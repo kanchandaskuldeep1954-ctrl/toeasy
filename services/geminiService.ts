@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { Dataset, AnalysisInsight, ChartSpec, CleaningAction, ValidationRule, DataRow, KPI } from "../types";
+import { Dataset, AnalysisInsight, ChartSpec, CleaningAction, ValidationRule, DataRow, KPI, SourceType } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
@@ -23,6 +23,38 @@ export class GeminiService {
       }
     }
     throw lastError;
+  }
+
+  static async generateMockData(source: SourceType): Promise<DataRow[]> {
+    return this.callWithRetry(async () => {
+      const prompt = `Generate realistic synthetic data for a "${source}" connection.
+      
+      If source is 'salesforce', generate leads (Name, Company, Stage, Amount, Owner).
+      If source is 'shopify', generate orders (OrderId, Customer, Total, Status, Items).
+      If source is 'google_ads', generate campaign stats (Campaign, Clicks, Impressions, CTR, Cost).
+      If source is 'postgres', generate a generic users or transactions table.
+      If source is 'stripe', generate payments (PaymentID, Amount, Currency, Status, Date).
+      
+      Generate exactly 50 rows.
+      Return a JSON array of objects.`;
+
+      const response = await ai.models.generateContent({
+        model: this.MODEL_NAME,
+        contents: prompt,
+        config: {
+            responseMimeType: "application/json",
+            responseSchema: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {},
+                    additionalProperties: true
+                }
+            }
+        }
+      });
+      return JSON.parse(response.text || '[]');
+    });
   }
 
   static async extractKPIs(dataset: Dataset): Promise<KPI[]> {

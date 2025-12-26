@@ -3,7 +3,13 @@ export interface DataRow {
   [key: string]: any;
 }
 
-export type SourceType = 'csv' | 'googlesheets' | 'postgres' | 'mysql' | 'meta_ads' | 'google_ads' | 'mixpanel';
+export type SourceType = 
+  | 'csv' | 'excel' | 'googlesheets' 
+  | 'postgres' | 'mysql' | 'sqlserver' | 'mariadb' | 'azure_sql' | 'snowflake' | 'redshift' | 'bigquery'
+  | 'salesforce' | 'hubspot' | 'zoho' | 'shopify' | 'woocommerce' | 'amazon_seller'
+  | 'google_ads' | 'facebook_ads' | 'tiktok_ads' | 'linkedin_ads' | 'ga4'
+  | 'stripe' | 'quickbooks' | 'xero' | 'netsuite'
+  | 's3' | 'google_drive' | 'sharepoint' | 'azure_blob' | 'github' | 'jira';
 
 export type PlanTier = 'basic' | 'pro' | 'enterprise';
 
@@ -37,6 +43,7 @@ export interface Dataset {
   lastCleaned?: Date;
   cleaningHistory?: CleaningAction[];
   kpis?: KPI[];
+  customCharts?: ChartSpec[];
 }
 
 export interface ColumnStats {
@@ -94,3 +101,14 @@ export interface ChartSpec {
 }
 
 export type AppView = 'upload' | 'clean' | 'explore' | 'dashboard' | 'report' | 'billing' | 'playground';
+
+export interface ConnectorDef {
+  id: SourceType;
+  name: string;
+  category: 'database' | 'finance' | 'sales' | 'marketing' | 'files' | 'engineering';
+  icon: string; // SVG path or url
+  description: string;
+  authType: 'oauth' | 'db_connection' | 'api_key';
+  brandColor?: string; // hex code for UI theming
+  fields: string[];
+}
