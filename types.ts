@@ -20,6 +20,13 @@ export interface UserUsage {
   connectorsCount: number;
 }
 
+export interface KPI {
+  label: string;
+  value: string | number;
+  trend?: number; // percentage change
+  trendDirection?: 'up' | 'down' | 'neutral';
+}
+
 export interface Dataset {
   name: string;
   sourceType: SourceType;
@@ -29,7 +36,7 @@ export interface Dataset {
   stats: ColumnStats[];
   lastCleaned?: Date;
   cleaningHistory?: CleaningAction[];
-  customCharts?: ChartSpec[];
+  kpis?: KPI[];
 }
 
 export interface ColumnStats {
@@ -83,6 +90,7 @@ export interface ChartSpec {
   xAxis: string;
   yAxis: string;
   color?: string;
+  description?: string;
 }
 
 export type AppView = 'upload' | 'clean' | 'explore' | 'dashboard' | 'report' | 'billing' | 'playground';

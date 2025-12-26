@@ -9,7 +9,6 @@ interface UploadViewProps {
 const UploadView: React.FC<UploadViewProps> = ({ onDataLoaded }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [connecting, setConnecting] = useState(false);
-  const [googleSheetUrl, setGoogleSheetUrl] = useState('');
 
   const parseCSV = (text: string) => {
     const lines = text.split(/\r?\n/).filter(line => line.trim());
@@ -53,79 +52,88 @@ const UploadView: React.FC<UploadViewProps> = ({ onDataLoaded }) => {
     reader.readAsText(file);
   };
 
-  const connectors = [
-    { id: 'csv', name: 'CSV / Excel', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z', color: 'text-blue-600', bg: 'bg-blue-50' },
-    { id: 'googlesheets', name: 'Google Sheets', icon: 'M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10a1 1 0 001 1h8a1 1 0 001-1z', color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { id: 'postgres', name: 'PostgreSQL', icon: 'M4 7v10c0 2 1 3 3 3h10c2 0 3-1 3-3V7c0-2-1-3-3-3H7c-2 0-3 1-3 3z', color: 'text-indigo-600', bg: 'bg-indigo-50' },
-    { id: 'mysql', name: 'MySQL / SQL', icon: 'M7 16V4m0 0L3 8m4-4l4 4m6 0v12', color: 'text-orange-600', bg: 'bg-orange-50' },
-  ];
-
-  const handleSimulate = async (type: SourceType, name: string) => {
-    setConnecting(true);
-    await new Promise(r => setTimeout(r, 1200));
-    
-    const data = Array.from({ length: 100 }, (_, i) => ({
-      id: 100 + i,
-      date: new Date(Date.now() - i * 86400000).toISOString().split('T')[0],
-      customer: `Client ${i % 10}`,
-      revenue: Math.floor(Math.random() * 5000) + 1000,
-      region: ['North', 'South', 'East', 'West'][Math.floor(Math.random() * 4)],
-      status: ['Paid', 'Pending', 'Overdue'][Math.floor(Math.random() * 3)]
-    }));
-
-    onDataLoaded(data, name, type);
-    setConnecting(false);
+  const handleSampleData = () => {
+     setConnecting(true);
+     setTimeout(() => {
+        const sampleData = Array.from({ length: 150 }, (_, i) => ({
+            id: 1000 + i,
+            date: new Date(Date.now() - Math.floor(Math.random() * 10000000000)).toISOString().split('T')[0],
+            sales_rep: ['Alice', 'Bob', 'Charlie', 'Dana'][Math.floor(Math.random() * 4)],
+            region: ['North', 'South', 'East', 'West', 'International'][Math.floor(Math.random() * 5)],
+            product_line: ['SaaS License', 'Consulting', 'Support Pack', 'Hardware'][Math.floor(Math.random() * 4)],
+            contract_value: Math.floor(Math.random() * 15000) + 2000,
+            status: ['Closed Won', 'Negotiation', 'Proposal', 'Qualified'][Math.floor(Math.random() * 4)],
+            probability: Math.floor(Math.random() * 100)
+        }));
+        onDataLoaded(sampleData, 'Sales_Pipeline_Sample.csv', 'csv');
+        setConnecting(false);
+     }, 800);
   };
 
   return (
-    <div className="max-w-5xl mx-auto py-12 space-y-16">
+    <div className="max-w-5xl mx-auto py-12 px-4 space-y-12">
       <div className="text-center space-y-4">
-        <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Welcome to Toeasy <span className="text-indigo-600">AI</span></h2>
-        <p className="text-lg text-slate-500 font-medium">Connect your data source to begin cleaning, analysis, and reporting.</p>
+        <h2 className="text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight">Toeasy <span className="text-indigo-600">AI</span></h2>
+        <p className="text-lg text-slate-500 dark:text-slate-400 font-medium max-w-2xl mx-auto">
+            The autonomous data operating system. Connect your source to begin automated cleaning, deep analysis, and executive reporting.
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {connectors.map(conn => (
-          <div key={conn.id} className="card p-8 flex flex-col items-center gap-6 hover:shadow-md hover:border-indigo-200 transition-all cursor-pointer group" onClick={() => conn.id === 'csv' ? fileInputRef.current?.click() : handleSimulate(conn.id as any, conn.name)}>
-            <div className={`w-14 h-14 rounded-2xl ${conn.bg} flex items-center justify-center ${conn.color} group-hover:scale-110 transition-transform`}>
-              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={conn.icon} /></svg>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+         {/* Main Upload Card */}
+         <div 
+            onClick={() => fileInputRef.current?.click()}
+            className="group cursor-pointer bg-white dark:bg-slate-900 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl p-10 flex flex-col items-center justify-center gap-6 hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all"
+         >
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform">
+               <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
             </div>
             <div className="text-center">
-              <span className="block text-base font-bold text-slate-900">{conn.name}</span>
-              <span className="text-xs text-slate-400 font-medium">Automatic Sync</span>
+               <h3 className="text-xl font-bold text-slate-900 dark:text-white">Upload CSV / Excel</h3>
+               <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Drag & drop or click to browse</p>
             </div>
-          </div>
-        ))}
-        <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+         </div>
+
+         {/* Connectors Grid */}
+         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-8">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white uppercase tracking-wider mb-6">Connect Source</h3>
+            <div className="grid grid-cols-2 gap-4">
+                {[
+                    { name: 'Google Sheets', color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+                    { name: 'PostgreSQL', color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                    { name: 'Stripe', color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
+                    { name: 'Salesforce', color: 'text-sky-600', bg: 'bg-sky-50 dark:bg-sky-900/20' },
+                ].map(c => (
+                    <button key={c.name} disabled className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-left opacity-60 cursor-not-allowed" title="Coming Soon">
+                        <div className={`w-8 h-8 rounded-lg ${c.bg} flex items-center justify-center ${c.color} font-bold text-xs`}>
+                            {c.name[0]}
+                        </div>
+                        <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{c.name}</span>
+                    </button>
+                ))}
+            </div>
+            
+            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+               <button 
+                onClick={handleSampleData}
+                className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+               >
+                  <span>🚀</span> Try with Sample Data
+               </button>
+            </div>
+         </div>
       </div>
 
-      <div className="card p-12 bg-white relative overflow-hidden">
-        <div className="flex flex-col md:flex-row items-center gap-12">
-           <div className="flex-1 space-y-6 text-center md:text-left">
-              <h3 className="text-2xl font-bold text-slate-900">Upload CSV or Drag & Drop</h3>
-              <p className="text-slate-500 font-medium leading-relaxed">Simply upload your spreadsheet. Our AI will automatically detect headers, clean up formatting, and suggest insights in seconds.</p>
-              <button 
-                onClick={() => fileInputRef.current?.click()}
-                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-100 flex items-center gap-3 mx-auto md:mx-0"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 4v16m8-8H4" /></svg>
-                Select File
-              </button>
-           </div>
-           <div className="w-full md:w-80 h-56 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center gap-4 bg-slate-50 hover:bg-white hover:border-indigo-400 transition-all group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-              <div className="w-12 h-12 bg-white rounded-xl shadow-sm flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-colors">
-                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
-              </div>
-              <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Drag file here</span>
-           </div>
-        </div>
-      </div>
+      <input type="file" ref={fileInputRef} className="hidden" accept=".csv" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
 
       {connecting && (
-        <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-           <div className="flex flex-col items-center gap-4">
-              <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></div>
-              <span className="text-sm font-bold text-slate-600">Connecting to Source...</span>
+        <div className="fixed inset-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center">
+           <div className="bg-white dark:bg-slate-900 p-8 rounded-3xl shadow-2xl flex flex-col items-center gap-6 border border-slate-200 dark:border-slate-800">
+              <div className="w-12 h-12 border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 rounded-full animate-spin"></div>
+              <div className="text-center">
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-white">Connecting...</h3>
+                  <p className="text-sm text-slate-500">Normalizing data schema</p>
+              </div>
            </div>
         </div>
       )}
