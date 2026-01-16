@@ -383,10 +383,10 @@ Respond ONLY with valid JSON, no markdown or extra text:
 
       // Categorize columns
       const sample = dataset.data?.slice(0, 50) || [];
-      const numericCols = headers.filter(h => 
-        sample.some(r => !isNaN(Number(r[h])))
+      const numericCols = headers.filter((h: string) => 
+        sample.some((r: any) => !isNaN(Number(r[h])))
       );
-      const categoricalCols = headers.filter(h => !numericCols.includes(h));
+      const categoricalCols = headers.filter((h: string) => !numericCols.includes(h));
 
       const charts = [];
       
@@ -464,9 +464,9 @@ Respond ONLY with valid JSON, no markdown or extra text:
       // Generate KPIs
       const kpis = [];
       if (numericCols.length > 0) {
-        const sum = sample.reduce((a, r) => a + (Number(r[numericCols[0]]) || 0), 0);
+        const sum = sample.reduce((a: number, r: any) => a + (Number(r[numericCols[0]]) || 0), 0);
         const avg = sum / (sample.length || 1);
-        const max = Math.max(...sample.map(r => Number(r[numericCols[0]]) || 0));
+        const max = Math.max(...sample.map((r: any) => Number(r[numericCols[0]]) || 0));
         
         kpis.push({
           label: `Total ${numericCols[0]}`,
