@@ -381,7 +381,177 @@ Respond ONLY with valid JSON, no markdown or extra text:
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       if (headers.length === 0) return { charts: [], kpis: [], patterns: [] };
 
-      // Categorize columns
+      console.log('🔍 Analyzing dataset semantics...');
+      
+      // NEW: Get semantic analysis
+      const analysis = await this.analyzeDatasetSemantics(dataset);
+      const relationships = await this.detectRelationships(dataset);
+      
+      console.log('📊 Analysis complete:', { 
+        domain: analysis.domain, 
+        relationshipCount: relationships.length,
+        quality: analysis.quality.overall
+      });
+
+      const charts = [];
+      const sample = dataset.data?.slice(0, 50) || [];
+      
+      // Build charts based on semantic relationships
+      // 1. Primary relationship (highest priority)
+      if (relationships.length > 0) {
+        const primary = relationships[0];
+        
+        if (primary.type === 'categorical-numeric') {
+          charts.push({
+            id: `chart-${Date.now()}-1`,
+            type: 'bar',
+            title: `${primary.column2} by ${primary.column1}`,
+            description: primary.description,
+            xAxis: primary.column1,
+            yAxis: primary.column2,
+            aggregation: 'sum',
+            category: 'Overview',
+            priority: 'critical',
+            insights: [`Primary dimension showing variation of ${primary.column2}`]
+          });
+        } else if (primary.type === 'time-series') {
+          charts.push({
+            id: `chart-${Date.now()}-1`,
+            type: 'line',
+            title: `${primary.column2} Over Time`,
+            description: `Temporal trend of ${primary.column2}`,
+            xAxis: primary.column1,
+            yAxis: primary.column2,
+            aggregation: 'sum',
+            category: 'Overview',
+            priority: 'critical',
+            insights: ['Time-series trend analysis']
+          });
+        } else if (primary.type === 'correlation') {
+          charts.push({
+            id: `chart-${Date.now()}-1`,
+            type: 'scatter',
+            title: `${primary.column1} vs ${primary.column2}`,
+            description: primary.description,
+            xAxis: primary.column1,
+            yAxis: primary.column2,
+            aggregation: 'none',
+            category: 'Patterns',
+            priority: 'high',
+            insights: ['Correlation analysis between key metrics']
+          });
+        }
+      }
+
+      // 2. Secondary relationships
+      for (let i = 1; i < Math.min(relationships.length, 3); i++) {
+        const rel = relationships[i];
+        if (charts.length >= 5) break;
+
+        if (rel.type === 'categorical-numeric' && i === 1) {
+          charts.push({
+            id: `chart-${Date.now()}-${i + 1}`,
+            type: 'pie',
+            title: `Distribution by ${rel.column1}`,
+            description: `Market composition of ${rel.column1}`,
+            xAxis: rel.column1,
+            yAxis: rel.column2,
+            aggregation: 'sum',
+            category: 'Overview',
+            priority: 'high'
+          });
+        }
+      }
+
+      // 3. Fallback charts for robustness
+      const numericCols = analysis.columnRoles.filter((c: any) => c.type === 'numeric' || c.type === 'currency').map((c: any) => c.column);
+      const categoricalCols = analysis.columnRoles.filter((c: any) => c.type === 'categorical').map((c: any) => c.column);
+
+      if (charts.length < 3 && categoricalCols.length > 0 && numericCols.length > 0) {
+        charts.push({
+          id: `chart-${Date.now()}-fallback`,
+          type: 'bar',
+          title: `${numericCols[0]} by ${categoricalCols[0]}`,
+          description: `Analysis of ${numericCols[0]}`,
+          xAxis: categoricalCols[0],
+          yAxis: numericCols[0],
+          aggregation: 'sum',
+          category: 'Overview',
+          priority: 'medium'
+        });
+      }
+
+      // Generate KPIs from primary numeric column
+      const kpis = [];
+      if (analysis.primaryMeasure && numericCols.length > 0) {
+        const measureCol = analysis.primaryMeasure;
+        const values = sample.map((r: any) => Number(r[measureCol]) || 0).filter((v: number) => !isNaN(v) && v !== null);
+        
+        if (values.length > 0) {
+          const sum = values.reduce((a: number, b: number) => a + b, 0);
+          const avg = sum / values.length;
+          const max = Math.max(...values);
+          const min = Math.min(...values);
+
+          kpis.push({
+            label: `Total ${measureCol}`,
+            value: sum.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+            category: 'financial',
+            calculation: { column: measureCol, operation: 'sum', format: 'number' }
+          });
+
+          kpis.push({
+            label: `Average ${measureCol}`,
+            value: avg.toLocaleString('en-US', { maximumFractionDigits: 1 }),
+            category: 'operational',
+            calculation: { column: measureCol, operation: 'avg', format: 'number' }
+          });
+
+          kpis.push({
+            label: `Max ${measureCol}`,
+            value: max.toLocaleString('en-US', { maximumFractionDigits: 0 }),
+            category: 'efficiency',
+            calculation: { column: measureCol, operation: 'max', format: 'number' }
+          });
+        }
+      }
+
+      kpis.push({
+        label: 'Total Records',
+        value: (dataset.data?.length || 0).toLocaleString(),
+        category: 'quality',
+        calculation: { column: headers[0], operation: 'count', format: 'number' }
+      });
+
+      kpis.push({
+        label: 'Data Quality',
+        value: `${analysis.quality.overall}%`,
+        category: 'quality',
+        calculation: { column: headers[0], operation: 'quality', format: 'percentage' }
+      });
+
+      return {
+        charts: charts.slice(0, 6),
+        kpis: kpis.slice(0, 5),
+        patterns: [],
+        metadata: {
+          generatedAt: new Date().toISOString(),
+          dataSource: 'AI-Generated',
+          domain: analysis.domain,
+          insights: analysis.keyInsights,
+          quality: analysis.quality
+        }
+      };
+    } catch (error) {
+      console.error('Dashboard generation error:', error);
+      // Fallback to template-based generation
+      return this.suggestDashboardFallback(dataset);
+    }
+  }
+
+  static async suggestDashboardFallback(dataset: any): Promise<any> {
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const sample = dataset.data?.slice(0, 50) || [];
       const numericCols = headers.filter((h: string) => 
         sample.some((r: any) => !isNaN(Number(r[h])))
@@ -390,7 +560,6 @@ Respond ONLY with valid JSON, no markdown or extra text:
 
       const charts = [];
       
-      // Auto-generate charts based on available columns
       if (categoricalCols.length > 0 && numericCols.length > 0) {
         charts.push({
           id: `chart-${Date.now()}-1`,
@@ -447,27 +616,11 @@ Respond ONLY with valid JSON, no markdown or extra text:
         });
       }
 
-      if (categoricalCols.length > 0 && numericCols.length > 0) {
-        charts.push({
-          id: `chart-${Date.now()}-5`,
-          type: 'radar',
-          title: `Performance Radar: ${categoricalCols[0]}`,
-          description: `Multi-metric analysis`,
-          xAxis: categoricalCols[0],
-          yAxis: numericCols[0],
-          aggregation: 'avg',
-          category: 'Overview',
-          priority: 'medium'
-        });
-      }
-
-      // Generate KPIs
       const kpis = [];
       if (numericCols.length > 0) {
         const sum = sample.reduce((a: number, r: any) => a + (Number(r[numericCols[0]]) || 0), 0);
         const avg = sum / (sample.length || 1);
-        const max = Math.max(...sample.map((r: any) => Number(r[numericCols[0]]) || 0));
-        
+
         kpis.push({
           label: `Total ${numericCols[0]}`,
           value: sum.toLocaleString('en-US', { maximumFractionDigits: 0 }),
@@ -476,17 +629,10 @@ Respond ONLY with valid JSON, no markdown or extra text:
         });
 
         kpis.push({
-          label: `Avg ${numericCols[0]}`,
-          value: avg.toLocaleString('en-US', { maximumFractionDigits: 2 }),
+          label: `Average ${numericCols[0]}`,
+          value: avg.toLocaleString('en-US', { maximumFractionDigits: 1 }),
           category: 'operational',
           calculation: { column: numericCols[0], operation: 'avg', format: 'number' }
-        });
-
-        kpis.push({
-          label: `Max ${numericCols[0]}`,
-          value: max.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-          category: 'efficiency',
-          calculation: { column: numericCols[0], operation: 'max', format: 'number' }
         });
       }
 
@@ -501,10 +647,10 @@ Respond ONLY with valid JSON, no markdown or extra text:
         charts: charts.slice(0, 6),
         kpis: kpis.slice(0, 5),
         patterns: [],
-        metadata: { generatedAt: new Date().toISOString(), dataSource: 'Auto-Generated' }
+        metadata: { generatedAt: new Date().toISOString(), dataSource: 'Template-Based' }
       };
     } catch (error) {
-      console.error('Dashboard generation error:', error);
+      console.error('Fallback dashboard generation error:', error);
       return { charts: [], kpis: [], patterns: [], metadata: {} };
     }
   }
@@ -673,6 +819,429 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
     } catch (error) {
       console.error('Agent error:', error instanceof Error ? error.message : error);
       return 'Unable to analyze data at this moment. Please try again.';
+    }
+  }
+
+  // ===== SEMANTIC DATA ANALYSIS METHODS =====
+
+  static async detectColumnTypes(dataset: any): Promise<any[]> {
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+      const sample = dataset.data?.slice(0, 100) || [];
+      
+      const analysis: any[] = [];
+
+      for (const col of headers) {
+        const values = sample.map((r: any) => r[col]).filter((v: any) => v !== null && v !== undefined && v !== '');
+        
+        if (values.length === 0) {
+          analysis.push({ column: col, type: 'unknown', cardinality: 0, nullness: 100, confidence: 0 });
+          continue;
+        }
+
+        // Analyze first 10 non-null values
+        const samples = values.slice(0, 10);
+        let type = 'unknown';
+        let confidence = 0.5;
+
+        // Check for datetime
+        const dateCount = samples.filter((v: any) => {
+          const dateStr = String(v);
+          return !isNaN(Date.parse(dateStr)) || /^\d{4}-\d{2}-\d{2}/.test(dateStr);
+        }).length;
+        if (dateCount / samples.length > 0.8) {
+          type = 'datetime';
+          confidence = 0.95;
+        }
+
+        // Check for numeric
+        if (type === 'unknown') {
+          const numCount = samples.filter((v: any) => !isNaN(Number(v)) && v !== '').length;
+          if (numCount / samples.length > 0.8) {
+            // Check if it's currency or percentage
+            const currencyCount = samples.filter((v: any) => String(v).match(/[$€£¥]/)).length;
+            const percentCount = samples.filter((v: any) => String(v).match(/%/)).length;
+            
+            if (currencyCount / samples.length > 0.5) {
+              type = 'currency';
+            } else if (percentCount / samples.length > 0.5) {
+              type = 'percentage';
+            } else {
+              type = 'numeric';
+            }
+            confidence = 0.95;
+          }
+        }
+
+        // Check for ID-like (very high cardinality numeric or mixed)
+        if (type === 'unknown') {
+          const uniqueCount = new Set(values).size;
+          if (uniqueCount / values.length > 0.8) {
+            type = 'id';
+            confidence = 0.9;
+          }
+        }
+
+        // Default to categorical
+        if (type === 'unknown') {
+          type = 'categorical';
+          confidence = 0.7;
+        }
+
+        const uniqueCount = new Set(values).size;
+        const nullness = ((sample.length - values.length) / sample.length) * 100;
+
+        analysis.push({
+          column: col,
+          type,
+          cardinality: uniqueCount,
+          nullness: Math.round(nullness),
+          confidence,
+          sampleValues: samples.slice(0, 3)
+        });
+      }
+
+      return analysis;
+    } catch (error) {
+      console.error('Column type detection error:', error);
+      return [];
+    }
+  }
+
+  static async analyzeDatasetSemantics(dataset: any): Promise<any> {
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+      const sample = dataset.data?.slice(0, 20) || [];
+      const columnTypes = await this.detectColumnTypes(dataset);
+
+      // Create analysis prompt for Groq
+      const typesSummary = columnTypes
+        .map((ct: any) => `${ct.column}: ${ct.type} (${ct.cardinality} unique values)`)
+        .join('; ');
+
+      const semanticPrompt = `Analyze this dataset and provide semantic insights.
+
+Columns (${headers.length}): ${headers.join(', ')}
+Column Types: ${typesSummary}
+Sample row: ${JSON.stringify(sample[0] || {})}
+
+ANALYZE and return ONLY valid JSON (no markdown):
+{
+  "domain": "sales|operations|financial|marketing|scientific|other",
+  "businessContext": "one sentence describing what this data represents",
+  "primaryMeasure": "column name of main metric (if any)",
+  "primaryDimension": "column name of main grouping (if any)",
+  "timeColumn": "column name if time-series data else null",
+  "keyInsights": ["insight1", "insight2"],
+  "recommendedCharts": ["chart_type1", "chart_type2"]
+}`;
+
+      const result = await this.callGroq(semanticPrompt, 800);
+      let analysis = {};
+      
+      try {
+        // Extract JSON from markdown if needed
+        let jsonStr = result.trim();
+        if (jsonStr.includes('```json')) {
+          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+        } else if (jsonStr.includes('```')) {
+          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+        }
+        analysis = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn('Failed to parse semantic analysis, using defaults:', e);
+        analysis = {
+          domain: 'unknown',
+          businessContext: 'Data analysis',
+          keyInsights: [],
+          recommendedCharts: ['bar', 'line']
+        };
+      }
+
+      // Build quality score
+      const nullAvg = columnTypes.reduce((sum: number, ct: any) => sum + ct.nullness, 0) / columnTypes.length;
+      const completeness = 100 - nullAvg;
+      const quality = {
+        completeness: Math.round(completeness),
+        uniqueness: Math.round(columnTypes.reduce((sum: any, ct: any) => sum + (ct.cardinality / sample.length), 0) * 100 / columnTypes.length),
+        consistency: 85, // placeholder
+        validity: 90, // placeholder
+        overall: Math.round((completeness + 85 + 90) / 3),
+        warnings: nullAvg > 30 ? ['High number of null values detected'] : []
+      };
+
+      return {
+        columnRoles: columnTypes,
+        ...analysis,
+        quality,
+        isTimeSeriesData: !!(analysis as any).timeColumn,
+        hasGeographicData: headers.some((h: string) => /city|country|state|region|location|geo/i.test(h))
+      };
+    } catch (error) {
+      console.error('Semantic analysis error:', error);
+      return {
+        columnRoles: [],
+        domain: 'unknown',
+        keyInsights: [],
+        quality: { completeness: 50, uniqueness: 50, consistency: 50, validity: 50, overall: 50, warnings: [] },
+        isTimeSeriesData: false,
+        hasGeographicData: false
+      };
+    }
+  }
+
+  static async detectRelationships(dataset: any): Promise<any[]> {
+    try {
+      const columnTypes = await this.detectColumnTypes(dataset);
+      const numericCols = columnTypes.filter((ct: any) => ct.type === 'numeric' || ct.type === 'currency');
+      const categoricalCols = columnTypes.filter((ct: any) => ct.type === 'categorical');
+      const timeCols = columnTypes.filter((ct: any) => ct.type === 'datetime');
+
+      const relationships = [];
+
+      // All numeric pairs → correlation
+      for (let i = 0; i < numericCols.length; i++) {
+        for (let j = i + 1; j < numericCols.length; j++) {
+          const col1 = numericCols[i].column;
+          const col2 = numericCols[j].column;
+          relationships.push({
+            column1: col1,
+            column2: col2,
+            type: 'correlation',
+            strength: 0.5, // placeholder - could calculate correlation coefficient
+            description: `Correlation between ${col1} and ${col2}`
+          });
+        }
+      }
+
+      // Time + numeric → time series
+      if (timeCols.length > 0 && numericCols.length > 0) {
+        relationships.push({
+          column1: timeCols[0].column,
+          column2: numericCols[0].column,
+          type: 'time-series',
+          strength: 0.9,
+          description: `Time series of ${numericCols[0].column}`
+        });
+      }
+
+      // Categorical + numeric → categorical-numeric relationship
+      for (const cat of categoricalCols.slice(0, 2)) {
+        for (const num of numericCols.slice(0, 2)) {
+          relationships.push({
+            column1: cat.column,
+            column2: num.column,
+            type: 'categorical-numeric',
+            strength: 0.7,
+            description: `Distribution of ${num.column} by ${cat.column}`
+          });
+        }
+      }
+
+      return relationships;
+    } catch (error) {
+      console.error('Relationship detection error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Generate optimized chart specifications from semantic analysis
+   * Converts relationships and column types into production-ready chart configs
+   */
+  static async generateChartSpecFromAnalysis(
+    analysis: any,
+    relationships: any[],
+    dataset: any
+  ): Promise<any[]> {
+    try {
+      const charts = [];
+      const columnTypes = analysis.columnRoles || [];
+      const numericCols = columnTypes.filter((c: any) => c.type === 'numeric' || c.type === 'currency').map((c: any) => c.column);
+      const categoricalCols = columnTypes.filter((c: any) => c.type === 'categorical').map((c: any) => c.column);
+
+      // Sort relationships by strength
+      const sortedRels = [...relationships].sort((a: any, b: any) => (b.strength || 0) - (a.strength || 0));
+
+      // Generate charts from strongest relationships
+      for (let i = 0; i < sortedRels.length && charts.length < 6; i++) {
+        const rel = sortedRels[i];
+        const cardinalityCap = 15;
+        
+        // Skip if high cardinality without proper aggregation
+        if (rel.type === 'categorical-numeric') {
+          const distinctCount = new Set((dataset.data || []).map((r: any) => r[rel.column1])).size;
+          if (distinctCount > cardinalityCap) {
+            // Use aggregation for high cardinality
+            charts.push({
+              id: `chart-${Date.now()}-${i}`,
+              type: 'bar',
+              title: `Top ${cardinalityCap} by ${rel.column2}`,
+              description: rel.description,
+              xAxis: rel.column1,
+              yAxis: rel.column2,
+              aggregation: 'sum',
+              limit: cardinalityCap,
+              showOther: true,
+              category: i === 0 ? 'Overview' : 'Analysis',
+              priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
+            });
+          } else {
+            // Direct bar chart for low cardinality
+            charts.push({
+              id: `chart-${Date.now()}-${i}`,
+              type: 'bar',
+              title: `${rel.column2} by ${rel.column1}`,
+              description: rel.description,
+              xAxis: rel.column1,
+              yAxis: rel.column2,
+              aggregation: 'sum',
+              category: i === 0 ? 'Overview' : 'Analysis',
+              priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
+            });
+          }
+        } else if (rel.type === 'time-series') {
+          // Time series → line chart
+          charts.push({
+            id: `chart-${Date.now()}-${i}`,
+            type: 'line',
+            title: `${rel.column2} Over Time`,
+            description: rel.description,
+            xAxis: rel.column1,
+            yAxis: rel.column2,
+            aggregation: 'sum',
+            category: 'Trends',
+            priority: i === 0 ? 'critical' : 'high'
+          });
+        } else if (rel.type === 'correlation') {
+          // Correlation → scatter
+          charts.push({
+            id: `chart-${Date.now()}-${i}`,
+            type: 'scatter',
+            title: `${rel.column1} vs ${rel.column2}`,
+            description: rel.description,
+            xAxis: rel.column1,
+            yAxis: rel.column2,
+            aggregation: 'none',
+            category: 'Patterns',
+            priority: 'medium'
+          });
+        }
+      }
+
+      // Fallback: Add pie chart if we have categorical data
+      if (charts.length < 4 && categoricalCols.length > 0) {
+        charts.push({
+          id: `chart-${Date.now()}-pie`,
+          type: 'pie',
+          title: `Distribution of ${categoricalCols[0]}`,
+          description: 'Market composition or category breakdown',
+          xAxis: categoricalCols[0],
+          yAxis: 'count',
+          aggregation: 'count',
+          limit: 10,
+          showOther: true,
+          category: 'Overview',
+          priority: 'high'
+        });
+      }
+
+      return charts.slice(0, 6);
+    } catch (error) {
+      console.error('Chart spec generation error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Smart data aggregation utility
+   * Groups high-cardinality data, aggregates dates, handles nulls intelligently
+   */
+  static smartAggregateData(
+    data: any[],
+    xColumn: string,
+    yColumn: string,
+    aggregation: string = 'sum',
+    limit: number = 15,
+    showOther: boolean = true
+  ): any[] {
+    try {
+      if (!data || data.length === 0) return [];
+
+      const aggregated: { [key: string]: any } = {};
+
+      // Group data
+      for (const row of data) {
+        const xVal = String(row[xColumn] || 'Unknown').trim();
+        const yVal = Number(row[yColumn]) || 0;
+
+        if (!aggregated[xVal]) {
+          aggregated[xVal] = {
+            label: xVal,
+            value: 0,
+            count: 0,
+            sum: 0,
+            max: yVal,
+            min: yVal
+          };
+        }
+
+        aggregated[xVal].sum += yVal;
+        aggregated[xVal].count += 1;
+        aggregated[xVal].max = Math.max(aggregated[xVal].max, yVal);
+        aggregated[xVal].min = Math.min(aggregated[xVal].min, yVal);
+      }
+
+      // Apply aggregation function
+      const result = Object.values(aggregated).map((item: any) => {
+        let value = 0;
+        switch (aggregation.toLowerCase()) {
+          case 'sum':
+            value = item.sum;
+            break;
+          case 'avg':
+          case 'average':
+            value = item.sum / item.count;
+            break;
+          case 'count':
+            value = item.count;
+            break;
+          case 'max':
+            value = item.max;
+            break;
+          case 'min':
+            value = item.min;
+            break;
+          default:
+            value = item.sum;
+        }
+
+        return { label: item.label, value };
+      });
+
+      // Sort by value descending
+      result.sort((a: any, b: any) => b.value - a.value);
+
+      // Handle limit and "Other" category
+      if (result.length > limit) {
+        const topItems = result.slice(0, limit);
+        const otherItems = result.slice(limit);
+        
+        if (showOther && otherItems.length > 0) {
+          const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
+          topItems.push({ label: 'Other', value: otherValue });
+        }
+
+        return topItems;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Smart aggregation error:', error);
+      return data.slice(0, limit).map((item: any) => ({
+        label: String(item[xColumn] || 'Unknown'),
+        value: Number(item[yColumn]) || 0
+      }));
     }
   }
 }

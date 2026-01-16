@@ -242,3 +242,56 @@ export interface ConnectorDef {
   brandColor?: string; 
   fields: string[];
 }
+
+// ===== SEMANTIC DATA ANALYSIS TYPES =====
+
+export type ColumnRole = 'dimension' | 'measure' | 'time' | 'geography' | 'id' | 'text' | 'unknown';
+
+export interface ColumnAnalysis {
+  column: string;
+  type: 'numeric' | 'categorical' | 'datetime' | 'geographic' | 'id' | 'text' | 'currency' | 'percentage';
+  role: ColumnRole;
+  cardinality: number;
+  nullness: number; // 0-100%
+  confidence: number; // 0-1
+  sampleValues?: any[];
+  description?: string;
+  isOutlier?: boolean;
+}
+
+export interface Relationship {
+  column1: string;
+  column2: string;
+  type: 'correlation' | 'many-to-one' | 'categorical-numeric' | 'time-series';
+  strength: number; // 0-1, correlation strength
+  description?: string;
+}
+
+export interface QualityScore {
+  completeness: number; // % of non-null values
+  uniqueness: number; // avg cardinality ratio
+  consistency: number; // 0-1
+  validity: number; // 0-1
+  overall: number; // weighted average
+  warnings: string[];
+}
+
+export interface DatasetAnalysis {
+  columnRoles: ColumnAnalysis[];
+  domain?: string; // 'sales', 'operations', 'financial', etc
+  insights: string[];
+  relationships: Relationship[];
+  quality: QualityScore;
+  recommendedChartTypes: string[]; // 'line', 'bar', 'scatter', etc
+  isTimeSeriesData: boolean;
+  hasGeographicData: boolean;
+  primaryMeasure?: string; // main KPI column
+  primaryDimension?: string; // main grouping column
+}
+
+export interface ChartRecommendation {
+  spec: ChartSpec;
+  reason: string;
+  confidence: number;
+  insights?: string[];
+}
