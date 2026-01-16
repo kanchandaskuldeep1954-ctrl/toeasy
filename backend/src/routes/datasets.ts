@@ -151,10 +151,38 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
     }
 
     const dataset = result.rows[0];
+    
+    // Parse raw_data safely - it might already be an object or a JSON string
+    let parsedRawData = [];
+    try {
+      if (typeof dataset.raw_data === 'string') {
+        parsedRawData = JSON.parse(dataset.raw_data || '[]');
+      } else if (Array.isArray(dataset.raw_data)) {
+        parsedRawData = dataset.raw_data;
+      } else if (dataset.raw_data && typeof dataset.raw_data === 'object') {
+        parsedRawData = [dataset.raw_data];
+      }
+    } catch (parseErr) {
+      console.warn('Failed to parse raw_data, using empty array:', parseErr);
+      parsedRawData = [];
+    }
+
+    // Parse analysis_result safely
+    let parsedAnalysis = null;
+    try {
+      if (dataset.analysis_result) {
+        parsedAnalysis = typeof dataset.analysis_result === 'string' 
+          ? JSON.parse(dataset.analysis_result) 
+          : dataset.analysis_result;
+      }
+    } catch (parseErr) {
+      console.warn('Failed to parse analysis_result:', parseErr);
+    }
+
     res.json({
       ...dataset,
-      raw_data: JSON.parse(dataset.raw_data || '[]'),
-      analysis_result: dataset.analysis_result ? JSON.parse(dataset.analysis_result) : null
+      raw_data: parsedRawData,
+      analysis_result: parsedAnalysis
     });
   } catch (err) {
     console.error('Get dataset error:', err);
