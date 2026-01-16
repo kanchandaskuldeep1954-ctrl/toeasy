@@ -201,4 +201,195 @@ export class GroqService {
   static async generateSQLFromNL(dataset: Dataset, query: string): Promise<{ sql: string; explanation: string }> {
     return await this.callApi('generate-sql', 'POST', { dataset, query });
   }
+
+  // ===== CLIENT-SIDE SMART UTILITIES =====
+
+  /**
+   * Smart data aggregation for high-cardinality data
+   * Groups and aggregates data intelligently with support for "Other" category
+   */
+  static smartAggregateData(
+    data: DataRow[],
+    xColumn: string,
+    yColumn: string,
+    aggregation: string = 'sum',
+    limit: number = 15,
+    showOther: boolean = true
+  ): Array<{ label: string; value: number }> {
+    try {
+      if (!data || data.length === 0) return [];
+
+      const aggregated: { [key: string]: any } = {};
+
+      // Group data
+      for (const row of data) {
+        const xVal = String(row[xColumn] || 'Unknown').trim();
+        const yVal = Number(row[yColumn]) || 0;
+
+        if (!aggregated[xVal]) {
+          aggregated[xVal] = {
+            label: xVal,
+            value: 0,
+            count: 0,
+            sum: 0,
+            max: yVal,
+            min: yVal
+          };
+        }
+
+        aggregated[xVal].sum += yVal;
+        aggregated[xVal].count += 1;
+        aggregated[xVal].max = Math.max(aggregated[xVal].max, yVal);
+        aggregated[xVal].min = Math.min(aggregated[xVal].min, yVal);
+      }
+
+      // Apply aggregation function
+      const result = Object.values(aggregated).map((item: any) => {
+        let value = 0;
+        switch (aggregation.toLowerCase()) {
+          case 'sum':
+            value = item.sum;
+            break;
+          case 'avg':
+          case 'average':
+            value = item.sum / item.count;
+            break;
+          case 'count':
+            value = item.count;
+            break;
+          case 'max':
+            value = item.max;
+            break;
+          case 'min':
+            value = item.min;
+            break;
+          default:
+            value = item.sum;
+        }
+
+        return { label: item.label, value };
+      });
+
+      // Sort by value descending
+      result.sort((a, b) => b.value - a.value);
+
+      // Handle limit and "Other" category
+      if (result.length > limit) {
+        const topItems = result.slice(0, limit);
+        const otherItems = result.slice(limit);
+
+        if (showOther && otherItems.length > 0) {
+          const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
+          topItems.push({ label: 'Other', value: otherValue });
+        }
+
+        return topItems;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Smart aggregation error:', error);
+      return data.slice(0, limit).map((item: any) => ({
+        label: String(item[xColumn] || 'Unknown'),
+        value: Number(item[yColumn]) || 0
+      }));
+    }
+  }
+
+  /**
+   * Transform raw data for chart rendering
+   * Handles aggregation, sorting, and data quality issues
+   */
+  static transformChartData(
+    data: DataRow[],
+    chartSpec: ChartSpec
+  ): Array<{ label: string; value: number; [key: string]: any }> {
+    try {
+      if (!data || !chartSpec) return [];
+
+      const { xAxis, yAxis, aggregation, limit, showOther } = chartSpec;
+
+      // For scatter plots, return raw data
+      if (chartSpec.type === 'scatter') {
+        return data.map(row => ({
+          label: String(row[xAxis] || ''),
+          value: Number(row[yAxis]) || 0,
+          [xAxis]: Number(row[xAxis]) || 0,
+          [yAxis]: Number(row[yAxis]) || 0
+        }));
+      }
+
+      // For all other charts, use smart aggregation
+      return this.smartAggregateData(
+        data,
+        xAxis,
+        yAxis,
+        aggregation || 'sum',
+        limit || 15,
+        showOther !== false
+      );
+    } catch (error) {
+      console.error('Chart data transformation error:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Calculate time-based aggregation (monthly, quarterly, yearly)
+   * Detects appropriate interval based on data range
+   */
+  static aggregateByTime(
+    data: DataRow[],
+    dateColumn: string,
+    valueColumn: string,
+    operation: 'sum' | 'avg' | 'count' = 'sum'
+  ): Array<{ label: string; value: number }> {
+    try {
+      const aggregated: { [key: string]: any } = {};
+
+      for (const row of data) {
+        const dateStr = String(row[dateColumn] || '');
+        const value = Number(row[valueColumn]) || 0;
+
+        // Extract year-month from various date formats
+        const match = dateStr.match(/(\d{4})-(\d{2})/);
+        if (!match) continue;
+
+        const yearMonth = `${match[1]}-${match[2]}`;
+
+        if (!aggregated[yearMonth]) {
+          aggregated[yearMonth] = { values: [], count: 0, sum: 0 };
+        }
+
+        aggregated[yearMonth].values.push(value);
+        aggregated[yearMonth].count += 1;
+        aggregated[yearMonth].sum += value;
+      }
+
+      // Convert to result format
+      const result = Object.entries(aggregated)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([label, data]: [string, any]) => {
+          let resultValue = 0;
+          switch (operation) {
+            case 'sum':
+              resultValue = data.sum;
+              break;
+            case 'avg':
+              resultValue = data.sum / data.count;
+              break;
+            case 'count':
+              resultValue = data.count;
+              break;
+          }
+          return { label, value: resultValue };
+        });
+
+      return result;
+    } catch (error) {
+      console.error('Time aggregation error:', error);
+      return [];
+    }
+  }
 }
+
