@@ -1,0 +1,115 @@
+
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './src/context/AuthContext';
+import { WorkspaceProvider } from './src/context/WorkspaceContext';
+import { DatasetProvider } from './src/context/DatasetContext';
+import { ProtectedRoute } from './src/routes/ProtectedRoute';
+import { PublicRoute } from './src/routes/PublicRoute';
+import { SourceType } from './types';
+
+// Auth Pages
+import { LoginPage } from './src/components/LoginPage';
+import { SignupPage } from './src/components/SignupPage';
+import { ProfilePage } from './src/components/ProfilePage';
+
+// App Pages
+import Sidebar from './components/Sidebar';
+import { WorkspacesView } from './src/components/WorkspacesView';
+import { DatasetLibrary } from './src/components/DatasetLibrary';
+import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
+import { QueryHistory } from './src/components/QueryHistory';
+import { DashboardLibrary } from './src/components/DashboardLibrary';
+import CleanViewIntegrated from './src/components/CleanViewIntegrated';
+import ExploreViewIntegrated from './src/components/ExploreViewIntegrated';
+import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
+import ReportView from './components/ReportView';
+import BillingViewIntegrated from './src/components/BillingViewIntegrated';
+import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
+import DatasetCreatorView from './components/DatasetCreatorView';
+import DataPreview from './src/components/DataPreview';
+import ValidationRulesManager from './src/components/ValidationRulesManager';
+import QuarantineVault from './src/components/QuarantineVault';
+import UsageMetrics from './src/components/UsageMetrics';
+
+const AppLayout: React.FC = () => {
+  return (
+    <div className="flex h-screen bg-slate-900">
+      <Sidebar />
+      <main className="flex-1 overflow-auto">
+        <Routes>
+          {/* Workspace & Dataset Management */}
+          <Route path="workspaces" element={<WorkspacesView />} />
+          <Route path="datasets" element={<DatasetLibrary />} />
+          <Route path="profile" element={<ProfilePage />} />
+
+           {/* Data Operations */}
+          <Route path="upload" element={<UploadViewPhase3 />} />
+          <Route path="create" element={<DatasetCreatorView onDataLoaded={() => {}} />} />
+          <Route path="clean" element={<CleanViewIntegrated />} />
+          <Route path="explore" element={<ExploreViewIntegrated />} />
+          <Route path="playground" element={<PlaygroundViewIntegrated />} />
+          <Route path="dashboard" element={<DashboardViewIntegrated />} />
+          <Route path="dashboards" element={<DashboardLibrary />} />
+          <Route path="report" element={<ReportView />} />
+          <Route path="queries" element={<QueryHistory />} />
+          <Route path="preview" element={<DataPreview />} />
+          <Route path="rules" element={<ValidationRulesManager />} />
+          <Route path="quarantine" element={<QuarantineVault />} />
+          <Route path="metrics" element={<UsageMetrics />} />
+          <Route path="billing" element={<BillingViewIntegrated />} />
+
+          {/* Default route */}
+          <Route path="/" element={<Navigate to="workspaces" replace />} />
+        </Routes>
+      </main>
+    </div>
+  );
+};
+
+function App() {
+  return (
+    <AuthProvider>
+      <WorkspaceProvider>
+        <DatasetProvider>
+          <Router>
+            <Routes>
+              {/* Public Routes */}
+              <Route
+                path="/login"
+                element={
+                  <PublicRoute>
+                    <LoginPage />
+                  </PublicRoute>
+                }
+              />
+              <Route
+                path="/signup"
+                element={
+                  <PublicRoute>
+                    <SignupPage />
+                  </PublicRoute>
+                }
+              />
+
+              {/* Protected Routes */}
+              <Route
+                path="/app/*"
+                element={
+                  <ProtectedRoute>
+                    <AppLayout />
+                  </ProtectedRoute>
+                }
+              />
+
+              {/* Default redirect */}
+              <Route path="/" element={<Navigate to="/app/workspaces" replace />} />
+            </Routes>
+          </Router>
+        </DatasetProvider>
+      </WorkspaceProvider>
+    </AuthProvider>
+  );
+}
+
+export default App;

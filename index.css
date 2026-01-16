@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Viewport Lock Strategy */
+html, body, #root { 
+  height: 100%; 
+  margin: 0; 
+  padding: 0; 
+  overflow: hidden; 
+}
+
+body { 
+  transition: background-color 0.3s ease, color 0.3s ease;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 20px;
+}
+.dark .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #334155;
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+.dark .glass-panel {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+.animate-float { animation: float 4s ease-in-out infinite; }
+
+/* Disable highlight on mobile */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Elastic Table Styles */
+.table-fixed-header thead th {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+/* Print / PDF Export Styles */
+@media print {
+    body { 
+        background: white !important; 
+        color: black !important; 
+        overflow: visible !important;
+        height: auto !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+    }
+    #root { height: auto !important; overflow: visible !important; }
+    
+    /* Hide Sidebar, Header, Buttons, Scrollbars */
+    aside, header, .no-print, button:not(.print-visible), .custom-scrollbar::-webkit-scrollbar, .glass-panel {
+        display: none !important;
+    }
+
+    /* Reset Layout for Page */
+    main {
+        margin: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        display: block !important;
+        width: 100% !important;
+    }
+
+    /* Charts Layout Fixes for Print */
+    .grid {
+        display: block !important;
+    }
+    .grid > div {
+        page-break-inside: avoid;
+        margin-bottom: 2rem;
+        border: 1px solid #ccc !important;
+        box-shadow: none !important;
+        width: 100% !important;
+        background-color: white !important;
+        color: black !important;
+    }
+    
+    /* Text Colors */
+    p, h1, h2, h3, h4, h5, h6, span, div {
+        color: black !important;
+        text-shadow: none !important;
+    }
+}

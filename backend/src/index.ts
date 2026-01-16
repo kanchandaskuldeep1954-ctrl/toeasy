@@ -1,0 +1,319 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
+import { config } from './config.js';
+import { initializeRedis, closeRedis } from './services/cacheService.js';
+import { cacheMiddleware, invalidateCacheMiddleware } from './middleware/cacheMiddleware.js';
+import { authenticateToken, AuthRequest } from './middleware/auth.js';
+import { GroqService } from './services/groq.service.js';
+import { query } from './db.js';
+
+// Import routes
+import authRoutes from './routes/auth.js';
+import workspaceRoutes from './routes/workspaces.js';
+import datasetRoutes from './routes/datasets.js';
+import dashboardRoutes from './routes/dashboards.js';
+import queryRoutes from './routes/queries.js';
+import validationRoutes from './routes/validation.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import paymentRoutes from './routes/payments.js';
+import userRoutes from './routes/users.js';
+import analyticsRoutes from './routes/analytics.js';
+
+const app = express();
+
+// Middleware
+app.use(helmet());
+app.use(cors({
+  origin: config.frontendUrl,
+  credentials: true
+}));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Trust proxy for Railway deployment
+app.set('trust proxy', 1);
+
+// Cache middleware for GET requests (5 minute TTL)
+app.use(cacheMiddleware({ ttl: 300 }));
+
+// Cache invalidation middleware for mutations
+app.use(invalidateCacheMiddleware());
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests, please try again later.'
+});
+
+app.use('/api/', limiter);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/workspaces', workspaceRoutes);
+app.use('/api/workspaces', datasetRoutes);
+app.use('/api/workspaces', dashboardRoutes);
+app.use('/api/workspaces', queryRoutes); // includes /workspaces/:id/datasets/:id/query
+app.use('/api/workspaces', validationRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/analytics', analyticsRoutes);
+
+// Top-level AI endpoints (not nested under workspaces)
+app.post('/api/generate-sql', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, query: nlQuery } = req.body;
+
+    if (!nlQuery) {
+      return res.status(400).json({ error: 'Query required' });
+    }
+
+    if (!dataset) {
+      return res.status(400).json({ error: 'Dataset required' });
+    }
+
+    console.log('Generating SQL for query:', nlQuery);
+    console.log('Dataset:', JSON.stringify(dataset).substring(0, 100));
+
+    // Use GroqService to generate SQL from natural language
+    const result = await GroqService.generateSQL(dataset, nlQuery);
+
+    console.log('Generated SQL:', result.sql);
+
+    res.json({
+      sql: result.sql,
+      explanation: result.explanation || ''
+    });
+  } catch (err) {
+    console.error('Generate SQL error:', err instanceof Error ? err.message : err);
+    console.error('Full error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate SQL' });
+  }
+});
+
+// Generate synthetic dataset endpoint
+app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { topic, fields, count } = req.body;
+
+    if (!topic || !fields || !count) {
+      return res.status(400).json({ error: 'Topic, fields, and count required' });
+    }
+
+    // Check subscription tier for max rows
+    const userResult = await query(
+      'SELECT tier FROM subscriptions WHERE user_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1',
+      [req.user!.id, 'active']
+    );
+
+    // Default to basic tier if no active subscription found
+    const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
+    
+    // Define max rows per tier
+    const tierLimits: Record<string, number> = {
+      'basic': 100,
+      'pro': 10000,
+      'enterprise': 1000000
+    };
+
+    const maxRows = tierLimits[tier] || 100;
+
+    if (count > maxRows) {
+      return res.status(400).json({ 
+        error: `Your ${tier} plan allows maximum ${maxRows} rows. Upgrade to generate more.`,
+        maxAllowed: maxRows,
+        tier
+      });
+    }
+
+    console.log(`Generating ${count} synthetic rows for topic: ${topic}`);
+
+    // Generate synthetic data with enhanced prompting
+    const syntheticData = await GroqService.generateSyntheticData(
+      topic,
+      fields,
+      Math.min(count, maxRows)
+    );
+
+    if (!syntheticData || syntheticData.length === 0) {
+      return res.status(500).json({ error: 'Failed to generate synthetic data' });
+    }
+
+    console.log(`Generated ${syntheticData.length} synthetic rows`);
+
+    res.json({
+      data: syntheticData,
+      count: syntheticData.length,
+      topic,
+      fields,
+      tier,
+      maxAllowed: maxRows,
+      generatedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Generate synthetic data error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate synthetic data' });
+  }
+});
+
+// ===== AI DASHBOARD ENDPOINTS =====
+
+// Suggest Dashboard Config from Dataset
+app.post('/api/suggest-dashboard', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset } = req.body;
+
+    if (!dataset) {
+      return res.status(400).json({ error: 'Dataset required' });
+    }
+
+    console.log('Suggesting dashboard for dataset with', dataset.data?.length || 0, 'rows');
+
+    const config = await GroqService.suggestDashboard(dataset);
+
+    res.json(config);
+  } catch (err) {
+    console.error('Suggest dashboard error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to suggest dashboard' });
+  }
+});
+
+// Modify Chart with AI
+app.post('/api/modify-chart', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, chart, prompt } = req.body;
+
+    if (!dataset || !chart || !prompt) {
+      return res.status(400).json({ error: 'Dataset, chart, and prompt required' });
+    }
+
+    console.log('Modifying chart:', chart.title, 'with prompt:', prompt);
+
+    const modifiedChart = await GroqService.modifyChartWithAI(dataset, chart, prompt);
+
+    res.json(modifiedChart);
+  } catch (err) {
+    console.error('Modify chart error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to modify chart' });
+  }
+});
+
+// Generate Chart from Prompt
+app.post('/api/generate-chart', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, prompt } = req.body;
+
+    if (!dataset || !prompt) {
+      return res.status(400).json({ error: 'Dataset and prompt required' });
+    }
+
+    console.log('Generating chart from prompt:', prompt);
+
+    const chart = await GroqService.generateChartFromPrompt(dataset, prompt);
+
+    res.json(chart);
+  } catch (err) {
+    console.error('Generate chart error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate chart' });
+  }
+});
+
+// Generate Strategic Report
+app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset } = req.body;
+
+    if (!dataset) {
+      return res.status(400).json({ error: 'Dataset required' });
+    }
+
+    console.log('Generating strategic report');
+
+    const report = await GroqService.generateReport(dataset);
+
+    res.json(report);
+  } catch (err) {
+    console.error('Generate report error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to generate report' });
+  }
+});
+
+// Consult Verified Agent (Chat/Q&A)
+app.post('/api/consult-agent', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, query, context } = req.body;
+
+    if (!dataset || !query) {
+      return res.status(400).json({ error: 'Dataset and query required' });
+    }
+
+    console.log('Consulting agent with query:', query);
+
+    const response = await GroqService.consultAgent(dataset, query, context);
+
+    res.json({ result: response });
+  } catch (err) {
+    console.error('Consult agent error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to consult agent' });
+  }
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Error handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'Internal server error'
+  });
+});
+
+const PORT = config.port || 3000;
+
+// Initialize Redis and start server
+async function startServer() {
+  try {
+    // Initialize Redis cache
+    await initializeRedis(config.redisUrl);
+    
+    const server = app.listen(PORT, () => {
+      console.log(`Backend server running on port ${PORT}`);
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+
+    // Graceful shutdown
+    process.on('SIGTERM', async () => {
+      console.log('SIGTERM received, shutting down gracefully...');
+      server.close(async () => {
+        await closeRedis();
+        process.exit(0);
+      });
+    });
+
+    process.on('SIGINT', async () => {
+      console.log('SIGINT received, shutting down gracefully...');
+      server.close(async () => {
+        await closeRedis();
+        process.exit(0);
+      });
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
+
+export default app;

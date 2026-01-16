@@ -1,0 +1,10 @@
+backend/
+.git/
+node_modules/
+.env
+.env.local
+.env.*.local
+.vercel/
+dist/
+.DS_Store
+*.log
