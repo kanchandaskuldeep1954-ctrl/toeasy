@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDataset } from '../hooks/useDataset';
 import { GroqService } from '../services/groqService';
 import { apiClient } from '../services/apiClient';
@@ -60,6 +61,9 @@ const ForensicCleanView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState<string>('');
 
+  const [searchParams] = useSearchParams();
+  const workspaceId = activeDataset?.workspace_id || searchParams.get('workspace');
+
   const [rawData, setRawData] = useState<DataRow[]>([]); // Immutable original
   const [cleanData, setCleanData] = useState<DataRow[]>([]); // Working copy
   const [quarantinedData, setQuarantinedData] = useState<DataRow[]>([]);
@@ -92,7 +96,7 @@ const ForensicCleanView: React.FC = () => {
           console.log(`[CleanView] Fetching full data for dataset ${activeDataset.id}...`);
           setLoading(true);
           setLoadingStep('Fetching dataset content...');
-          const res = await apiClient.get<Dataset>(`/workspaces/${activeDataset.workspace_id}/datasets/${activeDataset.id}`);
+          const res = await apiClient.get<Dataset>(`/workspaces/${workspaceId}/datasets/${activeDataset.id}`);
           if (res.data && res.data.raw_data) {
             raw = res.data.raw_data;
             // Update context to cache it
