@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Dataset, AnalysisInsight, CleaningAction, DataRow, ValidationRule, QualityDimension } from '../../types';
-import { GroqService } from '../../services/groqService';
-import { useDataset } from '../../hooks/useDataset';
-import { apiClient } from '../../services/apiClient';
+import { GroqService } from '../services/groqService';
+import { useDataset } from '../hooks/useDataset';
+import { apiClient } from '../services/apiClient';
 import ExportModal from './ExportHub/ExportModal';
 
 const ForensicCleanView: React.FC = () => {
@@ -306,8 +306,8 @@ const ForensicCleanView: React.FC = () => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
               className={`px-8 py-3 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all whitespace-nowrap ${activeTab === tab.id
-                  ? 'bg-indigo-600 text-white shadow-xl scale-105'
-                  : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                ? 'bg-indigo-600 text-white shadow-xl scale-105'
+                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
             >
               <span>{tab.icon}</span> {tab.label}
@@ -372,8 +372,8 @@ const ForensicCleanView: React.FC = () => {
                   key={dim}
                   onClick={() => setActiveDimension(dim as any)}
                   className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeDimension === dim
-                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
-                      : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
+                    : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                     }`}
                 >
                   {dim}
