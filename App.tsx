@@ -15,6 +15,7 @@ import { ProfilePage } from './src/components/ProfilePage';
 
 // App Pages
 import MainLayout from './src/components/Layout/MainLayout';
+import { UrlSync } from './src/components/UrlSync';
 import { WorkspacesView } from './src/components/WorkspacesView';
 import { DatasetLibrary } from './src/components/DatasetLibrary';
 import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
