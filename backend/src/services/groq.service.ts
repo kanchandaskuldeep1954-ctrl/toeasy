@@ -857,9 +857,9 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
         if (isNumeric) {
           const numValues = nonNullValues.map((v: any) => Number(v)).filter((v: any) => !isNaN(v));
           if (numValues.length > 5) {
-            const mean = numValues.reduce((a, b) => a + b, 0) / numValues.length;
-            const std = Math.sqrt(numValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / numValues.length);
-            outliers = numValues.filter(v => Math.abs(v - mean) > 3 * std);
+            const mean = numValues.reduce((a: number, b: number) => a + b, 0) / numValues.length;
+            const std = Math.sqrt(numValues.reduce((a: number, b: number) => a + Math.pow(b - mean, 2), 0) / numValues.length);
+            outliers = numValues.filter((v: number) => Math.abs(v - mean) > 3 * std);
           }
         }
 
