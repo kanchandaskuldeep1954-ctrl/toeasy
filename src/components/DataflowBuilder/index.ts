@@ -2,7 +2,9 @@
  * DataflowBuilder - Barrel Export
  */
 
-export { default as DataflowBuilder } from './DataflowBuilder';
+import DataflowBuilder from './DataflowBuilder';
+
+export { DataflowBuilder };
 export * from './dataflowTypes';
 
 export default DataflowBuilder;

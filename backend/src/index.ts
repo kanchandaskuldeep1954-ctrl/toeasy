@@ -21,6 +21,7 @@ import paymentRoutes from './routes/payments.js';
 import userRoutes from './routes/users.js';
 import analyticsRoutes from './routes/analytics.js';
 import cleaningRoutes from './routes/cleaning.js';
+import dataflowRoutes from './routes/dataflows.js';
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/workspaces', cleaningRoutes);
+app.use('/api/workspaces', dataflowRoutes);
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, async (req: AuthRequest, res) => {

@@ -18,8 +18,8 @@ export interface DataRow {
   };
 }
 
-export type SourceType = 
-  | 'csv' | 'excel' | 'googlesheets' 
+export type SourceType =
+  | 'csv' | 'excel' | 'googlesheets'
   | 'postgres' | 'mysql' | 'sqlserver' | 'mariadb' | 'azure_sql' | 'snowflake' | 'redshift' | 'bigquery'
   | 'salesforce' | 'hubspot' | 'zoho' | 'shopify' | 'woocommerce' | 'amazon_seller'
   | 'google_ads' | 'facebook_ads' | 'tiktok_ads' | 'linkedin_ads' | 'ga4'
@@ -53,7 +53,7 @@ export interface KPI {
   label: string;
   value: string | number;
   unit?: string;
-  trend?: number; 
+  trend?: number;
   trendDirection?: 'up' | 'down' | 'neutral' | 'flat';
   category?: 'financial' | 'quality' | 'operational' | 'efficiency' | 'growth';
   status?: 'on_track' | 'at_risk' | 'off_track';
@@ -70,9 +70,9 @@ export interface KPI {
 }
 
 export interface HistoryStep {
-    timestamp: Date;
-    description: string;
-    dataSnapshot: DataRow[]; 
+  timestamp: Date;
+  description: string;
+  dataSnapshot: DataRow[];
 }
 
 export interface SavedQuery {
@@ -85,20 +85,24 @@ export interface SavedQuery {
 }
 
 export interface Dataset {
+  id?: string;
+  createdAt?: string;
+  rowCount?: number;
+  cleaningActions?: CleaningAction[];
   name: string;
   sourceType: SourceType;
   headers: string[];
   data: DataRow[];
   originalData?: DataRow[];
-  quarantinedData?: DataRow[]; 
+  quarantinedData?: DataRow[];
   stats: ColumnStats[];
   healthScore?: number;
   fraudRate?: number;
   issuesCount?: { errors: number; warnings: number; infos: number; frauds: number };
   lastCleaned?: Date;
-  cleaningHistory: CleaningAction[]; 
+  cleaningHistory: CleaningAction[];
   historyStack?: HistoryStep[];
-  cleaningSuggestions?: CleaningAction[]; 
+  cleaningSuggestions?: CleaningAction[];
   analysisInsights?: AnalysisInsight[];
   kpis?: KPI[];
   customCharts?: ChartSpec[];
@@ -130,9 +134,9 @@ export interface CleaningAction {
   title: string;
   description: string;
   impactedRows: number;
-  status: 'pending' | 'applied' | 'preview' | 'rejected' | 'quarantined'; 
+  status: 'pending' | 'applied' | 'preview' | 'rejected' | 'quarantined';
   suggestion: string;
-  applyFunction?: string; 
+  applyFunction?: string;
   timestamp?: Date;
 }
 
@@ -145,11 +149,13 @@ export interface ValidationRule {
   qualityDimension?: QualityDimension;
   column: string;
   expression: string;
-  healFunction?: string; 
+  healFunction?: string;
   severity: 'error' | 'warning' | 'info';
   description: string;
   active: boolean;
   relationshipType?: 'Lookup' | 'Calculation' | 'Pattern' | 'Validation';
+  confidenceScore?: number;
+  reasoning?: string;
 }
 
 export interface AnalysisInsight {
@@ -195,6 +201,8 @@ export interface ChartSpec {
   chartConfig?: ChartConfig;
   insights?: string[];
   color?: string; // Legacy support
+  limit?: number;
+  showOther?: boolean;
 }
 
 export interface Pattern {
@@ -236,10 +244,10 @@ export interface ConnectorDef {
   id: SourceType;
   name: string;
   category: 'database' | 'finance' | 'sales' | 'marketing' | 'files' | 'engineering';
-  icon: string; 
+  icon: string;
   description: string;
   authType: 'oauth' | 'db_connection' | 'api_key';
-  brandColor?: string; 
+  brandColor?: string;
   fields: string[];
 }
 

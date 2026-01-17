@@ -27,6 +27,8 @@ export interface ValidationRule {
   expression: string; // JS boolean expression
   healFunction?: string; // JS execution code for recovery
   active: boolean;
+  confidenceScore?: number;
+  reasoning?: string;
 }
 
 export interface CleaningAction {
@@ -405,7 +407,24 @@ const ForensicCleanView: React.FC = () => {
                     <input type="checkbox" checked={rule.active} onChange={() => { }} className="accent-indigo-600" />
                   </div>
                   <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight mb-1">{rule.description}</p>
-                  <p className="text-[9px] font-mono text-slate-400 truncate">{rule.expression}</p>
+                  <p className="text-[9px] font-mono text-slate-400 truncate mb-2">{rule.expression}</p>
+
+                  {rule.confidenceScore !== undefined && (
+                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <div className="flex-1 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${rule.confidenceScore > 0.8 ? 'bg-emerald-500' : rule.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                          style={{ width: `${rule.confidenceScore * 100}%` }}
+                        />
+                      </div>
+                      <span className="text-[8px] font-black text-slate-400">{Math.round(rule.confidenceScore * 100)}%</span>
+                    </div>
+                  )}
+                  {rule.reasoning && (
+                    <p className="text-[9px] text-slate-500 italic mt-2 line-clamp-2 hover:line-clamp-none transition-all">
+                      " {rule.reasoning} "
+                    </p>
+                  )}
                 </div>
               ))
             )}

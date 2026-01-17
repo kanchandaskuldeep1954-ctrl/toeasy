@@ -35,7 +35,7 @@ Provide a brief semantic analysis of what this dataset contains, potential quali
 
     // Build a smarter prompt for realistic data generation
     const fieldDescriptions = actualFields.map(f => `- ${f} (provide realistic values)`).join('\n');
-    
+
     const prompt = `You are a data generation expert. Generate exactly ${count} realistic JSON objects for this topic: "${topic}"
 
 Required fields (use these exact names):
@@ -61,36 +61,36 @@ Now generate exactly ${count} realistic objects:`;
 
     const maxTokens = Math.min(count * 50, 8000); // Scale tokens based on count
     const groqResponse = await this.callGroq(prompt, maxTokens);
-    
+
     console.log(`Groq synthetic response length: ${groqResponse.length}, first 200 chars: ${groqResponse.substring(0, 200)}`);
-    
+
     try {
       // Try to extract JSON array from response
       let jsonStr = groqResponse.trim();
-      
+
       // If empty, log and throw error
       if (!jsonStr) {
         throw new Error('Groq API returned empty response');
       }
-      
+
       // If wrapped in markdown code blocks, extract the JSON
       if (jsonStr.includes('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
       } else if (jsonStr.includes('```')) {
         jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
       }
-      
+
       // Remove any leading/trailing whitespace
       jsonStr = jsonStr.trim();
-      
+
       if (!jsonStr) {
         throw new Error('No JSON content found in response');
       }
-      
+
       // Fix common JSON issues
       // 1. Remove trailing commas before closing brackets
       jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-      
+
       // 2. If it starts with [ and doesn't have matching ], add it
       if (jsonStr.startsWith('[') && !jsonStr.endsWith(']')) {
         // Find the last complete object and close the array
@@ -99,13 +99,13 @@ Now generate exactly ${count} realistic objects:`;
           jsonStr = jsonStr.substring(0, lastBracketIndex + 1) + ']';
         }
       }
-      
+
       console.log(`Parsing JSON of length: ${jsonStr.length}`);
       const data = JSON.parse(jsonStr);
       const cleanedData = Array.isArray(data) ? data : [data];
-      
+
       console.log(`Parsed ${cleanedData.length} records`);
-      
+
       // Ensure all records have all fields
       const normalized = cleanedData.map(row => {
         const normalized: any = {};
@@ -114,7 +114,7 @@ Now generate exactly ${count} realistic objects:`;
         });
         return normalized;
       });
-      
+
       const finalResult = normalized.slice(0, count);
       console.log(`Returning ${finalResult.length} synthetic records`);
       return finalResult;
@@ -135,7 +135,7 @@ Example: ["id", "name", "email", "created_at"]
 Generate fields:`;
 
     const result = await this.callGroq(prompt, 500);
-    
+
     try {
       let jsonStr = result.trim();
       if (jsonStr.includes('[')) {
@@ -167,7 +167,7 @@ Sample: ${JSON.stringify(sample)}
 Return JSON with: { charts: [], kpis: [], layout: {} }`;
 
     const result = await this.callGroq(prompt, 3000);
-    
+
     try {
       return JSON.parse(result);
     } catch {
@@ -179,7 +179,7 @@ Return JSON with: { charts: [], kpis: [], layout: {} }`;
     // Extract headers and sample data from dataset
     let headers: string[] = [];
     let sampleData: any[] = [];
-    
+
     if (dataset && dataset.columns && Array.isArray(dataset.columns)) {
       headers = dataset.columns;
       sampleData = dataset.data || [];
@@ -195,7 +195,7 @@ Return JSON with: { charts: [], kpis: [], layout: {} }`;
       headers = Object.keys(dataset[0]);
       sampleData = dataset;
     }
-    
+
     if (headers.length === 0) {
       headers = ['id', 'name', 'value']; // Default fallback
     }
@@ -227,7 +227,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
     try {
       const result = await this.callGroq(prompt, 600);
       console.log('Raw Groq response:', result.substring(0, 300));
-      
+
       // Try to parse the response
       try {
         const parsed = JSON.parse(result);
@@ -248,7 +248,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
           }
         }
       }
-      
+
       // Fallback: Generate smart SQL from query pattern
       console.warn('Failed to parse Groq response, using smart fallback');
       const sql = this.generateSmartSQL(query, headers, sampleData);
@@ -270,29 +270,29 @@ Respond ONLY with valid JSON, no markdown or extra text:
   private static generateSmartSQL(query: string, headers: string[], sampleData: any[]): string {
     const lowerQuery = query.toLowerCase();
     const columnStr = headers.length > 0 ? headers.join(', ') : '*';
-    
+
     // Smart column matching function
     const findMatchingColumn = (userTerm: string): string | null => {
       const lowerTerm = userTerm.toLowerCase();
-      
+
       // Exact match (case-insensitive)
       const exact = headers.find(h => h.toLowerCase() === lowerTerm);
       if (exact) return exact;
-      
+
       // Partial match - column contains the user term or vice versa
-      const partial = headers.find(h => 
+      const partial = headers.find(h =>
         h.toLowerCase().includes(lowerTerm) || lowerTerm.includes(h.toLowerCase())
       );
       if (partial) return partial;
-      
+
       return null;
     };
-    
+
     // Count queries (how many, count, total)
     if (lowerQuery.includes('count') || lowerQuery.includes('how many') || lowerQuery.includes('total')) {
       return `SELECT COUNT(*) as total FROM data`;
     }
-    
+
     // Specific column selection (show/select/display column_name)
     const columnMatch = query.match(/(?:show|select|give|display|only)\s+(?:me\s+)?(?:the\s+)?(?:only\s+)?([\w]+)/i);
     if (columnMatch) {
@@ -309,7 +309,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
         return `SELECT ${columnStr} FROM data LIMIT 5 ${suggestion}`;
       }
     }
-    
+
     // Distinct/Unique values
     if (lowerQuery.includes('distinct') || lowerQuery.includes('unique') || lowerQuery.includes('different')) {
       const columnMatch = query.match(/([\w]+)/);
@@ -321,14 +321,14 @@ Respond ONLY with valid JSON, no markdown or extra text:
         }
       }
     }
-    
+
     // Limit queries (first/top N rows)
     if (lowerQuery.includes('first') || lowerQuery.includes('top')) {
       const numMatch = query.match(/(\d+)/);
       const limit = numMatch ? numMatch[1] : '5';
       return `SELECT ${columnStr} FROM data LIMIT ${limit}`;
     }
-    
+
     // Default: select all
     return `SELECT ${columnStr} FROM data`;
   }
@@ -356,7 +356,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
         if (!content) {
           throw new Error('Empty response from Groq API');
         }
-        
+
         console.log('Groq API response received successfully');
         return content;
       } catch (error) {
@@ -382,25 +382,25 @@ Respond ONLY with valid JSON, no markdown or extra text:
       if (headers.length === 0) return { charts: [], kpis: [], patterns: [] };
 
       console.log('🔍 Analyzing dataset semantics...');
-      
+
       // NEW: Get semantic analysis
       const analysis = await this.analyzeDatasetSemantics(dataset);
       const relationships = await this.detectRelationships(dataset);
-      
-      console.log('📊 Analysis complete:', { 
-        domain: analysis.domain, 
+
+      console.log('📊 Analysis complete:', {
+        domain: analysis.domain,
         relationshipCount: relationships.length,
         quality: analysis.quality.overall
       });
 
       const charts = [];
       const sample = dataset.data?.slice(0, 50) || [];
-      
+
       // Build charts based on semantic relationships
       // 1. Primary relationship (highest priority)
       if (relationships.length > 0) {
         const primary = relationships[0];
-        
+
         if (primary.type === 'categorical-numeric') {
           charts.push({
             id: `chart-${Date.now()}-1`,
@@ -486,7 +486,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
       if (analysis.primaryMeasure && numericCols.length > 0) {
         const measureCol = analysis.primaryMeasure;
         const values = sample.map((r: any) => Number(r[measureCol]) || 0).filter((v: number) => !isNaN(v) && v !== null);
-        
+
         if (values.length > 0) {
           const sum = values.reduce((a: number, b: number) => a + b, 0);
           const avg = sum / values.length;
@@ -553,13 +553,13 @@ Respond ONLY with valid JSON, no markdown or extra text:
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const sample = dataset.data?.slice(0, 50) || [];
-      const numericCols = headers.filter((h: string) => 
+      const numericCols = headers.filter((h: string) =>
         sample.some((r: any) => !isNaN(Number(r[h])))
       );
       const categoricalCols = headers.filter((h: string) => !numericCols.includes(h));
 
       const charts = [];
-      
+
       if (categoricalCols.length > 0 && numericCols.length > 0) {
         charts.push({
           id: `chart-${Date.now()}-1`,
@@ -675,13 +675,13 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       const result = await this.callGroq(groqPrompt, 600);
       let jsonStr = result.trim();
-      
+
       if (jsonStr.includes('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
       } else if (jsonStr.includes('```')) {
         jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
       }
-      
+
       const modified = JSON.parse(jsonStr);
       return { ...chart, ...modified };
     } catch (error) {
@@ -693,7 +693,7 @@ Return ONLY valid JSON (no markdown, no explanation):
   static async generateChartFromPrompt(dataset: any, prompt: string): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      
+
       const groqPrompt = `You are a data visualization expert. Generate a chart specification based on this user request.
 
 Request: "${prompt}"
@@ -705,13 +705,13 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       const result = await this.callGroq(groqPrompt, 600);
       let jsonStr = result.trim();
-      
+
       if (jsonStr.includes('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
       } else if (jsonStr.includes('```')) {
         jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
       }
-      
+
       const spec = JSON.parse(jsonStr);
       return {
         id: `chart-${Date.now()}`,
@@ -745,7 +745,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const dataSize = dataset.data?.length || 0;
-      
+
       const groqPrompt = `You are a business intelligence analyst. Generate a strategic data analysis report.
 
 Dataset: ${headers.slice(0, 10).join(', ')}
@@ -775,13 +775,13 @@ Generate a report with ONLY this valid JSON structure (no markdown, no explanati
 
       const result = await this.callGroq(groqPrompt, 1500);
       let jsonStr = result.trim();
-      
+
       if (jsonStr.includes('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
       } else if (jsonStr.includes('```')) {
         jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
       }
-      
+
       return JSON.parse(jsonStr);
     } catch (error) {
       console.error('Report generation error:', error instanceof Error ? error.message : error);
@@ -805,7 +805,7 @@ Generate a report with ONLY this valid JSON structure (no markdown, no explanati
   static async consultAgent(dataset: any, query: string, context?: any): Promise<string> {
     try {
       const headers = dataset.headers || [];
-      
+
       const groqPrompt = `You are a data analyst AI assistant. Answer this question about the dataset concisely.
 
 Dataset columns: ${headers.join(', ')}
@@ -824,53 +824,288 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
 
   static async suggestValidationRules(dataset: any, semanticContext?: string): Promise<any[]> {
     try {
-        const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-        const sample = dataset.data?.slice(0, 5) || [];
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+      const data = dataset.data || [];
+      const sampleSize = Math.min(data.length, 100);
+      const sample = data.slice(0, sampleSize);
 
-        const prompt = `You are a Data Quality Architect. Suggest 3-5 validation rules (Logic Gates) for this dataset.
-        
-        DataSet Headers: ${headers.join(', ')}
-        Sample Data: ${JSON.stringify(sample)}
-        Semantic Context: ${semanticContext || 'General Business Data'}
+      // ========== STEP 1: Pre-analyze data quality issues ==========
+      const qualityIssues: any[] = [];
+      const columnStats: { [key: string]: any } = {};
 
-        Return a JSON array of rules. Each rule must have:
-        - description: "Fix missing prices by looking up ProductID" (String)
-        - category: "Recovery" or "Audit" (Recovery = fixable, Audit = check only)
-        - column: Target column name
-        - qualityDimension: "Completeness" | "Accuracy" | "Consistency" | "Validity"
-        - expression: JavaScript boolean expression (row['col'] > 0)
-        - healFunction: JavaScript code to fix it (row['col'] = 0) (Only for Recovery)
+      for (const col of headers) {
+        const values = sample.map((row: any) => row[col]);
+        const nullCount = values.filter((v: any) => v === null || v === undefined || v === '' || v === 'null' || v === 'undefined').length;
+        const nullPercent = (nullCount / sampleSize) * 100;
 
-        JSON format ONLY (no markdown):
-        [
-            { "description": "...", "category": "Recovery", "column": "...", "qualityDimension": "...", "expression": "...", "healFunction": "..." }
-        ]`;
+        // Detect data types
+        const nonNullValues = values.filter((v: any) => v !== null && v !== undefined && v !== '');
+        const numericCount = nonNullValues.filter((v: any) => !isNaN(Number(v)) && v !== '').length;
+        const dateCount = nonNullValues.filter((v: any) => {
+          const dateStr = String(v);
+          return !isNaN(Date.parse(dateStr)) || /^\d{4}-\d{2}-\d{2}/.test(dateStr);
+        }).length;
 
-        const result = await this.callGroq(prompt, 2000);
-        let rules = [];
+        const isNumeric = numericCount / Math.max(nonNullValues.length, 1) > 0.8;
+        const isDate = dateCount / Math.max(nonNullValues.length, 1) > 0.8;
+
+        // Check for type mismatches (expected numeric but has strings)
+        const typeMismatch = isNumeric && nonNullValues.some((v: any) => isNaN(Number(v)));
+
+        // Check for outliers in numeric columns
+        let outliers: number[] = [];
+        if (isNumeric) {
+          const numValues = nonNullValues.map((v: any) => Number(v)).filter((v: any) => !isNaN(v));
+          if (numValues.length > 5) {
+            const mean = numValues.reduce((a, b) => a + b, 0) / numValues.length;
+            const std = Math.sqrt(numValues.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / numValues.length);
+            outliers = numValues.filter(v => Math.abs(v - mean) > 3 * std);
+          }
+        }
+
+        // Check for duplicates in ID-like columns
+        const uniqueValues = new Set(values.map((v: any) => String(v)));
+        const duplicatePercent = 100 - (uniqueValues.size / values.length) * 100;
+        const isIdLike = col.toLowerCase().includes('id') || col.toLowerCase().includes('key');
+
+        // Check for invalid email patterns
+        const isEmail = col.toLowerCase().includes('email');
+        const invalidEmails = isEmail ? nonNullValues.filter((v: any) =>
+          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))
+        ) : [];
+
+        // Check for negative values where they shouldn't exist
+        const isPriceOrQuantity = /price|cost|amount|qty|quantity|count|total/i.test(col);
+        const negativeValues = isNumeric && isPriceOrQuantity ?
+          nonNullValues.filter((v: any) => Number(v) < 0) : [];
+
+        columnStats[col] = {
+          nullPercent: Math.round(nullPercent),
+          isNumeric,
+          isDate,
+          typeMismatch,
+          outlierCount: outliers.length,
+          duplicatePercent: Math.round(duplicatePercent),
+          isIdLike,
+          invalidEmailCount: invalidEmails.length,
+          negativeCount: negativeValues.length,
+          sampleValues: nonNullValues.slice(0, 3)
+        };
+
+        // Record quality issues found
+        if (nullPercent > 5) {
+          qualityIssues.push({
+            column: col,
+            issue: 'missing_values',
+            severity: nullPercent > 20 ? 'high' : 'medium',
+            detail: `${Math.round(nullPercent)}% null values`,
+            suggestion: 'Fill with default, calculate from related columns, or flag for review'
+          });
+        }
+        if (typeMismatch) {
+          qualityIssues.push({
+            column: col,
+            issue: 'type_mismatch',
+            severity: 'high',
+            detail: 'Expected numeric but contains non-numeric values',
+            suggestion: 'Parse numeric values, clean formatting characters'
+          });
+        }
+        if (outliers.length > 0) {
+          qualityIssues.push({
+            column: col,
+            issue: 'outliers',
+            severity: 'medium',
+            detail: `${outliers.length} statistical outliers detected`,
+            suggestion: 'Cap at reasonable bounds or flag for review'
+          });
+        }
+        if (isIdLike && duplicatePercent > 5) {
+          qualityIssues.push({
+            column: col,
+            issue: 'duplicates',
+            severity: 'high',
+            detail: `ID column has ${Math.round(duplicatePercent)}% duplicates`,
+            suggestion: 'Deduplicate or add unique constraint'
+          });
+        }
+        if (invalidEmails.length > 0) {
+          qualityIssues.push({
+            column: col,
+            issue: 'invalid_format',
+            severity: 'medium',
+            detail: `${invalidEmails.length} invalid email formats`,
+            suggestion: 'Validate email format, fix typos'
+          });
+        }
+        if (negativeValues.length > 0) {
+          qualityIssues.push({
+            column: col,
+            issue: 'invalid_values',
+            severity: 'medium',
+            detail: `${negativeValues.length} negative values in ${col}`,
+            suggestion: 'Convert to absolute value or flag as error'
+          });
+        }
+      }
+
+      // ========== STEP 2: Generate rules only for detected issues ==========
+      if (qualityIssues.length === 0) {
+        // No issues detected, return basic audit rules
+        return headers.slice(0, 3).map((col: string, idx: number) => ({
+          id: Math.random().toString(36).substr(2),
+          description: `Audit ${col} for data quality`,
+          category: 'Audit',
+          column: col,
+          qualityDimension: 'Completeness',
+          expression: `row['${col}'] !== null && row['${col}'] !== undefined && row['${col}'] !== ''`,
+          healFunction: '',
+          active: true,
+          confidence: 0.5,
+          reasoning: 'Baseline audit rule - no specific issues detected'
+        }));
+      }
+
+      // ========== STEP 3: Chain-of-thought prompt for targeted rules ==========
+      const issuesSummary = qualityIssues.slice(0, 5).map(i =>
+        `- ${i.column}: ${i.issue} (${i.severity}) - ${i.detail}`
+      ).join('\n');
+
+      const prompt = `You are a Data Quality Engineer. Generate validation rules to fix SPECIFIC issues found in this dataset.
+
+=== DATA QUALITY ANALYSIS RESULTS ===
+${issuesSummary}
+
+=== COLUMN STATISTICS ===
+${Object.entries(columnStats).slice(0, 5).map(([col, stats]: [string, any]) =>
+        `${col}: ${stats.isNumeric ? 'numeric' : 'text'}, ${stats.nullPercent}% null, samples: ${JSON.stringify(stats.sampleValues)}`
+      ).join('\n')}
+
+=== CHAIN OF THOUGHT ===
+For each issue above, think step-by-step:
+1. What is the root cause of this issue?
+2. Can it be automatically fixed (Recovery) or just flagged (Audit)?
+3. Write the simplest JavaScript expression to detect violations
+4. Write a safe heal function that won't corrupt data
+
+=== RULES TO GENERATE ===
+Generate exactly ${Math.min(qualityIssues.length, 5)} rules, one per detected issue.
+
+Return ONLY valid JSON array (no markdown):
+[
+  {
+    "description": "Brief description of what this rule does",
+    "category": "Recovery" or "Audit",
+    "column": "exact_column_name",
+    "qualityDimension": "Completeness|Accuracy|Consistency|Validity",
+    "expression": "JavaScript boolean - true if row is VALID",
+    "healFunction": "JavaScript code to fix row (only for Recovery)",
+    "reasoning": "Why this rule is needed based on analysis",
+    "confidence": 0.8
+  }
+]
+
+CRITICAL RULES:
+- Expression must return TRUE for VALID rows (pass = good)
+- healFunction must modify 'row' object directly: row['col'] = newValue
+- Use safe defaults: row['price'] = row['price'] || 0
+- For emails: use /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)
+- For nulls: check value !== null && value !== '' && value !== undefined`;
+
+      const result = await this.callGroq(prompt, 2500);
+      let rules: any[] = [];
+
+      try {
+        let jsonStr = result.trim();
+        if (jsonStr.includes('```json')) {
+          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+        } else if (jsonStr.includes('```')) {
+          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+        }
+        rules = JSON.parse(jsonStr);
+      } catch (e) {
+        console.error("Rule parsing failed", e);
+        // Return fallback rules based on detected issues
+        return qualityIssues.slice(0, 3).map((issue, idx) => ({
+          id: Math.random().toString(36).substr(2),
+          description: `Fix ${issue.issue} in ${issue.column}`,
+          category: issue.issue === 'missing_values' ? 'Recovery' : 'Audit',
+          column: issue.column,
+          qualityDimension: 'Completeness',
+          expression: `row['${issue.column}'] !== null && row['${issue.column}'] !== ''`,
+          healFunction: issue.issue === 'missing_values' ?
+            `if (!row['${issue.column}']) row['${issue.column}'] = 'N/A'` : '',
+          active: true,
+          confidence: 0.6,
+          reasoning: issue.detail
+        }));
+      }
+
+      // ========== STEP 4: Validate generated expressions ==========
+      const validatedRules = rules.map((r: any, idx: number) => {
+        let expressionValid = true;
+        let healFunctionValid = true;
+
+        // Test expression syntax
         try {
-            let jsonStr = result.trim();
-            if (jsonStr.includes('```json')) {
-                jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-            } else if (jsonStr.includes('```')) {
-                jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-            }
-            rules = JSON.parse(jsonStr);
-        } catch (e) { console.error("Rule parsing failed", e); }
-        
-        return rules.map((r: any) => ({ ...r, id: Math.random().toString(36).substr(2), active: true }));
+          const testRow = sample[0] || {};
+          const testFn = new Function('row', `return (${r.expression})`);
+          testFn(testRow);
+        } catch (e) {
+          console.warn(`Rule ${idx} expression invalid:`, e);
+          expressionValid = false;
+          // Fix common issues
+          r.expression = `row['${r.column}'] !== null && row['${r.column}'] !== ''`;
+        }
+
+        // Test heal function syntax
+        if (r.healFunction && r.category === 'Recovery') {
+          try {
+            const testRow = { ...sample[0] };
+            const healFn = new Function('row', r.healFunction);
+            healFn(testRow);
+          } catch (e) {
+            console.warn(`Rule ${idx} healFunction invalid:`, e);
+            healFunctionValid = false;
+            r.healFunction = `if (!row['${r.column}']) row['${r.column}'] = 'N/A'`;
+          }
+        }
+
+        return {
+          ...r,
+          id: Math.random().toString(36).substr(2),
+          active: true,
+          confidenceScore: (expressionValid && healFunctionValid) ? (r.confidence || 0.8) : 0.5,
+          validated: expressionValid && healFunctionValid
+        };
+      });
+
+      return validatedRules;
 
     } catch (error) {
-        console.error("Suggest rules error:", error);
-        return [];
+      console.error("Suggest rules error:", error);
+      // Return safe fallback rules
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+      return headers.slice(0, 2).map((col: string) => ({
+        id: Math.random().toString(36).substr(2),
+        description: `Check ${col} is not empty`,
+        category: 'Audit',
+        column: col,
+        qualityDimension: 'Completeness',
+        expression: `row['${col}'] !== null && row['${col}'] !== ''`,
+        healFunction: '',
+        active: true,
+        confidence: 0.5,
+        reasoning: 'Fallback rule due to analysis error'
+      }));
     }
   }
 
   static async generateLogicFromDescription(dataset: any, category: string, description: string): Promise<any> {
-      try {
-          const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-          
-          const prompt = `Generate JavaScript logic for a data validation rule.
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+
+      const prompt = `Generate JavaScript logic for a data validation rule.
           
           Headers: ${headers.join(', ')}
           Rule Description: "${description}"
@@ -884,20 +1119,20 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
               "relationshipType": "Lookup|Calculation|Pattern|Validation"
           }`;
 
-          const result = await this.callGroq(prompt, 1000);
-          let logic = {};
-          try {
-             let jsonStr = result.trim();
-             if (jsonStr.includes('```json')) jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-             else if (jsonStr.includes('```')) jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-             logic = JSON.parse(jsonStr);
-          } catch (e) { console.error("Logic parsing failed", e); }
-          
-          return logic;
-      } catch (error) {
-          console.error("Generate logic error:", error);
-          return { expression: 'true', healFunction: '' };
-      }
+      const result = await this.callGroq(prompt, 1000);
+      let logic = {};
+      try {
+        let jsonStr = result.trim();
+        if (jsonStr.includes('```json')) jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+        else if (jsonStr.includes('```')) jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+        logic = JSON.parse(jsonStr);
+      } catch (e) { console.error("Logic parsing failed", e); }
+
+      return logic;
+    } catch (error) {
+      console.error("Generate logic error:", error);
+      return { expression: 'true', healFunction: '' };
+    }
   }
 
   // ===== SEMANTIC DATA ANALYSIS METHODS =====
@@ -906,12 +1141,12 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const sample = dataset.data?.slice(0, 100) || [];
-      
+
       const analysis: any[] = [];
 
       for (const col of headers) {
         const values = sample.map((r: any) => r[col]).filter((v: any) => v !== null && v !== undefined && v !== '');
-        
+
         if (values.length === 0) {
           analysis.push({ column: col, type: 'unknown', cardinality: 0, nullness: 100, confidence: 0 });
           continue;
@@ -939,7 +1174,7 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
             // Check if it's currency or percentage
             const currencyCount = samples.filter((v: any) => String(v).match(/[$€£¥]/)).length;
             const percentCount = samples.filter((v: any) => String(v).match(/%/)).length;
-            
+
             if (currencyCount / samples.length > 0.5) {
               type = 'currency';
             } else if (percentCount / samples.length > 0.5) {
@@ -1016,7 +1251,7 @@ ANALYZE and return ONLY valid JSON (no markdown):
 
       const result = await this.callGroq(semanticPrompt, 800);
       let analysis = {};
-      
+
       try {
         // Extract JSON from markdown if needed
         let jsonStr = result.trim();
@@ -1145,7 +1380,7 @@ ANALYZE and return ONLY valid JSON (no markdown):
       for (let i = 0; i < sortedRels.length && charts.length < 6; i++) {
         const rel = sortedRels[i];
         const cardinalityCap = 15;
-        
+
         // Skip if high cardinality without proper aggregation
         if (rel.type === 'categorical-numeric') {
           const distinctCount = new Set((dataset.data || []).map((r: any) => r[rel.column1])).size;
@@ -1304,7 +1539,7 @@ ANALYZE and return ONLY valid JSON (no markdown):
       if (result.length > limit) {
         const topItems = result.slice(0, limit);
         const otherItems = result.slice(limit);
-        
+
         if (showOther && otherItems.length > 0) {
           const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
           topItems.push({ label: 'Other', value: otherValue });

@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import { apiClient } from '../../services/apiClient';
 import {
     Dataflow,
     DataflowNode,
@@ -25,6 +26,7 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
     onRun,
     onSave,
 }) => {
+    const [dataflowId, setDataflowId] = useState<string | null>(null);
     const [dataflow, setDataflow] = useState<Dataflow>({
         name: 'New Dataflow',
         description: '',
@@ -37,7 +39,10 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
     const [selectedNode, setSelectedNode] = useState<string | null>(null);
     const [showTemplates, setShowTemplates] = useState(true);
     const [isRunning, setIsRunning] = useState(false);
+    const [isSaving, setIsSaving] = useState(false);
     const [runProgress, setRunProgress] = useState(0);
+    const [lastSaved, setLastSaved] = useState<string | null>(null);
+    const [error, setError] = useState<string | null>(null);
 
     // Add a node to the canvas
     const addNode = useCallback((type: DataflowNodeType) => {
@@ -69,6 +74,7 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
             connections,
         }));
         setShowTemplates(false);
+        setError(null);
     }, [dataflow.nodes, dataflow.connections]);
 
     // Load a template
@@ -81,6 +87,7 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
                 description: template.description,
             });
             setShowTemplates(false);
+            setDataflowId(null); // Reset ID since it's a new flow
         }
     }, []);
 
@@ -103,44 +110,106 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
         }));
         setSelectedNode(null);
         setShowTemplates(true);
+        setDataflowId(null);
+        setLastSaved(null);
     }, []);
 
-    // Simulate running the dataflow
+    // Save dataflow to backend
+    const saveDataflow = useCallback(async () => {
+        if (dataflow.nodes.length === 0) return;
+
+        setIsSaving(true);
+        setError(null);
+
+        try {
+            const pipeline = dataflow.nodes.map(node => ({
+                type: node.type,
+                name: node.name,
+                config: node.config,
+            }));
+
+            const payload = {
+                name: dataflow.name,
+                description: dataflow.description,
+                pipeline,
+                isTemplate: dataflow.isTemplate,
+            };
+
+            let response;
+            if (dataflowId) {
+                // Update existing
+                response = await apiClient.put(`/workspaces/${workspaceId}/dataflows/${dataflowId}`, payload);
+            } else {
+                // Create new
+                response = await apiClient.post(`/workspaces/${workspaceId}/dataflows`, payload);
+                setDataflowId(response.data.id);
+            }
+
+            setLastSaved(new Date().toLocaleTimeString());
+            if (onSave) onSave(dataflow);
+        } catch (err) {
+            console.error('Save dataflow error:', err);
+            setError('Failed to save dataflow. Please try again.');
+        } finally {
+            setIsSaving(false);
+        }
+    }, [dataflow, dataflowId, workspaceId, onSave]);
+
+    // Run dataflow via backend API
     const runDataflow = useCallback(async () => {
         if (dataflow.nodes.length === 0) return;
 
         setIsRunning(true);
         setRunProgress(0);
+        setError(null);
 
-        // Simulate step-by-step execution
-        for (let i = 0; i < dataflow.nodes.length; i++) {
-            const node = dataflow.nodes[i];
-
-            // Update node status to running
-            setDataflow(prev => ({
-                ...prev,
-                nodes: prev.nodes.map(n =>
-                    n.id === node.id ? { ...n, status: 'running' } : n
-                ),
-            }));
-
-            // Simulate processing time
-            await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 500));
-
-            // Update node status to completed
-            setDataflow(prev => ({
-                ...prev,
-                nodes: prev.nodes.map(n =>
-                    n.id === node.id ? { ...n, status: 'completed' } : n
-                ),
-            }));
-
-            setRunProgress(((i + 1) / dataflow.nodes.length) * 100);
+        // First save if not saved
+        if (!dataflowId) {
+            await saveDataflow();
         }
 
-        setIsRunning(false);
-        if (onRun) onRun(dataflow);
-    }, [dataflow, onRun]);
+        try {
+            // Update all nodes to pending first
+            setDataflow(prev => ({
+                ...prev,
+                nodes: prev.nodes.map(n => ({ ...n, status: 'pending' })),
+            }));
+
+            // Execute via backend
+            const response = await apiClient.post(`/workspaces/${workspaceId}/dataflows/${dataflowId}/execute`, {
+                datasetId,
+            });
+
+            const { stepResults } = response.data;
+
+            // Update node statuses based on results
+            setDataflow(prev => ({
+                ...prev,
+                nodes: prev.nodes.map((n, idx) => {
+                    const result = stepResults?.[idx];
+                    return {
+                        ...n,
+                        status: result?.status === 'completed' ? 'completed' :
+                            result?.status === 'failed' ? 'failed' : 'completed',
+                    };
+                }),
+            }));
+
+            setRunProgress(100);
+            if (onRun) onRun(dataflow);
+        } catch (err) {
+            console.error('Run dataflow error:', err);
+            setError('Failed to execute dataflow. Please try again.');
+
+            // Mark all as failed
+            setDataflow(prev => ({
+                ...prev,
+                nodes: prev.nodes.map(n => ({ ...n, status: 'failed' })),
+            }));
+        } finally {
+            setIsRunning(false);
+        }
+    }, [dataflow, dataflowId, workspaceId, datasetId, onRun, saveDataflow]);
 
     // Get status color
     const getStatusColor = (status: DataflowNode['status']) => {
@@ -173,6 +242,12 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-3">
+                    {lastSaved && (
+                        <span className="text-xs text-emerald-500">✓ Saved {lastSaved}</span>
+                    )}
+                    {error && (
+                        <span className="text-xs text-rose-400">{error}</span>
+                    )}
                     <button
                         onClick={clearCanvas}
                         className="px-4 py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
@@ -180,10 +255,18 @@ const DataflowBuilder: React.FC<DataflowBuilderProps> = ({
                         Clear
                     </button>
                     <button
-                        onClick={() => onSave && onSave(dataflow)}
-                        className="px-4 py-2 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors"
+                        onClick={saveDataflow}
+                        disabled={isSaving || dataflow.nodes.length === 0}
+                        className="px-4 py-2 text-xs font-bold text-white bg-slate-800 rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
-                        Save
+                        {isSaving ? (
+                            <>
+                                <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                Saving...
+                            </>
+                        ) : (
+                            'Save'
+                        )}
                     </button>
                     <button
                         onClick={runDataflow}
