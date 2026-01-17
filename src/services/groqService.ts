@@ -48,14 +48,25 @@ export class GroqService {
   }
 
   // Batch apply rules to dataset (client-side operation)
+  // ENHANCED: Handles formula-based recovery, complex expressions, and detailed audit trail
   static applyBatchRulesToDataset(dataset: Dataset, rules: ValidationRule[]): Dataset {
+    console.log(`[Cleaning Engine] Processing ${(dataset.data || []).length} rows with ${rules.length} rules`);
+
+    // Combine main data and any previously quarantined data
     let pool = JSON.parse(JSON.stringify([...(dataset.data || []), ...(dataset.quarantinedData || [])])) as DataRow[];
 
+    // Initialize metadata for all rows
     pool.forEach(row => {
       if (!row.__metadata) {
-        row.__metadata = { recoveredFields: [], validationErrors: [], recoveryExplanations: {} };
+        row.__metadata = {
+          recoveredFields: [],
+          validationErrors: [],
+          recoveryExplanations: {},
+          auditLog: []
+        };
       } else {
         row.__metadata.validationErrors = [];
+        row.__metadata.auditLog = row.__metadata.auditLog || [];
       }
     });
 
@@ -63,8 +74,12 @@ export class GroqService {
     const recoveryRules = activeRules.filter(r => r.category === 'Recovery');
     const auditRules = activeRules.filter(r => r.category === 'Audit');
 
-    const MAX_PASSES = 6;
+    console.log(`[Cleaning Engine] Active rules: ${recoveryRules.length} recovery, ${auditRules.length} audit`);
 
+    const MAX_PASSES = 6;
+    let totalRecoveries = 0;
+
+    // Multi-pass recovery for handling dependencies
     for (let pass = 1; pass <= MAX_PASSES; pass++) {
       let changesInPass = 0;
 
@@ -73,33 +88,67 @@ export class GroqService {
           try {
             const val = row[rule.column];
 
-            const checkFn = new Function('value', 'row', 'index', 'fullData', `try { return (${rule.expression}); } catch(e) { return true; }`);
+            // Build the check function with error handling
+            const checkFn = new Function('value', 'row', 'index', 'fullData', `
+              try { 
+                return (${rule.expression}); 
+              } catch(e) { 
+                return true; 
+              }
+            `);
+
             const isValid = checkFn(val, row, index, pool);
 
             if (!isValid && rule.healFunction) {
-              const healFn = new Function('value', 'row', 'index', 'fullData', `try { ${rule.healFunction} } catch(e) {}`);
+              // Execute heal function with comprehensive error handling
+              const healFn = new Function('value', 'row', 'index', 'fullData', `
+                try { 
+                  ${rule.healFunction} 
+                } catch(e) { 
+                  console.warn('Heal function error:', e.message);
+                }
+              `);
+
               const preHealVal = JSON.stringify(row[rule.column]);
-
               healFn(val, row, index, pool);
-
               const postHealVal = JSON.stringify(row[rule.column]);
 
               if (preHealVal !== postHealVal) {
+                // Track the recovery
                 if (!row.__metadata!.recoveredFields!.includes(rule.column)) {
                   row.__metadata!.recoveredFields!.push(rule.column);
                 }
                 row.__metadata!.recoveryExplanations![rule.column] = `[Pass ${pass}] ${rule.description}`;
                 row.__metadata!.recoveryPass = pass;
+                row.__metadata!.auditLog!.push({
+                  action: 'recovered',
+                  field: rule.column,
+                  from: preHealVal,
+                  to: postHealVal,
+                  rule: rule.id,
+                  pass: pass,
+                  timestamp: new Date().toISOString()
+                });
                 changesInPass++;
+                totalRecoveries++;
               }
             }
-          } catch (e) { }
+          } catch (e) {
+            console.warn(`Rule execution error (${rule.id}):`, e);
+          }
         });
       });
 
-      if (changesInPass === 0 && pass > 1) break;
+      console.log(`[Cleaning Engine] Pass ${pass}: ${changesInPass} recoveries`);
+
+      // Optimization: stop if no changes in this pass (equilibrium reached)
+      if (changesInPass === 0 && pass > 1) {
+        console.log(`[Cleaning Engine] Equilibrium reached at pass ${pass}`);
+        break;
+      }
     }
 
+    // Audit phase: validate all rows against audit rules
     const cleanData: DataRow[] = [];
     const vaultData: DataRow[] = [];
 
@@ -108,12 +157,31 @@ export class GroqService {
       const violations: string[] = [];
 
       auditRules.forEach(rule => {
-        const val = row[rule.column];
-        const checkFn = new Function('value', 'row', 'index', 'fullData', `try { return (${rule.expression}); } catch(e) { return true; }`);
+        try {
+          // Handle multi-column rules (column = '*')
+          const targetCol = rule.column === '*' ? null : rule.column;
+          const val = targetCol ? row[targetCol] : null;
 
-        if (!checkFn(val, row, index, pool)) {
-          violations.push(`${rule.qualityDimension || 'Validity'}: ${rule.description}`);
-          quarantine = true;
+          const checkFn = new Function('value', 'row', 'index', 'fullData', `
+            try { 
+              return (${rule.expression}); 
+            } catch(e) { 
+              return true; 
+            }
+          `);
+
+          if (!checkFn(val, row, index, pool)) {
+            const severity = rule.severity || 'error';
+            violations.push(`${rule.qualityDimension || 'Validity'}: ${rule.description}`);
+
+            // Only quarantine on critical/error severity
+            if (severity === 'critical' || severity === 'error') {
+              quarantine = true;
+            }
+          }
+        } catch (e) {
+          // Rule execution failed, don't quarantine due to rule error
+          console.warn(`Audit rule execution error (${rule.id}):`, e);
         }
       });
 
@@ -128,13 +196,18 @@ export class GroqService {
       }
     });
 
+    const healthScore = Math.round((cleanData.length / Math.max(pool.length, 1)) * 100);
+
+    console.log(`[Cleaning Engine] Complete: ${cleanData.length} clean, ${vaultData.length} quarantined, ${totalRecoveries} total recoveries, health: ${healthScore}%`);
+
     return {
       ...dataset,
       data: cleanData,
       quarantinedData: vaultData,
-      healthScore: Math.round((cleanData.length / pool.length) * 100),
+      healthScore,
     };
   }
+
 
   // Suggest validation rules
   static async suggestValidationRules(dataset: Dataset, semanticContext?: string): Promise<ValidationRule[]> {

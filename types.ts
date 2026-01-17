@@ -15,8 +15,22 @@ export interface DataRow {
     recoveryPass?: number; // Which pass fixed this row
     isSuspicious?: boolean;
     patternLabels?: string[];
+    auditLog?: AuditLogEntry[]; // Track all recovery actions
   };
 }
+
+// Audit log entry for tracking data recovery actions
+export interface AuditLogEntry {
+  action: 'recovered' | 'quarantined' | 'modified' | 'validated';
+  field: string;
+  from?: string;
+  to?: string;
+  rule?: string;
+  pass?: number;
+  timestamp: string;
+  reason?: string;
+}
+
 
 export type SourceType =
   | 'csv' | 'excel' | 'googlesheets'
@@ -141,7 +155,7 @@ export interface CleaningAction {
 }
 
 export type RuleCategory = 'Recovery' | 'Audit';
-export type QualityDimension = 'Completeness' | 'Accuracy' | 'Consistency' | 'Validity' | 'Timeliness' | 'Uniqueness';
+export type QualityDimension = 'Completeness' | 'Accuracy' | 'Consistency' | 'Validity' | 'Timeliness' | 'Uniqueness' | 'Integrity' | 'Conformity' | 'Recoverability' | 'Semantics';
 
 export interface ValidationRule {
   id: string;
@@ -150,13 +164,16 @@ export interface ValidationRule {
   column: string;
   expression: string;
   healFunction?: string;
-  severity: 'error' | 'warning' | 'info';
+  severity: 'critical' | 'error' | 'warning' | 'info';
   description: string;
   active: boolean;
   relationshipType?: 'Lookup' | 'Calculation' | 'Pattern' | 'Validation';
   confidenceScore?: number;
+  confidence?: number;  // Alias for confidenceScore
   reasoning?: string;
+  validated?: boolean;  // Whether the expression was validated
 }
+
 
 export interface AnalysisInsight {
   title: string;

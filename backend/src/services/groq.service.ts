@@ -1,5 +1,7 @@
 import Groq from 'groq-sdk';
 import { config } from '../config.js';
+import { DataForensicsEngine } from './dataForensicsEngine.js';
+
 
 const groq = new Groq({
   apiKey: config.groqApiKey,
@@ -830,271 +832,80 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
     }
   }
 
+  /**
+   * ENHANCED: Universal Data Forensics Rule Generation
+   * Uses DataForensicsEngine for comprehensive analysis of ANY dataset
+   * Generates 50-100+ rules covering all quality dimensions
+   */
   static async suggestValidationRules(dataset: any, semanticContext?: string): Promise<any[]> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const data = dataset.data || [];
-      const sampleSize = Math.min(data.length, 100);
-      const sample = data.slice(0, sampleSize);
 
-      // ========== STEP 1: Pre-analyze data quality issues ==========
-      const qualityIssues: any[] = [];
-      const columnStats: { [key: string]: any } = {};
-
-      for (const col of headers) {
-        const values = sample.map((row: any) => row[col]);
-        const nullCount = values.filter((v: any) => v === null || v === undefined || v === '' || v === 'null' || v === 'undefined').length;
-        const nullPercent = (nullCount / sampleSize) * 100;
-
-        // Detect data types
-        const nonNullValues = values.filter((v: any) => v !== null && v !== undefined && v !== '');
-        const numericCount = nonNullValues.filter((v: any) => !isNaN(Number(v)) && v !== '').length;
-        const dateCount = nonNullValues.filter((v: any) => {
-          const dateStr = String(v);
-          return !isNaN(Date.parse(dateStr)) || /^\d{4}-\d{2}-\d{2}/.test(dateStr);
-        }).length;
-
-        const isNumeric = numericCount / Math.max(nonNullValues.length, 1) > 0.8;
-        const isDate = dateCount / Math.max(nonNullValues.length, 1) > 0.8;
-
-        // Check for type mismatches (expected numeric but has strings)
-        const typeMismatch = isNumeric && nonNullValues.some((v: any) => isNaN(Number(v)));
-
-        // Check for outliers in numeric columns
-        let outliers: number[] = [];
-        if (isNumeric) {
-          const numValues = nonNullValues.map((v: any) => Number(v)).filter((v: any) => !isNaN(v));
-          if (numValues.length > 5) {
-            const mean = numValues.reduce((a: number, b: number) => a + b, 0) / numValues.length;
-            const std = Math.sqrt(numValues.reduce((a: number, b: number) => a + Math.pow(b - mean, 2), 0) / numValues.length);
-            outliers = numValues.filter((v: number) => Math.abs(v - mean) > 3 * std);
-          }
-        }
-
-        // Check for duplicates in ID-like columns
-        const uniqueValues = new Set(values.map((v: any) => String(v)));
-        const duplicatePercent = 100 - (uniqueValues.size / values.length) * 100;
-        const isIdLike = col.toLowerCase().includes('id') || col.toLowerCase().includes('key');
-
-        // Check for invalid email patterns
-        const isEmail = col.toLowerCase().includes('email');
-        const invalidEmails = isEmail ? nonNullValues.filter((v: any) =>
-          !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v))
-        ) : [];
-
-        // Check for negative values where they shouldn't exist
-        const isPriceOrQuantity = /price|cost|amount|qty|quantity|count|total/i.test(col);
-        const negativeValues = isNumeric && isPriceOrQuantity ?
-          nonNullValues.filter((v: any) => Number(v) < 0) : [];
-
-        columnStats[col] = {
-          nullPercent: Math.round(nullPercent),
-          isNumeric,
-          isDate,
-          typeMismatch,
-          outlierCount: outliers.length,
-          duplicatePercent: Math.round(duplicatePercent),
-          isIdLike,
-          invalidEmailCount: invalidEmails.length,
-          negativeCount: negativeValues.length,
-          sampleValues: nonNullValues.slice(0, 3)
-        };
-
-        // Record quality issues found
-        if (nullPercent > 5) {
-          qualityIssues.push({
-            column: col,
-            issue: 'missing_values',
-            severity: nullPercent > 20 ? 'high' : 'medium',
-            detail: `${Math.round(nullPercent)}% null values`,
-            suggestion: 'Fill with default, calculate from related columns, or flag for review'
-          });
-        }
-        if (typeMismatch) {
-          qualityIssues.push({
-            column: col,
-            issue: 'type_mismatch',
-            severity: 'high',
-            detail: 'Expected numeric but contains non-numeric values',
-            suggestion: 'Parse numeric values, clean formatting characters'
-          });
-        }
-        if (outliers.length > 0) {
-          qualityIssues.push({
-            column: col,
-            issue: 'outliers',
-            severity: 'medium',
-            detail: `${outliers.length} statistical outliers detected`,
-            suggestion: 'Cap at reasonable bounds or flag for review'
-          });
-        }
-        if (isIdLike && duplicatePercent > 5) {
-          qualityIssues.push({
-            column: col,
-            issue: 'duplicates',
-            severity: 'high',
-            detail: `ID column has ${Math.round(duplicatePercent)}% duplicates`,
-            suggestion: 'Deduplicate or add unique constraint'
-          });
-        }
-        if (invalidEmails.length > 0) {
-          qualityIssues.push({
-            column: col,
-            issue: 'invalid_format',
-            severity: 'medium',
-            detail: `${invalidEmails.length} invalid email formats`,
-            suggestion: 'Validate email format, fix typos'
-          });
-        }
-        if (negativeValues.length > 0) {
-          qualityIssues.push({
-            column: col,
-            issue: 'invalid_values',
-            severity: 'medium',
-            detail: `${negativeValues.length} negative values in ${col}`,
-            suggestion: 'Convert to absolute value or flag as error'
-          });
-        }
+      if (data.length === 0 || headers.length === 0) {
+        return [];
       }
 
-      // ========== STEP 2: Generate rules only for detected issues ==========
-      if (qualityIssues.length === 0) {
-        // No issues detected, return basic audit rules
-        return headers.slice(0, 3).map((col: string, idx: number) => ({
-          id: Math.random().toString(36).substr(2),
-          description: `Audit ${col} for data quality`,
-          category: 'Audit',
-          column: col,
-          qualityDimension: 'Completeness',
-          expression: `row['${col}'] !== null && row['${col}'] !== undefined && row['${col}'] !== ''`,
-          healFunction: '',
-          active: true,
-          confidence: 0.5,
-          reasoning: 'Baseline audit rule - no specific issues detected'
-        }));
-      }
+      console.log(`[Forensics] Analyzing dataset: ${headers.length} columns, ${data.length} rows`);
 
-      // ========== STEP 3: Chain-of-thought prompt for targeted rules ==========
-      const issuesSummary = qualityIssues.slice(0, 5).map(i =>
-        `- ${i.column}: ${i.issue} (${i.severity}) - ${i.detail}`
-      ).join('\n');
+      // Use the DataForensicsEngine for comprehensive analysis
+      const forensicResult = await DataForensicsEngine.analyze(headers, data, 500);
 
-      const prompt = `You are a Data Quality Engineer. Generate validation rules to fix SPECIFIC issues found in this dataset.
+      console.log(`[Forensics] Analysis complete:
+        - ${forensicResult.profiles.length} columns profiled
+        - ${forensicResult.mathRelationships.length} math relationships detected
+        - ${forensicResult.crossFieldRules.length} cross-field rules
+        - ${forensicResult.garbageColumns.length} garbage columns
+        - ${forensicResult.validationRules.length} rules generated`);
 
-=== DATA QUALITY ANALYSIS RESULTS ===
-${issuesSummary}
-
-=== COLUMN STATISTICS ===
-${Object.entries(columnStats).slice(0, 5).map(([col, stats]: [string, any]) =>
-        `${col}: ${stats.isNumeric ? 'numeric' : 'text'}, ${stats.nullPercent}% null, samples: ${JSON.stringify(stats.sampleValues)}`
-      ).join('\n')}
-
-=== CHAIN OF THOUGHT ===
-For each issue above, think step-by-step:
-1. What is the root cause of this issue?
-2. Can it be automatically fixed (Recovery) or just flagged (Audit)?
-3. Write the simplest JavaScript expression to detect violations
-4. Write a safe heal function that won't corrupt data
-
-=== RULES TO GENERATE ===
-Generate exactly ${Math.min(qualityIssues.length, 5)} rules, one per detected issue.
-
-Return ONLY valid JSON array (no markdown):
-[
-  {
-    "description": "Brief description of what this rule does",
-    "category": "Recovery" or "Audit",
-    "column": "exact_column_name",
-    "qualityDimension": "Completeness|Accuracy|Consistency|Validity",
-    "expression": "JavaScript boolean - true if row is VALID",
-    "healFunction": "JavaScript code to fix row (only for Recovery)",
-    "reasoning": "Why this rule is needed based on analysis",
-    "confidence": 0.8
-  }
-]
-
-CRITICAL RULES:
-- Expression must return TRUE for VALID rows (pass = good)
-- healFunction must modify 'row' object directly: row['col'] = newValue
-- Use safe defaults: row['price'] = row['price'] || 0
-- For emails: use /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(value)
-- For nulls: check value !== null && value !== '' && value !== undefined`;
-
-      const result = await this.callGroq(prompt, 2500);
-      let rules: any[] = [];
-
-      try {
-        let jsonStr = result.trim();
-        if (jsonStr.includes('```json')) {
-          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-        } else if (jsonStr.includes('```')) {
-          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-        }
-        rules = JSON.parse(jsonStr);
-      } catch (e) {
-        console.error("Rule parsing failed", e);
-        // Return fallback rules based on detected issues
-        return qualityIssues.slice(0, 3).map((issue, idx) => ({
-          id: Math.random().toString(36).substr(2),
-          description: `Fix ${issue.issue} in ${issue.column}`,
-          category: issue.issue === 'missing_values' ? 'Recovery' : 'Audit',
-          column: issue.column,
-          qualityDimension: 'Completeness',
-          expression: `row['${issue.column}'] !== null && row['${issue.column}'] !== ''`,
-          healFunction: issue.issue === 'missing_values' ?
-            `if (!row['${issue.column}']) row['${issue.column}'] = 'N/A'` : '',
-          active: true,
-          confidence: 0.6,
-          reasoning: issue.detail
-        }));
-      }
-
-      // ========== STEP 4: Validate generated expressions ==========
-      const validatedRules = rules.map((r: any, idx: number) => {
-        let expressionValid = true;
-        let healFunctionValid = true;
-
+      // If forensics found good rules, validate them
+      const validatedRules = forensicResult.validationRules.map((rule: any) => {
         // Test expression syntax
+        let expressionValid = true;
         try {
-          const testRow = sample[0] || {};
-          const testFn = new Function('row', `return (${r.expression})`);
+          const testRow = data[0] || {};
+          const testFn = new Function('row', `try { return (${rule.expression}); } catch(e) { return true; }`);
           testFn(testRow);
         } catch (e) {
-          console.warn(`Rule ${idx} expression invalid:`, e);
+          console.warn(`Rule "${rule.description}" expression invalid, fixing...`);
           expressionValid = false;
-          // Fix common issues
-          r.expression = `row['${r.column}'] !== null && row['${r.column}'] !== ''`;
+          rule.expression = `row['${rule.column}'] !== null && row['${rule.column}'] !== ''`;
         }
 
-        // Test heal function syntax
-        if (r.healFunction && r.category === 'Recovery') {
+        // Test heal function if present
+        if (rule.healFunction && rule.category === 'Recovery') {
           try {
-            const testRow = { ...sample[0] };
-            const healFn = new Function('row', r.healFunction);
+            const testRow = { ...data[0] };
+            const healFn = new Function('row', rule.healFunction);
             healFn(testRow);
           } catch (e) {
-            console.warn(`Rule ${idx} healFunction invalid:`, e);
-            healFunctionValid = false;
-            r.healFunction = `if (!row['${r.column}']) row['${r.column}'] = 'N/A'`;
+            console.warn(`Rule "${rule.description}" healFunction invalid, fixing...`);
+            rule.healFunction = `if (!row['${rule.column}']) row['${rule.column}'] = null`;
           }
         }
 
         return {
-          ...r,
-          id: Math.random().toString(36).substr(2),
-          active: true,
-          confidenceScore: (expressionValid && healFunctionValid) ? (r.confidence || 0.8) : 0.5,
-          validated: expressionValid && healFunctionValid
+          ...rule,
+          validated: expressionValid,
+          confidenceScore: expressionValid ? (rule.confidence || 0.8) : 0.5
         };
       });
 
+      // If not enough rules, supplement with AI-generated rules
+      if (validatedRules.length < 10 && data.length > 0) {
+        console.log('[Forensics] Supplementing with AI-generated rules...');
+        const aiRules = await this.generateAISupplementRules(headers, data.slice(0, 20), forensicResult.profiles);
+        validatedRules.push(...aiRules);
+      }
+
+      console.log(`[Forensics] Final rule count: ${validatedRules.length}`);
       return validatedRules;
 
     } catch (error) {
       console.error("Suggest rules error:", error);
       // Return safe fallback rules
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      return headers.slice(0, 2).map((col: string) => ({
+      return headers.slice(0, 3).map((col: string) => ({
         id: Math.random().toString(36).substr(2),
         description: `Check ${col} is not empty`,
         category: 'Audit',
@@ -1108,6 +919,76 @@ CRITICAL RULES:
       }));
     }
   }
+
+  /**
+   * Generate AI-supplemented rules for complex patterns the forensics engine might miss
+   */
+  private static async generateAISupplementRules(headers: string[], sample: any[], profiles: any[]): Promise<any[]> {
+    try {
+      const profileSummary = profiles.slice(0, 8).map((p: any) =>
+        `${p.column}: ${p.role} (${p.dataType}, ${p.nullPercent}% null, placeholders: ${p.placeholders?.map((ph: any) => ph.value).join(', ') || 'none'})`
+      ).join('\n');
+
+      const prompt = `You are a data quality expert. Analyze this dataset and generate validation rules.
+
+COLUMN PROFILES:
+${profileSummary}
+
+SAMPLE ROW:
+${JSON.stringify(sample[0] || {}, null, 2)}
+
+Generate 5-10 validation rules following these patterns:
+1. Cross-column dependencies (if A then B must be...)
+2. Value range/format validations
+3. Business logic rules
+4. Data consistency rules
+
+Return ONLY valid JSON array (no markdown):
+[
+  {
+    "description": "Brief description",
+    "category": "Recovery" or "Audit",
+    "column": "column_name or *",
+    "qualityDimension": "Completeness|Accuracy|Consistency|Validity|Timeliness|Uniqueness",
+    "expression": "JS boolean - true if VALID (use row['col'] syntax)",
+    "healFunction": "JS to fix row (only for Recovery, use row['col'] = value)",
+    "reasoning": "Why this rule",
+    "confidence": 0.7
+  }
+]
+
+CRITICAL: Expression must return TRUE for VALID rows. Use row['columnName'] syntax.`;
+
+      const result = await this.callGroq(prompt, 2500);
+
+      let rules: any[] = [];
+      try {
+        let jsonStr = result.trim();
+        if (jsonStr.includes('```json')) {
+          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+        } else if (jsonStr.includes('```')) {
+          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+        }
+        rules = JSON.parse(jsonStr);
+      } catch (e) {
+        console.warn('Failed to parse AI supplement rules:', e);
+        return [];
+      }
+
+      return rules.map((r: any) => ({
+        ...r,
+        id: Math.random().toString(36).substr(2),
+        active: true,
+        severity: 'warning',
+        validated: false
+      }));
+
+    } catch (error) {
+      console.error('AI supplement rules error:', error);
+      return [];
+    }
+  }
+
 
   static async generateLogicFromDescription(dataset: any, category: string, description: string): Promise<any> {
     try {
