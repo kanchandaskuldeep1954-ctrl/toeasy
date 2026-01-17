@@ -9,115 +9,164 @@ interface PlotlyChartProps {
     onClick?: (data: any) => void;
 }
 
-// Modern dark theme for Plotly
-const PLOTLY_LAYOUT: Partial<Plotly.Layout> = {
-    paper_bgcolor: 'transparent',
-    plot_bgcolor: 'transparent',
-    font: { family: 'Inter, system-ui, sans-serif', color: '#94a3b8', size: 11 },
-    margin: { l: 50, r: 20, t: 40, b: 50 },
-    showlegend: true,
-    legend: { orientation: 'h', y: -0.15, x: 0.5, xanchor: 'center' },
-    xaxis: {
-        gridcolor: 'rgba(148, 163, 184, 0.1)',
-        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
-        tickfont: { size: 10 }
-    },
-    yaxis: {
-        gridcolor: 'rgba(148, 163, 184, 0.1)',
-        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
-        tickfont: { size: 10 }
-    },
-    hoverlabel: {
-        bgcolor: '#1e293b',
-        bordercolor: '#475569',
-        font: { color: '#f8fafc', size: 12 }
-    }
-};
-
 // Professional color palette
 const COLORS = [
     '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
     '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'
 ];
 
+// Modern dark theme layout
+const getLayout = (height: number, title?: string): Partial<Plotly.Layout> => ({
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Inter, system-ui, sans-serif', color: '#94a3b8', size: 11 },
+    margin: { l: 60, r: 30, t: 30, b: 60 },
+    showlegend: false,
+    height,
+    xaxis: {
+        gridcolor: 'rgba(148, 163, 184, 0.1)',
+        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
+        tickfont: { size: 10, color: '#94a3b8' }
+    },
+    yaxis: {
+        gridcolor: 'rgba(148, 163, 184, 0.1)',
+        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
+        tickfont: { size: 10, color: '#94a3b8' }
+    },
+    hoverlabel: {
+        bgcolor: '#1e293b',
+        bordercolor: '#475569',
+        font: { color: '#f8fafc', size: 12 }
+    }
+});
+
 export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, onClick }) => {
-    // Transform data based on chart type
-    const plotData = useMemo((): Plotly.Data[] => {
+    // Normalize data from backend to standard format
+    const normalizedData = useMemo(() => {
         const sourceData = data || chart.data || [];
         if (!Array.isArray(sourceData) || sourceData.length === 0) return [];
 
-        // Extract labels and values with fallbacks
-        const labels = sourceData.map((d: any) =>
-            String(d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown')
-        ).filter(l => l !== 'Unknown' && l !== 'undefined' && l !== 'null');
+        return sourceData.map((d: any) => ({
+            name: String(d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown'),
+            value: Number(d.value ?? d.y ?? d.count ?? 0),
+            x: d.x,
+            y: d.y,
+            size: d.size ?? d.z ?? 20
+        })).filter(d => d.name !== 'Unknown' && d.name !== 'undefined' && !isNaN(d.value));
+    }, [chart.data, data]);
 
-        const values = sourceData.map((d: any) => {
-            const val = Number(d.value ?? d.y ?? d.count ?? d.size ?? 0);
-            return isNaN(val) ? 0 : val;
-        });
+    // Build Plotly traces based on chart type
+    const plotData = useMemo((): Plotly.Data[] => {
+        if (normalizedData.length === 0) return [];
+
+        const labels = normalizedData.map(d => d.name);
+        const values = normalizedData.map(d => d.value);
 
         switch (chart.type) {
+            // ===== BAR CHARTS =====
             case 'bar':
-            case 'histogram':
                 return [{
                     x: labels,
                     y: values,
                     type: 'bar',
-                    marker: {
-                        color: COLORS[0],
-                        line: { width: 0 },
-                        opacity: 0.9
-                    },
-                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'
+                    marker: { color: COLORS[0], opacity: 0.9 },
+                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
+            case 'bar-horizontal':
+                return [{
+                    x: values,
+                    y: labels,
+                    type: 'bar',
+                    orientation: 'h',
+                    marker: { color: COLORS[0], opacity: 0.9 },
+                    hovertemplate: '<b>%{y}</b><br>Value: %{x:,.2f}<extra></extra>'
+                }];
+
+            // ===== LINE / AREA =====
             case 'line':
-            case 'area':
                 return [{
                     x: labels,
                     y: values,
                     type: 'scatter',
                     mode: 'lines+markers',
-                    fill: chart.type === 'area' ? 'tozeroy' : undefined,
                     line: { color: COLORS[2], width: 2, shape: 'spline' },
                     marker: { size: 6, color: COLORS[2] },
-                    fillcolor: chart.type === 'area' ? 'rgba(99, 102, 241, 0.2)' : undefined,
-                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'
+                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
+            case 'area':
+                return [{
+                    x: labels,
+                    y: values,
+                    type: 'scatter',
+                    mode: 'lines',
+                    fill: 'tozeroy',
+                    fillcolor: 'rgba(99, 102, 241, 0.3)',
+                    line: { color: COLORS[0], width: 2 },
+                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
+                }];
+
+            // ===== PIE / DONUT =====
             case 'pie':
+                return [{
+                    labels,
+                    values,
+                    type: 'pie',
+                    hole: 0,
+                    marker: { colors: COLORS },
+                    textinfo: 'percent+label',
+                    textposition: 'inside',
+                    hovertemplate: '<b>%{label}</b><br>%{value:,.2f} (%{percent})<extra></extra>'
+                }];
+
+            case 'donut':
             case 'doughnut':
                 return [{
                     labels,
                     values,
                     type: 'pie',
-                    hole: chart.type === 'doughnut' ? 0.5 : 0,
+                    hole: 0.5,
                     marker: { colors: COLORS },
                     textinfo: 'percent',
                     textposition: 'inside',
-                    hovertemplate: '<b>%{label}</b><br>%{value:,.0f} (%{percent})<extra></extra>'
+                    hovertemplate: '<b>%{label}</b><br>%{value:,.2f} (%{percent})<extra></extra>'
                 }];
 
+            // ===== SCATTER / BUBBLE =====
             case 'scatter':
-            case 'bubble':
-                const xVals = sourceData.map((d: any) => Number(d.x ?? 0));
-                const yVals = sourceData.map((d: any) => Number(d.y ?? 0));
-                const sizes = sourceData.map((d: any) => Math.max(10, Number(d.size ?? d.value ?? 15)));
                 return [{
-                    x: xVals,
-                    y: yVals,
+                    x: normalizedData.map(d => d.x ?? d.value),
+                    y: normalizedData.map(d => d.y ?? d.value * 0.8 + Math.random() * 100),
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        size: sizes,
+                        size: 10,
                         color: COLORS[4],
                         opacity: 0.7,
-                        line: { width: 1, color: '#fff' }
+                        line: { width: 1, color: 'white' }
                     },
                     text: labels,
-                    hovertemplate: '<b>%{text}</b><br>X: %{x}<br>Y: %{y}<extra></extra>'
+                    hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>'
                 }];
 
+            case 'bubble':
+                return [{
+                    x: normalizedData.map(d => d.x ?? d.value),
+                    y: normalizedData.map(d => d.y ?? d.value * 0.5 + Math.random() * 50),
+                    mode: 'markers',
+                    type: 'scatter',
+                    marker: {
+                        size: normalizedData.map(d => Math.min(Math.max(d.size, 10), 60)),
+                        color: COLORS,
+                        opacity: 0.7,
+                        line: { width: 1, color: 'white' }
+                    },
+                    text: labels,
+                    hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Size: %{marker.size}<extra></extra>'
+                }];
+
+            // ===== FUNNEL =====
             case 'funnel':
                 return [{
                     y: labels,
@@ -125,19 +174,50 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'funnel',
                     marker: { color: COLORS },
                     textinfo: 'value+percent total',
-                    hovertemplate: '<b>%{y}</b><br>%{x:,.0f}<extra></extra>'
+                    hovertemplate: '<b>%{y}</b><br>%{x:,.2f}<extra></extra>'
                 }];
 
-            case 'heatmap':
-                // For heatmap, we need a 2D array - simplified version
+            // ===== GAUGE =====
+            case 'gauge':
+                const gaugeValue = values[0] || 0;
+                const maxVal = Math.max(...values, 100);
                 return [{
-                    z: [values],
-                    x: labels,
-                    type: 'heatmap',
-                    colorscale: 'Viridis',
-                    hovertemplate: '<b>%{x}</b><br>Value: %{z}<extra></extra>'
+                    type: 'indicator',
+                    mode: 'gauge+number+delta',
+                    value: gaugeValue,
+                    title: { text: labels[0] || 'Value', font: { size: 14, color: '#94a3b8' } },
+                    gauge: {
+                        axis: { range: [0, maxVal], tickcolor: '#475569' },
+                        bar: { color: COLORS[0] },
+                        bgcolor: '#1e293b',
+                        borderwidth: 0,
+                        steps: [
+                            { range: [0, maxVal * 0.25], color: 'rgba(239, 68, 68, 0.3)' },
+                            { range: [maxVal * 0.25, maxVal * 0.5], color: 'rgba(234, 179, 8, 0.3)' },
+                            { range: [maxVal * 0.5, maxVal * 0.75], color: 'rgba(34, 197, 94, 0.3)' },
+                            { range: [maxVal * 0.75, maxVal], color: 'rgba(99, 102, 241, 0.3)' }
+                        ],
+                        threshold: {
+                            line: { color: '#f43f5e', width: 4 },
+                            thickness: 0.75,
+                            value: maxVal * 0.9
+                        }
+                    }
+                } as any];
+
+            // ===== RADAR =====
+            case 'radar':
+                return [{
+                    r: values,
+                    theta: labels,
+                    type: 'scatterpolar',
+                    fill: 'toself',
+                    fillcolor: 'rgba(99, 102, 241, 0.3)',
+                    line: { color: COLORS[0], width: 2 },
+                    marker: { size: 6, color: COLORS[0] }
                 }];
 
+            // ===== TREEMAP =====
             case 'treemap':
                 return [{
                     labels,
@@ -145,9 +225,25 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     values,
                     type: 'treemap',
                     textinfo: 'label+value',
-                    marker: { colors: COLORS }
+                    marker: {
+                        colors: values,
+                        colorscale: 'Blues'
+                    }
                 }];
 
+            // ===== HEATMAP =====
+            case 'heatmap':
+                // Create a simple 1D heatmap from the data
+                return [{
+                    z: [values],
+                    x: labels,
+                    y: ['Value'],
+                    type: 'heatmap',
+                    colorscale: 'Viridis',
+                    hovertemplate: '<b>%{x}</b><br>%{z:,.2f}<extra></extra>'
+                }];
+
+            // ===== WATERFALL =====
             case 'waterfall':
                 return [{
                     x: labels,
@@ -156,48 +252,63 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     connector: { line: { color: '#475569' } },
                     increasing: { marker: { color: '#22c55e' } },
                     decreasing: { marker: { color: '#f43f5e' } },
-                    hovertemplate: '<b>%{x}</b><br>%{y:,.0f}<extra></extra>'
+                    totals: { marker: { color: COLORS[0] } },
+                    hovertemplate: '<b>%{x}</b><br>%{y:,.2f}<extra></extra>'
                 }];
 
-            case 'radar':
+            // ===== HISTOGRAM =====
+            case 'histogram':
                 return [{
-                    r: values,
-                    theta: labels,
-                    type: 'scatterpolar',
-                    fill: 'toself',
-                    fillcolor: 'rgba(99, 102, 241, 0.3)',
-                    line: { color: COLORS[0] }
+                    x: values,
+                    type: 'histogram',
+                    marker: { color: COLORS[0], opacity: 0.8 },
+                    nbinsx: 15
                 }];
 
-            // Default to bar chart
+            // DEFAULT: Bar chart
             default:
                 return [{
                     x: labels,
                     y: values,
                     type: 'bar',
                     marker: { color: COLORS[0], opacity: 0.9 },
-                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.0f}<extra></extra>'
+                    hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
         }
-    }, [chart, data]);
+    }, [chart.type, normalizedData]);
 
-    // Build layout with chart title
-    const layout = useMemo((): Partial<Plotly.Layout> => ({
-        ...PLOTLY_LAYOUT,
-        height,
-        title: undefined, // We handle title externally
-        xaxis: {
-            ...PLOTLY_LAYOUT.xaxis,
-            title: chart.xAxis || undefined
-        },
-        yaxis: {
-            ...PLOTLY_LAYOUT.yaxis,
-            title: chart.yAxis || undefined
+    // Build layout based on chart type
+    const layout = useMemo((): Partial<Plotly.Layout> => {
+        const base = getLayout(height);
+
+        // Special layouts for certain chart types
+        if (chart.type === 'radar') {
+            return {
+                ...base,
+                polar: {
+                    radialaxis: { visible: true, range: [0, Math.max(...normalizedData.map(d => d.value)) * 1.1] },
+                    bgcolor: 'transparent'
+                }
+            };
         }
-    }), [chart, height]);
+
+        if (chart.type === 'pie' || chart.type === 'donut' || chart.type === 'doughnut') {
+            return { ...base, showlegend: true, legend: { font: { color: '#94a3b8' } } };
+        }
+
+        if (chart.type === 'gauge') {
+            return { ...base, margin: { l: 30, r: 30, t: 30, b: 30 } };
+        }
+
+        if (chart.type === 'bar-horizontal') {
+            return { ...base, yaxis: { ...base.yaxis, automargin: true } };
+        }
+
+        return base;
+    }, [chart.type, height, normalizedData]);
 
     // Handle empty data
-    if (plotData.length === 0 || (plotData[0] as any).x?.length === 0) {
+    if (normalizedData.length === 0) {
         return (
             <div className="w-full h-full flex items-center justify-center bg-slate-800/20 rounded-xl border border-dashed border-slate-700">
                 <p className="text-slate-500 text-sm">No data available for {chart.title}</p>
@@ -221,8 +332,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     onClick({
                         activePayload: [{
                             payload: {
-                                label: (point as any).x || (point as any).label,
-                                value: (point as any).y || (point as any).value
+                                label: (point as any).x || (point as any).label || (point as any).y,
+                                value: (point as any).y || (point as any).value || (point as any).x
                             }
                         }]
                     });

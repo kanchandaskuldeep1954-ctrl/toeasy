@@ -246,7 +246,7 @@ export class AnalyticsEngine {
             charts.push({
                 id: `top_10_${catCols[0].column}`,
                 title: `Top 10 ${catCols[0].column} by ${numCols[0].column}`,
-                type: 'bar', // Horizontal bar ideally
+                type: 'bar-horizontal',
                 priority: 'high',
                 size: 'medium',
                 data: this.aggregateByCategory(data, catCols[0].column, numCols[0].column).sort((a: any, b: any) => b.value - a.value).slice(0, 10),
