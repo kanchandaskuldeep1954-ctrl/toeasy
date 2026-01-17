@@ -170,6 +170,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
 
     const aggregateData = useCallback((chart: ChartSpec) => {
+        // PRIORITY 1: Use pre-aggregated data from backend if available
+        // This is the data pre-computed by AnalyticsEngine
+        if (chart.data && Array.isArray(chart.data) && chart.data.length > 0) {
+            // Normalize data to ensure it has the right format
+            return chart.data.map((d: any) => ({
+                name: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
+                value: Number(d.value ?? d.y ?? d.count ?? 0),
+                label: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
+                ...d
+            }));
+        }
+
+        // PRIORITY 2: Manual aggregation from raw data (for user-edited charts)
         if (!filteredData || filteredData.length === 0) return [];
 
         const xAxis = chart.xAxis;
