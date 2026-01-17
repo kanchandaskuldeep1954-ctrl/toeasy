@@ -23,13 +23,13 @@ export class GroqService {
       const baseUrl = this.getBaseUrl();
       const url = `${baseUrl}/api/${endpoint}`;
       console.log(`Calling API: ${method} ${url}`, body);
-      
+
       // Get auth token from localStorage
       const token = localStorage.getItem('auth_token');
       if (!token) {
         throw new Error('No token provided');
       }
-      
+
       const options: RequestInit = {
         method,
         headers: {
@@ -55,7 +55,7 @@ export class GroqService {
       throw error;
     }
   }
-  
+
   // Deep semantic analysis
   static async analyzeDatasetSemantics(dataset: Dataset): Promise<string> {
     const result = await this.callApi<{ result: string }>('analyze', 'POST', { dataset });
@@ -231,5 +231,136 @@ export class GroqService {
   // Generate SQL from natural language
   static async generateSQLFromNL(dataset: Dataset, query: string): Promise<{ sql: string; explanation: string }> {
     return await this.callApi('generate-sql', 'POST', { dataset, query });
+  }
+  // ===== CLIENT-SIDE SMART UTILITIES =====
+
+  /**
+   * Smart data aggregation for high-cardinality data
+   * Groups and aggregates data intelligently with support for "Other" category
+   */
+  static smartAggregateData(
+    data: DataRow[],
+    xColumn: string,
+    yColumn: string,
+    aggregation: string = 'sum',
+    limit: number = 15,
+    showOther: boolean = true
+  ): Array<{ label: string; value: number }> {
+    try {
+      if (!data || data.length === 0) return [];
+
+      const aggregated: { [key: string]: any } = {};
+
+      // Group data
+      for (const row of data) {
+        const xVal = String(row[xColumn] || 'Unknown').trim();
+        const yVal = Number(row[yColumn]) || 0;
+
+        if (!aggregated[xVal]) {
+          aggregated[xVal] = {
+            label: xVal,
+            value: 0,
+            count: 0,
+            sum: 0,
+            max: yVal,
+            min: yVal
+          };
+        }
+
+        aggregated[xVal].sum += yVal;
+        aggregated[xVal].count += 1;
+        aggregated[xVal].max = Math.max(aggregated[xVal].max, yVal);
+        aggregated[xVal].min = Math.min(aggregated[xVal].min, yVal);
+      }
+
+      // Apply aggregation function
+      const result = Object.values(aggregated).map((item: any) => {
+        let value = 0;
+        switch (aggregation.toLowerCase()) {
+          case 'sum':
+            value = item.sum;
+            break;
+          case 'avg':
+          case 'average':
+            value = item.sum / item.count;
+            break;
+          case 'count':
+            value = item.count;
+            break;
+          case 'max':
+            value = item.max;
+            break;
+          case 'min':
+            value = item.min;
+            break;
+          default:
+            value = item.sum;
+        }
+
+        return { label: item.label, value };
+      });
+
+      // Sort by value descending
+      result.sort((a, b) => b.value - a.value);
+
+      // Handle limit and "Other" category
+      if (result.length > limit) {
+        const topItems = result.slice(0, limit);
+        const otherItems = result.slice(limit);
+
+        if (showOther && otherItems.length > 0) {
+          const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
+          topItems.push({ label: 'Other', value: otherValue });
+        }
+
+        return topItems;
+      }
+
+      return result;
+    } catch (error) {
+      console.error('Smart aggregation error:', error);
+      return data.slice(0, limit).map((item: any) => ({
+        label: String(item[xColumn] || 'Unknown'),
+        value: Number(item[yColumn]) || 0
+      }));
+    }
+  }
+
+  /**
+   * Transform raw data for chart rendering
+   * Handles aggregation, sorting, and data quality issues
+   */
+  static transformChartData(
+    data: DataRow[],
+    chartSpec: ChartSpec
+  ): Array<{ label: string; value: number;[key: string]: any }> {
+    try {
+      if (!data || !chartSpec) return [];
+
+      const { xAxis, yAxis, aggregation, limit, showOther } = chartSpec;
+
+      // For scatter plots, return raw data
+      if (chartSpec.type === 'scatter') {
+        return data.map(row => ({
+          label: String(row[xAxis] || ''),
+          value: Number(row[yAxis]) || 0,
+          [xAxis]: Number(row[xAxis]) || 0,
+          [yAxis]: Number(row[yAxis]) || 0
+        }));
+      }
+
+      // For all other charts, use smart aggregation
+      return GroqService.smartAggregateData(
+        data,
+        xAxis,
+        yAxis,
+        aggregation || 'sum',
+        limit || 15,
+        showOther !== false
+      );
+    } catch (error) {
+      console.error('Chart data transformation error:', error);
+      return [];
+    }
   }
 }
