@@ -822,6 +822,84 @@ Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
     }
   }
 
+  static async suggestValidationRules(dataset: any, semanticContext?: string): Promise<any[]> {
+    try {
+        const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+        const sample = dataset.data?.slice(0, 5) || [];
+
+        const prompt = `You are a Data Quality Architect. Suggest 3-5 validation rules (Logic Gates) for this dataset.
+        
+        DataSet Headers: ${headers.join(', ')}
+        Sample Data: ${JSON.stringify(sample)}
+        Semantic Context: ${semanticContext || 'General Business Data'}
+
+        Return a JSON array of rules. Each rule must have:
+        - description: "Fix missing prices by looking up ProductID" (String)
+        - category: "Recovery" or "Audit" (Recovery = fixable, Audit = check only)
+        - column: Target column name
+        - qualityDimension: "Completeness" | "Accuracy" | "Consistency" | "Validity"
+        - expression: JavaScript boolean expression (row['col'] > 0)
+        - healFunction: JavaScript code to fix it (row['col'] = 0) (Only for Recovery)
+
+        JSON format ONLY (no markdown):
+        [
+            { "description": "...", "category": "Recovery", "column": "...", "qualityDimension": "...", "expression": "...", "healFunction": "..." }
+        ]`;
+
+        const result = await this.callGroq(prompt, 2000);
+        let rules = [];
+        try {
+            let jsonStr = result.trim();
+            if (jsonStr.includes('```json')) {
+                jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+            } else if (jsonStr.includes('```')) {
+                jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+            }
+            rules = JSON.parse(jsonStr);
+        } catch (e) { console.error("Rule parsing failed", e); }
+        
+        return rules.map((r: any) => ({ ...r, id: Math.random().toString(36).substr(2), active: true }));
+
+    } catch (error) {
+        console.error("Suggest rules error:", error);
+        return [];
+    }
+  }
+
+  static async generateLogicFromDescription(dataset: any, category: string, description: string): Promise<any> {
+      try {
+          const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+          
+          const prompt = `Generate JavaScript logic for a data validation rule.
+          
+          Headers: ${headers.join(', ')}
+          Rule Description: "${description}"
+          Category: ${category}
+          
+          Return JSON ONLY:
+          {
+              "expression": "JS boolean expression (true if valid)",
+              "healFunction": "JS code to fix invalid row (modify 'row' object directly)",
+              "qualityDimension": "Completeness|Accuracy|Consistency|Validity",
+              "relationshipType": "Lookup|Calculation|Pattern|Validation"
+          }`;
+
+          const result = await this.callGroq(prompt, 1000);
+          let logic = {};
+          try {
+             let jsonStr = result.trim();
+             if (jsonStr.includes('```json')) jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+             else if (jsonStr.includes('```')) jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+             logic = JSON.parse(jsonStr);
+          } catch (e) { console.error("Logic parsing failed", e); }
+          
+          return logic;
+      } catch (error) {
+          console.error("Generate logic error:", error);
+          return { expression: 'true', healFunction: '' };
+      }
+  }
+
   // ===== SEMANTIC DATA ANALYSIS METHODS =====
 
   static async detectColumnTypes(dataset: any): Promise<any[]> {

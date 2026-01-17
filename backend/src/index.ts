@@ -116,7 +116,7 @@ app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, 
 
     // Default to basic tier if no active subscription found
     const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
-    
+
     // Define max rows per tier
     const tierLimits: Record<string, number> = {
       'basic': 100,
@@ -127,7 +127,7 @@ app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, 
     const maxRows = tierLimits[tier] || 100;
 
     if (count > maxRows) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: `Your ${tier} plan allows maximum ${maxRows} rows. Upgrade to generate more.`,
         maxAllowed: maxRows,
         tier
@@ -266,6 +266,48 @@ app.post('/api/consult-agent', authenticateToken, async (req: AuthRequest, res) 
   }
 });
 
+// Deep Semantic Analysis
+app.post('/api/analyze', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset } = req.body;
+    if (!dataset) return res.status(400).json({ error: 'Dataset required' });
+
+    const analysis = await GroqService.analyzeDatasetSemantics(dataset);
+    res.json({ result: analysis }); // Wrap in result object to match frontend expectation
+  } catch (err) {
+    console.error('Analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze dataset' });
+  }
+});
+
+// Suggest Rules
+app.post('/api/suggest-rules', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, semanticContext } = req.body;
+    if (!dataset) return res.status(400).json({ error: 'Dataset required' });
+
+    const rules = await GroqService.suggestValidationRules(dataset, semanticContext);
+    res.json({ rules });
+  } catch (err) {
+    console.error('Suggest rules error:', err);
+    res.status(500).json({ error: 'Failed to suggest rules' });
+  }
+});
+
+// Generate Logic
+app.post('/api/generate-logic', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, category, title } = req.body; // Frontend sends 'title' as description
+    if (!dataset) return res.status(400).json({ error: 'Dataset required' });
+
+    const logic = await GroqService.generateLogicFromDescription(dataset, category, title);
+    res.json(logic);
+  } catch (err) {
+    console.error('Generate logic error:', err);
+    res.status(500).json({ error: 'Failed to generate logic' });
+  }
+});
+
 // 404 handler
 app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
@@ -286,7 +328,7 @@ async function startServer() {
   try {
     // Initialize Redis cache
     await initializeRedis(config.redisUrl);
-    
+
     const server = app.listen(PORT, () => {
       console.log(`Backend server running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);

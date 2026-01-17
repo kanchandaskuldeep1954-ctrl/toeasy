@@ -130,7 +130,6 @@ router.delete('/:workspaceId/datasets/:datasetId/rules/:ruleId', async (req: Aut
 // Get AI-suggested validation rules
 router.post('/:workspaceId/datasets/:datasetId/rules/suggest', async (req: AuthRequest, res) => {
   try {
-    // Get dataset
     const datasetResult = await query(
       'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
       [req.params.datasetId, req.params.workspaceId]
@@ -142,30 +141,80 @@ router.post('/:workspaceId/datasets/:datasetId/rules/suggest', async (req: AuthR
 
     const data = JSON.parse(datasetResult.rows[0].raw_data);
     const headers = Object.keys(data[0] || {});
-    const sample = data.slice(0, 10);
+    // Construct a minimal dataset object for the service
+    const datasetObj = { headers, data: data.slice(0, 50) }; // Send sample
 
-    // Analyze dataset to suggest rules
-    const analysis = await GroqService.analyzeDataset(headers, sample);
+    const semanticContext = req.body.semanticContext || '';
+    const suggestedRules = await GroqService.suggestValidationRules(datasetObj, semanticContext);
 
-    // Extract suggested rules from analysis
-    // This is a simplified version - in production, parse Groq's response properly
-    const suggestedRules = [
-      {
-        name: 'Null Check',
-        ruleType: 'null_check',
-        ruleDefinition: { columns: headers }
-      },
-      {
-        name: 'Data Type Consistency',
-        ruleType: 'type_check',
-        ruleDefinition: { columns: headers }
-      }
-    ];
-
-    res.json({ suggestedRules });
+    res.json(suggestedRules);
   } catch (err) {
     console.error('Suggest rules error:', err);
     res.status(500).json({ error: 'Failed to suggest validation rules' });
+  }
+});
+
+// Deep Semantic Analysis
+router.post('/:workspaceId/datasets/:datasetId/analyze', async (req: AuthRequest, res) => {
+  try {
+    const datasetResult = await query(
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
+    );
+
+    if (datasetResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    const data = JSON.parse(datasetResult.rows[0].raw_data);
+    const headers = Object.keys(data[0] || {});
+
+    const analysis = await GroqService.analyzeDatasetSemantics({ headers, data });
+    res.json(analysis);
+  } catch (err) {
+    console.error('Analysis error:', err);
+    res.status(500).json({ error: 'Failed to analyze dataset' });
+  }
+});
+
+// Generate Logic from NL
+router.post('/:workspaceId/datasets/:datasetId/rules/generate-logic', async (req: AuthRequest, res) => {
+  try {
+    const { description, category } = req.body;
+    const datasetResult = await query(
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
+    );
+    const data = JSON.parse(datasetResult.rows[0].raw_data);
+    const headers = Object.keys(data[0] || {});
+
+    const logic = await GroqService.generateLogicFromDescription({ headers, data: data.slice(0, 5) }, category, description);
+    res.json(logic);
+  } catch (err) {
+    console.error('Logic generation error:', err);
+    res.status(500).json({ error: 'Failed to generate logic' });
+  }
+});
+
+// Consult Agent
+router.post('/:workspaceId/datasets/:datasetId/consult-agent', async (req: AuthRequest, res) => {
+  try {
+    const { query: agentQuery, context } = req.body;
+    const datasetResult = await query(
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
+    );
+    const data = JSON.parse(datasetResult.rows[0].raw_data);
+
+    const answer = await GroqService.consultAgent({
+      headers: Object.keys(data[0] || {}),
+      data: data.slice(0, 50)
+    }, agentQuery, context);
+
+    res.json({ answer });
+  } catch (err) {
+    console.error('Agent consultation error:', err);
+    res.status(500).json({ error: 'Failed to consult agent' });
   }
 });
 
@@ -215,8 +264,8 @@ function validateData(data: any[], rules: any[]): any {
     let isValid = true;
 
     for (const rule of rules) {
-      const ruleDef = typeof rule.rule_definition === 'string' 
-        ? JSON.parse(rule.rule_definition) 
+      const ruleDef = typeof rule.rule_definition === 'string'
+        ? JSON.parse(rule.rule_definition)
         : rule.rule_definition;
 
       if (rule.rule_type === 'null_check') {
