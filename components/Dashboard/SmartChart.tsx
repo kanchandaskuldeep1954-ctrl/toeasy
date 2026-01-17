@@ -22,11 +22,18 @@ export const SmartChart: React.FC<SmartChartProps> = ({ chart, data, height = 30
         const sourceData = data || chart.data;
         if (!sourceData || !Array.isArray(sourceData)) return [];
 
-        return sourceData.map((d: any) => ({
-            label: d.name || d.label || d.x || 'Unknown',
-            value: Number(d.value || d.y || 0),
-            ...d
-        } as DataPoint));
+        return sourceData
+            .map((d: any) => {
+                const rawValue = d.value ?? d.y ?? d.count ?? 0;
+                const numericValue = Number(rawValue);
+                
+                return {
+                    label: String(d.name || d.label || d.x || d.category || 'Unknown'),
+                    value: isNaN(numericValue) ? 0 : numericValue,
+                    ...d
+                } as DataPoint;
+            })
+            .filter((d: DataPoint) => d.label && d.label !== 'undefined' && d.label !== 'null');
     }, [chart.data, data]);
 
     // Handle empty data

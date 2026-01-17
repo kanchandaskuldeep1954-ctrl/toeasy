@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
 import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
-import { SmartChart } from './Dashboard/SmartChart';
+import { PlotlyChart } from './Dashboard/PlotlyChart';
 import { KPICard } from './Dashboard/KPICard';
 import { FilterPanel } from './Dashboard/FilterPanel';
 import { InsightCard } from './Dashboard/InsightCard';
@@ -736,7 +736,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 </div>
 
                                 <div className="flex-1 w-full relative min-h-[300px] cursor-crosshair">
-                                    <SmartChart
+                                    <PlotlyChart
                                         chart={chart}
                                         data={data}
                                         onClick={(data) => handleChartClick(data, chart)}
@@ -809,7 +809,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                     if (previewData.length === 0) return <div className="flex items-center justify-center h-full text-slate-400 font-medium">Invalid Configuration or Empty Data</div>;
                                     return (
                                         <div className="w-full h-full">
-                                            <SmartChart chart={editedChart} data={previewData} />
+                                            <PlotlyChart chart={editedChart} data={previewData} />
                                         </div>
                                     );
                                 })()}
