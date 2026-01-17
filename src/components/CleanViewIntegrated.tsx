@@ -76,20 +76,47 @@ const ForensicCleanView: React.FC = () => {
   const [agentResponse, setAgentResponse] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
 
+  import { apiClient } from '../services/apiClient';
+
   // Initialize from context
   useEffect(() => {
-    if (activeDataset && activeDataset.raw_data) {
-      // Ensure data format
+    const loadData = async () => {
+      if (!activeDataset) return;
+
       let raw: any = activeDataset.raw_data;
+
+      // If no data, try fetching it
+      if (!raw || (Array.isArray(raw) && raw.length === 0 && activeDataset.row_count > 0)) {
+        try {
+          console.log(`[CleanView] Fetching full data for dataset ${activeDataset.id}...`);
+          setLoading(true);
+          setLoadingStep('Fetching dataset content...');
+          const res = await apiClient.get<Dataset>(`/datasets/${activeDataset.id}`);
+          if (res.data && res.data.raw_data) {
+            raw = res.data.raw_data;
+            // Update context to cache it
+            updateDataset(activeDataset.id, { raw_data: raw });
+          }
+        } catch (err) {
+          console.error("Failed to fetch dataset content", err);
+        } finally {
+          setLoading(false);
+          setLoadingStep('');
+        }
+      }
+
+      // Parse if string
       if (typeof raw === 'string') {
         try { raw = JSON.parse(raw); } catch (e) { console.error("Failed to parse raw_data", e); raw = []; }
       }
 
-      if (Array.isArray(raw)) {
+      if (Array.isArray(raw) && raw.length > 0) {
         setRawData(raw);
         setCleanData(raw); // Initial clean data is same as raw
       }
-    }
+    };
+
+    loadData();
   }, [activeDataset]);
 
   // --- Core Actions ---
