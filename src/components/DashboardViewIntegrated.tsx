@@ -15,6 +15,12 @@ const DashboardViewIntegrated: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Agent State
+  const [agentQuery, setAgentQuery] = useState('');
+  const [agentResponse, setAgentResponse] = useState('');
+  const [isAgentThinking, setIsAgentThinking] = useState(false);
+  const [isAgentOpen, setIsAgentOpen] = useState(false);
+
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
@@ -88,11 +94,6 @@ const DashboardViewIntegrated: React.FC = () => {
     );
   }
 
-  // Agent State
-  const [agentQuery, setAgentQuery] = useState('');
-  const [agentResponse, setAgentResponse] = useState('');
-  const [isAgentThinking, setIsAgentThinking] = useState(false);
-  const [isAgentOpen, setIsAgentOpen] = useState(false);
 
   const consultAgent = async () => {
     if (!agentQuery) return;
