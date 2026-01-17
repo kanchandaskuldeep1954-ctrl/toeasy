@@ -1,357 +1,815 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useDataset } from '../hooks/useDataset';
-import { GroqService } from '../services/groqService';
-import { apiClient } from '../services/apiClient';
+import { Dataset, AnalysisInsight, CleaningAction, DataRow, ValidationRule, QualityDimension } from '../../types';
+import { GroqService } from '../../services/groqService';
+import { useDataset } from '../../hooks/useDataset';
+import { apiClient } from '../../services/apiClient';
 import ExportModal from './ExportHub/ExportModal';
 
-// --- Types (Locally defined to ensure self-containment) ---
-
-export interface DataRow {
-  [key: string]: any;
-  __metadata?: {
-    isQuarantined?: boolean;
-    validationErrors?: string[];
-    recoveredFields?: string[];
-    recoveryExplanations?: { [key: string]: string };
-    recoveryPass?: number;
-  };
-}
-
-export interface ValidationRule {
-  id: string;
-  category: 'Recovery' | 'Audit';
-  column: string;
-  description: string;
-  qualityDimension: 'Completeness' | 'Accuracy' | 'Consistency' | 'Validity' | 'Uniqueness' | 'Timeliness';
-  expression: string; // JS boolean expression
-  healFunction?: string; // JS execution code for recovery
-  active: boolean;
-  confidenceScore?: number;
-  reasoning?: string;
-}
-
-export interface CleaningAction {
-  id: string;
-  title: string;
-  description: string;
-  type: string;
-  impactedRows: number;
-  status: 'pending' | 'applied' | 'dismissed';
-  applyFunction?: string; // Cache the generated code
-  timestamp?: Date;
-}
-
-export interface DeepAnalysisResult {
-  domain: string;
-  keyInsights: string[];
-  quality: {
-    overall: number;
-    completeness: number;
-    uniqueness: number;
-    validity: number;
-  };
-  semanticContext?: string; // Helper for passing to rule generator
-}
-
-// --- Main Component ---
-
 const ForensicCleanView: React.FC = () => {
-  const { activeDataset, updateDataset } = useDataset();
+  const { activeDataset: dataset, updateDataset } = useDataset();
+  // Using 'onUpdate' alias for compatibility with logic
+  const onUpdate = (updated: Dataset | Partial<Dataset>) => {
+    if (dataset) {
+      // If we are updating the full dataset object or partial
+      updateDataset(dataset.id, updated as Partial<Dataset>);
+    }
+  };
+  const onAIAction = () => { /* Optional telemetry/UI feedback */ };
 
-  // Local state for the view
-  const [activeTab, setActiveTab] = useState<'raw' | 'clean' | 'audit' | 'quarantine'>('raw');
-  const [loading, setLoading] = useState(false);
-  const [loadingStep, setLoadingStep] = useState<string>('');
+  const [activeTab, setActiveTab] = useState<'validation' | 'editor' | 'quarantine'>('validation');
+  const [loading, setLoading] = useState(true);
+  const [loadingStep, setLoadingStep] = useState<string>(''); // For loading feedback
+  const [semanticContext, setSemanticContext] = useState<string>(''); // New State
 
-  const [searchParams] = useSearchParams();
-  const workspaceId = activeDataset?.workspace_id || searchParams.get('workspace');
+  const [pendingActions, setPendingActions] = useState<CleaningAction[]>([]);
+  const [insights, setInsights] = useState<AnalysisInsight[]>([]);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [previewData, setPreviewData] = useState<DataRow[]>([]);
 
-  const [rawData, setRawData] = useState<DataRow[]>([]); // Immutable original
-  const [cleanData, setCleanData] = useState<DataRow[]>([]); // Working copy
-  const [quarantinedData, setQuarantinedData] = useState<DataRow[]>([]);
+  // Rule Engine State
+  const [isExecuting, setIsExecuting] = useState(false);
+  const [execStatus, setExecStatus] = useState('');
   const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
-  const [auditLog, setAuditLog] = useState<CleaningAction[]>([]); // Transparency log
+  const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
+  const [nlRuleInput, setNlRuleInput] = useState('');
+  const [activeDimension, setActiveDimension] = useState<QualityDimension | 'All'>('All');
+  const [isGeneratingRule, setIsGeneratingRule] = useState(false);
+  const [showRuleEditor, setShowRuleEditor] = useState(false);
+  const [isAutoGeneratingLogic, setIsAutoGeneratingLogic] = useState(false);
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
+  const [ruleFormData, setRuleFormData] = useState<Partial<ValidationRule>>({
+    column: dataset?.headers[0] || '',
+    category: 'Recovery',
+    description: '',
+    expression: 'true',
+    healFunction: '',
+    severity: 'error',
+    qualityDimension: 'Validity'
+  });
 
-  const [deepAnalysis, setDeepAnalysis] = useState<DeepAnalysisResult | null>(null);
-
-  const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStatus, setProcessingStatus] = useState('');
-
-  // Agent State
+  // Editor Agent State
+  const [selectedCell, setSelectedCell] = useState<{ rowIdx: number, field: string, value: any, row: DataRow } | null>(null);
   const [agentQuery, setAgentQuery] = useState('');
-  const [agentResponse, setAgentResponse] = useState('');
+  const [agentHistory, setAgentHistory] = useState<{ role: 'user' | 'agent', text: string }[]>([]);
   const [isAgentThinking, setIsAgentThinking] = useState(false);
-  const [isAgentOpen, setIsAgentOpen] = useState(false);
 
-  // Export & Confirm State
-  const [showExportModal, setShowExportModal] = useState(false);
-  const [isConfirming, setIsConfirming] = useState(false);
+  // Vault Agent State
+  const [selectedCluster, setSelectedCluster] = useState<string>('All Vault Isolated');
+  const [selectedVaultRow, setSelectedVaultRow] = useState<DataRow | null>(null);
+  const [vaultAgentQuery, setVaultAgentQuery] = useState('');
+  const [vaultAgentHistory, setVaultAgentHistory] = useState<{ role: 'user' | 'agent', text: string }[]>([]);
+  const [isVaultAgentThinking, setIsVaultAgentThinking] = useState(false);
+
+  // Confirm State
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
-  // Confirm Cleaning Handler
+  const displayHeaders = dataset ? dataset.headers.filter(h => h !== '__metadata') : [];
+
+  // Initialize view from dataset state (Cache Hit) & Logic Gates
+  useEffect(() => {
+    const init = async () => {
+      if (!dataset) return;
+
+      setPreviewData(dataset.data || []);
+      setLoading(true);
+
+      // Check for cached suggestions
+      if (dataset.cleaningSuggestions && dataset.cleaningSuggestions.length > 0) {
+        setPendingActions(dataset.cleaningSuggestions);
+        setInsights(dataset.analysisInsights || []);
+      }
+
+      // Initialize Rules with Deep Semantic Analysis if needed
+      if ((!dataset.validationRules || dataset.validationRules.length === 0) && dataset.data.length > 0) {
+        try {
+          if (onAIAction) onAIAction();
+
+          // Step 1: Deep Semantic Analysis
+          setLoadingStep('Deep Semantic Analysis (Understanding Meaning)...');
+          const semantics = await GroqService.analyzeDatasetSemantics(dataset);
+          setSemanticContext(semantics);
+
+          // Step 2: Comprehensive Rule Generation
+          setLoadingStep(`Architecting Logic Gates based on: "${semantics.substring(0, 30)}..."`);
+          const suggested = await GroqService.suggestValidationRules(dataset, semantics);
+
+          setValidationRules(suggested);
+          onUpdate({ ...dataset, validationRules: suggested });
+        } catch (e) { console.error("Rule suggestion failed", e); }
+      } else if (dataset.validationRules) {
+        setValidationRules(dataset.validationRules);
+      }
+
+      setLoading(false);
+    };
+    init();
+  }, [dataset?.id]);
+
+  const handleAutoGenerateLogic = async () => {
+    if (!dataset || !ruleFormData.description) return;
+    setIsAutoGeneratingLogic(true);
+    try {
+      if (onAIAction) onAIAction();
+      const res = await GroqService.generateLogicFromDescription(dataset, ruleFormData.category || 'Recovery', ruleFormData.description);
+      setRuleFormData(prev => ({
+        ...prev,
+        expression: res.expression,
+        healFunction: res.healFunction || '',
+        relationshipType: res.relationshipType as any,
+        qualityDimension: res.qualityDimension
+      }));
+    } catch (e) { alert("Forensic Stream interrupted."); }
+    finally { setIsAutoGeneratingLogic(false); }
+  };
+
+  const handleAddNlRule = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!dataset || !nlRuleInput.trim() || isGeneratingRule) return;
+    setIsGeneratingRule(true);
+    try {
+      if (onAIAction) onAIAction();
+      const rule = await GroqService.generateRuleFromNL(dataset, nlRuleInput, 'Recovery');
+      const newRules = [...validationRules, rule];
+      setValidationRules(newRules);
+      onUpdate({ ...dataset, validationRules: newRules });
+      setNlRuleInput('');
+    } catch (e) { alert("Forensic architect failed to deploy."); }
+    finally { setIsGeneratingRule(false); }
+  };
+
+  const handleRunSelectedRules = async () => {
+    if (!dataset || selectedRuleIds.size === 0) return;
+    setIsExecuting(true);
+    setExecStatus('Initializing Recursive Healing Engine...');
+
+    // Simulating the 6-pass structure visually
+    const statuses = [
+      'Pass 1/6: Establishing Base Truths...',
+      'Pass 2/6: Calculating Dependencies...',
+      'Pass 3/6: Resolving Cross-Row Lookups...',
+      'Pass 4/6: Pattern Extraction & Formatting...',
+      'Pass 5/6: Recursive Deep Cleaning...',
+      'Pass 6/6: Final Equilibrium Check & Vaulting...'
+    ];
+
+    let currentStep = 0;
+    // We update status slightly faster to match AI speed
+    const interval = setInterval(() => {
+      if (currentStep < statuses.length) {
+        setExecStatus(statuses[currentStep]);
+        currentStep++;
+      }
+    }, 600); // 600ms per visual step
+
+    // Use setTimeout to ensure the React UI renders the "Executing" state before blocking on the heavy calculation
+    setTimeout(() => {
+      if (onAIAction) onAIAction();
+      const rulesToRun = validationRules.filter(r => selectedRuleIds.has(r.id));
+
+      // This is the heavy lifting
+      const finalDataset = GroqService.applyBatchRulesToDataset(dataset, rulesToRun);
+
+      clearInterval(interval);
+      onUpdate(finalDataset);
+      setIsExecuting(false);
+      setSelectedRuleIds(new Set());
+      setActiveTab('editor');
+    }, 100);
+  };
+
+  const openRuleEditor = (rule?: ValidationRule) => {
+    if (!dataset) return;
+    if (rule) {
+      setEditingRuleId(rule.id);
+      setRuleFormData({ ...rule });
+    } else {
+      setEditingRuleId(null);
+      setRuleFormData({
+        column: dataset.headers[0],
+        category: 'Recovery',
+        description: '',
+        expression: 'true',
+        healFunction: '',
+        severity: 'error',
+        qualityDimension: 'Validity'
+      });
+    }
+    setShowRuleEditor(true);
+  };
+
+  const handleSaveRule = () => {
+    if (!dataset) return;
+    const newRule = { ...ruleFormData, id: editingRuleId || Math.random().toString(36).substr(2, 9), active: true } as ValidationRule;
+    const updatedRules = editingRuleId
+      ? validationRules.map(r => r.id === editingRuleId ? newRule : r)
+      : [...validationRules, newRule];
+
+    setValidationRules(updatedRules);
+    onUpdate({ ...dataset, validationRules: updatedRules });
+    setShowRuleEditor(false);
+  };
+
+  const toggleRuleSelection = (id: string) => {
+    const newSet = new Set(selectedRuleIds);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedRuleIds(newSet);
+  };
+
   const confirmCleaning = async () => {
-    if (!activeDataset || cleanData.length === 0) return;
-
+    if (!dataset) return;
     setIsConfirming(true);
     try {
-      // Save cleaned data to backend
-      await apiClient.put(`/workspaces/${workspaceId}/datasets/${activeDataset.id}/cleaned`, {
-        cleanedData: cleanData,
-        quarantinedData: quarantinedData,
-        healthScore: deepAnalysis?.quality?.overall || 100,
-        cleaningSummary: {
-          originalRows: rawData.length,
-          cleanedRows: cleanData.length,
-          quarantinedRows: quarantinedData.length,
-          rulesApplied: validationRules.filter(r => r.active).length,
-        }
+      await apiClient.put(`/workspaces/${dataset.workspace_id || 'default'}/datasets/${dataset.id}/cleaned`, {
+        cleanedData: dataset.data,
+        quarantinedData: dataset.quarantinedData || [],
+        healthScore: dataset.healthScore || 100
       });
-
-      // Confirm and overwrite
-      await apiClient.post(`/workspaces/${workspaceId}/datasets/${activeDataset.id}/confirm-clean`, {
+      await apiClient.post(`/workspaces/${dataset.workspace_id || 'default'}/datasets/${dataset.id}/confirm-clean`, {
         keepQuarantined: true
       });
-
-      // Update local state
-      setRawData(cleanData);
+      alert('✓ Forensic Cleaning Confirmed.');
       setShowConfirmDialog(false);
-      alert('✓ Cleaning confirmed! Original dataset has been updated.');
-
-      // Refresh dataset context
-      if (updateDataset) {
-        updateDataset(activeDataset.id, { raw_data: cleanData, row_count: cleanData.length });
-      }
-    } catch (err) {
-      console.error('Confirm cleaning failed:', err);
-      alert('Failed to confirm cleaning. Check console.');
+    } catch (e) {
+      console.error(e);
+      alert('Failed to save cleaning state.');
     } finally {
       setIsConfirming(false);
     }
   };
 
+  const clusters = useMemo(() => {
+    if (!dataset) return {};
+    const q = dataset.quarantinedData || [];
+    const grouped: Record<string, DataRow[]> = { 'All Vault Isolated': q };
+    q.forEach(row => {
+      row.__metadata?.validationErrors?.forEach(err => {
+        const clusterKey = err.split(':')[0] || 'Uncategorized';
+        if (!grouped[clusterKey]) grouped[clusterKey] = [];
+        grouped[clusterKey].push(row);
+      });
+    });
+    return grouped;
+  }, [dataset?.quarantinedData]);
 
+  const filteredRules = useMemo(() => {
+    if (activeDimension === 'All') return validationRules;
+    return validationRules.filter(r => r.qualityDimension === activeDimension);
+  }, [validationRules, activeDimension]);
 
-
-  // Initialize from context
-  useEffect(() => {
-    const loadData = async () => {
-      if (!activeDataset) return;
-
-      let raw: any = activeDataset.raw_data;
-
-      // If no data, try fetching it
-      if (!raw || (Array.isArray(raw) && raw.length === 0 && activeDataset.row_count > 0)) {
-        try {
-          console.log(`[CleanView] Fetching full data for dataset ${activeDataset.id}...`);
-          setLoading(true);
-          setLoadingStep('Fetching dataset content...');
-          const res = await apiClient.get<Dataset>(`/workspaces/${workspaceId}/datasets/${activeDataset.id}`);
-          if (res.data && res.data.raw_data) {
-            raw = res.data.raw_data;
-            // Update context to cache it
-            updateDataset(activeDataset.id, { raw_data: raw });
-          }
-        } catch (err) {
-          console.error("Failed to fetch dataset content", err);
-        } finally {
-          setLoading(false);
-          setLoadingStep('');
-        }
-      }
-
-      // Parse if string
-      if (typeof raw === 'string') {
-        try { raw = JSON.parse(raw); } catch (e) { console.error("Failed to parse raw_data", e); raw = []; }
-      }
-
-      if (Array.isArray(raw) && raw.length > 0) {
-        setRawData(raw);
-        setCleanData(raw); // Initial clean data is same as raw
-      }
-    };
-
-    loadData();
-  }, [activeDataset]);
-
-  // --- Core Actions ---
-
-  const runDeepAnalysis = async () => {
-    if (!activeDataset) return;
-    setLoading(true);
-    setLoadingStep('Running Deep Semantic Analysis...');
-
-    try {
-      // FIX: Explicitly pass the full data array in the payload
-      // The context object might have truncated raw_data or be a string, so we use our parsed state.
-      const payloadDataset = {
-        ...activeDataset,
-        data: cleanData.length > 0 ? cleanData : rawData // Send current working data
-      };
-
-      // 1. Analyze Semantics
-      const analysisRaw: any = await GroqService.analyzeDatasetSemantics(payloadDataset as any);
-      setDeepAnalysis(analysisRaw);
-
-      // 2. Architect Logic Gates (Suggest Rules)
-      setLoadingStep('Architecting Logic Gates (AI)...');
-      const suggestedRules = await GroqService.suggestValidationRules(payloadDataset as any, JSON.stringify(analysisRaw));
-      setValidationRules(suggestedRules);
-
-      // Switch to Clean View so user can see rules applied
-      setActiveTab('clean');
-
-    } catch (e) {
-      console.error("Deep analysis failed", e);
-      alert("Analysis failed. See console for details.");
-    } finally {
-      setLoading(false);
+  // Dimension Color Map
+  const dimColor = (d: string) => {
+    switch (d) {
+      case 'Completeness': return 'text-blue-500 bg-blue-50 border-blue-200';
+      case 'Accuracy': return 'text-emerald-500 bg-emerald-50 border-emerald-200';
+      case 'Consistency': return 'text-indigo-500 bg-indigo-50 border-indigo-200';
+      case 'Validity': return 'text-amber-500 bg-amber-50 border-amber-200';
+      case 'Timeliness': return 'text-violet-500 bg-violet-50 border-violet-200';
+      case 'Uniqueness': return 'text-rose-500 bg-rose-50 border-rose-200';
+      default: return 'text-slate-500 bg-slate-50 border-slate-200';
     }
   };
 
-  const executeForensicEngine = async () => {
-    if (validationRules.length === 0) return;
-    setIsProcessing(true);
-    setProcessingStatus('Initializing 6-Pass Healing Engine...');
+  if (!dataset) return <div className="p-10 flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest">No Dataset Selected</div>;
 
-    try {
-      // Construct a temporary dataset object for the service
-      const tempDataset = {
-        ...activeDataset,
-        headers: Object.keys(cleanData[0] || {}),
-        data: cleanData,
-        quarantinedData: quarantinedData
-      };
-
-      // Run the batch processor (Client-side logic in GroqService)
-      setProcessingStatus('Executing Pass 1/6: Semantic Recovery...');
-      const result = GroqService.applyBatchRulesToDataset(tempDataset as any, validationRules);
-
-      // Simulate multi-pass visual feedback
-      await new Promise(r => setTimeout(r, 800));
-      setProcessingStatus('Executing Pass 3/6: Cross-Column Validation...');
-      await new Promise(r => setTimeout(r, 800));
-      setProcessingStatus('Executing Pass 6/6: Final Integrity Check...');
-
-      // Update State
-      setCleanData(result.data);
-      setQuarantinedData(result.quarantinedData || []);
-
-      // Log the Action
-      const newAction: CleaningAction = {
-        id: Math.random().toString(36).substr(2),
-        title: 'Forensic Engine Execution',
-        description: `Applied ${validationRules.filter(r => r.active).length} logic gates. Recovered rows and quarantined violations.`,
-        type: 'batch_process',
-        impactedRows: result.data.length,
-        status: 'applied',
-        timestamp: new Date()
-      };
-      setAuditLog(prev => [newAction, ...prev]);
-
-      // Update Global Context (Optional: Only if you want to persist immediately)
-      // updateDataset(activeDataset!.id, { raw_data: result.data }); 
-
-    } catch (e) {
-      console.error("Forensic Engine Failed", e);
-      alert("Execution failed. Check console.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const consultAgent = async () => {
-    if (!agentQuery) return;
-    setIsAgentThinking(true);
-    try {
-      const res = await GroqService.consultVerifiedAgent(
-        { headers: Object.keys(cleanData[0] || {}), data: cleanData } as any,
-        agentQuery,
-        { deepAnalysis }
-      );
-      setAgentResponse(res);
-    } catch (e) {
-      setAgentResponse("Agent is offline.");
-    } finally {
-      setIsAgentThinking(false);
-    }
-  };
-
-  // --- Render Helpers ---
-
-  if (!activeDataset) return <div className="p-10 flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest">No Dataset Selected</div>;
-
-  const dataToShow = activeTab === 'raw' ? rawData : (activeTab === 'quarantine' ? quarantinedData : cleanData);
+  if (loading) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center space-y-12 animate-in fade-in">
+        <div className="relative">
+          <div className="w-24 h-24 border-[6px] border-indigo-100 dark:border-indigo-900 rounded-full"></div>
+          <div className="absolute inset-0 border-[6px] border-t-indigo-600 rounded-full animate-spin"></div>
+          <div className="absolute inset-0 flex items-center justify-center text-3xl">🧠</div>
+        </div>
+        <div className="text-center space-y-3">
+          <h3 className="text-xl font-black uppercase tracking-[0.2em] text-indigo-600">Forensic Initialization</h3>
+          <p className="text-sm font-medium text-slate-400">{loadingStep || 'Analyzing Data DNA...'}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 dark:bg-black overflow-hidden font-sans">
+    <div className="h-full flex flex-col gap-6 w-full max-w-[1900px] mx-auto overflow-hidden p-4 md:p-6 lg:p-8">
 
-      {/* Top Bar */}
-      <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
-          </div>
-          <div>
-            <h1 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter">Forensic Data Refinery</h1>
-            <p className="text-[10px] text-slate-500 font-bold tracking-wide">AI-Powered Cleaning Engine</p>
-          </div>
+      {/* Header Panel */}
+      <div className="glass-panel p-4 rounded-[40px] shadow-2xl flex flex-col md:flex-row gap-4 justify-between items-center shrink-0 z-50 border border-indigo-500/10 bg-white/50 backdrop-blur-xl dark:bg-slate-900/50">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-2 md:pb-0">
+          {[
+            { id: 'validation', label: 'Forensic Architect', icon: '⚒️' },
+            { id: 'editor', label: 'Clean Workspace', icon: '💎' },
+            { id: 'quarantine', label: 'Forensic Vault', icon: '🛡️', count: dataset.quarantinedData?.length }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`px-8 py-3 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all whitespace-nowrap ${activeTab === tab.id
+                  ? 'bg-indigo-600 text-white shadow-xl scale-105'
+                  : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+            >
+              <span>{tab.icon}</span> {tab.label}
+              {tab.count !== undefined && tab.count > 0 && <span className="bg-rose-500 text-white px-2 py-0.5 rounded-full text-[8px] animate-pulse">{tab.count}</span>}
+            </button>
+          ))}
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setShowExportModal(true)}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-2"
-            disabled={cleanData.length === 0}
-          >
-            💾 Export
-          </button>
-          <button
-            onClick={runDeepAnalysis}
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all"
-          >
-            {loading ? 'Analyzing...' : 'Run Deep Analysis'}
-          </button>
-          <button
-            onClick={executeForensicEngine}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-lg shadow-indigo-500/20 transition-all flex items-center gap-2"
-          >
-            {isProcessing ? 'Processing...' : 'Execute Recovery Engine'}
-          </button>
-          <button
-            onClick={() => setShowConfirmDialog(true)}
-            disabled={cleanData.length === 0 || cleanData.length === rawData.length}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            ✓ Confirm & Save
-          </button>
+        <div className="flex items-center gap-4">
+          {semanticContext && (
+            <div className="hidden lg:flex px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-900/50">
+              <p className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide truncate max-w-[200px]" title={semanticContext}>
+                Context: {semanticContext}
+              </p>
+            </div>
+          )}
+          <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Workspace Integrity: {dataset.healthScore || 0}%</span>
+          <div className="w-32 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
+            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${dataset.healthScore || 0}%` }}></div>
+          </div>
         </div>
       </div>
 
-      {/* Export Modal */}
-      <ExportModal
-        isOpen={showExportModal}
-        onClose={() => setShowExportModal(false)}
-        exportType="dataset"
-        data={activeTab === 'clean' ? cleanData : rawData}
-        filename={activeDataset?.name || 'dataset'}
-      />
+      <div className="flex-1 min-h-0 relative">
+        {activeTab === 'validation' && (
+          <div className="h-full flex flex-col gap-6 relative overflow-hidden">
+            {/* Action Bar */}
+            <div className="glass-panel p-8 md:p-12 rounded-[56px] flex flex-col lg:flex-row justify-between items-center gap-10 shadow-xl border border-indigo-500/10 shrink-0 bg-white/80 dark:bg-slate-900/80">
+              <div className="flex-1 space-y-2 text-center lg:text-left">
+                <h3 className="text-3xl font-black uppercase tracking-tighter text-slate-800 dark:text-white">Truth-Gate Architect</h3>
+                <p className="text-slate-500 text-base font-medium">Design 6-pass recovery logic and sharp audit gates for recursive refinement.</p>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 w-full lg:w-auto items-center">
+                {selectedRuleIds.size > 0 && (
+                  <button onClick={handleRunSelectedRules} className="px-10 py-4 bg-emerald-600 text-white rounded-[30px] text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all animate-in zoom-in-95">
+                    🚀 Run 6-Pass Engine ({selectedRuleIds.size})
+                  </button>
+                )}
+                <form onSubmit={handleAddNlRule} className="relative flex-1 sm:w-[400px]">
+                  <input
+                    value={nlRuleInput}
+                    onChange={(e) => setNlRuleInput(e.target.value)}
+                    placeholder="Forensic Goal: 'Fix Price using lookups'..."
+                    className="w-full pl-8 pr-32 py-4 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[30px] text-sm font-bold focus:ring-8 focus:ring-indigo-500/10 transition-all outline-none"
+                  />
+                  <button disabled={isGeneratingRule} className="absolute right-2 top-2 bottom-2 px-6 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-[20px] shadow-lg hover:bg-indigo-500 transition-all">
+                    {isGeneratingRule ? '...' : 'AI Deploy'}
+                  </button>
+                </form>
+                <button onClick={() => openRuleEditor()} className="px-10 py-4 bg-slate-950 dark:bg-slate-100 dark:text-slate-900 text-white rounded-[30px] text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all">➕ New Gate</button>
+              </div>
+            </div>
+
+            {/* Dimension Filters */}
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 shrink-0 px-2">
+              <button
+                onClick={() => setSelectedRuleIds(new Set(filteredRules.map(r => r.id)))}
+                className="px-6 py-3 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 transition-all"
+              >Select All</button>
+              <div className="w-px h-10 bg-slate-200 dark:bg-slate-800 mx-4"></div>
+              {['All', 'Completeness', 'Accuracy', 'Consistency', 'Validity', 'Timeliness', 'Uniqueness'].map(dim => (
+                <button
+                  key={dim}
+                  onClick={() => setActiveDimension(dim as any)}
+                  className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeDimension === dim
+                      ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
+                      : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                    }`}
+                >
+                  {dim}
+                </button>
+              ))}
+            </div>
+
+            {/* Rules Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 overflow-y-auto custom-scrollbar pb-20 pr-2">
+              {filteredRules.map((rule) => (
+                <div key={rule.id} className={`p-10 rounded-[56px] border-[3px] transition-all bg-white dark:bg-slate-900 relative group/card ${rule.active ? 'border-indigo-100 dark:border-indigo-900/40 shadow-xl' : 'opacity-50 grayscale'}`}>
+                  <div className="absolute top-8 left-8 z-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedRuleIds.has(rule.id)}
+                      onChange={() => toggleRuleSelection(rule.id)}
+                      className="w-6 h-6 rounded-lg border-2 border-indigo-200 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex justify-between items-start mb-8 ml-10">
+                    <span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest border ${dimColor(rule.qualityDimension || 'Validity')}`}>
+                      {rule.qualityDimension || 'Validity'}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => openRuleEditor(rule)} className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-indigo-600 transition-all border border-slate-200 dark:border-slate-700">✎</button>
+                      <button onClick={() => {
+                        const updated = validationRules.map(r => r.id === rule.id ? { ...r, active: !r.active } : r);
+                        setValidationRules(updated);
+                        if (dataset) onUpdate({ ...dataset, validationRules: updated });
+                      }} className={`w-12 h-6 rounded-full transition-all ${rule.active ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full mt-1 ml-1 transition-transform ${rule.active ? 'translate-x-6' : ''}`} />
+                      </button>
+                    </div>
+                  </div>
+                  <h4 className="text-[18px] font-black uppercase tracking-tight mb-2 leading-tight text-slate-900 dark:text-white min-h-[50px]">
+                    {rule.description || "Unspecified Logic Gate"}
+                  </h4>
+                  <div className="flex gap-2 items-center mb-6">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Target: {rule.column}</p>
+                    <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${rule.category === 'Recovery' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                      {rule.category}
+                    </span>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-6 bg-slate-950 rounded-[32px] font-mono text-[10px] text-indigo-400 border border-white/5 overflow-x-auto no-scrollbar">
+                      <div className="text-slate-600 mb-2 uppercase text-[8px] font-black tracking-widest">Logic Expression (Boolean)</div>
+                      {rule.expression || "true"}
+                    </div>
+                    {rule.category === 'Recovery' && (
+                      <div className="p-6 bg-emerald-950/20 rounded-[32px] font-mono text-[10px] text-emerald-400 border border-emerald-900/20 overflow-x-auto no-scrollbar">
+                        <div className="text-emerald-800 mb-2 uppercase text-[8px] font-black tracking-widest">Heal Script (JS)</div>
+                        {rule.healFunction || "// No heal script provided"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Editor (Clean Workspace) Tab */}
+        {activeTab === 'editor' && (
+          <div className="h-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[64px] flex flex-col overflow-hidden relative shadow-2xl">
+            <div className="p-10 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/20 flex justify-between items-center shrink-0">
+              <div className="space-y-1">
+                <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Refined Operational Workspace</h3>
+                <p className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                  {dataset.data.length.toLocaleString()} Records Passed 6-Pass Cycle
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  disabled={dataset.data.length === 0}
+                  className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-[24px] text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-50 transition-all border border-slate-200 dark:border-slate-700"
+                >
+                  Export Cleaned Data
+                </button>
+                <button
+                  onClick={() => setShowConfirmDialog(true)}
+                  className="px-8 py-3 bg-indigo-600 text-white rounded-[24px] text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-indigo-500 transition-all"
+                >
+                  Confirm & Save
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 flex overflow-hidden min-h-0 relative">
+              <div className="flex-1 overflow-auto custom-scrollbar table-fixed-header">
+                <table className="w-full text-left text-[11px] border-separate border-spacing-0">
+                  <thead className="sticky top-0 z-40 bg-slate-50 dark:bg-slate-800 shadow-md">
+                    <tr>
+                      <th className="p-5 border-b border-slate-200 dark:border-slate-700 font-black uppercase text-slate-400 w-20 text-center tracking-widest bg-slate-50 dark:bg-slate-800">ID</th>
+                      {displayHeaders.map(h => (
+                        <th key={h} className="p-5 border-b border-slate-200 dark:border-slate-700 font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider whitespace-nowrap bg-slate-50 dark:bg-slate-800">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-slate-900">
+                    {dataset.data.slice(0, 200).map((row, i) => (
+                      <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
+                        <td className="p-5 border-r border-slate-100 text-slate-400 font-mono text-center opacity-40 group-hover:opacity-100">{i + 1}</td>
+                        {displayHeaders.map(h => {
+                          const isRec = row.__metadata?.recoveredFields?.includes(h);
+                          const isSelected = selectedCell?.rowIdx === i && selectedCell?.field === h;
+                          return (
+                            <td
+                              key={h}
+                              onClick={() => setSelectedCell({ rowIdx: i, field: h, value: row[h], row })}
+                              className={`p-5 border-r border-slate-50 text-slate-600 dark:text-slate-300 cursor-pointer relative transition-all duration-300 ${isSelected ? 'bg-indigo-600 text-white font-black scale-[1.02] shadow-2xl z-20' : isRec ? 'bg-emerald-500/10 text-emerald-600 font-black underline decoration-emerald-500/30' : ''}`}
+                            >
+                              <div className="truncate max-w-[200px]">
+                                {row[h] === null || row[h] === undefined || row[h] === '' ? <span className="opacity-20 italic">null_sector</span> : String(row[h])}
+                              </div>
+                              {isRec && !isSelected && <span className="absolute top-1 right-1 text-[9px] text-emerald-500 animate-pulse">✦ P{row.__metadata?.recoveryPass}</span>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Forensic Agent Sidebar (Blue/Indigo) */}
+              <div className={`w-[450px] glass-panel border-l border-slate-100 dark:border-slate-800 p-8 flex flex-col gap-8 shadow-2xl shrink-0 transition-transform duration-500 bg-white dark:bg-slate-900`}>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse"></div>
+                    <h4 className="text-[12px] font-black uppercase tracking-[0.5em] text-indigo-500">Forensic Agent</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">Analyzing multi-pass logic traces.</p>
+                </div>
+
+                <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-1 space-y-6">
+                    {agentHistory.map((msg, idx) => (
+                      <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in`}>
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">{msg.role === 'user' ? 'You' : 'Analyst'}</p>
+                        <div className={`p-6 rounded-[32px] text-xs font-medium leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 rounded-tl-none'}`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedCell && (
+                    <div className="p-8 bg-white dark:bg-slate-800 rounded-[48px] border-2 border-indigo-100 dark:border-indigo-900 shadow-2xl space-y-4 shrink-0 animate-in zoom-in-95">
+                      <div className="flex justify-between items-center">
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Trace: {selectedCell.field}</p>
+                        <button onClick={() => setSelectedCell(null)} className="text-slate-400 hover:text-rose-500">✕</button>
+                      </div>
+                      <p className="text-xl font-black text-slate-950 dark:text-white truncate">{String(selectedCell.value)}</p>
+                      {selectedCell.row.__metadata?.recoveredFields?.includes(selectedCell.field) && (
+                        <div className="bg-emerald-500/5 p-5 rounded-[28px] border border-emerald-500/20">
+                          <p className="text-[9px] font-black text-emerald-600 uppercase mb-2 tracking-widest">Recovery Trace Log</p>
+                          <p className="text-xs text-emerald-800 dark:text-emerald-400 font-bold italic">"{selectedCell.row.__metadata?.recoveryExplanations?.[selectedCell.field]}"</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!agentQuery.trim()) return;
+                    setAgentHistory(prev => [...prev, { role: 'user', text: agentQuery }]);
+                    setIsAgentThinking(true);
+                    GroqService.consultVerifiedAgent(dataset, agentQuery, selectedCell).then(res => {
+                      setAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
+                      setIsAgentThinking(false);
+                    });
+                    setAgentQuery('');
+                  }} className="relative mt-auto">
+                    <textarea value={agentQuery} onChange={(e) => setAgentQuery(e.target.value)} placeholder="Query logic passes..." className="w-full px-8 py-7 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-[48px] text-xs font-bold min-h-[160px] resize-none shadow-2xl focus:ring-8 focus:ring-indigo-500/10 outline-none" />
+                    <button className="absolute right-5 bottom-5 px-8 py-3 bg-indigo-600 text-white text-[10px] font-black uppercase rounded-full shadow-2xl">{isAgentThinking ? '...' : 'Query'}</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Quarantine Vault Tab (with Diagnostic Agent) */}
+        {activeTab === 'quarantine' && (
+          <div className="h-full glass-panel border border-slate-200 dark:border-slate-800 rounded-[64px] flex flex-col overflow-hidden relative shadow-2xl">
+            <div className="p-10 border-b border-slate-100 dark:border-slate-800 bg-rose-50/50 dark:bg-rose-950/10 flex flex-col lg:flex-row justify-between items-center gap-10 shrink-0">
+              <div className="flex-1 space-y-2 text-center lg:text-left">
+                <h3 className="text-4xl font-black text-rose-600 uppercase tracking-tighter leading-none">Diagnostic Vault</h3>
+                <p className="text-slate-500 text-sm font-medium">Records failing mandatory Truth Audit after 6 recovery passes.</p>
+              </div>
+              <div className="bg-white dark:bg-slate-800 p-4 rounded-[32px] border border-slate-200 dark:border-slate-700 shadow-xl min-w-[320px]">
+                <span className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">Cluster by sharp violation:</span>
+                <select value={selectedCluster} onChange={(e) => setSelectedCluster(e.target.value)} className="w-full bg-transparent border-none text-xs font-black text-slate-800 dark:text-white outline-none cursor-pointer">
+                  {Object.keys(clusters).map(key => <option key={key} value={key}>{key} ({clusters[key].length})</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex-1 flex overflow-hidden min-h-0 relative">
+              <div className="flex-1 overflow-auto custom-scrollbar p-14 bg-white dark:bg-slate-950">
+                {clusters[selectedCluster]?.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
+                    <div className="text-9xl mb-10">🛡️</div>
+                    <h4 className="text-2xl font-black uppercase">Vault Clear</h4>
+                    <p className="text-sm">No records reached isolation after forensic reconstruction.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                    {clusters[selectedCluster].map((row, i) => (
+                      <div
+                        key={i}
+                        onClick={() => setSelectedVaultRow(row)}
+                        className={`bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[56px] p-10 flex flex-col gap-8 border-l-[12px] shadow-xl hover:scale-[1.01] transition-all cursor-pointer ${selectedVaultRow === row ? 'border-rose-500 ring-4 ring-rose-500/10' : 'border-l-rose-500'}`}
+                      >
+                        <div className="flex flex-wrap gap-2">
+                          {row.__metadata?.validationErrors?.map((err, j) => (
+                            <span key={j} className="px-4 py-1.5 bg-rose-500 text-white text-[9px] font-black uppercase rounded-full shadow-lg flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+                              {err}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-3 gap-10">
+                          {displayHeaders.slice(0, 9).map(h => (
+                            <div key={h}>
+                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{h}</p>
+                              <p className="text-sm text-slate-800 dark:text-slate-200 truncate font-black">
+                                {row[h] === null || row[h] === '' ? <span className="text-rose-400">NULL_SECTOR</span> : String(row[h])}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Diagnostic Agent Sidebar (Red/Rose) */}
+              <div className={`w-[450px] glass-panel border-l border-slate-100 dark:border-slate-800 p-8 flex flex-col gap-8 shadow-2xl shrink-0 transition-transform duration-500 bg-white dark:bg-slate-900`}>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 bg-rose-500 rounded-full animate-pulse"></div>
+                    <h4 className="text-[12px] font-black uppercase tracking-[0.5em] text-rose-500">Diagnostic Agent</h4>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">Analyzing quarantined error patterns.</p>
+                </div>
+
+                <div className="flex-1 flex flex-col gap-6 overflow-hidden">
+                  <div className="flex-1 overflow-y-auto no-scrollbar p-1 space-y-6">
+                    {vaultAgentHistory.length === 0 && (
+                      <div className="p-6 rounded-[32px] bg-rose-50 dark:bg-rose-900/10 text-xs font-medium text-rose-800 dark:text-rose-200 border border-rose-100 dark:border-rose-800/20 text-center">
+                        I am analyzing the <span className="font-black">{selectedCluster}</span> cluster. Click a card to focus on specific failures, or ask me to diagnose the pattern.
+                      </div>
+                    )}
+                    {vaultAgentHistory.map((msg, idx) => (
+                      <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in`}>
+                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">{msg.role === 'user' ? 'You' : 'Diagnostician'}</p>
+                        <div className={`p-6 rounded-[32px] text-xs font-medium leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-rose-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 rounded-tl-none'}`}>
+                          {msg.text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {selectedVaultRow && (
+                    <div className="p-8 bg-white dark:bg-slate-800 rounded-[48px] border-2 border-rose-100 dark:border-rose-900 shadow-2xl space-y-4 shrink-0 animate-in zoom-in-95 relative">
+                      <button onClick={() => setSelectedVaultRow(null)} className="absolute top-6 right-8 text-slate-400 hover:text-rose-500">✕</button>
+                      <p className="text-[10px] font-black uppercase text-rose-400 tracking-widest">Active Specimen</p>
+                      <div className="space-y-2">
+                        {selectedVaultRow.__metadata?.validationErrors?.map((err, i) => (
+                          <p key={i} className="text-xs font-black text-slate-800 dark:text-white">{err}</p>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!vaultAgentQuery.trim()) return;
+                    setVaultAgentHistory(prev => [...prev, { role: 'user', text: vaultAgentQuery }]);
+                    setIsVaultAgentThinking(true);
+
+                    // Context includes the selected cluster name and the specific row if selected
+                    const context = {
+                      cluster: selectedCluster,
+                      focusedRow: selectedVaultRow,
+                      totalInCluster: clusters[selectedCluster]?.length
+                    };
+
+                    GroqService.consultVerifiedAgent(dataset, vaultAgentQuery, context).then(res => {
+                      setVaultAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
+                      setIsVaultAgentThinking(false);
+                    });
+                    setVaultAgentQuery('');
+                  }} className="relative mt-auto">
+                    <textarea value={vaultAgentQuery} onChange={(e) => setVaultAgentQuery(e.target.value)} placeholder="Analyze failure root cause..." className="w-full px-8 py-7 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-[48px] text-xs font-bold min-h-[160px] resize-none shadow-2xl focus:ring-8 focus:ring-rose-500/10 outline-none" />
+                    <button className="absolute right-5 bottom-5 px-8 py-3 bg-rose-600 text-white text-[10px] font-black uppercase rounded-full shadow-2xl">{isVaultAgentThinking ? '...' : 'Diagnose'}</button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Rule Editor Modal */}
+      {showRuleEditor && (
+        <div className="fixed inset-0 z-[100] flex justify-center items-center p-4">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-sm" onClick={() => setShowRuleEditor(false)}></div>
+          <div className="w-full max-w-[650px] bg-white dark:bg-slate-900 shadow-2xl rounded-[56px] p-10 md:p-14 flex flex-col gap-8 animate-in zoom-in-95 relative overflow-hidden border-4 border-white/10">
+            <div className="flex justify-between items-center">
+              <h3 className="text-3xl font-black uppercase tracking-tighter text-slate-800 dark:text-white">{editingRuleId ? 'Modify Logic Gate' : 'Forensic Gate Designer'}</h3>
+              <button onClick={() => setShowRuleEditor(false)} className="text-slate-400 hover:text-rose-500 text-3xl transition-colors">✕</button>
+            </div>
+
+            <div className="space-y-8 overflow-y-auto no-scrollbar pr-2 max-h-[60vh]">
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Gate Category</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Recovery', 'Audit'].map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => setRuleFormData({ ...ruleFormData, category: cat as any })}
+                      className={`px-4 py-3 rounded-2xl text-[8px] font-black uppercase tracking-widest border-2 transition-all ${ruleFormData.category === cat ? 'bg-indigo-600 text-white border-indigo-500 shadow-xl' : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700 text-slate-500'
+                        }`}
+                    >
+                      {cat === 'Recovery' ? 'Recovery (Fixes)' : 'Audit (Verifies)'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Quality Dimension</label>
+                <select
+                  value={ruleFormData.qualityDimension}
+                  onChange={(e) => setRuleFormData({ ...ruleFormData, qualityDimension: e.target.value as any })}
+                  className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[24px] text-sm font-bold outline-none text-slate-700 dark:text-white"
+                >
+                  {['Completeness', 'Accuracy', 'Consistency', 'Validity', 'Timeliness', 'Uniqueness'].map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Forensic Objective</label>
+                <div className="relative">
+                  <input
+                    value={ruleFormData.description}
+                    onChange={(e) => setRuleFormData({ ...ruleFormData, description: e.target.value })}
+                    placeholder="e.g., 'Recover missing prices via Item lookup'..."
+                    className="w-full px-8 py-5 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[24px] text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none"
+                  />
+                  <button
+                    onClick={handleAutoGenerateLogic}
+                    disabled={isAutoGeneratingLogic || !ruleFormData.description}
+                    className="absolute right-3 top-3 bottom-3 px-4 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-xl hover:bg-indigo-500 transition-all shadow-lg"
+                  >
+                    {isAutoGeneratingLogic ? '...' : '⚡ AI Script'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Target Header</label>
+                  <select value={ruleFormData.column} onChange={(e) => setRuleFormData({ ...ruleFormData, column: e.target.value })} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[24px] text-sm font-bold outline-none text-slate-700 dark:text-white">
+                    {dataset?.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Logic Type</label>
+                  <select value={ruleFormData.relationshipType} onChange={(e) => setRuleFormData({ ...ruleFormData, relationshipType: e.target.value as any })} className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[24px] text-sm font-bold outline-none text-slate-700 dark:text-white">
+                    <option value="Lookup">Cross-Row Lookup</option>
+                    <option value="Calculation">Cross-Column Math</option>
+                    <option value="Pattern">Pattern Inference</option>
+                    <option value="Validation">Truth Audit</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[11px] font-black uppercase text-indigo-500 tracking-[0.2em]">Deductive Logic (TRUE = OK)</label>
+                <textarea value={ruleFormData.expression} onChange={(e) => setRuleFormData({ ...ruleFormData, expression: e.target.value })} className="w-full px-8 py-6 bg-slate-950 text-indigo-400 font-mono rounded-[24px] text-xs min-h-[80px] shadow-inner resize-none" />
+              </div>
+
+              {ruleFormData.category === 'Recovery' && (
+                <div className="space-y-4">
+                  <label className="text-[11px] font-black uppercase text-emerald-500 tracking-[0.2em]">Recursive Fix Script</label>
+                  <textarea value={ruleFormData.healFunction} onChange={(e) => setRuleFormData({ ...ruleFormData, healFunction: e.target.value })} placeholder="row['Total'] = row['Qty'] * row['Price'];" className="w-full px-8 py-6 bg-emerald-950/20 text-emerald-400 font-mono rounded-[24px] text-xs min-h-[80px] shadow-inner resize-none border border-emerald-900/20" />
+                </div>
+              )}
+            </div>
+
+            <button onClick={handleSaveRule} className="w-full py-6 bg-indigo-600 text-white rounded-[24px] font-black uppercase tracking-[0.3em] text-[12px] shadow-2xl hover:scale-[1.02] active:scale-95 transition-all">Deploy Forensic Gate</button>
+          </div>
+        </div>
+      )}
+
+      {isExecuting && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-[60px] z-[200] flex flex-col items-center justify-center text-center p-20">
+          <div className="relative w-80 h-80 mb-20 flex items-center justify-center">
+            <div className="absolute inset-0 border-[15px] border-indigo-500/10 rounded-full"></div>
+            <div className="absolute inset-0 border-[15px] border-indigo-500 border-t-transparent rounded-full animate-spin" style={{ animationDuration: '0.6s' }}></div>
+            <div className="absolute inset-0 flex items-center justify-center text-8xl animate-pulse">⚒️</div>
+          </div>
+          <div className="space-y-10 max-w-3xl w-full text-white">
+            <h3 className="text-6xl font-black uppercase tracking-tighter animate-in slide-in-from-bottom-5">Multi-Pass Forensic Engine</h3>
+            <p className="text-indigo-300 font-bold uppercase tracking-widest text-sm">{execStatus}</p>
+            <div className="w-full h-4 bg-white/5 rounded-full overflow-hidden shadow-inner">
+              <div className="h-full bg-indigo-500 animate-pulse w-full"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirm Dialog */}
       {showConfirmDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6">
             <div className="text-center">
               <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-4xl mx-auto mb-4">
                 ⚠️
               </div>
-              <h3 className="text-xl font-black text-white mb-2">Confirm Cleaning</h3>
+              <h3 className="text-xl font-black text-white mb-2">Confirm Forensic Cleaning</h3>
               <p className="text-sm text-slate-400 mb-6">
                 This will <strong className="text-white">permanently replace</strong> your original dataset
-                ({rawData.length} rows) with the cleaned version ({cleanData.length} rows).
-                {quarantinedData.length > 0 && (
-                  <> {quarantinedData.length} rows will be quarantined.</>
+                with the forensically verified version.
+                {dataset?.quarantinedData && dataset.quarantinedData.length > 0 && (
+                  <> {dataset.quarantinedData.length} rows will be digitally quarantined.</>
                 )}
               </p>
 
@@ -368,9 +826,9 @@ const ForensicCleanView: React.FC = () => {
                   className="px-6 py-2.5 text-sm font-black uppercase tracking-wide text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
                 >
                   {isConfirming ? (
-                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Confirming...</>
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Sealing...</>
                   ) : (
-                    <>✓ Confirm & Overwrite</>
+                    <>✓ Seal & Overwrite</>
                   )}
                 </button>
               </div>
@@ -379,239 +837,14 @@ const ForensicCleanView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden">
-
-        {/* Left Panel: Logic Gates (Rules) */}
-        <div className="w-80 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-col z-10 shrink-0">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50">
-            <h2 className="text-[10px] font-black uppercase tracking-widest text-slate-500">Logic Gates (Validation Rules)</h2>
-          </div>
-          <div className="flex-1 overflow-y-auto p-2 space-y-2">
-            {validationRules.length === 0 ? (
-              <div className="p-8 text-center opacity-40">
-                <p className="text-xs">No logic gates defined.</p>
-                <p className="text-[10px] mt-2">Run "Deep Analysis" to architect rules.</p>
-              </div>
-            ) : (
-              validationRules.map(rule => (
-                <div
-                  key={rule.id}
-                  className={`p-3 rounded-xl border cursor-pointer transition-all ${rule.active ? 'border-l-4 border-l-emerald-500 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700' : 'opacity-50 border-slate-100 dark:border-slate-800'}`}
-                  onClick={() => setSelectedRuleId(rule.id)}
-                >
-                  <div className="flex justify-between items-start mb-1">
-                    <span className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${rule.category === 'Recovery' ? 'bg-indigo-100 text-indigo-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {rule.category}
-                    </span>
-                    <input type="checkbox" checked={rule.active} onChange={() => { }} className="accent-indigo-600" />
-                  </div>
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-tight mb-1">{rule.description}</p>
-                  <p className="text-[9px] font-mono text-slate-400 truncate mb-2">{rule.expression}</p>
-
-                  {rule.confidenceScore !== undefined && (
-                    <div className="flex items-center gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                      <div className="flex-1 h-1 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${rule.confidenceScore > 0.8 ? 'bg-emerald-500' : rule.confidenceScore > 0.5 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                          style={{ width: `${rule.confidenceScore * 100}%` }}
-                        />
-                      </div>
-                      <span className="text-[8px] font-black text-slate-400">{Math.round(rule.confidenceScore * 100)}%</span>
-                    </div>
-                  )}
-                  {rule.reasoning && (
-                    <p className="text-[9px] text-slate-500 italic mt-2 line-clamp-2 hover:line-clamp-none transition-all">
-                      " {rule.reasoning} "
-                    </p>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Center Panel: Data View */}
-        <div className="flex-1 flex flex-col bg-slate-50 dark:bg-black/50 overflow-hidden relative">
-
-          {/* Navigation Tabs (3-Tab Layout) */}
-          <div className="flex items-center gap-1 p-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-            <button
-              onClick={() => setActiveTab('raw')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'raw' ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-200 dark:ring-indigo-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              Real Full Dataset ({rawData.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('clean')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'clean' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 ring-1 ring-emerald-200 dark:ring-emerald-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              Cleaned Dataset ({cleanData.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('quarantine')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'quarantine' ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 ring-1 ring-rose-200 dark:ring-rose-800' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              Quarantine Vault ({quarantinedData.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('audit')}
-              className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all ${activeTab === 'audit' ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white ring-1 ring-slate-300 dark:ring-slate-700' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-            >
-              Audit Log ({auditLog.length})
-            </button>
-          </div>
-
-          {/* Tab Content */}
-          <div className="flex-1 overflow-hidden relative">
-            {activeTab === 'audit' ? (
-              // Audit View
-              <div className="h-full overflow-y-auto p-4 custom-scrollbar">
-                <div className="max-w-4xl mx-auto space-y-4">
-                  {auditLog.length === 0 ? (
-                    <div className="text-center p-12 text-slate-400 text-sm">No audit logs available. Execute cleaning steps to generate logs.</div>
-                  ) : (
-                    auditLog.map(action => (
-                      <div key={action.id} className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-bold text-slate-900 dark:text-white text-sm">{action.title}</h3>
-                          <span className="text-[10px] font-mono text-slate-400">{action.timestamp?.toLocaleTimeString()}</span>
-                        </div>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">{action.description}</p>
-                        <div className="flex items-center gap-2">
-                          <span className="px-2 py-1 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 text-[10px] rounded font-bold uppercase">
-                            {action.status}
-                          </span>
-                          <span className="text-[10px] text-slate-500">Impacted Rows: {action.impactedRows}</span>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              // Data Table View (Raw, Clean, Quarantine)
-              <div className="h-full overflow-auto custom-scrollbar p-4">
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden min-w-[800px]">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 text-[10px] uppercase font-bold text-slate-500 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-4 py-3 bg-slate-50 dark:bg-slate-800">#</th>
-                        {Object.keys(dataToShow[0] || {}).filter(k => k !== '__metadata').map(h => (
-                          <th key={h} className="px-4 py-3 bg-slate-50 dark:bg-slate-800">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {dataToShow.slice(0, 100).map((row, i) => (
-                        <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                          <td className="px-4 py-2 font-mono text-slate-400">{i + 1}</td>
-                          {Object.keys(dataToShow[0] || {}).filter(k => k !== '__metadata').map(h => {
-                            const isRecovered = activeTab === 'clean' && row.__metadata?.recoveredFields?.includes(h);
-                            const isError = activeTab === 'clean' && row.__metadata?.validationErrors?.some(e => e.includes(h));
-                            // Only show visual indicators in Clean view
-
-                            return (
-                              <td key={h} className={`px-4 py-2 border-r border-transparent ${isRecovered ? 'bg-emerald-50/50 text-emerald-700 font-medium' : ''} ${isError ? 'bg-rose-50/50 text-rose-700' : 'text-slate-600 dark:text-slate-400'}`}>
-                                {String(row[h])}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {dataToShow.length === 0 && (
-                    <div className="p-10 text-center text-slate-400 text-xs">No data in this view.</div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Agent Overlay - Collapsible */}
-            <div className={`absolute bottom-6 right-6 transition-all duration-300 z-50 flex flex-col items-end ${isAgentOpen ? 'w-80' : 'w-auto'}`}>
-
-              {isAgentOpen ? (
-                <div className="w-full bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200">
-                  {/* Header */}
-                  <div className="bg-indigo-600 p-3 flex justify-between items-center cursor-pointer" onClick={() => setIsAgentOpen(false)}>
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
-                      <span className="text-white text-xs font-bold uppercase tracking-wider">Forensic Agent</span>
-                    </div>
-                    <button className="text-white/70 hover:text-white transition-colors">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                    </button>
-                  </div>
-
-                  {/* Chat Area */}
-                  <div className="h-64 overflow-y-auto p-4 bg-slate-50 dark:bg-black/20 custom-scrollbar">
-                    {agentResponse ? (
-                      <div className="bg-white dark:bg-slate-800 p-3 rounded-lg rounded-tl-none shadow-sm text-xs text-slate-700 dark:text-slate-300 leading-relaxed border border-slate-100 dark:border-slate-700">
-                        {agentResponse}
-                      </div>
-                    ) : (
-                      <div className="text-center mt-8">
-                        <div className="w-8 h-8 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-2">
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                        </div>
-                        <p className="text-[10px] text-slate-400 italic">I can analyze anomalies, suggest fixes, and explain data sources.</p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Input */}
-                  <div className="p-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2">
-                    <input
-                      value={agentQuery}
-                      onChange={e => setAgentQuery(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && consultAgent()}
-                      placeholder="Ask about this data..."
-                      autoFocus
-                      className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
-                    />
-                    <button
-                      onClick={consultAgent}
-                      disabled={isAgentThinking || !agentQuery.trim()}
-                      className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-                    >
-                      {isAgentThinking ? (
-                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                      ) : (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
-                      )}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsAgentOpen(true)}
-                  className="group flex items-center gap-3 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 rounded-full shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95"
-                >
-                  <span className="text-xs font-bold uppercase tracking-wider max-w-0 overflow-hidden group-hover:max-w-xs transition-all duration-300 whitespace-nowrap">Ask Agent</span>
-                  <div className="relative">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" /></svg>
-                    <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-400 border-2 border-indigo-600 rounded-full"></span>
-                  </div>
-                </button>
-              )}
-            </div>
-
-          </div>
-
-        </div>
-      </div>
-
-      {/* Loading Overlay */}
-      {isProcessing && (
-        <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center">
-          <div className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-2xl max-w-sm w-full text-center">
-            <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
-            <h3 className="text-lg font-black text-slate-900 dark:text-white mb-2">Processing</h3>
-            <p className="text-xs text-slate-500 uppercase tracking-widest animate-pulse">{processingStatus}</p>
-          </div>
-        </div>
-      )}
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        exportType="dataset"
+        data={dataset?.data || []}
+        filename={dataset?.name || 'dataset'}
+      />
     </div>
   );
 };
