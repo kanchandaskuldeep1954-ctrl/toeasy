@@ -309,13 +309,20 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
             healthScore || 100, JSON.stringify(cleaningSummary || {}), datasetId, workspaceId]
         );
 
-        // Log to cleaning history
-        await query(
-            `INSERT INTO cleaning_history (dataset_id, user_id, action_type, details, rows_affected, health_score_before, health_score_after)
-       VALUES ($1, $2, 'cleaned', $3, $4, $5, $6)`,
-            [datasetId, req.user!.id, JSON.stringify(cleaningSummary || {}),
-                cleanedData.length, previousHealthScore, healthScore || 100]
-        );
+        // Log to cleaning history (optional - skip if table doesn't exist or user not authenticated)
+        try {
+            if (req.user?.id) {
+                await query(
+                    `INSERT INTO cleaning_history (dataset_id, user_id, action_type, details, rows_affected, health_score_before, health_score_after)
+           VALUES ($1, $2, 'cleaned', $3, $4, $5, $6)`,
+                    [datasetId, req.user.id, JSON.stringify(cleaningSummary || {}),
+                        cleanedData.length, previousHealthScore, healthScore || 100]
+                );
+            }
+        } catch (historyError) {
+            // Log error but don't fail the request
+            console.warn('Failed to log cleaning history:', historyError);
+        }
 
         res.json({
             message: 'Cleaned data saved',
