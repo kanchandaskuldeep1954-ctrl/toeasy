@@ -44,7 +44,7 @@ const ForensicCleanView: React.FC = () => {
             raw_data: fullData.raw_data || [],
             headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []
           };
-          updateDataset(hydrated);
+          onUpdate(hydrated);
         } catch (e) {
           console.error("Failed to hydrate dataset:", e);
         } finally {
