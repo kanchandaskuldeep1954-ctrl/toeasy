@@ -477,7 +477,7 @@ const ForensicCleanView: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-slate-900">
-                    {dataset.data.slice(0, 200).map((row, i) => (
+                    {(dataset.data || []).slice(0, 200).map((row, i) => (
                       <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
                         <td className="p-5 border-r border-slate-100 text-slate-400 font-mono text-center opacity-40 group-hover:opacity-100">{i + 1}</td>
                         {displayHeaders.map(h => {
