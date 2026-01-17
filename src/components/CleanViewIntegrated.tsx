@@ -66,7 +66,7 @@ const ForensicCleanView: React.FC = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
-  const displayHeaders = dataset ? dataset.headers.filter(h => h !== '__metadata') : [];
+  const displayHeaders = dataset?.headers ? dataset.headers.filter(h => h !== '__metadata') : [];
 
   // Initialize view from dataset state (Cache Hit) & Logic Gates
   useEffect(() => {
