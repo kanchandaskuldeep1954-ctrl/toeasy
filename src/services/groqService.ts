@@ -11,10 +11,10 @@ export class GroqService {
   private static async callApi<T>(endpoint: string, method: 'POST' | 'GET' = 'POST', body?: any): Promise<T> {
     try {
       console.log(`Calling backend API: ${method} /${endpoint}`, body);
-      const response = method === 'POST' 
+      const response = method === 'POST'
         ? await apiClient.post<T>(`/${endpoint}`, body)
         : await apiClient.get<T>(`/${endpoint}`);
-      
+
       console.log(`API response from /${endpoint}:`, response.data);
       return response.data as T;
     } catch (error: any) {
@@ -25,7 +25,7 @@ export class GroqService {
       throw new Error(error.message || 'Unknown error');
     }
   }
-  
+
   // Deep semantic analysis
   static async analyzeDatasetSemantics(dataset: Dataset): Promise<string> {
     const result = await this.callApi<{ result: string }>('analyze', 'POST', { dataset });
@@ -303,7 +303,7 @@ export class GroqService {
   static transformChartData(
     data: DataRow[],
     chartSpec: ChartSpec
-  ): Array<{ label: string; value: number; [key: string]: any }> {
+  ): Array<{ label: string; value: number;[key: string]: any }> {
     try {
       if (!data || !chartSpec) return [];
 
@@ -320,7 +320,7 @@ export class GroqService {
       }
 
       // For all other charts, use smart aggregation
-      return this.smartAggregateData(
+      return GroqService.smartAggregateData(
         data,
         xAxis,
         yAxis,
