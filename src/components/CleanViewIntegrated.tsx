@@ -17,10 +17,37 @@ const ForensicCleanView: React.FC = () => {
   };
   const onAIAction = () => { /* Optional telemetry/UI feedback */ };
 
-  const [activeTab, setActiveTab] = useState<'validation' | 'editor' | 'quarantine'>('validation');
-  const [loading, setLoading] = useState(true);
-  const [loadingStep, setLoadingStep] = useState<string>(''); // For loading feedback
+  const [activeTab, setActiveTab] = useState<'validation' | 'editor' | 'quarantine' | 'original' | 'clean'>('validation'); // Start at validation (Forensic Architect)
+  const [isLoading, setIsLoading] = useState(false);
   const [semanticContext, setSemanticContext] = useState<string>(''); // New State
+
+  // Hydrate dataset if raw data is missing (from list view optimization)
+  useEffect(() => {
+    const hydrateDataset = async () => {
+      if (dataset && (!dataset.raw_data || !dataset.data)) {
+        console.log("Hydrating dataset logic...", dataset.id);
+        setIsLoading(true);
+        try {
+          const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
+          const fullData = res.data;
+          // Ensure data/raw_data alias consistency
+          const hydrated = {
+            ...dataset,
+            ...fullData,
+            data: fullData.raw_data || [],
+            raw_data: fullData.raw_data || [],
+            headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []
+          };
+          updateDataset(hydrated);
+        } catch (e) {
+          console.error("Failed to hydrate dataset:", e);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    hydrateDataset();
+  }, [dataset, datasetId, workspaceId, updateDataset]); // Dependency on dataset might cause re-run if it changes, but condition prevents loop
 
   const [pendingActions, setPendingActions] = useState<CleaningAction[]>([]);
   const [insights, setInsights] = useState<AnalysisInsight[]>([]);
@@ -30,7 +57,7 @@ const ForensicCleanView: React.FC = () => {
   // Rule Engine State
   const [isExecuting, setIsExecuting] = useState(false);
   const [execStatus, setExecStatus] = useState('');
-  const [validationRules, setValidationRules] = useState<ValidationRule[]>([]);
+  const [validationRules, setValidationRules] = useState<ValidationRule[]>(dataset?.validationRules || []);
   const [selectedRuleIds, setSelectedRuleIds] = useState<Set<string>>(new Set());
   const [nlRuleInput, setNlRuleInput] = useState('');
   const [activeDimension, setActiveDimension] = useState<QualityDimension | 'All'>('All');
