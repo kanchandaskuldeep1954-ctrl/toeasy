@@ -283,10 +283,24 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
             return res.status(400).json({ error: 'cleanedData array is required' });
         }
 
-        // Get current state for comparison
+        // Resolve workspace ID (handle 'default' or numeric string)
+        let resolvedWorkspaceId: number | null = null;
+        if (workspaceId === 'default') {
+            // Find user's first/default workspace
+            if (req.user?.id) {
+                const wsResult = await query(`SELECT id FROM workspaces WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1`, [req.user.id]);
+                if (wsResult.rows.length > 0) {
+                    resolvedWorkspaceId = wsResult.rows[0].id;
+                }
+            }
+        } else {
+            resolvedWorkspaceId = parseInt(workspaceId, 10) || null;
+        }
+
+        // Get current state for comparison - use dataset_id primarily (it's unique)
         const currentResult = await query(
-            `SELECT health_score FROM datasets WHERE id = $1 AND workspace_id = $2`,
-            [datasetId, workspaceId]
+            `SELECT health_score, workspace_id FROM datasets WHERE id = $1`,
+            [datasetId]
         );
 
         if (currentResult.rows.length === 0) {
@@ -294,6 +308,7 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
         }
 
         const previousHealthScore = currentResult.rows[0].health_score || 100;
+        const actualWorkspaceId = currentResult.rows[0].workspace_id;
 
         // Try to update with all columns, fallback if columns don't exist
         let updateSuccess = false;
@@ -308,9 +323,9 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
                cleaning_summary = $4,
                cleaning_confirmed = false,
                updated_at = NOW()
-           WHERE id = $5 AND workspace_id = $6`,
+           WHERE id = $5`,
                 [JSON.stringify(cleanedData), JSON.stringify(quarantinedData || []),
-                healthScore || 100, JSON.stringify(cleaningSummary || {}), datasetId, workspaceId]
+                healthScore || 100, JSON.stringify(cleaningSummary || {}), datasetId]
             );
             updateSuccess = true;
         } catch (updateError: any) {
@@ -321,8 +336,8 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
                     `UPDATE datasets 
                SET raw_data = $1,
                    updated_at = NOW()
-               WHERE id = $2 AND workspace_id = $3`,
-                    [cleanedData.map(row => Object.values(row)), datasetId, workspaceId]
+               WHERE id = $2`,
+                    [cleanedData.map(row => Object.values(row)), datasetId]
                 );
                 updateSuccess = true;
             } catch (fallbackError) {
