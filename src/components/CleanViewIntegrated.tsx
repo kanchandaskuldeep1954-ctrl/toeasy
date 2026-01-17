@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useDataset } from '../hooks/useDataset';
 import { GroqService } from '../services/groqService';
 import { apiClient } from '../services/apiClient';
-import { ExportModal } from './ExportHub';
+import ExportModal from './ExportHub/ExportModal';
 
 // --- Types (Locally defined to ensure self-containment) ---
 
