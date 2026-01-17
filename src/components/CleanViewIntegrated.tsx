@@ -29,7 +29,8 @@ const ForensicCleanView: React.FC = () => {
   // Hydrate dataset if raw data is missing (from list view optimization)
   useEffect(() => {
     const hydrateDataset = async () => {
-      if (dataset && (!dataset.raw_data || !dataset.data)) {
+      // Hydrate if we have rows but no data loaded (or empty array)
+      if (dataset && dataset.row_count > 0 && (!dataset.data || dataset.data.length === 0)) {
         console.log("Hydrating dataset logic...", dataset.id);
         setIsLoading(true);
         try {
