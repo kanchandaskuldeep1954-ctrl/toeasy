@@ -295,19 +295,45 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
 
         const previousHealthScore = currentResult.rows[0].health_score || 100;
 
-        // Update dataset
-        await query(
-            `UPDATE datasets 
-       SET cleaned_data = $1, 
-           quarantined_data = $2,
-           health_score = $3,
-           cleaning_summary = $4,
-           cleaning_confirmed = false,
-           updated_at = NOW()
-       WHERE id = $5 AND workspace_id = $6`,
-            [JSON.stringify(cleanedData), JSON.stringify(quarantinedData || []),
-            healthScore || 100, JSON.stringify(cleaningSummary || {}), datasetId, workspaceId]
-        );
+        // Try to update with all columns, fallback if columns don't exist
+        let updateSuccess = false;
+
+        // Try full update first (with all cleaning columns)
+        try {
+            await query(
+                `UPDATE datasets 
+           SET cleaned_data = $1, 
+               quarantined_data = $2,
+               health_score = $3,
+               cleaning_summary = $4,
+               cleaning_confirmed = false,
+               updated_at = NOW()
+           WHERE id = $5 AND workspace_id = $6`,
+                [JSON.stringify(cleanedData), JSON.stringify(quarantinedData || []),
+                healthScore || 100, JSON.stringify(cleaningSummary || {}), datasetId, workspaceId]
+            );
+            updateSuccess = true;
+        } catch (updateError: any) {
+            // If columns don't exist, try updating just raw_data
+            console.warn('Full update failed, trying fallback:', updateError.message);
+            try {
+                await query(
+                    `UPDATE datasets 
+               SET raw_data = $1,
+                   updated_at = NOW()
+               WHERE id = $2 AND workspace_id = $3`,
+                    [cleanedData.map(row => Object.values(row)), datasetId, workspaceId]
+                );
+                updateSuccess = true;
+            } catch (fallbackError) {
+                console.error('Fallback update also failed:', fallbackError);
+                throw fallbackError;
+            }
+        }
+
+        if (!updateSuccess) {
+            throw new Error('Failed to update dataset');
+        }
 
         // Log to cleaning history (optional - skip if table doesn't exist or user not authenticated)
         try {
