@@ -83,7 +83,7 @@ const ForensicCleanView: React.FC = () => {
       }
 
       // Initialize Rules with Deep Semantic Analysis if needed
-      if ((!dataset.validationRules || dataset.validationRules.length === 0) && dataset.data.length > 0) {
+      if ((!dataset.validationRules || dataset.validationRules.length === 0) && (dataset.data || []).length > 0) {
         try {
           if (onAIAction) onAIAction();
 
@@ -300,7 +300,7 @@ const ForensicCleanView: React.FC = () => {
           {[
             { id: 'validation', label: 'Forensic Architect', icon: '⚒️' },
             { id: 'editor', label: 'Clean Workspace', icon: '💎' },
-            { id: 'quarantine', label: 'Forensic Vault', icon: '🛡️', count: dataset.quarantinedData?.length }
+            { id: 'quarantine', label: 'Forensic Vault', icon: '🛡️', count: (dataset.quarantinedData || []).length }
           ].map(tab => (
             <button
               key={tab.id}
@@ -444,13 +444,13 @@ const ForensicCleanView: React.FC = () => {
                 <h3 className="text-[12px] font-black uppercase tracking-[0.4em] text-slate-400">Refined Operational Workspace</h3>
                 <p className="text-[10px] font-black text-emerald-500 uppercase flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  {dataset.data.length.toLocaleString()} Records Passed 6-Pass Cycle
+                  {(dataset?.data || []).length.toLocaleString()} Records Passed 6-Pass Cycle
                 </p>
               </div>
               <div className="flex gap-2">
                 <button
                   onClick={() => setShowExportModal(true)}
-                  disabled={dataset.data.length === 0}
+                  disabled={(dataset.data || []).length === 0}
                   className="px-6 py-3 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded-[24px] text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-slate-50 transition-all border border-slate-200 dark:border-slate-700"
                 >
                   Export Cleaned Data
