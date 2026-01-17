@@ -792,16 +792,7 @@ const ForensicCleanView: React.FC = () => {
                     });
                     setVaultAgentQuery('');
                   }} className="relative mt-auto">
-                    focusedRow: selectedVaultRow,
-                    totalInCluster: clusters[selectedCluster]?.length
-                    };
 
-                    GroqService.consultVerifiedAgent(dataset, vaultAgentQuery, context).then(res => {
-                      setVaultAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
-                    setIsVaultAgentThinking(false);
-                    });
-                    setVaultAgentQuery('');
-                  }} className="relative mt-auto">
                     <textarea value={vaultAgentQuery} onChange={(e) => setVaultAgentQuery(e.target.value)} placeholder="Analyze failure root cause..." className="w-full px-8 py-7 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded-[48px] text-xs font-bold min-h-[160px] resize-none shadow-2xl focus:ring-8 focus:ring-rose-500/10 outline-none" />
                     <button className="absolute right-5 bottom-5 px-8 py-3 bg-rose-600 text-white text-[10px] font-black uppercase rounded-full shadow-2xl">{isVaultAgentThinking ? '...' : 'Diagnose'}</button>
                   </form>
