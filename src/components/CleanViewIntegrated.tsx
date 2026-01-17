@@ -82,7 +82,15 @@ const ForensicCleanView: React.FC = () => {
   });
 
   // Editor Agent State
-  const [selectedCell, setSelectedCell] = useState<{ rowIdx: number, field: string, value: any, row: DataRow } | null>(null);
+  // Selection State
+  type SelectionContext =
+    | { type: 'cell', rowIdx: number, field: string, value: any, row: DataRow }
+    | { type: 'row', rowIdx: number, data: DataRow }
+    | { type: 'col', field: string };
+
+  const [selectionContext, setSelectionContext] = useState<SelectionContext | null>(null);
+  // Alias for backward compatibility if needed, though we will update usages
+  const selectedCell = selectionContext?.type === 'cell' ? selectionContext : null;
   const [agentQuery, setAgentQuery] = useState('');
   const [agentHistory, setAgentHistory] = useState<{ role: 'user' | 'agent', text: string }[]>([]);
   const [isAgentThinking, setIsAgentThinking] = useState(false);
@@ -272,6 +280,49 @@ const ForensicCleanView: React.FC = () => {
       alert('Failed to save cleaning state.');
     } finally {
       setIsConfirming(false);
+    }
+  };
+
+  const executeAgentAction = (action: any) => {
+    if (!dataset) return;
+    let newData = [...(dataset.data || [])];
+    let newHeaders = [...(dataset.headers || [])];
+    let logText = '';
+
+    try {
+      if (action.action === 'DELETE_COL') {
+        // Remove from headers
+        newHeaders = newHeaders.filter(h => h !== action.target);
+        // Remove from all rows (create new objects)
+        newData = newData.map(row => {
+          const newRow = { ...row };
+          delete newRow[action.target];
+          return newRow;
+        });
+        logText = `Removed column "${action.target}"`;
+      } else if (action.action === 'DELETE_ROW') {
+        // Assuming target is index for now, or we can look for ID if we had one
+        // If action.target is numeric string
+        const idx = parseInt(String(action.target));
+        if (!isNaN(idx) && idx >= 0 && idx < newData.length) {
+          newData.splice(idx, 1);
+          logText = `Removed row #${idx + 1}`;
+        } else {
+          throw new Error("Invalid Row Index");
+        }
+      } else if (action.action === 'UPDATE_CELL') {
+        if (typeof action.rowIdx === 'number' && action.col) {
+          newData[action.rowIdx] = { ...newData[action.rowIdx], [action.col]: action.value };
+          logText = `Updated cell [${action.rowIdx}, ${action.col}] to "${action.value}"`;
+        }
+      }
+
+      if (logText) {
+        onUpdate({ ...dataset, data: newData, headers: newHeaders });
+        setAgentHistory(prev => [...prev, { role: 'agent', text: `✓ Executed: ${logText}` }]);
+      }
+    } catch (e) {
+      setAgentHistory(prev => [...prev, { role: 'agent', text: `❌ Execution Failed: ${(e as Error).message}` }]);
     }
   };
 
@@ -583,34 +634,65 @@ const ForensicCleanView: React.FC = () => {
                     <tr>
                       <th className="p-5 border-b border-slate-200 dark:border-slate-700 font-black uppercase text-slate-400 w-20 text-center tracking-widest bg-slate-50 dark:bg-slate-800">ID</th>
                       {displayHeaders.map(h => (
-                        <th key={h} className="p-5 border-b border-slate-200 dark:border-slate-700 font-black uppercase text-slate-600 dark:text-slate-300 tracking-wider whitespace-nowrap bg-slate-50 dark:bg-slate-800">
+                        <th
+                          key={h}
+                          onClick={() => setSelectionContext({ type: 'col', field: h })}
+                          className={`p-5 border-b border-slate-200 dark:border-slate-700 font-black uppercase tracking-wider whitespace-nowrap cursor-pointer transition-colors ${selectionContext?.type === 'col' && selectionContext.field === h
+                            ? 'bg-indigo-600 text-white shadow-lg'
+                            : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}
+                        >
                           {h}
                         </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50 bg-white dark:bg-slate-900">
-                    {(dataset.data || []).slice(0, 200).map((row, i) => (
-                      <tr key={i} className="hover:bg-indigo-50/30 transition-colors group">
-                        <td className="p-5 border-r border-slate-100 text-slate-400 font-mono text-center opacity-40 group-hover:opacity-100">{i + 1}</td>
-                        {displayHeaders.map(h => {
-                          const isRec = row.__metadata?.recoveredFields?.includes(h);
-                          const isSelected = selectedCell?.rowIdx === i && selectedCell?.field === h;
-                          return (
-                            <td
-                              key={h}
-                              onClick={() => setSelectedCell({ rowIdx: i, field: h, value: row[h], row })}
-                              className={`p-5 border-r border-slate-50 text-slate-600 dark:text-slate-300 cursor-pointer relative transition-all duration-300 ${isSelected ? 'bg-indigo-600 text-white font-black scale-[1.02] shadow-2xl z-20' : isRec ? 'bg-emerald-500/10 text-emerald-600 font-black underline decoration-emerald-500/30' : ''}`}
-                            >
-                              <div className="truncate max-w-[200px]">
-                                {row[h] === null || row[h] === undefined || row[h] === '' ? <span className="opacity-20 italic">null_sector</span> : String(row[h])}
-                              </div>
-                              {isRec && !isSelected && <span className="absolute top-1 right-1 text-[9px] text-emerald-500 animate-pulse">✦ P{row.__metadata?.recoveryPass}</span>}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
+                    {(dataset.data || []).slice(0, 200).map((row, i) => {
+                      const isRowSelected = selectionContext?.type === 'row' && selectionContext.rowIdx === i;
+                      return (
+                        <tr key={i} className={`transition-colors group ${isRowSelected ? 'bg-indigo-50 dark:bg-indigo-900/20' : 'hover:bg-indigo-50/30'}`}>
+                          <td
+                            onClick={() => setSelectionContext({ type: 'row', rowIdx: i, data: row })}
+                            className={`p-5 border-r border-slate-100 font-mono text-center cursor-pointer transition-all ${isRowSelected ? 'text-indigo-600 font-black bg-indigo-100 dark:bg-indigo-900/40' : 'text-slate-400 opacity-40 group-hover:opacity-100 hover:bg-slate-200 dark:hover:bg-slate-800'
+                              }`}
+                          >
+                            {i + 1}
+                          </td>
+                          {displayHeaders.map(h => {
+                            const isRec = row.__metadata?.recoveredFields?.includes(h);
+                            const isSelected = selectionContext?.type === 'cell' && selectionContext.rowIdx === i && selectionContext.field === h;
+                            const isColSelected = selectionContext?.type === 'col' && selectionContext.field === h;
+
+                            return (
+                              <td
+                                key={h}
+                                onClick={() => setSelectionContext({ type: 'cell', rowIdx: i, field: h, value: row[h], row })}
+                                title={isRec ? `Recovered: ${row.__metadata?.recoveryExplanations?.[h] || 'Logic inference'}` : ''}
+                                className={`p-5 border-r border-slate-50 text-slate-600 dark:text-slate-300 cursor-pointer relative transition-all duration-300 transform
+                                  ${isSelected
+                                    ? 'bg-indigo-600 text-white font-black scale-[1.02] shadow-2xl z-20 hover:scale-[1.05]'
+                                    : isColSelected
+                                      ? 'bg-indigo-50 dark:bg-indigo-900/10'
+                                      : isRec
+                                        ? 'bg-emerald-500/5 text-emerald-700 dark:text-emerald-400 font-bold'
+                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+                                  }
+                                `}
+                              >
+                                <div className="truncate max-w-[200px]">
+                                  {row[h] === null || row[h] === undefined || row[h] === '' ? <span className="opacity-20 italic">null_sector</span> : String(row[h])}
+                                </div>
+                                {isRec && !isSelected && (
+                                  <div className="absolute top-1 right-1 flex gap-1">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  </div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
                   </tbody>
                 </table>
               </div>
@@ -632,23 +714,75 @@ const ForensicCleanView: React.FC = () => {
                       <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in`}>
                         <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">{msg.role === 'user' ? 'You' : 'Analyst'}</p>
                         <div className={`p-4 lg:p-6 rounded-[24px] lg:rounded-[32px] text-xs font-medium leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 rounded-tl-none'}`}>
-                          {msg.text}
+                          {(() => {
+                            try {
+                              const action = JSON.parse(msg.text);
+                              if (action.action) {
+                                return (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400">
+                                      <span className="text-lg">⚡</span>
+                                      <span className="font-black uppercase tracking-wider">{action.action.replace('_', ' ')}</span>
+                                    </div>
+                                    <p className="text-slate-600 dark:text-slate-300 italic">"{action.reason}"</p>
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 p-2 rounded-lg font-mono text-[10px] border border-slate-200 dark:border-slate-700">
+                                      Target: <span className="font-bold text-slate-800 dark:text-white">{action.target}</span>
+                                      {action.value && <span> → {action.value}</span>}
+                                    </div>
+                                    <button
+                                      onClick={() => executeAgentAction(action)}
+                                      className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold uppercase tracking-widest text-[10px] shadow-lg transition-all"
+                                    >
+                                      Execute Action
+                                    </button>
+                                  </div>
+                                );
+                              }
+                            } catch (e) { }
+                            return msg.text;
+                          })()}
                         </div>
                       </div>
                     ))}
                   </div>
 
-                  {selectedCell && (
+                  {selectionContext && (
                     <div className="p-6 lg:p-8 bg-white dark:bg-slate-800 rounded-[32px] lg:rounded-[48px] border-2 border-indigo-100 dark:border-indigo-900 shadow-2xl space-y-4 shrink-0 animate-in zoom-in-95">
                       <div className="flex justify-between items-center">
-                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Trace: {selectedCell.field}</p>
-                        <button onClick={() => setSelectedCell(null)} className="text-slate-400 hover:text-rose-500">✕</button>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                          {selectionContext.type === 'cell' ? `Trace: ${selectionContext.field}` :
+                            selectionContext.type === 'row' ? `Context: Row #${selectionContext.rowIdx + 1}` :
+                              `Context: Column ${selectionContext.field}`}
+                        </p>
+                        <button onClick={() => setSelectionContext(null)} className="text-slate-400 hover:text-rose-500">✕</button>
                       </div>
-                      <p className="text-xl font-black text-slate-950 dark:text-white truncate">{String(selectedCell.value)}</p>
-                      {selectedCell.row.__metadata?.recoveredFields?.includes(selectedCell.field) && (
-                        <div className="bg-emerald-500/5 p-4 rounded-[20px] border border-emerald-500/20">
-                          <p className="text-[9px] font-black text-emerald-600 uppercase mb-2 tracking-widest">Recovery Trace Log</p>
-                          <p className="text-xs text-emerald-800 dark:text-emerald-400 font-bold italic">"{selectedCell.row.__metadata?.recoveryExplanations?.[selectedCell.field]}"</p>
+
+                      {selectionContext.type === 'cell' && (
+                        <>
+                          <p className="text-xl font-black text-slate-950 dark:text-white truncate">{String(selectionContext.value)}</p>
+                          {selectionContext.row.__metadata?.recoveredFields?.includes(selectionContext.field) && (
+                            <div className="bg-emerald-500/5 p-4 rounded-[20px] border border-emerald-500/20">
+                              <p className="text-[9px] font-black text-emerald-600 uppercase mb-2 tracking-widest">Recovery Trace Log</p>
+                              <p className="text-xs text-emerald-800 dark:text-emerald-400 font-bold italic">"{selectionContext.row.__metadata?.recoveryExplanations?.[selectionContext.field]}"</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {selectionContext.type === 'row' && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {displayHeaders.slice(0, 4).map(h => (
+                            <div key={h} className="bg-slate-50 dark:bg-slate-900 p-2 rounded-lg">
+                              <p className="text-[8px] uppercase text-slate-400">{h}</p>
+                              <p className="text-xs font-bold truncate">{String(selectionContext.data[h])}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {selectionContext.type === 'col' && (
+                        <div className="bg-indigo-50 dark:bg-indigo-900/20 p-4 rounded-2xl">
+                          <p className="text-xs font-bold text-indigo-600">Selected for bulk analysis</p>
                         </div>
                       )}
                     </div>
@@ -660,7 +794,7 @@ const ForensicCleanView: React.FC = () => {
                     const newHistory = [...agentHistory, { role: 'user', text: agentQuery }];
                     setAgentHistory(newHistory);
                     setIsAgentThinking(true);
-                    GroqService.consultVerifiedAgent(dataset, agentQuery, selectedCell, newHistory).then(res => {
+                    GroqService.consultVerifiedAgent(dataset, agentQuery, selectionContext, newHistory).then(res => {
                       setAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
                       setIsAgentThinking(false);
                     });

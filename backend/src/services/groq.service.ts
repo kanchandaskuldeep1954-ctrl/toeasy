@@ -815,7 +815,12 @@ ${historyText ? `\nConversation History:\n${historyText}\n` : ''}
 Question: "${query}"
 ${context ? `Context: ${JSON.stringify(context)}` : ''}
 
-Provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
+If the user explicitly asks to perform an action (delete row, delete column, or update cell/value), you MUST return a valid JSON object with no other text:
+{ "action": "DELETE_COL", "target": "column_name", "reason": "Explanation of why" }
+{ "action": "DELETE_ROW", "target": "row_index_number", "reason": "Explanation" }
+{ "action": "UPDATE_CELL", "rowIdx": number, "col": "field_name", "value": "new_value", "reason": "Explanation" }
+
+Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
 
       return await this.callGroq(groqPrompt, 400);
     } catch (error) {
