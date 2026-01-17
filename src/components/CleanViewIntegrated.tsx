@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useDataset } from '../hooks/useDataset';
 import { GroqService } from '../services/groqService';
+import { apiClient } from '../services/apiClient';
 
 // --- Types (Locally defined to ensure self-containment) ---
 
@@ -76,7 +77,7 @@ const ForensicCleanView: React.FC = () => {
   const [agentResponse, setAgentResponse] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
 
-  import { apiClient } from '../services/apiClient';
+
 
   // Initialize from context
   useEffect(() => {
