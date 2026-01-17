@@ -92,7 +92,7 @@ const ForensicCleanView: React.FC = () => {
           console.log(`[CleanView] Fetching full data for dataset ${activeDataset.id}...`);
           setLoading(true);
           setLoadingStep('Fetching dataset content...');
-          const res = await apiClient.get<Dataset>(`/datasets/${activeDataset.id}`);
+          const res = await apiClient.get<Dataset>(`/workspaces/${activeDataset.workspace_id}/datasets/${activeDataset.id}`);
           if (res.data && res.data.raw_data) {
             raw = res.data.raw_data;
             // Update context to cache it

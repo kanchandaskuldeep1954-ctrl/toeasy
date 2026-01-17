@@ -20,6 +20,7 @@ const ValidationRulesManager: React.FC = () => {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const datasetId = searchParams.get('dataset');
+  const workspaceId = searchParams.get('workspace'); // Get workspace ID
 
   const [rules, setRules] = useState<ValidationRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,19 +40,19 @@ const ValidationRulesManager: React.FC = () => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
-    if (datasetId && token) {
+    if (datasetId && workspaceId && token) {
       loadRules();
     }
-  }, [datasetId, token]);
+  }, [datasetId, workspaceId, token]);
 
   const loadRules = async () => {
     try {
       setLoading(true);
       const response = await axios.get(
-        `${backendUrl}/datasets/${datasetId}/validation-rules`,
+        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/rules`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setRules(response.data || []);
+      setRules(response.data.data || []); // Backend returns paginated { data: rules }
     } catch (err) {
       setError('Failed to load rules');
       console.error(err);
@@ -68,34 +69,46 @@ const ValidationRulesManager: React.FC = () => {
 
     try {
       const ruleData: any = {
-        dataset_id: datasetId,
-        field: form.field,
-        type: form.type,
-        description: form.description
+        name: `${form.field} - ${form.type}`, // Backend expects 'name'
+        ruleType: form.type === 'not_null' ? 'null_check' : 'custom', // Map types if needed, backend specific?
+        // Actually backend seems to accept generic definition. Let's align with schema.
+        // Backend expects: name, ruleType, ruleDefinition (json)
+
+        // Let's construct ruleDefinition based on type
+        ruleDefinition: {
+          field: form.field,
+          type: form.type,
+          pattern: form.pattern,
+          min: form.min,
+          max: form.max
+        }
       };
 
-      if (form.type === 'pattern' && form.pattern) {
-        ruleData.pattern = form.pattern;
-      }
-      if (form.type === 'range') {
-        if (form.min) ruleData.min = parseInt(form.min);
-        if (form.max) ruleData.max = parseInt(form.max);
-      }
+      // Backend validation.ts expects 'name', 'ruleType', 'ruleDefinition'
+      // Mapping frontend state to backend requirements
+      const payload = {
+        name: `${form.field} check`,
+        ruleType: form.type, // simplified
+        ruleDefinition: ruleData.ruleDefinition,
+        isActive: true
+      };
+
 
       if (editingId) {
         await axios.put(
-          `${backendUrl}/datasets/${datasetId}/validation-rules/${editingId}`,
-          ruleData,
+          `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/rules/${editingId}`,
+          payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setRules(rules.map(r => r.id === editingId ? { ...r, ...ruleData } : r));
+        // Note: local update might be intricate with mismatched types, better to reload
+        loadRules();
       } else {
-        const response = await axios.post(
-          `${backendUrl}/datasets/${datasetId}/validation-rules`,
-          ruleData,
+        await axios.post(
+          `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/rules`,
+          payload,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setRules([...rules, response.data]);
+        loadRules();
       }
 
       resetForm();
@@ -107,7 +120,7 @@ const ValidationRulesManager: React.FC = () => {
   const deleteRule = async (ruleId: string) => {
     try {
       await axios.delete(
-        `${backendUrl}/datasets/${datasetId}/validation-rules/${ruleId}`,
+        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/rules/${ruleId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setRules(rules.filter(r => r.id !== ruleId));
@@ -145,7 +158,7 @@ const ValidationRulesManager: React.FC = () => {
 
   return (
     <div className="max-w-[1200px] mx-auto h-full flex flex-col gap-6 p-4 overflow-auto">
-      
+
       {/* Header */}
       <div className="flex justify-between items-start gap-6 shrink-0">
         <div>
