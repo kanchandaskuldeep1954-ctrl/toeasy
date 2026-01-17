@@ -692,7 +692,8 @@ const ForensicCleanView: React.FC = () => {
                             );
                           })}
                         </tr>
-                      ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
