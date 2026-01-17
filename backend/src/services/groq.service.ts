@@ -802,14 +802,16 @@ Generate a report with ONLY this valid JSON structure (no markdown, no explanati
     }
   }
 
-  static async consultAgent(dataset: any, query: string, context?: any): Promise<string> {
+  static async consultAgent(dataset: any, query: string, context?: any, history?: any[]): Promise<string> {
     try {
       const headers = dataset.headers || [];
+      const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
 
       const groqPrompt = `You are a data analyst AI assistant. Answer this question about the dataset concisely.
 
 Dataset columns: ${headers.join(', ')}
 Total records: ${dataset.data?.length || 0}
+${historyText ? `\nConversation History:\n${historyText}\n` : ''}
 Question: "${query}"
 ${context ? `Context: ${JSON.stringify(context)}` : ''}
 

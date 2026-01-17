@@ -156,8 +156,8 @@ export class GroqService {
   }
 
   // Consult verified agent
-  static async consultVerifiedAgent(dataset: Dataset, query: string, context?: any): Promise<string> {
-    const result = await this.callApi<{ result: string }>('consult-agent', 'POST', { dataset, query, context });
+  static async consultVerifiedAgent(dataset: Dataset, query: string, context?: any, history?: any[]): Promise<string> {
+    const result = await this.callApi<{ result: string }>('consult-agent', 'POST', { dataset, query, context, history });
     return result.result;
   }
 

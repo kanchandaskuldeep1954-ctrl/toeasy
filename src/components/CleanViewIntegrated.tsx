@@ -657,9 +657,10 @@ const ForensicCleanView: React.FC = () => {
                   <form onSubmit={(e) => {
                     e.preventDefault();
                     if (!agentQuery.trim()) return;
-                    setAgentHistory(prev => [...prev, { role: 'user', text: agentQuery }]);
+                    const newHistory = [...agentHistory, { role: 'user', text: agentQuery }];
+                    setAgentHistory(newHistory);
                     setIsAgentThinking(true);
-                    GroqService.consultVerifiedAgent(dataset, agentQuery, selectedCell).then(res => {
+                    GroqService.consultVerifiedAgent(dataset, agentQuery, selectedCell, newHistory).then(res => {
                       setAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
                       setIsAgentThinking(false);
                     });
@@ -683,8 +684,8 @@ const ForensicCleanView: React.FC = () => {
                 <p className="text-slate-500 text-sm font-medium">Records failing mandatory Truth Audit after 6 recovery passes.</p>
               </div>
               <div className="bg-white dark:bg-slate-800 p-4 rounded-[32px] border border-slate-200 dark:border-slate-700 shadow-xl min-w-[320px]">
-                <span className="text-[10px] font-black text-slate-400 uppercase ml-4 tracking-widest">Cluster by sharp violation:</span>
-                <select value={selectedCluster} onChange={(e) => setSelectedCluster(e.target.value)} className="w-full bg-transparent border-none text-xs font-black text-slate-800 dark:text-white outline-none cursor-pointer">
+                <span className="text-xs font-black text-slate-400 uppercase ml-4 tracking-widest">Cluster by sharp violation:</span>
+                <select value={selectedCluster} onChange={(e) => setSelectedCluster(e.target.value)} className="w-full bg-transparent border-none text-sm font-black text-slate-800 dark:text-white outline-none cursor-pointer">
                   {Object.keys(clusters).map(key => <option key={key} value={key}>{key} ({clusters[key].length})</option>)}
                 </select>
               </div>
@@ -708,7 +709,7 @@ const ForensicCleanView: React.FC = () => {
                       >
                         <div className="flex flex-wrap gap-2">
                           {row.__metadata?.validationErrors?.map((err, j) => (
-                            <span key={j} className="px-4 py-1.5 bg-rose-500 text-white text-[9px] font-black uppercase rounded-full shadow-lg flex items-center gap-2">
+                            <span key={j} className="px-4 py-1.5 bg-rose-500 text-white text-[10px] font-black uppercase rounded-full shadow-lg flex items-center gap-2">
                               <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
                               {err}
                             </span>
@@ -717,8 +718,8 @@ const ForensicCleanView: React.FC = () => {
                         <div className="grid grid-cols-3 gap-10">
                           {displayHeaders.slice(0, 9).map(h => (
                             <div key={h}>
-                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">{h}</p>
-                              <p className="text-sm text-slate-800 dark:text-slate-200 truncate font-black">
+                              <p className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-1">{h}</p>
+                              <p className="text-base text-slate-800 dark:text-slate-200 truncate font-black">
                                 {row[h] === null || row[h] === '' ? <span className="text-rose-400">NULL_SECTOR</span> : String(row[h])}
                               </p>
                             </div>
@@ -735,22 +736,22 @@ const ForensicCleanView: React.FC = () => {
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">
                     <div className="w-3 h-3 bg-rose-500 rounded-full animate-pulse"></div>
-                    <h4 className="text-[12px] font-black uppercase tracking-[0.5em] text-rose-500">Diagnostic Agent</h4>
+                    <h4 className="text-sm font-black uppercase tracking-[0.5em] text-rose-500">Diagnostic Agent</h4>
                   </div>
-                  <p className="text-xs text-slate-500 font-medium">Analyzing quarantined error patterns.</p>
+                  <p className="text-sm text-slate-500 font-medium">Analyzing quarantined error patterns.</p>
                 </div>
 
                 <div className="flex-1 flex flex-col gap-6 overflow-hidden">
                   <div className="flex-1 overflow-y-auto no-scrollbar p-1 space-y-6">
                     {vaultAgentHistory.length === 0 && (
-                      <div className="p-6 rounded-[32px] bg-rose-50 dark:bg-rose-900/10 text-xs font-medium text-rose-800 dark:text-rose-200 border border-rose-100 dark:border-rose-800/20 text-center">
+                      <div className="p-6 rounded-[32px] bg-rose-50 dark:bg-rose-900/10 text-sm font-medium text-rose-800 dark:text-rose-200 border border-rose-100 dark:border-rose-800/20 text-center">
                         I am analyzing the <span className="font-black">{selectedCluster}</span> cluster. Click a card to focus on specific failures, or ask me to diagnose the pattern.
                       </div>
                     )}
                     {vaultAgentHistory.map((msg, idx) => (
                       <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in fade-in`}>
-                        <p className="text-[9px] font-black uppercase text-slate-400 mb-2 tracking-widest">{msg.role === 'user' ? 'You' : 'Diagnostician'}</p>
-                        <div className={`p-6 rounded-[32px] text-xs font-medium leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-rose-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 rounded-tl-none'}`}>
+                        <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-widest">{msg.role === 'user' ? 'You' : 'Diagnostician'}</p>
+                        <div className={`p-6 rounded-[32px] text-sm font-medium leading-relaxed shadow-xl ${msg.role === 'user' ? 'bg-rose-600 text-white rounded-tr-none' : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-100 rounded-tl-none'}`}>
                           {msg.text}
                         </div>
                       </div>
@@ -775,16 +776,29 @@ const ForensicCleanView: React.FC = () => {
                     setVaultAgentHistory(prev => [...prev, { role: 'user', text: vaultAgentQuery }]);
                     setIsVaultAgentThinking(true);
 
+                    const newHistory = [...vaultAgentHistory, { role: 'user', text: vaultAgentQuery }];
+
                     // Context includes the selected cluster name and the specific row if selected
                     const context = {
                       cluster: selectedCluster,
-                      focusedRow: selectedVaultRow,
-                      totalInCluster: clusters[selectedCluster]?.length
+                      sampleRow: selectedVaultRow,
+                      errorCount: clusters[selectedCluster]?.length || 0,
+                      datasetId: dataset.id
+                    };
+
+                    GroqService.consultVerifiedAgent(dataset, vaultAgentQuery, context, newHistory).then(res => {
+                      setVaultAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
+                      setIsVaultAgentThinking(false);
+                    });
+                    setVaultAgentQuery('');
+                  }} className="relative mt-auto">
+                    focusedRow: selectedVaultRow,
+                    totalInCluster: clusters[selectedCluster]?.length
                     };
 
                     GroqService.consultVerifiedAgent(dataset, vaultAgentQuery, context).then(res => {
                       setVaultAgentHistory(prev => [...prev, { role: 'agent', text: res }]);
-                      setIsVaultAgentThinking(false);
+                    setIsVaultAgentThinking(false);
                     });
                     setVaultAgentQuery('');
                   }} className="relative mt-auto">

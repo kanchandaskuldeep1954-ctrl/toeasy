@@ -253,7 +253,7 @@ app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res
 // Consult Verified Agent (Chat/Q&A)
 app.post('/api/consult-agent', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { dataset, query, context } = req.body;
+    const { dataset, query, context, history } = req.body;
 
     if (!dataset || !query) {
       return res.status(400).json({ error: 'Dataset and query required' });
@@ -261,7 +261,7 @@ app.post('/api/consult-agent', authenticateToken, async (req: AuthRequest, res) 
 
     console.log('Consulting agent with query:', query);
 
-    const response = await GroqService.consultAgent(dataset, query, context);
+    const response = await GroqService.consultAgent(dataset, query, context, history);
 
     res.json({ result: response });
   } catch (err) {
