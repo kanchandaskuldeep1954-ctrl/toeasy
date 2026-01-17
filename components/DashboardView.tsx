@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
 import { GroqService } from '../services/groqService';
+import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
 import { 
   BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer, 
   XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, 
@@ -52,6 +53,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
   const [config, setConfig] = useState<DashboardConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
+  
+  // Chart Validation & Quality Warnings
+  const [chartValidations, setChartValidations] = useState<{ [id: string]: any }>({});
+  const [dataQuality, setDataQuality] = useState<any>(null);
+  const [showQualityWarnings, setShowQualityWarnings] = useState(false);
   
   // Edit Mode States
   const [editingChartId, setEditingChartId] = useState<string | null>(null);
@@ -143,6 +149,26 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
   };
 
   useEffect(() => { initAnalysis(); }, [dataset.name]);
+
+  // Validate charts and assess data quality
+  useEffect(() => {
+    if (!config || !dataset) return;
+
+    // Assess overall data quality
+    const quality = assessDataQuality(dataset.data || [], dataset.headers || []);
+    setDataQuality(quality);
+
+    // Validate each chart against data
+    const validations: { [id: string]: any } = {};
+    config.charts?.forEach((chart) => {
+      validations[chart.id] = validateChartSpec(
+        chart,
+        dataset.data || [],
+        dataset.headers || []
+      );
+    });
+    setChartValidations(validations);
+  }, [config, dataset]);
 
   const handleChartClick = (data: any, chart: ChartSpec) => {
       if (!data || !data.activePayload) return;
@@ -236,31 +262,36 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     }
 
     // --- Standard Aggregation (Bar, Line, Area, Pie, Radar, Funnel, Gauge) ---
-    const map = new Map<string, number>();
-    filteredData.forEach(row => {
-        const key = String(row[xAxis] || 'Unknown').trim();
-        if (key === 'Unknown' || key === 'undefined') return;
-        const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[yAxis])) || 0);
-        map.set(key, (map.get(key) || 0) + val);
-    });
+    // IMPROVED: Use smart aggregation for high-cardinality data with automatic "Top N + Other" grouping
+    const limit = chart.limit || (chart.type === 'pie' ? 10 : 20);
+    const showOther = chart.showOther !== false; // Default true
     
-    let result = Array.from(map.entries())
-        .map(([name, value]) => ({ name: name.length > 20 ? name.substring(0, 18) + '...' : name, value: Number(value.toFixed(2)) }));
+    // Use smart aggregation from GroqService for intelligent grouping
+    const smartData = GroqService.smartAggregateData(
+      filteredData,
+      xAxis,
+      yAxis,
+      chart.aggregation || 'sum',
+      limit,
+      showOther
+    );
+
+    // Handle truncation of labels for readability
+    let result = smartData.map(item => ({
+      name: item.label.length > 20 ? item.label.substring(0, 18) + '...' : item.label,
+      value: Number(item.value.toFixed(2))
+    }));
     
-    // Sorting typically helps standard charts
-    result.sort((a, b) => b.value - a.value);
-    
-    // Slice for readability unless it's a line chart (usually time series needs order)
-    if (chart.type !== 'line' && chart.type !== 'area') {
-        return result.slice(0, 30);
-    } else {
-        // For time-series like data, we might want to sort by name if it's a date?
-        // Simple heuristic: if name looks like a year/date, sort by name
+    // Sorting typically helps standard charts (already done by smartAggregateData)
+    // Only re-sort if this is a time-series chart
+    if (chart.type === 'line' || chart.type === 'area') {
+        // For time-series, check if data looks like dates
         if (result.length > 0 && !isNaN(Date.parse(result[0].name))) {
-             result.sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
+            result.sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
         }
-        return result.slice(0, 50); 
     }
+    
+    return result;
   }, [filteredData, dataset.headers]);
 
   // --- Rendering Logic ---
@@ -804,14 +835,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
             {visibleCharts.map((chart, i) => {
                 const data = aggregateData(chart);
+                const validation = chartValidations[chart.id];
                 if (data.length === 0) return null;
                 const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
+                const hasWarnings = validation && (validation.warnings.length > 0 || !validation.valid);
+                const insights = data.length > 0 ? generateChartInsights(data, chart.type) : [];
 
                 return (
-                    <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
+                    <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border transition-all ${
+                      hasWarnings 
+                        ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md' 
+                        : 'border-slate-200 dark:border-slate-800'
+                    } shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
                         <div className="flex justify-between items-start mb-6">
-                            <div>
-                                <h3 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h3>
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h3>
+                                  {hasWarnings && (
+                                    <div className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded text-[8px] font-bold uppercase tracking-wide">
+                                      ⚠️ {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
+                                    </div>
+                                  )}
+                                </div>
                                 <p className="text-[10px] text-slate-500 mt-1">{chart.description}</p>
                             </div>
                             <button 
@@ -828,6 +873,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 {renderChartContent(chart, data)}
                             </ResponsiveContainer>
                         </div>
+
+                        {/* Chart Insights Footer */}
+                        {insights.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Insights:</p>
+                            <p className="text-[9px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                              {insights.slice(0, 2).join(' • ')}
+                            </p>
+                          </div>
+                        )}
                     </div>
                 );
             })}
