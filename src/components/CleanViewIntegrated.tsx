@@ -23,6 +23,7 @@ const ForensicCleanView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'validation' | 'editor' | 'quarantine' | 'original' | 'clean'>('validation'); // Start at validation (Forensic Architect)
   const [isLoading, setIsLoading] = useState(false);
+  const [loadingStep, setLoadingStep] = useState<string>('');
   const [semanticContext, setSemanticContext] = useState<string>(''); // New State
 
   // Hydrate dataset if raw data is missing (from list view optimization)
