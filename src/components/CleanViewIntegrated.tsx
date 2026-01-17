@@ -275,9 +275,11 @@ const ForensicCleanView: React.FC = () => {
       });
       alert('✓ Forensic Cleaning Confirmed.');
       setShowConfirmDialog(false);
-    } catch (e) {
-      console.error(e);
-      alert('Failed to save cleaning state.');
+    } catch (e: any) {
+      console.error('Save error:', e);
+      const errorMessage = e.message || e.error || 'Failed to save cleaning state.';
+      const details = e.details ? `\nDetails: ${e.details}` : '';
+      alert(`${errorMessage}${details}`);
     } finally {
       setIsConfirming(false);
     }

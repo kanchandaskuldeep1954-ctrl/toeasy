@@ -86,7 +86,8 @@ apiClient.interceptors.response.use(
     // 500+ - Server Error
     if (status && status >= 500) {
       return Promise.reject({
-        message: data?.message || 'Server error. Please try again later or contact support.',
+        message: data?.message || data?.error || 'Server error. Please try again later or contact support.',
+        details: data?.details,
         type: 'SERVER_ERROR',
         status,
         supportEmail: 'support@toeasy.com'
