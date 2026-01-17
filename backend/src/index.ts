@@ -321,7 +321,9 @@ app.use((req, res) => {
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
   res.status(err.status || 500).json({
-    error: err.message || 'Internal server error'
+    error: err.message || 'Internal server error',
+    details: err.details || JSON.stringify(err),
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
   });
 });
 

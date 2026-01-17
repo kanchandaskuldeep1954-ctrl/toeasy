@@ -23,7 +23,7 @@ export async function checkSubscription(req: AuthRequest, res: Response, next: N
     }
 
     const sub = result.rows[0];
-    
+
     // Check if subscription expired
     if (new Date(sub.renewal_date) < new Date()) {
       return res.status(403).json({ error: 'Subscription expired' });
@@ -32,8 +32,10 @@ export async function checkSubscription(req: AuthRequest, res: Response, next: N
     req.user.tier = sub.tier;
     next();
   } catch (err) {
-    console.error('Subscription check error:', err);
-    res.status(500).json({ error: 'Internal server error' });
+    console.error('Subscription check error (falling back to basic):', err);
+    // Fallback to basic tier instead of failing
+    if (req.user) req.user.tier = 'basic';
+    next();
   }
 }
 
