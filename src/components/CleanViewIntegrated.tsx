@@ -419,7 +419,7 @@ const ForensicCleanView: React.FC = () => {
                 <p className="text-slate-500 font-medium mb-8 max-w-md text-center">The Forensic Architect hasn't established a baseline for this dataset yet.</p>
                 <button
                   onClick={async () => {
-                    setLoading(true);
+                    setIsLoading(true);
                     setLoadingStep('Manual Override: Force-Architecting Logic Gates...');
                     try {
                       const semantics = await GroqService.analyzeDatasetSemantics(dataset);
@@ -427,7 +427,7 @@ const ForensicCleanView: React.FC = () => {
                       setValidationRules(suggested);
                       onUpdate({ ...dataset, validationRules: suggested });
                     } catch (e) { alert('Architect Failure'); }
-                    setLoading(false);
+                    setIsLoading(false);
                   }}
                   className="px-10 py-4 bg-indigo-600 text-white rounded-[30px] font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all"
                 >
