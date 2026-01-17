@@ -329,36 +329,45 @@ const ForensicCleanView: React.FC = () => {
     <div className="h-full flex flex-col gap-6 w-full max-w-[1900px] mx-auto overflow-hidden p-4 md:p-6 lg:p-8">
 
       {/* Header Panel */}
-      <div className="glass-panel p-4 rounded-[40px] shadow-2xl flex flex-col md:flex-row gap-4 justify-between items-center shrink-0 z-50 border border-indigo-500/10 bg-white/50 backdrop-blur-xl dark:bg-slate-900/50">
-        <div className="flex gap-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-2 md:pb-0">
+      <div className="glass-panel px-6 py-3 rounded-[32px] shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center shrink-0 z-50 border-b border-slate-100 dark:border-slate-800 bg-white/80 backdrop-blur-md dark:bg-slate-900/80 sticky top-0">
+        <div className="flex gap-2 overflow-x-auto no-scrollbar w-full xl:w-auto items-center">
           {[
             { id: 'validation', label: 'Forensic Architect', icon: '⚒️' },
-            { id: 'original', label: 'Original Dataset', icon: '📄' },
-            { id: 'clean', label: 'Clean Dataset', icon: '💎' },
-            { id: 'quarantine', label: 'Forensic Vault', icon: '🛡️', count: (dataset.quarantinedData || []).length }
+            { id: 'original', label: 'Original', icon: '📄' },
+            { id: 'clean', label: 'Cleaned', icon: '💎' },
+            { id: 'quarantine', label: 'Vault', icon: '🛡️', count: (dataset.quarantinedData || []).length }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-3 px-8 py-4 rounded-full transition-all relative ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-2xl scale-105 z-10' : 'bg-white dark:bg-slate-800 text-slate-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20'
+              className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all text-xs font-bold whitespace-nowrap ${activeTab === tab.id
+                ? 'bg-indigo-600 text-white shadow-lg ring-2 ring-indigo-500/20'
+                : 'bg-slate-50 dark:bg-slate-800 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700'
                 }`}
             >
               <span>{tab.icon}</span> {tab.label}
-              {tab.count !== undefined && tab.count > 0 && <span className="bg-rose-500 text-white px-2 py-0.5 rounded-full text-[8px] animate-pulse">{tab.count}</span>}
+              {tab.count !== undefined && tab.count > 0 && <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[9px] min-w-[16px] text-center">{tab.count}</span>}
             </button>
           ))}
         </div>
-        <div className="flex items-center gap-4">
+
+        <div className="flex items-center gap-4 w-full xl:w-auto justify-end">
           {semanticContext && (
-            <div className="hidden lg:flex px-4 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 rounded-full border border-indigo-100 dark:border-indigo-900/50">
-              <p className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 uppercase tracking-wide truncate max-w-[200px]" title={semanticContext}>
+            <div className="hidden 2xl:flex px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg border border-indigo-100 dark:border-indigo-900/50 max-w-[300px]">
+              <p className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400 truncate" title={semanticContext}>
                 Context: {semanticContext}
               </p>
             </div>
           )}
-          <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Workspace Integrity: {dataset.healthScore || 0}%</span>
-          <div className="w-32 h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700">
-            <div className="h-full bg-emerald-500 transition-all duration-1000" style={{ width: `${dataset.healthScore || 0}%` }}></div>
+
+          <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800">
+            <div className="flex flex-col items-end">
+              <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Integrity</span>
+              <span className={`text-xs font-black ${dataset.healthScore && dataset.healthScore > 90 ? 'text-emerald-500' : 'text-amber-500'}`}>{dataset.healthScore || 0}%</span>
+            </div>
+            <div className="w-24 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div className={`h-full transition-all duration-1000 ${dataset.healthScore && dataset.healthScore > 90 ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-400 to-amber-500'}`} style={{ width: `${dataset.healthScore || 0}%` }}></div>
+            </div>
           </div>
         </div>
       </div>
@@ -367,45 +376,51 @@ const ForensicCleanView: React.FC = () => {
         {activeTab === 'validation' && (
           <div className="h-full flex flex-col gap-4 lg:gap-6 relative overflow-hidden">
             {/* Action Bar */}
-            <div className="glass-panel p-6 md:p-10 rounded-[40px] md:rounded-[56px] flex flex-col xl:flex-row justify-between items-center gap-6 md:gap-10 shadow-xl border border-indigo-500/10 shrink-0 bg-white/80 dark:bg-slate-900/80 transition-all">
-              <div className="flex-1 space-y-2 text-center xl:text-left">
-                <h3 className="text-2xl md:text-3xl font-black uppercase tracking-tighter text-slate-800 dark:text-white">Truth-Gate Architect</h3>
-                <p className="text-slate-500 text-xs md:text-base font-medium">Design 6-pass recovery logic and sharp audit gates for recursive refinement.</p>
+            <div className="glass-panel p-6 rounded-[32px] flex flex-col xl:flex-row justify-between items-end gap-6 shadow-sm border border-slate-100 dark:border-slate-800 shrink-0 bg-white/50 dark:bg-slate-900/50">
+              <div className="flex-1 space-y-1">
+                <h3 className="text-xl font-black uppercase tracking-tight text-slate-800 dark:text-white flex items-center gap-2">
+                  <span className="text-indigo-500">⚡</span> Truth-Gate Architect
+                </h3>
+                <p className="text-slate-500 text-sm font-medium">Design recovery logic gates for recursive refinement.</p>
               </div>
-              <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto items-center">
+
+              <div className="flex flex-col sm:flex-row gap-2 w-full xl:w-auto items-center">
                 {selectedRuleIds.size > 0 && (
-                  <button onClick={handleRunSelectedRules} className="px-8 py-3 md:px-10 md:py-4 bg-emerald-600 text-white rounded-[30px] text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all animate-in zoom-in-95">
-                    🚀 Run 6-Pass Engine ({selectedRuleIds.size})
+                  <button onClick={handleRunSelectedRules} className="px-6 py-3 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:bg-emerald-600 transition-all">
+                    Run Engine ({selectedRuleIds.size})
                   </button>
                 )}
-                <form onSubmit={handleAddNlRule} className="relative flex-1 w-full sm:w-[320px] lg:w-[400px]">
+                <form onSubmit={handleAddNlRule} className="relative flex-1 w-full sm:w-[320px]">
                   <input
                     value={nlRuleInput}
                     onChange={(e) => setNlRuleInput(e.target.value)}
-                    placeholder="Forensic Goal: 'Fix Price using lookups'..."
-                    className="w-full pl-6 pr-28 py-3 md:py-4 bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 rounded-[30px] text-xs md:text-sm font-bold focus:ring-4 md:focus:ring-8 focus:ring-indigo-500/10 transition-all outline-none"
+                    placeholder="Describe a new rule goal..."
+                    className="w-full pl-4 pr-24 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 transition-all outline-none"
                   />
-                  <button disabled={isGeneratingRule} className="absolute right-2 top-2 bottom-2 px-4 md:px-6 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-[20px] shadow-lg hover:bg-indigo-500 transition-all">
-                    {isGeneratingRule ? '...' : 'AI Deploy'}
+                  <button disabled={isGeneratingRule} className="absolute right-1.5 top-1.5 bottom-1.5 px-3 bg-indigo-600 text-white text-[9px] font-black uppercase rounded-lg hover:bg-indigo-500 transition-all">
+                    {isGeneratingRule ? '...' : 'Create'}
                   </button>
                 </form>
-                <button onClick={() => openRuleEditor()} className="px-6 py-3 md:px-10 md:py-4 bg-slate-950 dark:bg-slate-100 dark:text-slate-900 text-white rounded-[30px] text-[10px] md:text-[11px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 active:scale-95 transition-all whitespace-nowrap">➕ New Gate</button>
+                <button onClick={() => openRuleEditor()} className="px-5 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">
+                  New Gate
+                </button>
               </div>
             </div>
 
             {/* Dimension Filters */}
-            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 shrink-0 px-2 lg:px-0">
+            <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1 shrink-0 px-2 lg:px-0 items-center">
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">Filter Gates:</span>
               <button
                 onClick={() => setSelectedRuleIds(new Set(filteredRules.map(r => r.id)))}
-                className="px-5 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 border border-slate-200 dark:border-slate-700 hover:text-indigo-600 transition-all whitespace-nowrap"
+                className="px-4 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-indigo-600 transition-all whitespace-nowrap"
               >Select All</button>
-              <div className="w-px h-8 bg-slate-200 dark:bg-slate-800 mx-2"></div>
+              <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-2"></div>
               {['All', 'Completeness', 'Accuracy', 'Consistency', 'Validity', 'Timeliness', 'Uniqueness'].map(dim => (
                 <button
                   key={dim}
                   onClick={() => setActiveDimension(dim as any)}
-                  className={`px-6 py-2.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeDimension === dim
-                    ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
+                  className={`px-4 py-2 rounded-lg text-[9px] font-bold uppercase tracking-wide transition-all whitespace-nowrap border ${activeDimension === dim
+                    ? 'bg-indigo-50 text-indigo-600 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-800'
                     : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                     }`}
                 >
@@ -438,10 +453,10 @@ const ForensicCleanView: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6 lg:gap-8 overflow-y-auto custom-scrollbar pb-24 pr-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 pb-24 pr-2">
                 {filteredRules.map((rule) => (
-                  <div key={rule.id} className={`p-8 lg:p-10 rounded-[40px] lg:rounded-[56px] border-[3px] transition-all bg-white dark:bg-slate-900 relative group/card flex flex-col ${rule.active ? 'border-indigo-100 dark:border-indigo-900/40 shadow-xl' : 'opacity-50 grayscale'}`}>
-                    <div className="absolute top-6 left-6 lg:top-8 lg:left-8 z-10">
+                  <div key={rule.id} className={`p-6 rounded-[24px] border transition-all bg-white dark:bg-slate-900 relative group/card flex flex-col hover:shadow-lg ${rule.active ? 'border-indigo-100 dark:border-indigo-900/40 shadow-xl' : 'opacity-50 grayscale'}`}>
+                    <div className="absolute top-4 left-4 z-10">
                       <input
                         type="checkbox"
                         checked={selectedRuleIds.has(rule.id)}
@@ -464,7 +479,7 @@ const ForensicCleanView: React.FC = () => {
                         </button>
                       </div>
                     </div>
-                    <h4 className="text-[14px] lg:text-[18px] font-black uppercase tracking-tight mb-2 leading-tight text-slate-900 dark:text-white min-h-[40px] lg:min-h-[50px]">
+                    <h4 className="text-xs font-bold uppercase tracking-tight mb-1 text-slate-900 dark:text-white line-clamp-2 min-h-[32px]">
                       {rule.description || "Unspecified Logic Gate"}
                     </h4>
                     <div className="flex gap-2 items-center mb-4 lg:mb-6">
@@ -475,12 +490,12 @@ const ForensicCleanView: React.FC = () => {
                     </div>
 
                     <div className="space-y-4 mt-auto">
-                      <div className="p-4 lg:p-6 bg-slate-950 rounded-[24px] lg:rounded-[32px] font-mono text-[9px] lg:text-[10px] text-indigo-400 border border-white/5 overflow-x-auto no-scrollbar">
+                      <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl font-mono text-[10px] text-indigo-400 border border-white/5 overflow-x-auto no-scrollbar">
                         <div className="text-slate-600 mb-2 uppercase text-[8px] font-black tracking-widest">Logic Expression (Boolean)</div>
                         {rule.expression || "true"}
                       </div>
                       {rule.category === 'Recovery' && (
-                        <div className="p-4 lg:p-6 bg-emerald-950/20 rounded-[24px] lg:rounded-[32px] font-mono text-[9px] lg:text-[10px] text-emerald-400 border border-emerald-900/20 overflow-x-auto no-scrollbar">
+                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl font-mono text-[10px] text-emerald-400 border border-emerald-900/20 overflow-x-auto no-scrollbar">
                           <div className="text-emerald-800 mb-2 uppercase text-[8px] font-black tracking-widest">Heal Script (JS)</div>
                           {rule.healFunction || "// No heal script provided"}
                         </div>
