@@ -203,8 +203,31 @@ router.post('/:workspaceId/datasets/:datasetId/analyze', async (req: AuthRequest
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
-    const data = JSON.parse(datasetResult.rows[0].raw_data);
+    // Parse raw_data safely - it might already be an object or a JSON string
+    let data: any[] = [];
+    try {
+      const rawData = datasetResult.rows[0].raw_data;
+      if (typeof rawData === 'string') {
+        data = JSON.parse(rawData || '[]');
+      } else if (Array.isArray(rawData)) {
+        data = rawData;
+      } else if (rawData && typeof rawData === 'object') {
+        data = [rawData];
+      }
+    } catch (parseErr) {
+      console.warn('Failed to parse raw_data in analyze:', parseErr);
+      return res.status(400).json({ error: 'Invalid dataset format: unable to parse data' });
+    }
+
+    if (!Array.isArray(data) || data.length === 0) {
+      return res.status(400).json({ error: 'Dataset is empty or invalid' });
+    }
+
     const headers = Object.keys(data[0] || {});
+    if (headers.length === 0) {
+      return res.status(400).json({ error: 'Dataset has no columns' });
+    }
+
     const sample = data.slice(0, 10);
 
     // Call Groq service
