@@ -60,7 +60,7 @@ const AppLayout: React.FC = () => {
         <Route path="rules" element={<ValidationRulesManager />} />
         <Route path="quarantine" element={<QuarantineVault />} />
         <Route path="metrics" element={<UsageMetrics />} />
-        <Route path="dataflows" element={<DataflowBuilder workspaceId={activeWorkspace?.id || ''} />} />
+        <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
         <Route path="billing" element={<BillingViewIntegrated />} />
 
         {/* Default route */}
