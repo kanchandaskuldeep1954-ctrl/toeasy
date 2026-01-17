@@ -27,9 +27,9 @@ export class GroqService {
   }
 
   // Deep semantic analysis
-  static async analyzeDatasetSemantics(dataset: Dataset): Promise<string> {
-    const result = await this.callApi<{ result: string }>('analyze', 'POST', { dataset });
-    return result.result;
+  static async analyzeDatasetSemantics(dataset: Dataset): Promise<any> {
+    const response = await this.callApi<{ result: any }>('analyze', 'POST', { dataset });
+    return response.result; // This is the semantic analysis object from backend
   }
 
   // Synthetic data generation

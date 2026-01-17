@@ -123,10 +123,11 @@ const ForensicCleanView: React.FC = () => {
           // Step 1: Deep Semantic Analysis
           setLoadingStep('Deep Semantic Analysis (Understanding Meaning)...');
           const semantics = await GroqService.analyzeDatasetSemantics(dataset);
-          setSemanticContext(semantics);
+          const contextString = semantics.businessContext || 'dataset analysis';
+          setSemanticContext(contextString);
 
           // Step 2: Comprehensive Rule Generation
-          setLoadingStep(`Architecting Logic Gates based on: "${semantics.substring(0, 30)}..."`);
+          setLoadingStep(`Architecting Logic Gates based on: "${contextString.substring(0, 30)}..."`);
           const suggested = await GroqService.suggestValidationRules(dataset, semantics);
 
           setValidationRules(suggested);
