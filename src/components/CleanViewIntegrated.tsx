@@ -517,56 +517,58 @@ const ForensicCleanView: React.FC = () => {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 pb-24 pr-2">
-                {filteredRules.map((rule) => (
-                  <div key={rule.id} className={`p-6 rounded-[24px] border transition-all bg-white dark:bg-slate-900 relative group/card flex flex-col hover:shadow-lg ${rule.active ? 'border-indigo-100 dark:border-indigo-900/40 shadow-xl' : 'opacity-50 grayscale'}`}>
-                    <div className="absolute top-4 left-4 z-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedRuleIds.has(rule.id)}
-                        onChange={() => toggleRuleSelection(rule.id)}
-                        className="w-5 h-5 lg:w-6 lg:h-6 rounded-lg border-2 border-indigo-200 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
-                      />
-                    </div>
-                    <div className="flex justify-between items-start mb-6 lg:mb-8 ml-8 lg:ml-10">
-                      <span className={`px-3 py-1 lg:px-4 lg:py-1.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest border ${dimColor(rule.qualityDimension || 'Validity')}`}>
-                        {rule.qualityDimension || 'Validity'}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button onClick={() => openRuleEditor(rule)} className="p-2 lg:p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-indigo-600 transition-all border border-slate-200 dark:border-slate-700">✎</button>
-                        <button onClick={() => {
-                          const updated = validationRules.map(r => r.id === rule.id ? { ...r, active: !r.active } : r);
-                          setValidationRules(updated);
-                          if (dataset) onUpdate({ ...dataset, validationRules: updated });
-                        }} className={`w-10 h-5 lg:w-12 lg:h-6 rounded-full transition-all ${rule.active ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                          <div className={`w-3.5 h-3.5 lg:w-4 lg:h-4 bg-white rounded-full mt-0.5 lg:mt-1 ml-1 transition-transform ${rule.active ? 'translate-x-5 lg:translate-x-6' : ''}`} />
-                        </button>
+              <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 min-h-0">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4 pb-24">
+                  {filteredRules.map((rule) => (
+                    <div key={rule.id} className={`p-6 rounded-[24px] border transition-all bg-white dark:bg-slate-900 relative group/card flex flex-col hover:shadow-lg ${rule.active ? 'border-indigo-100 dark:border-indigo-900/40 shadow-xl' : 'opacity-50 grayscale'}`}>
+                      <div className="absolute top-4 left-4 z-10">
+                        <input
+                          type="checkbox"
+                          checked={selectedRuleIds.has(rule.id)}
+                          onChange={() => toggleRuleSelection(rule.id)}
+                          className="w-5 h-5 lg:w-6 lg:h-6 rounded-lg border-2 border-indigo-200 text-indigo-600 focus:ring-indigo-500 transition-all cursor-pointer"
+                        />
                       </div>
-                    </div>
-                    <h4 className="text-xs font-bold uppercase tracking-tight mb-1 text-slate-900 dark:text-white line-clamp-2 min-h-[32px]">
-                      {rule.description || "Unspecified Logic Gate"}
-                    </h4>
-                    <div className="flex gap-2 items-center mb-4 lg:mb-6">
-                      <p className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">Target: {rule.column}</p>
-                      <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${rule.category === 'Recovery' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                        {rule.category}
-                      </span>
-                    </div>
-
-                    <div className="space-y-4 mt-auto">
-                      <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl font-mono text-[10px] text-indigo-400 border border-white/5 overflow-x-auto no-scrollbar">
-                        <div className="text-slate-600 mb-2 uppercase text-[8px] font-black tracking-widest">Logic Expression (Boolean)</div>
-                        {rule.expression || "true"}
-                      </div>
-                      {rule.category === 'Recovery' && (
-                        <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl font-mono text-[10px] text-emerald-400 border border-emerald-900/20 overflow-x-auto no-scrollbar">
-                          <div className="text-emerald-800 mb-2 uppercase text-[8px] font-black tracking-widest">Heal Script (JS)</div>
-                          {rule.healFunction || "// No heal script provided"}
+                      <div className="flex justify-between items-start mb-6 lg:mb-8 ml-8 lg:ml-10">
+                        <span className={`px-3 py-1 lg:px-4 lg:py-1.5 rounded-full text-[8px] lg:text-[9px] font-black uppercase tracking-widest border ${dimColor(rule.qualityDimension || 'Validity')}`}>
+                          {rule.qualityDimension || 'Validity'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => openRuleEditor(rule)} className="p-2 lg:p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl text-slate-400 hover:text-indigo-600 transition-all border border-slate-200 dark:border-slate-700">✎</button>
+                          <button onClick={() => {
+                            const updated = validationRules.map(r => r.id === rule.id ? { ...r, active: !r.active } : r);
+                            setValidationRules(updated);
+                            if (dataset) onUpdate({ ...dataset, validationRules: updated });
+                          }} className={`w-10 h-5 lg:w-12 lg:h-6 rounded-full transition-all ${rule.active ? 'bg-indigo-600' : 'bg-slate-300'}`}>
+                            <div className={`w-3.5 h-3.5 lg:w-4 lg:h-4 bg-white rounded-full mt-0.5 lg:mt-1 ml-1 transition-transform ${rule.active ? 'translate-x-5 lg:translate-x-6' : ''}`} />
+                          </button>
                         </div>
-                      )}
+                      </div>
+                      <h4 className="text-xs font-bold uppercase tracking-tight mb-1 text-slate-900 dark:text-white line-clamp-2 min-h-[32px]">
+                        {rule.description || "Unspecified Logic Gate"}
+                      </h4>
+                      <div className="flex gap-2 items-center mb-4 lg:mb-6">
+                        <p className="text-[9px] lg:text-[10px] font-black text-slate-400 uppercase tracking-widest">Target: {rule.column}</p>
+                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${rule.category === 'Recovery' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
+                          {rule.category}
+                        </span>
+                      </div>
+
+                      <div className="space-y-4 mt-auto">
+                        <div className="p-3 bg-slate-50 dark:bg-slate-950 rounded-xl font-mono text-[10px] text-indigo-400 border border-white/5 overflow-x-auto no-scrollbar">
+                          <div className="text-slate-600 mb-2 uppercase text-[8px] font-black tracking-widest">Logic Expression (Boolean)</div>
+                          {rule.expression || "true"}
+                        </div>
+                        {rule.category === 'Recovery' && (
+                          <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-xl font-mono text-[10px] text-emerald-400 border border-emerald-900/20 overflow-x-auto no-scrollbar">
+                            <div className="text-emerald-800 mb-2 uppercase text-[8px] font-black tracking-widest">Heal Script (JS)</div>
+                            {rule.healFunction || "// No heal script provided"}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
           </div>
