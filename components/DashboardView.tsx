@@ -831,6 +831,88 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             ))}
         </div>
 
+        {/* Data Quality Warnings Section */}
+        {dataQuality && (dataQuality.warnings.length > 0 || dataQuality.overallScore < 80) && (
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-[32px] p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                <span className="text-lg">⚠️</span>
+              </div>
+              <div>
+                <h3 className="font-black uppercase tracking-widest text-yellow-900 dark:text-yellow-200">Data Quality Report</h3>
+                <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide">
+                  {dataQuality.overallScore}% Quality Score
+                </p>
+              </div>
+            </div>
+
+            {/* Quality Score Bar */}
+            <div className="mb-6">
+              <div className="w-full bg-white/50 dark:bg-slate-900/50 rounded-full h-2 overflow-hidden border border-yellow-200 dark:border-yellow-900/50">
+                <div 
+                  className={`h-full transition-all ${
+                    dataQuality.overallScore >= 80 
+                      ? 'bg-green-500' 
+                      : dataQuality.overallScore >= 60 
+                      ? 'bg-yellow-500' 
+                      : 'bg-red-500'
+                  }`}
+                  style={{ width: `${dataQuality.overallScore}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Warnings List */}
+            {dataQuality.warnings.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase text-yellow-900 dark:text-yellow-300 tracking-widest">Issues Found:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-40 overflow-y-auto">
+                  {dataQuality.warnings.slice(0, 8).map((warning: any, idx: number) => (
+                    <div 
+                      key={idx}
+                      className={`p-3 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${
+                        warning.level === 'error'
+                          ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300'
+                          : warning.level === 'warning'
+                          ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300'
+                      }`}
+                    >
+                      <p className="font-black mb-1">
+                        {warning.level === 'error' ? '❌' : warning.level === 'warning' ? '⚠️' : 'ℹ️'} {warning.affectedField}
+                      </p>
+                      <p className="font-medium opacity-90 mb-2">{warning.message}</p>
+                      {warning.recommendation && (
+                        <p className="text-[9px] italic opacity-75">💡 {warning.recommendation}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {dataQuality.warnings.length > 8 && (
+                  <p className="text-[9px] font-bold text-yellow-600 dark:text-yellow-400 text-center pt-2">
+                    +{dataQuality.warnings.length - 8} more issues...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Cardinalities Info */}
+            {Object.keys(dataQuality.cardinalities).length > 0 && (
+              <div className="mt-6 pt-6 border-t border-yellow-200 dark:border-yellow-900/30">
+                <p className="text-[10px] font-black uppercase text-yellow-900 dark:text-yellow-300 tracking-widest mb-3">Column Cardinalities:</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {Object.entries(dataQuality.cardinalities).slice(0, 12).map(([col, card]: [string, any]) => (
+                    <div key={col} className="text-center">
+                      <p className="text-[9px] font-bold text-yellow-700 dark:text-yellow-300 truncate">{col}</p>
+                      <p className="text-[10px] font-black text-yellow-900 dark:text-yellow-200">{card}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Charts Masonry Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
             {visibleCharts.map((chart, i) => {
