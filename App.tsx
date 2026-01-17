@@ -32,6 +32,7 @@ import DataPreview from './src/components/DataPreview';
 import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
+import DataflowBuilder from './src/components/DataflowBuilder';
 
 const AppLayout: React.FC = () => {
   return (
@@ -57,6 +58,7 @@ const AppLayout: React.FC = () => {
         <Route path="rules" element={<ValidationRulesManager />} />
         <Route path="quarantine" element={<QuarantineVault />} />
         <Route path="metrics" element={<UsageMetrics />} />
+        <Route path="dataflows" element={<DataflowBuilder workspaceId="" />} />
         <Route path="billing" element={<BillingViewIntegrated />} />
 
         {/* Default route */}

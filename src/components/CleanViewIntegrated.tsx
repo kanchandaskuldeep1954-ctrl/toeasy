@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useDataset } from '../hooks/useDataset';
 import { GroqService } from '../services/groqService';
 import { apiClient } from '../services/apiClient';
+import { ExportModal } from './ExportHub';
 
 // --- Types (Locally defined to ensure self-containment) ---
 
@@ -81,6 +82,53 @@ const ForensicCleanView: React.FC = () => {
   const [agentResponse, setAgentResponse] = useState('');
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
+
+  // Export & Confirm State
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Confirm Cleaning Handler
+  const confirmCleaning = async () => {
+    if (!activeDataset || cleanData.length === 0) return;
+
+    setIsConfirming(true);
+    try {
+      // Save cleaned data to backend
+      await apiClient.put(`/workspaces/${workspaceId}/datasets/${activeDataset.id}/cleaned`, {
+        cleanedData: cleanData,
+        quarantinedData: quarantinedData,
+        healthScore: deepAnalysis?.quality?.overall || 100,
+        cleaningSummary: {
+          originalRows: rawData.length,
+          cleanedRows: cleanData.length,
+          quarantinedRows: quarantinedData.length,
+          rulesApplied: validationRules.filter(r => r.active).length,
+        }
+      });
+
+      // Confirm and overwrite
+      await apiClient.post(`/workspaces/${workspaceId}/datasets/${activeDataset.id}/confirm-clean`, {
+        keepQuarantined: true
+      });
+
+      // Update local state
+      setRawData(cleanData);
+      setShowConfirmDialog(false);
+      alert('✓ Cleaning confirmed! Original dataset has been updated.');
+
+      // Refresh dataset context
+      if (updateDataset) {
+        updateDataset(activeDataset.id, { raw_data: cleanData, row_count: cleanData.length });
+      }
+    } catch (err) {
+      console.error('Confirm cleaning failed:', err);
+      alert('Failed to confirm cleaning. Check console.');
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
 
 
 
@@ -251,6 +299,13 @@ const ForensicCleanView: React.FC = () => {
 
         <div className="flex items-center gap-3">
           <button
+            onClick={() => setShowExportModal(true)}
+            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all flex items-center gap-2"
+            disabled={cleanData.length === 0}
+          >
+            💾 Export
+          </button>
+          <button
             onClick={runDeepAnalysis}
             className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all"
           >
@@ -262,8 +317,65 @@ const ForensicCleanView: React.FC = () => {
           >
             {isProcessing ? 'Processing...' : 'Execute Recovery Engine'}
           </button>
+          <button
+            onClick={() => setShowConfirmDialog(true)}
+            disabled={cleanData.length === 0 || cleanData.length === rawData.length}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold uppercase tracking-wider rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            ✓ Confirm & Save
+          </button>
         </div>
       </div>
+
+      {/* Export Modal */}
+      <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        exportType="dataset"
+        data={activeTab === 'clean' ? cleanData : rawData}
+        filename={activeDataset?.name || 'dataset'}
+      />
+
+      {/* Confirm Dialog */}
+      {showConfirmDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6">
+            <div className="text-center">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-500/20 flex items-center justify-center text-4xl mx-auto mb-4">
+                ⚠️
+              </div>
+              <h3 className="text-xl font-black text-white mb-2">Confirm Cleaning</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                This will <strong className="text-white">permanently replace</strong> your original dataset
+                ({rawData.length} rows) with the cleaned version ({cleanData.length} rows).
+                {quarantinedData.length > 0 && (
+                  <> {quarantinedData.length} rows will be quarantined.</>
+                )}
+              </p>
+
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => setShowConfirmDialog(false)}
+                  className="px-5 py-2.5 text-sm font-bold text-slate-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmCleaning}
+                  disabled={isConfirming}
+                  className="px-6 py-2.5 text-sm font-black uppercase tracking-wide text-white bg-gradient-to-r from-emerald-600 to-teal-600 rounded-xl hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-2"
+                >
+                  {isConfirming ? (
+                    <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Confirming...</>
+                  ) : (
+                    <>✓ Confirm & Overwrite</>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Area */}
       <div className="flex-1 flex overflow-hidden">
