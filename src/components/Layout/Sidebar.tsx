@@ -3,6 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDataset } from '../../hooks/useDataset';
+import { useTheme } from '../../hooks/useTheme';
 
 const Sidebar: React.FC = () => {
     const location = useLocation();
@@ -10,6 +11,7 @@ const Sidebar: React.FC = () => {
     const { logout, user } = useAuth();
     const { activeWorkspace } = useWorkspace();
     const { activeDataset } = useDataset();
+    const { theme, toggleTheme } = useTheme();
     const [collapsed, setCollapsed] = useState(false);
 
     const isActive = (path: string) => location.pathname.includes(path);
@@ -117,6 +119,24 @@ const Sidebar: React.FC = () => {
 
             {/* User Profile Footer */}
             <div className="p-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+                <button
+                    onClick={toggleTheme}
+                    className={`mb-4 w-full flex items-center gap-3 p-2 rounded-xl text-xs font-bold uppercase tracking-widest transition-colors ${theme === 'dark'
+                        ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700'
+                        : 'bg-indigo-50 text-indigo-900 hover:bg-indigo-100'
+                        } ${collapsed ? 'justify-center' : ''}`}
+                    title={collapsed ? `Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode` : ''}
+                >
+                    {theme === 'dark' ? (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
+                    ) : (
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                    )}
+                    {!collapsed && (
+                        <span>{theme === 'dark' ? 'Light Mode' : 'Dark Mode'}</span>
+                    )}
+                </button>
+
                 <button
                     onClick={() => navigate('/app/profile')}
                     className={`flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
