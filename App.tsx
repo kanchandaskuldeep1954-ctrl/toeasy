@@ -2,7 +2,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './src/context/AuthContext';
-import { WorkspaceProvider } from './src/context/WorkspaceContext';
+import { WorkspaceProvider, useWorkspace } from './src/context/WorkspaceContext';
 import { DatasetProvider } from './src/context/DatasetContext';
 import { ProtectedRoute } from './src/routes/ProtectedRoute';
 import { PublicRoute } from './src/routes/PublicRoute';
@@ -32,9 +32,10 @@ import DataPreview from './src/components/DataPreview';
 import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
-import DataflowBuilder from './src/components/DataflowBuilder';
+import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 
 const AppLayout: React.FC = () => {
+  const { activeWorkspace } = useWorkspace();
   return (
     <MainLayout>
       <UrlSync />
@@ -58,7 +59,7 @@ const AppLayout: React.FC = () => {
         <Route path="rules" element={<ValidationRulesManager />} />
         <Route path="quarantine" element={<QuarantineVault />} />
         <Route path="metrics" element={<UsageMetrics />} />
-        <Route path="dataflows" element={<DataflowBuilder workspaceId="" />} />
+        <Route path="dataflows" element={<DataflowBuilder workspaceId={activeWorkspace?.id || ''} />} />
         <Route path="billing" element={<BillingViewIntegrated />} />
 
         {/* Default route */}
