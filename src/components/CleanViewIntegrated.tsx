@@ -105,7 +105,7 @@ const ForensicCleanView: React.FC = () => {
       if (!dataset) return;
 
       setPreviewData(dataset.data || []);
-      setLoading(true);
+      setIsLoading(true);
 
       // Check for cached suggestions
       if (dataset.cleaningSuggestions && dataset.cleaningSuggestions.length > 0) {
@@ -134,7 +134,7 @@ const ForensicCleanView: React.FC = () => {
         setValidationRules(dataset.validationRules);
       }
 
-      setLoading(false);
+      setIsLoading(false);
     };
     init();
   }, [dataset?.id]);
@@ -306,7 +306,7 @@ const ForensicCleanView: React.FC = () => {
 
   if (!dataset) return <div className="p-10 flex items-center justify-center text-slate-400 font-bold uppercase tracking-widest">No Dataset Selected</div>;
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="h-full flex flex-col items-center justify-center space-y-12 animate-in fade-in">
         <div className="relative">
