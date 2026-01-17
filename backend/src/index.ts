@@ -57,8 +57,45 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', timestamp: new Date().toISOString() });
 });
 
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  console.log('Headers:', JSON.stringify(req.headers['content-length'] ? { 'content-length': req.headers['content-length'] } : {}));
+  if (req.body && Object.keys(req.body).length > 0) {
+    const bodyPreview = JSON.stringify(req.body).substring(0, 200);
+    console.log('Body Preview:', bodyPreview + (bodyPreview.length >= 200 ? '...' : ''));
+  }
+  next();
+});
+
 // API Routes
 app.use('/api/auth', authRoutes);
+
+// Test DB Route to debug schema
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const tableResult = await query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `);
+
+    // Check specific columns in datasets
+    const columnsResult = await query(`
+      SELECT column_name, data_type 
+      FROM information_schema.columns 
+      WHERE table_name = 'datasets'
+    `);
+
+    res.json({
+      status: 'Available',
+      tables: tableResult.rows.map(r => r.table_name),
+      datasetColumns: columnsResult.rows
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: 'DB Connection Failed', details: err.message });
+  }
+});
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/workspaces', datasetRoutes);
 app.use('/api/workspaces', dashboardRoutes);
