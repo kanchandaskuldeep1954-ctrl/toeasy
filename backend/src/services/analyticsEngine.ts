@@ -79,7 +79,7 @@ export class AnalyticsEngine {
         };
     }
 
-    private static generateKPIs(data: any[], profiles: Record<string, ColumnProfile>): KPI[] {
+    private static generateKPIs(data: any[], profiles: ColumnProfile[]): KPI[] {
         const kpis: KPI[] = [];
         const totalRows = data.length;
 
@@ -94,7 +94,7 @@ export class AnalyticsEngine {
         });
 
         // --- 2. Financial KPIs ---
-        const currencyCols = Object.values(profiles).filter(p => p.role === 'currency' || (p.dataType === 'number' && (p.column.toLowerCase().includes('price') || p.column.toLowerCase().includes('amount') || p.column.toLowerCase().includes('total') || p.column.toLowerCase().includes('cost') || p.column.toLowerCase().includes('revenue'))));
+        const currencyCols = profiles.filter(p => p.role === 'currency' || (p.dataType === 'number' && (p.column.toLowerCase().includes('price') || p.column.toLowerCase().includes('amount') || p.column.toLowerCase().includes('total') || p.column.toLowerCase().includes('cost') || p.column.toLowerCase().includes('revenue'))));
 
         currencyCols.forEach(col => {
             const values = data.map(r => parseFloat(r[col.column])).filter(n => !isNaN(n));
@@ -160,9 +160,9 @@ export class AnalyticsEngine {
         return kpis;
     }
 
-    private static generateCharts(data: any[], profiles: Record<string, ColumnProfile>): ChartSpec[] {
+    private static generateCharts(data: any[], profiles: ColumnProfile[]): ChartSpec[] {
         const charts: ChartSpec[] = [];
-        const cols = Object.values(profiles);
+        const cols = profiles;
 
         // Find key columns
         const dateCol = cols.find(p => p.role === 'timestamp' || p.dataType === 'date');
@@ -257,9 +257,9 @@ export class AnalyticsEngine {
         return charts;
     }
 
-    private static generateFilters(profiles: Record<string, ColumnProfile>, data: any[]): FilterSpec[] {
+    private static generateFilters(profiles: ColumnProfile[], data: any[]): FilterSpec[] {
         const filters: FilterSpec[] = [];
-        const cols = Object.values(profiles);
+        const cols = profiles;
 
         // 1. Date Filters
         const dateCol = cols.find(p => p.role === 'timestamp' || p.dataType === 'date');
