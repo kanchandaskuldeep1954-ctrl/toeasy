@@ -39,7 +39,7 @@ const ForensicCleanView: React.FC = () => {
   const [isAutoGeneratingLogic, setIsAutoGeneratingLogic] = useState(false);
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
   const [ruleFormData, setRuleFormData] = useState<Partial<ValidationRule>>({
-    column: dataset?.headers[0] || '',
+    column: dataset?.headers?.[0] || '',
     category: 'Recovery',
     description: '',
     expression: 'true',
@@ -188,7 +188,7 @@ const ForensicCleanView: React.FC = () => {
     } else {
       setEditingRuleId(null);
       setRuleFormData({
-        column: dataset.headers[0],
+        column: dataset.headers?.[0],
         category: 'Recovery',
         description: '',
         expression: 'true',
