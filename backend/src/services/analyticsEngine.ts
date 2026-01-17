@@ -56,7 +56,7 @@ export class AnalyticsEngine {
         // We sample up to 2000 rows for analytics to be more accurate than forensics
         const sampleSize = Math.min(data.length, 2000);
         const sample = data.slice(0, sampleSize);
-        const forensics = DataForensicsEngine.analyze(headers, sample, sampleSize);
+        const forensics = await DataForensicsEngine.analyze(headers, sample, sampleSize);
 
         // 2. Generate KPIs
         const kpis = this.generateKPIs(data, forensics.profiles);
