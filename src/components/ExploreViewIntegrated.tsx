@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
+import { MarkdownContent } from '../utils/markdownRenderer';
 
 interface Analysis {
   summary: string;
@@ -120,9 +121,9 @@ const ExploreViewIntegrated: React.FC = () => {
             </div>
           </div>
 
-          {/* Premium Summary Card with Gradient */}
+          {/* Premium Summary Card */}
           <div className="group relative overflow-hidden rounded-[32px] shadow-2xl">
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-900 opacity-100 group-hover:opacity-110 transition-opacity"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-900 opacity-100"></div>
             <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/10"></div>
             <div className="absolute -top-40 -right-40 w-80 h-80 bg-indigo-400/20 rounded-full blur-3xl"></div>
             <div className="absolute -bottom-20 -left-20 w-60 h-60 bg-purple-400/20 rounded-full blur-3xl"></div>
@@ -133,16 +134,12 @@ const ExploreViewIntegrated: React.FC = () => {
                   <div className="inline-block px-4 py-2 bg-white/20 backdrop-blur-sm rounded-full mb-4">
                     <p className="text-[9px] font-black uppercase tracking-widest text-indigo-100">📋 Executive Summary</p>
                   </div>
-                  <h3 className="text-3xl font-black leading-tight tracking-tighter mb-4">Data Analysis Complete</h3>
+                  <h3 className="text-2xl font-black leading-tight tracking-tighter mb-4">Dataset Analysis</h3>
                 </div>
                 <div className="text-5xl opacity-20">📊</div>
               </div>
-              <p className="text-sm leading-relaxed font-bold text-indigo-50 line-clamp-5">{analysis.summary}</p>
-              <div className="mt-6 flex gap-3">
-                <div className="inline-flex items-center gap-2 px-3 py-2 bg-white/20 backdrop-blur-sm rounded-lg">
-                  <span className="text-lg">✓</span>
-                  <span className="text-xs font-bold text-indigo-100">Analysis Complete</span>
-                </div>
+              <div className="text-sm leading-relaxed font-medium text-indigo-50 prose prose-invert max-w-none">
+                <MarkdownContent content={analysis.summary} className="text-indigo-50" />
               </div>
             </div>
           </div>
@@ -210,7 +207,7 @@ const ExploreViewIntegrated: React.FC = () => {
           {/* Three Column Enhanced Layout */}
           <div className="grid grid-cols-3 gap-6">
             
-            {/* Insights - Enhanced */}
+            {/* Insights - Enhanced with Markdown */}
             <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden hover:shadow-2xl transition-all">
               <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border-b border-slate-200 dark:border-slate-800 p-6">
                 <div className="flex items-center gap-3">
@@ -221,7 +218,7 @@ const ExploreViewIntegrated: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="p-6 space-y-3">
+              <div className="p-6 space-y-4">
                 {analysis.insights.map((insight, i) => (
                   <div
                     key={i}
@@ -230,14 +227,16 @@ const ExploreViewIntegrated: React.FC = () => {
                   >
                     <div className="flex gap-3 items-start">
                       <span className="text-lg leading-none mt-0.5">💡</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 font-bold leading-relaxed">{insight}</p>
+                      <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed flex-1">
+                        <MarkdownContent content={insight} />
+                      </div>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Patterns - Enhanced */}
+            {/* Patterns - Enhanced with Markdown */}
             <div className="bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden hover:shadow-2xl transition-all">
               <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border-b border-slate-200 dark:border-slate-800 p-6">
                 <div className="flex items-center gap-3">
@@ -248,7 +247,7 @@ const ExploreViewIntegrated: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="p-6 space-y-3">
+              <div className="p-6 space-y-4">
                 {analysis.patterns.map((pattern, i) => (
                   <div
                     key={i}
@@ -257,7 +256,9 @@ const ExploreViewIntegrated: React.FC = () => {
                   >
                     <div className="flex gap-3 items-start">
                       <span className="text-lg leading-none mt-0.5">📈</span>
-                      <p className="text-xs text-slate-700 dark:text-slate-300 font-bold leading-relaxed">{pattern}</p>
+                      <div className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed flex-1">
+                        <MarkdownContent content={pattern} />
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -284,7 +285,9 @@ const ExploreViewIntegrated: React.FC = () => {
                       className="flex gap-2 items-start p-3 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900 rounded-lg hover:bg-rose-100 dark:hover:bg-rose-900/30 transition-colors"
                     >
                       <span className="text-sm leading-none mt-0.5">●</span>
-                      <p className="text-xs text-rose-700 dark:text-rose-400 font-bold leading-relaxed">{anomaly}</p>
+                      <div className="text-xs text-rose-700 dark:text-rose-400 leading-relaxed flex-1">
+                        <MarkdownContent content={anomaly} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -308,7 +311,9 @@ const ExploreViewIntegrated: React.FC = () => {
                       className="flex gap-2 items-start p-3 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors"
                     >
                       <span className="text-sm leading-none mt-0.5">✓</span>
-                      <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold leading-relaxed">{rec}</p>
+                      <div className="text-xs text-emerald-700 dark:text-emerald-400 leading-relaxed flex-1">
+                        <MarkdownContent content={rec} />
+                      </div>
                     </div>
                   ))}
                 </div>
