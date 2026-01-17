@@ -63,22 +63,23 @@ export interface UserUsage {
 }
 
 export interface KPI {
-  id?: string;
+  id: string;
   label: string;
   value: string | number;
   unit?: string;
   trend?: number;
   trendDirection?: 'up' | 'down' | 'neutral' | 'flat';
-  category?: 'financial' | 'quality' | 'operational' | 'efficiency' | 'growth';
+  category?: 'financial' | 'quality' | 'operational' | 'efficiency' | 'growth' | 'volume';
   status?: 'on_track' | 'at_risk' | 'off_track';
+  sparklineData?: number[];
   comparison?: {
     period: string;
     value: number;
     interpretation: string;
   };
   calculation?: {
-    column: string;
-    operation: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'unique';
+    column?: string;
+    operation: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'unique' | 'quality';
     format?: 'currency' | 'percentage' | 'number';
   };
 }
@@ -207,8 +208,9 @@ export interface ChartSpec {
   description?: string;
   category?: string;
   priority?: 'critical' | 'high' | 'medium' | 'low';
-  xAxis: string;
-  yAxis: string;
+  size?: 'small' | 'medium' | 'large' | 'full';
+  xAxis?: string; // Legacy/Direct property
+  yAxis?: string; // Legacy/Direct property
   zAxis?: string;
   groupBy?: string;
   aggregation?: string;
@@ -220,6 +222,20 @@ export interface ChartSpec {
   color?: string; // Legacy support
   limit?: number;
   showOther?: boolean;
+
+  // AnalyticsEngine 2.0 properties
+  data?: any;
+  options?: any;
+}
+
+export interface FilterSpec {
+  id: string;
+  label: string;
+  column: string;
+  type: 'date' | 'select' | 'range' | 'search';
+  options?: string[];
+  min?: number;
+  max?: number;
 }
 
 export interface Pattern {
@@ -235,6 +251,9 @@ export interface DashboardConfig {
   charts: ChartSpec[];
   kpis: KPI[];
   patterns: Pattern[];
+  filters?: FilterSpec[]; // Add filters from AnalyticsEngine
+  insights?: string[]; // Add insights from AnalyticsEngine
+  layout?: any; // Add layout
   metadata: any;
 }
 

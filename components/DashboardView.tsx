@@ -3,12 +3,10 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
 import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
-import {
-    D3BarChart,
-    D3LineChart,
-    D3PieChart,
-    D3ScatterChart
-} from '../src/components/D3Charts';
+import { SmartChart } from './Dashboard/SmartChart';
+import { KPICard } from './Dashboard/KPICard';
+import { FilterPanel } from './Dashboard/FilterPanel';
+import { InsightCard } from './Dashboard/InsightCard';
 
 interface DashboardViewProps {
     dataset: Dataset;
@@ -169,23 +167,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         setChartValidations(validations);
     }, [config, dataset]);
 
-    const handleChartClick = (data: any, chart: ChartSpec) => {
-        if (!data || !data.activePayload) return;
-        const payload = data.activePayload[0].payload;
-        const key = chart.xAxis;
-        // Safe check for payload structure varies by chart type
-        const value = payload.name !== undefined ? payload.name : payload.x;
 
-        if (value === undefined) return;
-
-        setActiveFilters(prev => {
-            if (prev[key] === value) {
-                const { [key]: _, ...rest } = prev;
-                return rest;
-            }
-            return { ...prev, [key]: value };
-        });
-    };
 
     const aggregateData = useCallback((chart: ChartSpec) => {
         if (!filteredData || filteredData.length === 0) return [];
@@ -293,94 +275,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         return result;
     }, [filteredData, dataset.headers]);
 
-    // --- Rendering Logic ---
-    const renderChartContent = (chart: ChartSpec, data: any[], isPreview = false) => {
-        const color = isPreview ? '#6366f1' : (perspective === 'Forensic' ? '#f43f5e' : '#6366f1');
+    // --- Interaction Logic ---
+    const handleChartClick = (data: any, chart: ChartSpec) => {
+        if (data && data.activePayload && data.activePayload.length > 0) {
+            const payload = data.activePayload[0].payload;
+            const val = payload.label || payload.name;
+            const key = chart.xAxis || chart.groupBy;
 
-        // Map to D3 data format
-        const d3Data = data.map(d => ({
-            label: d.label || d.name || String(d.x || ''),
-            value: Number(d.value !== undefined ? d.value : (d.size || d.y || 0)),
-            category: d.category || chart.category,
-            original: d
-        }));
-
-        switch (chart.type) {
-            case 'bar':
-            case 'bar_horizontal':
-            case 'histogram':
-                return (
-                    <D3BarChart
-                        data={d3Data}
-                        height={300}
-                        color={color}
-                        horizontal={chart.type === 'bar_horizontal'}
-                        onBarClick={(d) => {
-                            const val = d.label;
-                            const key = chart.xAxis;
-                            setActiveFilters(prev => {
-                                if (prev[key] === val) {
-                                    const { [key]: _, ...rest } = prev;
-                                    return rest;
-                                }
-                                return { ...prev, [key]: val };
-                            });
-                        }}
-                    />
-                );
-
-            case 'line':
-            case 'area':
-            case 'composed':
-                return (
-                    <D3LineChart
-                        data={d3Data}
-                        height={300}
-                        color={color}
-                        curved={true}
-                        showDots={true}
-                        showArea={chart.type === 'area'}
-                    />
-                );
-
-            case 'pie':
-            case 'donut':
-                return (
-                    <D3PieChart
-                        data={d3Data}
-                        height={300}
-                        donut={chart.type === 'donut'}
-                    />
-                );
-
-            case 'scatter':
-            case 'bubble':
-            case 'heatmap':
-                // Scatter expects x, y, value
-                const scatterData = data.map(d => ({
-                    x: Number(d.x || 0),
-                    y: Number(d.y || 0),
-                    value: Number(d.z || d.value || 10),
-                    label: d.name || 'Point'
-                }));
-                return (
-                    <D3ScatterChart
-                        data={scatterData}
-                        height={300}
-                        xLabel={chart.xAxis}
-                        yLabel={chart.yAxis}
-                    />
-                );
-
-            default:
-                // Fallback to Bar if type not explicitly handled by D3 yet
-                return (
-                    <D3BarChart
-                        data={d3Data}
-                        height={300}
-                        color={color}
-                    />
-                );
+            if (key && val) {
+                setActiveFilters(prev => {
+                    if (String(prev[key]) === String(val)) {
+                        const { [key]: _, ...rest } = prev;
+                        return rest;
+                    }
+                    return { ...prev, [key]: val };
+                });
+            }
         }
     };
 
@@ -653,45 +563,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
             {/* Top Bar: Slicers & Context */}
             <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-8 py-4 flex flex-col xl:flex-row justify-between gap-6 shadow-sm no-print">
-                <div className="flex items-center gap-6">
+                <div className="flex items-center gap-4">
                     <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white hidden md:block">Analytics OS</h2>
 
-                    {/* Slicers (Global Filters) */}
-                    <div className="flex flex-wrap gap-2 items-center">
-                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-2">Slicers:</span>
-                        {slicers.map(slicer => {
-                            // Get unique values for this slicer from FULL dataset
-                            const unique = Array.from(new Set(dataset.data.map(r => String(r[slicer])))).sort();
-                            const isActive = !!activeFilters[slicer];
-
-                            return (
-                                <div key={slicer} className="relative group">
-                                    <select
-                                        value={activeFilters[slicer] || ''}
-                                        onChange={(e) => setActiveFilters(prev => {
-                                            const val = e.target.value;
-                                            if (!val) { const { [slicer]: _, ...rest } = prev; return rest; }
-                                            return { ...prev, [slicer]: val };
-                                        })}
-                                        className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border cursor-pointer transition-all outline-none ${isActive
-                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
-                                            }`}
-                                    >
-                                        <option value="">{slicer} (All)</option>
-                                        {unique.map(u => <option key={u} value={u}>{u}</option>)}
-                                    </select>
-                                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-                                        <svg className={`w-3 h-3 ${isActive ? 'text-white' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
-                                    </div>
-                                </div>
-                            )
-                        })}
-                        {Object.keys(activeFilters).length > 0 && (
-                            <button onClick={() => setActiveFilters({})} className="ml-2 p-1.5 rounded-full bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors" title="Clear All">
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        )}
+                    {/* Dynamic Filter Panel */}
+                    <div className="pl-6 border-l border-slate-200 dark:border-slate-800">
+                        <FilterPanel
+                            filters={config?.filters || []}
+                            activeFilters={activeFilters}
+                            onFilterChange={(col, val) => setActiveFilters(prev => {
+                                if (!val) { const { [col]: _, ...rest } = prev; return rest; }
+                                return { ...prev, [col]: val };
+                            })}
+                            onClearAll={() => setActiveFilters({})}
+                        />
                     </div>
                 </div>
 
@@ -725,32 +610,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
             <div className="p-8 space-y-12">
                 {/* KPI Grid */}
+                {/* KPI Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                    {dynamicKPIs.slice(0, 5).map((kpi, idx) => {
-                        const sparklineColor = ['#6366f1', '#f43f5e', '#10b981', '#f59e0b', '#8b5cf6'][idx % 5];
-                        return (
-                            <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-indigo-500/30 transition-all">
-                                <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                                    <svg className="w-16 h-16 text-indigo-600 transform translate-x-4 -translate-y-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" /></svg>
-                                </div>
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 truncate">{kpi.label}</p>
-                                <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter truncate">{kpi.value}</h3>
-
-                                {/* Simulated Mini Sparkline using plain SVG for D3 look */}
-                                <div className="h-8 mt-4 w-full opacity-50">
-                                    <svg className="w-full h-full" viewBox="0 0 100 20" preserveAspectRatio="none">
-                                        <path
-                                            d={`M0,15 L20,8 L40,12 L60,5 L80,10 L100,2`}
-                                            fill="none"
-                                            stroke={sparklineColor}
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                        />
-                                    </svg>
-                                </div>
-                            </div>
-                        );
-                    })}
+                    {dynamicKPIs.map((kpi) => (
+                        <KPICard key={kpi.id} kpi={kpi} />
+                    ))}
                 </div>
 
                 {/* Data Quality Warnings Section */}
@@ -872,7 +736,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 </div>
 
                                 <div className="flex-1 w-full relative min-h-[300px] cursor-crosshair">
-                                    {renderChartContent(chart, data)}
+                                    <SmartChart
+                                        chart={chart}
+                                        data={data}
+                                        onClick={(data) => handleChartClick(data, chart)}
+                                    />
                                 </div>
 
                                 {/* Chart Insights Footer */}
@@ -893,17 +761,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                 {perspective === 'Patterns' && config.patterns.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-10">
                         {config.patterns.map((pat, i) => (
-                            <div key={i} className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-8 rounded-[32px] shadow-xl relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-8 opacity-20 text-6xl">
-                                    {pat.type === 'anomaly' ? '⚡' : '🔍'}
-                                </div>
-                                <h4 className="font-black uppercase tracking-widest text-xs mb-2 opacity-70">{pat.type} Detected</h4>
-                                <p className="font-bold text-lg mb-4 leading-tight">{pat.description}</p>
-                                <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10">
-                                    <p className="text-[10px] uppercase font-bold opacity-60 mb-1">AI Recommendation</p>
-                                    <p className="text-sm font-medium">{pat.recommendation}</p>
-                                </div>
-                            </div>
+                            <InsightCard
+                                key={i}
+                                title={`${pat.type} Detected`}
+                                content={pat.description}
+                                type={pat.type === 'anomaly' ? 'anomaly' : 'info'}
+                                recommendation={pat.recommendation}
+                            />
                         ))}
                     </div>
                 )}
@@ -945,7 +809,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                     if (previewData.length === 0) return <div className="flex items-center justify-center h-full text-slate-400 font-medium">Invalid Configuration or Empty Data</div>;
                                     return (
                                         <div className="w-full h-full">
-                                            {renderChartContent(editedChart, previewData, true)}
+                                            <SmartChart chart={editedChart} data={previewData} />
                                         </div>
                                     );
                                 })()}

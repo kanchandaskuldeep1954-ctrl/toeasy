@@ -189,7 +189,8 @@ router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthReq
 
     const data = JSON.parse(datasetResult.rows[0].raw_data);
     const headers = Object.keys(data[0] || {});
-    const sample = data.slice(0, 10);
+    // PASSING LARGER SAMPLE (2000) FOR ANALYTICS ENGINE
+    const sample = data.slice(0, 2000);
 
     // Call Groq service
     const dashboard = await GroqService.generateDashboard(headers, sample);

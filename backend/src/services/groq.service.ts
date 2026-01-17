@@ -1,6 +1,7 @@
 import Groq from 'groq-sdk';
 import { config } from '../config.js';
 import { DataForensicsEngine } from './dataForensicsEngine.js';
+import { AnalyticsEngine } from './analyticsEngine.js';
 
 
 const groq = new Groq({
@@ -162,18 +163,20 @@ Generate fields:`;
   }
 
   static async generateDashboard(headers: string[], sample: any): Promise<any> {
-    const prompt = `Create a dashboard specification for this dataset:
+    try {
+      // Use the Universal Analytics Engine for professional-grade dashboard generation
+      // Ensure data is array
+      const data = Array.isArray(sample) ? sample : [sample];
+      return await AnalyticsEngine.analyze(headers, data);
+    } catch (e) {
+      console.error('Analytics Engine failed, falling back to basic AI:', e);
+      // Fallback to basic AI if engine fails
+      const prompt = `Create a simple dashboard specification for this dataset:
 Headers: ${headers.join(', ')}
-Sample: ${JSON.stringify(sample)}
-
 Return JSON with: { charts: [], kpis: [], layout: {} }`;
 
-    const result = await this.callGroq(prompt, 3000);
-
-    try {
-      return JSON.parse(result);
-    } catch {
-      return { charts: [], kpis: [], layout: {} };
+      const result = await this.callGroq(prompt, 2000);
+      try { return JSON.parse(result); } catch { return { charts: [], kpis: [], layout: {} }; }
     }
   }
 
@@ -381,173 +384,22 @@ Respond ONLY with valid JSON, no markdown or extra text:
   static async suggestDashboard(dataset: any): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      if (headers.length === 0) return { charts: [], kpis: [], patterns: [] };
+      const data = dataset.data || [];
 
-      console.log('🔍 Analyzing dataset semantics...');
+      console.log(`[GroqService] Delegating dashboard generation for ${data.length} rows to AnalyticsEngine`);
 
-      // NEW: Get semantic analysis
-      const analysis = await this.analyzeDatasetSemantics(dataset);
-      const relationships = await this.detectRelationships(dataset);
-
-      console.log('📊 Analysis complete:', {
-        domain: analysis.domain,
-        relationshipCount: relationships.length,
-        quality: analysis.quality.overall
-      });
-
-      const charts = [];
-      const sample = dataset.data?.slice(0, 50) || [];
-
-      // Build charts based on semantic relationships
-      // 1. Primary relationship (highest priority)
-      if (relationships.length > 0) {
-        const primary = relationships[0];
-
-        if (primary.type === 'categorical-numeric') {
-          charts.push({
-            id: `chart-${Date.now()}-1`,
-            type: 'bar',
-            title: `${primary.column2} by ${primary.column1}`,
-            description: primary.description,
-            xAxis: primary.column1,
-            yAxis: primary.column2,
-            aggregation: 'sum',
-            category: 'Overview',
-            priority: 'critical',
-            insights: [`Primary dimension showing variation of ${primary.column2}`]
-          });
-        } else if (primary.type === 'time-series') {
-          charts.push({
-            id: `chart-${Date.now()}-1`,
-            type: 'line',
-            title: `${primary.column2} Over Time`,
-            description: `Temporal trend of ${primary.column2}`,
-            xAxis: primary.column1,
-            yAxis: primary.column2,
-            aggregation: 'sum',
-            category: 'Overview',
-            priority: 'critical',
-            insights: ['Time-series trend analysis']
-          });
-        } else if (primary.type === 'correlation') {
-          charts.push({
-            id: `chart-${Date.now()}-1`,
-            type: 'scatter',
-            title: `${primary.column1} vs ${primary.column2}`,
-            description: primary.description,
-            xAxis: primary.column1,
-            yAxis: primary.column2,
-            aggregation: 'none',
-            category: 'Patterns',
-            priority: 'high',
-            insights: ['Correlation analysis between key metrics']
-          });
-        }
-      }
-
-      // 2. Secondary relationships
-      for (let i = 1; i < Math.min(relationships.length, 3); i++) {
-        const rel = relationships[i];
-        if (charts.length >= 5) break;
-
-        if (rel.type === 'categorical-numeric' && i === 1) {
-          charts.push({
-            id: `chart-${Date.now()}-${i + 1}`,
-            type: 'pie',
-            title: `Distribution by ${rel.column1}`,
-            description: `Market composition of ${rel.column1}`,
-            xAxis: rel.column1,
-            yAxis: rel.column2,
-            aggregation: 'sum',
-            category: 'Overview',
-            priority: 'high'
-          });
-        }
-      }
-
-      // 3. Fallback charts for robustness
-      const numericCols = analysis.columnRoles.filter((c: any) => c.type === 'numeric' || c.type === 'currency').map((c: any) => c.column);
-      const categoricalCols = analysis.columnRoles.filter((c: any) => c.type === 'categorical').map((c: any) => c.column);
-
-      if (charts.length < 3 && categoricalCols.length > 0 && numericCols.length > 0) {
-        charts.push({
-          id: `chart-${Date.now()}-fallback`,
-          type: 'bar',
-          title: `${numericCols[0]} by ${categoricalCols[0]}`,
-          description: `Analysis of ${numericCols[0]}`,
-          xAxis: categoricalCols[0],
-          yAxis: numericCols[0],
-          aggregation: 'sum',
-          category: 'Overview',
-          priority: 'medium'
-        });
-      }
-
-      // Generate KPIs from primary numeric column
-      const kpis = [];
-      if (analysis.primaryMeasure && numericCols.length > 0) {
-        const measureCol = analysis.primaryMeasure;
-        const values = sample.map((r: any) => Number(r[measureCol]) || 0).filter((v: number) => !isNaN(v) && v !== null);
-
-        if (values.length > 0) {
-          const sum = values.reduce((a: number, b: number) => a + b, 0);
-          const avg = sum / values.length;
-          const max = Math.max(...values);
-          const min = Math.min(...values);
-
-          kpis.push({
-            label: `Total ${measureCol}`,
-            value: sum.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-            category: 'financial',
-            calculation: { column: measureCol, operation: 'sum', format: 'number' }
-          });
-
-          kpis.push({
-            label: `Average ${measureCol}`,
-            value: avg.toLocaleString('en-US', { maximumFractionDigits: 1 }),
-            category: 'operational',
-            calculation: { column: measureCol, operation: 'avg', format: 'number' }
-          });
-
-          kpis.push({
-            label: `Max ${measureCol}`,
-            value: max.toLocaleString('en-US', { maximumFractionDigits: 0 }),
-            category: 'efficiency',
-            calculation: { column: measureCol, operation: 'max', format: 'number' }
-          });
-        }
-      }
-
-      kpis.push({
-        label: 'Total Records',
-        value: (dataset.data?.length || 0).toLocaleString(),
-        category: 'quality',
-        calculation: { column: headers[0], operation: 'count', format: 'number' }
-      });
-
-      kpis.push({
-        label: 'Data Quality',
-        value: `${analysis.quality.overall}%`,
-        category: 'quality',
-        calculation: { column: headers[0], operation: 'quality', format: 'percentage' }
-      });
-
+      const config = await AnalyticsEngine.analyze(headers, data);
+      return config;
+    } catch (e) {
+      console.error('Analytics Engine failed in suggestDashboard:', e);
+      // Construct a minimal safe fallback
       return {
-        charts: charts.slice(0, 6),
-        kpis: kpis.slice(0, 5),
-        patterns: [],
-        metadata: {
-          generatedAt: new Date().toISOString(),
-          dataSource: 'AI-Generated',
-          domain: analysis.domain,
-          insights: analysis.keyInsights,
-          quality: analysis.quality
-        }
+        charts: [],
+        kpis: [],
+        layout: { columns: 4, rows: 'auto' },
+        filters: [],
+        insights: ['System could not analyze this dataset automatically.']
       };
-    } catch (error) {
-      console.error('Dashboard generation error:', error);
-      // Fallback to template-based generation
-      return this.suggestDashboardFallback(dataset);
     }
   }
 
