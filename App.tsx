@@ -2,7 +2,8 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './src/context/AuthContext';
-import { WorkspaceProvider, useWorkspace } from './src/context/WorkspaceContext';
+import { WorkspaceProvider } from './src/context/WorkspaceContext';
+import { useWorkspace } from './src/hooks/useWorkspace';
 import { DatasetProvider } from './src/context/DatasetContext';
 import { ProtectedRoute } from './src/routes/ProtectedRoute';
 import { PublicRoute } from './src/routes/PublicRoute';
