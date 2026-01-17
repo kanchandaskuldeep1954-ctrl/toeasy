@@ -1,5 +1,5 @@
 
-import { DataForensicsEngine, ColumnProfile, ColumnRole } from './dataForensicsEngine';
+import { DataForensicsEngine, ColumnProfile, ColumnRole } from './dataForensicsEngine.js';
 
 export interface DashboardConfig {
     kpis: KPI[];
