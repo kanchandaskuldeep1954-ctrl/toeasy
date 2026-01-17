@@ -35,6 +35,7 @@ import UsageMetrics from './src/components/UsageMetrics';
 const AppLayout: React.FC = () => {
   return (
     <MainLayout>
+      <UrlSync />
       <Routes>
         {/* Workspace & Dataset Management */}
         <Route path="workspaces" element={<WorkspacesView />} />
