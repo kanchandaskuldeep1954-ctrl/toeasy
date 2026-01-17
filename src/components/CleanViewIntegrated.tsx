@@ -315,6 +315,17 @@ const ForensicCleanView: React.FC = () => {
           newData[action.rowIdx] = { ...newData[action.rowIdx], [action.col]: action.value };
           logText = `Updated cell [${action.rowIdx}, ${action.col}] to "${action.value}"`;
         }
+      } else if (action.action === 'FILL_NULLS') {
+        let count = 0;
+        newData = newData.map(row => {
+          if (row[action.target] === null || row[action.target] === '' || row[action.target] === undefined) {
+            count++;
+            return { ...row, [action.target]: action.value };
+          }
+          return row;
+        });
+        if (count > 0) logText = `Filled ${count} missing/null values in "${action.target}" with "${action.value}"`;
+        else throw new Error("No null values found in target column");
       }
 
       if (logText) {

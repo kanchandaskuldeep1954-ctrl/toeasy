@@ -819,6 +819,7 @@ If the user explicitly asks to perform an action (delete row, delete column, or 
 { "action": "DELETE_COL", "target": "column_name", "reason": "Explanation of why" }
 { "action": "DELETE_ROW", "target": "row_index_number", "reason": "Explanation" }
 { "action": "UPDATE_CELL", "rowIdx": number, "col": "field_name", "value": "new_value", "reason": "Explanation" }
+{ "action": "FILL_NULLS", "target": "column_name", "value": "replacement_value", "reason": "Explanation" }
 
 Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
 
