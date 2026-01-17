@@ -371,9 +371,12 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
             quarantinedRows: (quarantinedData || []).length,
             healthScore: healthScore || 100
         });
-    } catch (err) {
+    } catch (err: any) {
         console.error('Save cleaned data error:', err);
-        res.status(500).json({ error: 'Failed to save cleaned data' });
+        res.status(500).json({
+            error: 'Failed to save cleaned data',
+            details: err.message || JSON.stringify(err)
+        });
     }
 });
 
