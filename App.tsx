@@ -15,6 +15,22 @@ import { ProfilePage } from './src/components/ProfilePage';
 
 // App Pages
 import MainLayout from './src/components/Layout/MainLayout';
+import { WorkspacesView } from './src/components/WorkspacesView';
+import { DatasetLibrary } from './src/components/DatasetLibrary';
+import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
+import { QueryHistory } from './src/components/QueryHistory';
+import { DashboardLibrary } from './src/components/DashboardLibrary';
+import CleanViewIntegrated from './src/components/CleanViewIntegrated';
+import ExploreViewIntegrated from './src/components/ExploreViewIntegrated';
+import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
+import ReportView from './components/ReportView';
+import BillingViewIntegrated from './src/components/BillingViewIntegrated';
+import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
+import DatasetCreatorView from './components/DatasetCreatorView';
+import DataPreview from './src/components/DataPreview';
+import ValidationRulesManager from './src/components/ValidationRulesManager';
+import QuarantineVault from './src/components/QuarantineVault';
+import UsageMetrics from './src/components/UsageMetrics';
 
 const AppLayout: React.FC = () => {
   return (
