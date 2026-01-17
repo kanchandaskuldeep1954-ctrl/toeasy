@@ -7,6 +7,10 @@ import { apiClient } from '../services/apiClient';
 import ExportModal from './ExportHub/ExportModal';
 
 const ForensicCleanView: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const workspaceId = searchParams.get('workspace');
+  const datasetId = searchParams.get('dataset');
+
   const { activeDataset: dataset, updateDataset } = useDataset();
   // Using 'onUpdate' alias for compatibility with logic
   const onUpdate = (updated: Dataset | Partial<Dataset>) => {
