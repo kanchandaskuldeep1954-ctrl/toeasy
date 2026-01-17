@@ -29,7 +29,7 @@ export interface KPI {
 export interface ChartSpec {
     id: string;
     title: string;
-    type: 'line' | 'bar' | 'pie' | 'doughnut' | 'scatter' | 'heatmap' | 'funnel' | 'area' | 'treemap';
+    type: 'line' | 'bar' | 'bar-horizontal' | 'pie' | 'doughnut' | 'donut' | 'scatter' | 'bubble' | 'heatmap' | 'funnel' | 'area' | 'treemap' | 'radar' | 'gauge' | 'waterfall' | 'histogram';
     description?: string;
     data: any;
     options: any;
