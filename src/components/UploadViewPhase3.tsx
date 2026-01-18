@@ -144,7 +144,7 @@ export const UploadViewPhase3: React.FC = () => {
       // Success - redirect to explore view
       setFile(null);
       setDatasetName('');
-      navigate(`/app/explore?dataset=${response.data.id}`);
+      navigate(`/app/clean?workspace=${workspaceId}&dataset=${response.data.id}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to upload dataset';
       setError(message);
@@ -177,11 +177,10 @@ export const UploadViewPhase3: React.FC = () => {
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${
-                dragActive
+              className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive
                   ? 'border-indigo-500 bg-indigo-600/10'
                   : 'border-slate-700 hover:border-slate-600'
-              }`}
+                }`}
             >
               {file ? (
                 <div className="space-y-3">

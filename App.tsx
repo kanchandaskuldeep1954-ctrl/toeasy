@@ -24,7 +24,6 @@ import { QueryHistory } from './src/components/QueryHistory';
 import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
 import CleanViewIntegrated from './src/components/CleanViewIntegrated';
-import ExploreViewIntegrated from './src/components/ExploreViewIntegrated';
 import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
 import ReportView from './components/ReportView';
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
@@ -59,7 +58,6 @@ const AppLayout: React.FC = () => {
         <Route path="upload" element={<UploadViewPhase3 />} />
         <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
         <Route path="clean" element={<CleanViewIntegrated />} />
-        <Route path="explore" element={<ExploreViewIntegrated />} />
         <Route path="playground" element={<PlaygroundViewIntegrated />} />
         <Route path="dashboard" element={<DashboardViewIntegrated />} />
         <Route path="dashboards" element={<DashboardLibrary />} />

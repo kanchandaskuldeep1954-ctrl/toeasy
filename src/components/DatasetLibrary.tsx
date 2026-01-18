@@ -26,7 +26,7 @@ export const DatasetLibrary: React.FC = () => {
   const { buildPath: buildDatasetPath } = useDatasetNavigation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  
+
   // Use context workspace, fall back to URL param, then redirect if neither
   const workspaceId = activeWorkspace?.id || searchParams.get('workspace');
 
@@ -223,7 +223,7 @@ export const DatasetLibrary: React.FC = () => {
                       className="border-b border-slate-800 hover:bg-slate-800/50 transition-colors cursor-pointer group"
                       onClick={() => {
                         setActiveDataset(dataset);
-                        navigate(buildDatasetPath('/app/explore'));
+                        navigate(buildDatasetPath('/app/clean'));
                       }}
                     >
                       <td className="px-6 py-4">

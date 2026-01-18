@@ -19,21 +19,21 @@ export const useDatasetNavigation = () => {
   const { activeDataset } = useDataset();
   const { workspaceId, buildPath: buildWorkspacePath } = useWorkspaceNavigation();
   const [searchParams] = useSearchParams();
-  
+
   // Get dataset ID from context or URL params
   const datasetId = activeDataset?.id || searchParams.get('dataset');
-  
+
   /**
    * Build a path with workspace and dataset context preserved
-   * @param basePath - The base path like '/app/explore'
+   * @param basePath - The base path like '/app/clean'
    * @returns Path with workspace and dataset parameters if available
    */
   const buildPath = (basePath: string): string => {
     if (!workspaceId) return basePath;
     if (!datasetId) return buildWorkspacePath(basePath);
-    
+
     return `${basePath}?workspace=${workspaceId}&dataset=${datasetId}`;
   };
-  
+
   return { workspaceId, datasetId, buildPath };
 };
