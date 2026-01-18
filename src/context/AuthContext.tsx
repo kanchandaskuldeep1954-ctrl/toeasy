@@ -29,7 +29,7 @@ interface LoginResponse {
   refreshToken: string;
 }
 
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+const BACKEND_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 const TOKEN_KEY = 'auth_token';
 const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'auth_user';
