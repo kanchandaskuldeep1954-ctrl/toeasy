@@ -59,20 +59,24 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setTotal(count);
 
 
-      // Sync active dataset
-      if (activeDataset) {
-        const current = data.find((ds: Dataset) => ds.id === activeDataset.id);
-        if (current) {
+      // Sync active dataset logic using functional update to avoid dependency loop
+      setActiveDatasetState((currentActive) => {
+        if (!currentActive) return null;
+
+        const currentData = data.find((ds: Dataset) => ds.id === currentActive.id);
+        if (currentData) {
           // Merge current with activeDataset to preserve any raw_data already loaded
-          setActiveDatasetState((prev) => prev ? { ...current, ...prev } : current);
+          return { ...currentData, ...currentActive };
         } else {
           // Only reset if we are in the same workspace but the dataset is gone
-          if (activeDataset.workspace_id === parseInt(workspaceId)) {
-            setActiveDatasetState(null);
+          if (currentActive.workspace_id === parseInt(workspaceId)) {
             localStorage.removeItem('activeDataset');
+            return null;
           }
+          return currentActive;
         }
-      }
+      });
+
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch datasets');
@@ -80,7 +84,7 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
     } finally {
       setLoading(false);
     }
-  }, [token, activeDataset]);
+  }, [token]); // Removed activeDataset dependency to fix loop
 
   // Fetch datasets when workspace changes
   useEffect(() => {
