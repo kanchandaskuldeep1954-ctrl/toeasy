@@ -42,6 +42,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [activeSection, setActiveSection] = useState<string>('');
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
     // Generate report with timeout
@@ -300,12 +301,12 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
             </aside>
 
-            {/* Mobile Header with TOC Dropdown */}
+            {/* Mobile Header with Drawer Trigger */}
             <div className="xl:hidden fixed top-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between print:hidden">
                 <div className="flex items-center gap-3">
                     <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold">T</div>
                     <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">{reportType} Report</p>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">Report View</p>
                         <p className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[150px]">{dataset?.name}</p>
                     </div>
                 </div>
@@ -318,31 +319,90 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                     </button>
 
-                    {/* Mobile Menu Trigger */}
-                    <div className="relative group">
-                        <button className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
-                        </button>
+                    <button
+                        onClick={() => setIsMobileMenuOpen(true)}
+                        className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                    </button>
+                </div>
+            </div>
 
-                        {/* Mobile Dropdown */}
-                        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-800 p-2 hidden group-focus-within:block">
-                            <p className="px-3 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1">Navigate Section</p>
-                            {report.sections.map((section, idx) => (
-                                <button
-                                    key={section.id}
-                                    onClick={() => {
-                                        setActiveSection(section.id);
-                                        document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
-                                    }}
-                                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                >
-                                    {idx + 1}. {section.title}
-                                </button>
-                            ))}
+            {/* FULL MOBILE DRAWER OVERLAY */}
+            {/* Using a fixed full-screen overlay when menu is open */}
+            {isMobileMenuOpen && (
+                <div className="fixed inset-0 z-50 xl:hidden">
+                    {/* Backdrop */}
+                    <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+
+                    {/* Drawer Content */}
+                    <div className="absolute right-0 top-0 bottom-0 w-80 bg-white dark:bg-slate-900 shadow-2xl border-l border-slate-200 dark:border-slate-800 p-6 overflow-y-auto animate-in slide-in-from-right duration-300">
+                        <div className="flex items-center justify-between mb-8">
+                            <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Report Navigation</h3>
+                            <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+                                <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="space-y-8">
+                            {/* 1. Report Type Selector (Mobile) */}
+                            <div>
+                                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Report Type</h4>
+                                <div className="flex flex-col gap-2">
+                                    {(['strategic', 'operational', 'financial', 'quality', 'risk'] as ReportType[]).map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => {
+                                                handleReportTypeChange(type);
+                                                setIsMobileMenuOpen(false);
+                                            }}
+                                            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl text-left transition-all ${reportType === type
+                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
+                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                                }`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span>{type} Report</span>
+                                                {reportType === type && <span>✓</span>}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 2. TOC (Mobile) */}
+                            <div>
+                                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Sections</h4>
+                                <nav className="space-y-1">
+                                    {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => (
+                                        <button
+                                            key={section.id}
+                                            onClick={() => {
+                                                setActiveSection(section.id);
+                                                setIsMobileMenuOpen(false);
+                                                document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
+                                            }}
+                                            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all ${activeSection === section.id
+                                                ? 'bg-indigo-50 dark:bg-indigo-900/10 text-indigo-600 border-l-4 border-indigo-600'
+                                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                }`}
+                                        >
+                                            {idx + 1}. {section.title}
+                                        </button>
+                                    ))}
+                                </nav>
+                            </div>
+                        </div>
+
+                        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+                            <button onClick={() => { setShowExportModal(true); setIsMobileMenuOpen(false); }} className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
+                                Export Options
+                            </button>
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* Export Modal */}
             {showExportModal && (
