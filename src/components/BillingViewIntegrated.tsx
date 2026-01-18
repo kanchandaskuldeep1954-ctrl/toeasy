@@ -77,7 +77,7 @@ const BillingViewIntegrated: React.FC = () => {
 
       setSubscription(subRes.data);
       setBillingCycle(subRes.data.interval);
-      
+
       // Handle both old and new usage response formats
       const usageData = usageRes.data;
       if (usageData.stats) {
@@ -236,8 +236,6 @@ const BillingViewIntegrated: React.FC = () => {
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                 <span className="text-lg font-bold text-slate-900 dark:text-white capitalize">{subscription.status}</span>
               </div>
-            </div>
-            <div>
               <p className="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400 mb-2">Renews</p>
               <p className="text-lg font-bold text-slate-900 dark:text-white">
                 {new Date(subscription.current_period_end).toLocaleDateString()}
@@ -305,21 +303,19 @@ const BillingViewIntegrated: React.FC = () => {
         <div className="inline-flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => setBillingCycle('month')}
-            className={`px-6 py-2 rounded-lg font-bold text-[10px] uppercase transition-all ${
-              billingCycle === 'month'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            className={`px-6 py-2 rounded-lg font-bold text-[10px] uppercase transition-all ${billingCycle === 'month'
+              ? 'bg-indigo-600 text-white shadow-lg'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
           >
             Monthly
           </button>
           <button
             onClick={() => setBillingCycle('year')}
-            className={`px-6 py-2 rounded-lg font-bold text-[10px] uppercase transition-all relative ${
-              billingCycle === 'year'
-                ? 'bg-indigo-600 text-white shadow-lg'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-            }`}
+            className={`px-6 py-2 rounded-lg font-bold text-[10px] uppercase transition-all relative ${billingCycle === 'year'
+              ? 'bg-indigo-600 text-white shadow-lg'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
           >
             Yearly
             <span className="absolute -top-3 -right-2 bg-emerald-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full">
@@ -336,11 +332,10 @@ const BillingViewIntegrated: React.FC = () => {
           return (
             <div
               key={plan.id}
-              className={`relative rounded-2xl border transition-all ${
-                plan.isPopular
-                  ? 'border-indigo-500/50 shadow-2xl shadow-indigo-500/10 scale-105 lg:scale-110 z-10'
-                  : 'border-slate-200 dark:border-slate-800'
-              } bg-white dark:bg-slate-900 overflow-hidden`}
+              className={`relative rounded-2xl border transition-all ${plan.isPopular
+                ? 'border-indigo-500/50 shadow-2xl shadow-indigo-500/10 scale-105 lg:scale-110 z-10'
+                : 'border-slate-200 dark:border-slate-800'
+                } bg-white dark:bg-slate-900 overflow-hidden`}
             >
               {plan.isPopular && (
                 <div className="absolute top-0 left-0 right-0 bg-indigo-600 text-white text-center py-1 text-[9px] font-black uppercase">
@@ -378,13 +373,12 @@ const BillingViewIntegrated: React.FC = () => {
                 <button
                   onClick={() => handleUpgrade(plan.id, price)}
                   disabled={plan.isCurrent || processingTier !== null}
-                  className={`w-full py-3 rounded-xl font-bold text-[10px] uppercase transition-all ${
-                    plan.isCurrent
-                      ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-default'
-                      : plan.isPopular
-                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
+                  className={`w-full py-3 rounded-xl font-bold text-[10px] uppercase transition-all ${plan.isCurrent
+                    ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-default'
+                    : plan.isPopular
+                      ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-slate-700'
+                    }`}
                 >
                   {processingTier === plan.id ? (
                     <div className="flex items-center justify-center gap-2">

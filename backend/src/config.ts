@@ -37,11 +37,9 @@ export interface Config {
   jwtExpiry: string;
   refreshTokenExpiry: string;
   groqApiKey: string | undefined;
-  cashfree: {
-    apiKey: string | undefined;
-    secretKey: string | undefined;
-    webhookSecret: string | undefined;
-    env: string;
+  razorpay: {
+    keyId: string | undefined;
+    keySecret: string | undefined;
   };
   redisUrl: string | undefined;
   frontendUrl: string;
@@ -58,11 +56,9 @@ export const config: Config = {
   jwtExpiry: process.env.JWT_EXPIRY || '7d',
   refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || '30d',
   groqApiKey: process.env.GROQ_API_KEY,
-  cashfree: {
-    apiKey: process.env.CASHFREE_API_KEY || process.env.CASHFREE_APP_ID,
-    secretKey: process.env.CASHFREE_SECRET_KEY,
-    webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET,
-    env: process.env.CASHFREE_ENV || 'production',
+  razorpay: {
+    keyId: process.env.RAZORPAY_KEY_ID,
+    keySecret: process.env.RAZORPAY_KEY_SECRET,
   },
   redisUrl: process.env.REDIS_URL,
   frontendUrl: process.env.FRONTEND_URL || 'https://toeasy.vercel.app',

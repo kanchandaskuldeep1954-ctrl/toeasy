@@ -1,19 +1,15 @@
 /**
  * Payment Flow Component
- * Handles Cashfree payment integration with success/failure handling
- * Works seamlessly with BillingViewIntegrated
- * 
+ * Handles Razorpay payment integration with success/failure handling
+ *
  * Features:
- * - Cashfree payment modal
+ * - Razorpay Checkout Modal
  * - Order creation and verification
  * - Subscription update on success
- * - Error recovery with retry option
- * - Payment status polling
- * - Confirmation modal with success/failure states
+ * - Error recovery
  */
 
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { useState } from 'react';
 import { paymentAPI } from '../services/api';
 
 interface PaymentFlowProps {
@@ -34,7 +30,7 @@ interface PaymentState {
 
 declare global {
   interface Window {
-    Cashfree?: any;
+    Razorpay?: any;
   }
 }
 
@@ -57,58 +53,72 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
       setPaymentState(prev => ({ ...prev, status: 'creating_order' }));
 
       const response = await paymentAPI.createOrder(planId, amount, interval);
-      const { orderId, paymentSessionId, redirectUrl } = response.data;
+      const data = response.data; // { key, amount, currency, name, description, order_id, prefill }
 
-      if (redirectUrl && window.Cashfree) {
-        // Initialize Cashfree SDK
-        const cashfree = new window.Cashfree();
+      if (window.Razorpay) {
+        const options = {
+          key: data.key,
+          amount: data.amount,
+          currency: data.currency,
+          name: data.name,
+          description: data.description,
+          order_id: data.order_id,
+          handler: async function (response: any) {
+            // Payment Success
+            setPaymentState(prev => ({ ...prev, status: 'verifying' }));
+            try {
+              await paymentAPI.verify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              });
 
-        setPaymentState(prev => ({
-          ...prev,
-          status: 'awaiting_payment',
-          orderId,
-        }));
-
-        // Open payment modal
-        cashfree.redirect(redirectUrl);
-
-        // Poll for payment status every 2 seconds
-        const pollInterval = setInterval(async () => {
-          try {
-            const statusResponse = await paymentAPI.getStatus(orderId);
-            const { status } = statusResponse.data;
-
-            if (status === 'completed') {
-              clearInterval(pollInterval);
               setPaymentState(prev => ({ ...prev, status: 'success' }));
               setTimeout(() => {
                 onPaymentSuccess();
                 handleClose();
               }, 2000);
-            } else if (status === 'failed') {
-              clearInterval(pollInterval);
+            } catch (err) {
               setPaymentState(prev => ({
                 ...prev,
                 status: 'failed',
-                error: 'Payment failed. Please try again.',
+                error: 'Payment verification failed. Please contact support.'
               }));
             }
-          } catch (err) {
-            // Continue polling if status check fails
+          },
+          prefill: data.prefill,
+          theme: {
+            color: "#4f46e5" // Indigo-600
+          },
+          modal: {
+            ondismiss: function () {
+              setPaymentState(prev => ({ ...prev, status: 'idle' }));
+            }
           }
-        }, 2000);
+        };
 
-        // Stop polling after 5 minutes
-        setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+        const rzp1 = new window.Razorpay(options);
+        rzp1.on('payment.failed', function (response: any) {
+          setPaymentState(prev => ({
+            ...prev,
+            status: 'failed',
+            error: response.error.description || 'Payment failed',
+            retryCount: prev.retryCount + 1,
+          }));
+        });
+
+        rzp1.open();
+        setPaymentState(prev => ({ ...prev, status: 'awaiting_payment' }));
+
       } else {
-        throw new Error('Payment gateway not available');
+        throw new Error('Razorpay SDK not loaded');
       }
     } catch (err: any) {
       console.error('Payment creation error:', err);
       setPaymentState(prev => ({
         ...prev,
         status: 'failed',
-        error: err.response?.data?.error || err.message || 'Failed to create payment order',
+        error: err.response?.data?.error || err.message || 'Failed to initialize payment',
         retryCount: prev.retryCount + 1,
       }));
     }
@@ -164,7 +174,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
 
             <div className="border-t border-slate-200 pt-4 dark:border-slate-700">
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                You will be redirected to Cashfree to complete the payment securely.
+                You will be redirected to Razorpay to complete the payment securely.
               </p>
             </div>
 
@@ -172,14 +182,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
               onClick={handleCreateOrder}
               className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
             >
-              Proceed to Payment
-            </button>
-
-            <button
-              onClick={handleClose}
-              className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
-            >
-              Cancel
+              Pay with Razorpay
             </button>
           </div>
         )}
@@ -187,17 +190,19 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
         {paymentState.status === 'creating_order' && (
           <div className="flex flex-col items-center justify-center space-y-4 py-8">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600 dark:border-slate-700 dark:border-t-indigo-500"></div>
-            <p className="text-slate-600 dark:text-slate-400">Creating payment order...</p>
+            <p className="text-slate-600 dark:text-slate-400">Initializing payment...</p>
           </div>
         )}
 
         {paymentState.status === 'awaiting_payment' && (
           <div className="flex flex-col items-center justify-center space-y-4 py-8">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-indigo-600 dark:border-slate-700 dark:border-t-indigo-500"></div>
+            <div className="h-12 w-12 animate-pulse rounded-full bg-indigo-100 p-2 dark:bg-indigo-900/30">
+              <svg className="h-8 w-8 text-indigo-600 dark:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+              </svg>
+            </div>
             <p className="text-center text-slate-600 dark:text-slate-400">
-              Waiting for payment confirmation...
-              <br />
-              <span className="text-sm">A payment page should have opened</span>
+              Please complete the payment in the Razorpay popup.
             </p>
           </div>
         )}
@@ -205,7 +210,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
         {paymentState.status === 'verifying' && (
           <div className="flex flex-col items-center justify-center space-y-4 py-8">
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600 dark:border-slate-700 dark:border-t-emerald-500"></div>
-            <p className="text-slate-600 dark:text-slate-400">Verifying payment...</p>
+            <p className="text-slate-600 dark:text-slate-400">Verifying secure payment...</p>
           </div>
         )}
 
@@ -234,29 +239,9 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
                 Payment Successful!
               </h3>
               <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-                Your subscription to <strong>{planId === 'pro' ? 'Pro' : 'Enterprise'}</strong> plan is now active.
+                Your subscription is now active.
               </p>
             </div>
-
-            <div className="space-y-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Order ID</span>
-                <span className="font-mono text-slate-900 dark:text-white">
-                  {paymentState.orderId?.substring(0, 12)}...
-                </span>
-              </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-slate-600 dark:text-slate-400">Amount Paid</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-500">${amount.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <button
-              onClick={handleClose}
-              className="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white transition hover:bg-emerald-700 dark:bg-emerald-500 dark:hover:bg-emerald-600"
-            >
-              Continue to Dashboard
-            </button>
           </div>
         )}
 
@@ -264,70 +249,31 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
           <div className="space-y-4">
             <div className="rounded-lg bg-rose-50 p-4 dark:bg-rose-900/20">
               <div className="flex items-start gap-3">
-                <svg
-                  className="h-6 w-6 text-rose-600 dark:text-rose-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
+                <svg className="h-6 w-6 text-rose-600 dark:text-rose-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <div>
-                  <h3 className="font-semibold text-rose-900 dark:text-rose-100">
-                    Payment Failed
-                  </h3>
+                  <h3 className="font-semibold text-rose-900 dark:text-rose-100">Payment Failed</h3>
                   <p className="mt-1 text-sm text-rose-800 dark:text-rose-200">
-                    {paymentState.error || 'Something went wrong during payment processing.'}
+                    {paymentState.error || 'Something went wrong.'}
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="space-y-2 border-t border-slate-200 pt-4 dark:border-slate-700">
-              <div className="text-sm text-slate-600 dark:text-slate-400">
-                Retry Attempts: {paymentState.retryCount} / 3
-              </div>
-              {paymentState.retryCount < 3 && (
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  You can retry your payment. No charge has been made yet.
-                </p>
-              )}
-            </div>
-
             <div className="space-y-2">
-              {paymentState.retryCount < 3 ? (
-                <>
-                  <button
-                    onClick={handleRetry}
-                    className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-                  >
-                    Try Again
-                  </button>
-                  <button
-                    onClick={handleClose}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-center text-sm text-slate-600 dark:text-slate-400">
-                    Maximum retry attempts reached.
-                  </p>
-                  <button
-                    onClick={handleClose}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
-                  >
-                    Close
-                  </button>
-                </>
-              )}
+              <button
+                onClick={handleRetry}
+                className="w-full rounded-lg bg-indigo-600 px-4 py-3 font-semibold text-white transition hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+              >
+                Try Again
+              </button>
+              <button
+                onClick={handleClose}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 font-semibold text-slate-900 transition hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-white dark:hover:bg-slate-700"
+              >
+                Cancel
+              </button>
             </div>
           </div>
         )}

@@ -126,8 +126,8 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
           <div
             key={plan.id}
             className={`relative flex flex-col p-8 glass-morphism rounded-[40px] border transition-all ${plan.highlight
-                ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10'
-                : 'border-white/10 hover:border-white/20'
+              ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10'
+              : 'border-white/10 hover:border-white/20'
               }`}
           >
             {plan.highlight && (
@@ -160,10 +160,10 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
               onClick={() => plan.id !== subscription.tier && handleSubscription(plan.id, plan.price)}
               disabled={plan.id === subscription.tier || processingTier !== null}
               className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${plan.id === subscription.tier
-                  ? 'bg-white/5 text-slate-500 cursor-default'
-                  : plan.highlight
-                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30'
-                    : 'bg-white/10 hover:bg-white/20 text-white'
+                ? 'bg-white/5 text-slate-500 cursor-default'
+                : plan.highlight
+                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
                 }`}
             >
               {processingTier === plan.id ? (
@@ -217,7 +217,7 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl">⚡</div>
             <div>
-              <p className="text-white font-bold">Secure Payment via Cashfree</p>
+              <p className="text-white font-bold">Secure Payment via Razorpay</p>
               <p className="text-sm text-slate-400">Your transaction is processed securely. We never store your card details.</p>
             </div>
           </div>
