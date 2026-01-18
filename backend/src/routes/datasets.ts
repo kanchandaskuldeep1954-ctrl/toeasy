@@ -393,6 +393,36 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
   }
 });
 
+// Update dataset (name, description, health_score, etc.)
+router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
+  try {
+    const { name, description, health_score, cleaning_confirmed } = req.body;
+
+    // We only update metadata fields here. 
+    // Data updates are handled by the specific cleaning endpoints for performance and safety.
+    const result = await query(
+      `UPDATE datasets 
+       SET name = COALESCE($1, name), 
+           description = COALESCE($2, description),
+           health_score = COALESCE($3, health_score),
+           cleaning_confirmed = COALESCE($4, cleaning_confirmed),
+           updated_at = NOW()
+       WHERE id = $5 AND workspace_id = $6
+       RETURNING *`,
+      [name, description, health_score, cleaning_confirmed, req.params.datasetId, req.params.workspaceId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Update dataset error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Delete dataset
 router.delete('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
 

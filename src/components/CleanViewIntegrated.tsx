@@ -11,7 +11,7 @@ const ForensicCleanView: React.FC = () => {
   const workspaceId = searchParams.get('workspace');
   const datasetId = searchParams.get('dataset');
 
-  const { activeDataset: dataset, updateDataset } = useDataset();
+  const { activeDataset: dataset, updateDataset, setActiveDataset } = useDataset();
   // Using 'onUpdate' alias for compatibility with logic
   const onUpdate = (updated: Dataset | Partial<Dataset>) => {
     if (dataset) {
@@ -48,7 +48,7 @@ const ForensicCleanView: React.FC = () => {
             raw_data: fullData.raw_data || [],
             headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []
           };
-          onUpdate(hydrated);
+          setActiveDataset(hydrated);
         } catch (e) {
           console.error("Failed to hydrate dataset:", e);
         } finally {
@@ -57,7 +57,7 @@ const ForensicCleanView: React.FC = () => {
       }
     };
     hydrateDataset();
-  }, [dataset, datasetId, workspaceId, updateDataset]); // Dependency on dataset might cause re-run if it changes, but condition prevents loop
+  }, [dataset, datasetId, workspaceId, setActiveDataset]); // Dependency on dataset might cause re-run if it changes, but condition prevents loop
 
   const [pendingActions, setPendingActions] = useState<CleaningAction[]>([]);
   const [insights, setInsights] = useState<AnalysisInsight[]>([]);

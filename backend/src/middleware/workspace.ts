@@ -8,16 +8,25 @@ import { AuthRequest } from './auth.js';
 export const verifyWorkspaceOwnership = async (req: AuthRequest, res: any, next: Function) => {
     try {
         const { workspaceId } = req.params;
+        if (!workspaceId) return next();
 
-        // If workspaceId is not in params, it might be in the parent router or not applicable
-        // But usually we expect it if this middleware is applied to a route with :workspaceId
-        if (!workspaceId) {
-            return next();
+        let targetWorkspaceId = workspaceId;
+
+        // Resolve 'default' workspace
+        if (targetWorkspaceId === 'default') {
+            const defaultWs = await query(
+                'SELECT id FROM workspaces WHERE user_id = $1 ORDER BY created_at ASC LIMIT 1',
+                [req.user!.id]
+            );
+            if (defaultWs.rows.length === 0) {
+                return res.status(404).json({ error: 'Default workspace not found' });
+            }
+            targetWorkspaceId = defaultWs.rows[0].id;
         }
 
         const result = await query(
             'SELECT user_id FROM workspaces WHERE id = $1',
-            [workspaceId]
+            [targetWorkspaceId]
         );
 
         if (result.rows.length === 0) {
