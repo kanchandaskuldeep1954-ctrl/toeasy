@@ -136,16 +136,22 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
         prev.map((ds) => (ds.id === id ? { ...ds, ...updated } : ds))
       );
 
-      if (activeDataset?.id === id) {
-        setActiveDataset({ ...activeDataset, ...updated });
-      }
+      // Use functional update to avoid dependency on activeDataset
+      setActiveDatasetState((currentActive) => {
+        if (currentActive?.id === id) {
+          const merged = { ...currentActive, ...updated };
+          localStorage.setItem('activeDataset', JSON.stringify(merged));
+          return merged;
+        }
+        return currentActive;
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to update dataset');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [activeDataset, activeWorkspace, setActiveDataset]);
+  }, [activeWorkspace]); // Removed activeDataset and setActiveDataset dependencies
 
   const removeDataset = useCallback(async (id: number) => {
     if (!activeWorkspace) return;
@@ -155,16 +161,21 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
       setDatasets((prev) => prev.filter((ds) => ds.id !== id));
 
-      if (activeDataset?.id === id) {
-        setActiveDataset(null);
-      }
+      // Use functional update to avoid dependency on activeDataset
+      setActiveDatasetState((currentActive) => {
+        if (currentActive?.id === id) {
+          localStorage.removeItem('activeDataset');
+          return null;
+        }
+        return currentActive;
+      });
     } catch (err: any) {
       setError(err.message || 'Failed to delete dataset');
       throw err;
     } finally {
       setLoading(false);
     }
-  }, [activeDataset, activeWorkspace, setActiveDataset]);
+  }, [activeWorkspace]); // Removed activeDataset and setActiveDataset dependencies
 
   return (
     <DatasetContext.Provider

@@ -58,17 +58,18 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       const data = response.data || [];
       setWorkspaces(data);
 
-      // Sync active workspace if it exists in the new list
-      if (activeWorkspace) {
-        const current = data.find((ws: Workspace) => ws.id === activeWorkspace.id);
+      // Sync active workspace using functional update to avoid circular dependency
+      setActiveWorkspaceState((currentActive) => {
+        if (!currentActive) return null;
+        const current = data.find((ws: Workspace) => ws.id === currentActive.id);
         if (current) {
-          setActiveWorkspaceState(current);
+          localStorage.setItem('active_workspace', JSON.stringify(current));
+          return current;
         } else {
-          // If active workspace is no longer in the list (deleted/archived elsewhere)
-          setActiveWorkspaceState(null);
           localStorage.removeItem('active_workspace');
+          return null;
         }
-      }
+      });
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch workspaces');
@@ -76,7 +77,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [token, activeWorkspace]);
+  }, [token]); // Removed activeWorkspace dependency
 
   // Initial fetch when token changes
   useEffect(() => {
@@ -124,9 +125,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         prev.map((ws) => (ws.id === id ? updatedWs : ws))
       );
 
-      if (activeWorkspace?.id === id) {
-        setActiveWorkspace(updatedWs);
-      }
+      // Use functional update to avoid dependency on activeWorkspace
+      setActiveWorkspaceState((currentActive) => {
+        if (currentActive?.id === id) {
+          localStorage.setItem('active_workspace', JSON.stringify(updatedWs));
+          return updatedWs;
+        }
+        return currentActive;
+      });
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to update workspace');
@@ -134,7 +140,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [activeWorkspace, setActiveWorkspace]);
+  }, []); // Removed activeWorkspace and setActiveWorkspace dependencies
 
   const removeWorkspace = useCallback(async (id: number) => {
     try {
@@ -143,9 +149,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
       setWorkspaces((prev) => prev.filter((ws) => ws.id !== id));
 
-      if (activeWorkspace?.id === id) {
-        setActiveWorkspace(null);
-      }
+      // Use functional update to avoid dependency on activeWorkspace
+      setActiveWorkspaceState((currentActive) => {
+        if (currentActive?.id === id) {
+          localStorage.removeItem('active_workspace');
+          return null;
+        }
+        return currentActive;
+      });
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to delete workspace');
@@ -153,7 +164,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [activeWorkspace, setActiveWorkspace]);
+  }, []); // Removed activeWorkspace and setActiveWorkspace dependencies
 
   return (
     <WorkspaceContext.Provider
