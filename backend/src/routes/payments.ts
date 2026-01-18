@@ -38,12 +38,13 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     const orderId = `ORDER_${req.user!.id}_${Date.now()}`;
 
     // Call Cashfree API
-    const isProduction = config.nodeEnv === 'production' || config.nodeEnv === 'deployment';
-    const cashfreeUrl = isProduction
-      ? 'https://api.cashfree.com/pg/orders'
-      : 'https://sandbox.cashfree.com/pg/orders';
+    // Check if using Test credentials (even in production)
+    const isTestKey = config.cashfree.apiKey?.startsWith('TEST');
+    const cashfreeUrl = isTestKey
+      ? 'https://sandbox.cashfree.com/pg/orders'
+      : 'https://api.cashfree.com/pg/orders';
 
-    console.log(`Using Cashfree Environment: ${isProduction ? 'Production' : 'Sandbox'} (${cashfreeUrl})`);
+    console.log(`Using Cashfree Environment: ${isTestKey ? 'Sandbox (Test Key)' : 'Production'} (${cashfreeUrl})`);
 
     const cashfreeResponse = await fetch(cashfreeUrl, {
       method: 'POST',
