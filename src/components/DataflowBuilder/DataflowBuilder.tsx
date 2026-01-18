@@ -363,7 +363,6 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         nodeTypes={nodeTypes}
                         proOptions={{ hideAttribution: true }}
                         fitView
-                        fitView
                         className="bg-slate-50 dark:bg-slate-950 transition-colors"
                     >
                         <Background color="#94a3b8" gap={20} size={1} variant={BackgroundVariant.Dots} className="opacity-20 dark:opacity-40" />
