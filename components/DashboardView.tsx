@@ -771,7 +771,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                 </div>
 
                 {/* Patterns/Insights Section */}
-                {perspective === 'Patterns' && config.patterns.length > 0 && (
+                {perspective === 'Patterns' && config.patterns?.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-10">
                         {config.patterns.map((pat, i) => (
                             <InsightCard
