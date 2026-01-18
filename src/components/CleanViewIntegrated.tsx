@@ -26,21 +26,33 @@ const ForensicCleanView: React.FC = () => {
   const [loadingStep, setLoadingStep] = useState<string>('');
   const [semanticContext, setSemanticContext] = useState<string>(''); // New State
 
-  // Hydrate dataset if raw data is missing (from list view optimization)
+  // Hydration & Polling Logic
+  const hydratingIdRef = React.useRef<number | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
+
   useEffect(() => {
-    const hydrateDataset = async () => {
-      // Hydrate if we have rows but no data loaded (or empty array)
-      if (dataset && dataset.row_count > 0 && (!dataset.data || dataset.data.length === 0)) {
-        if (workspaceId === 'null' || datasetId === 'null' || !workspaceId || !datasetId) {
-          console.log("Skipping hydration: null IDs");
-          return;
-        }
-        console.log("Hydrating dataset logic...", dataset.id);
-        setIsLoading(true);
-        try {
-          const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
-          const fullData = res.data;
-          // Ensure data/raw_data alias consistency
+    let isMounted = true;
+    let pollInterval: NodeJS.Timeout;
+
+    const syncDataset = async (isInitial = false) => {
+      // Logic gates to prevent spamming
+      if (!dataset || !workspaceId || !datasetId || workspaceId === 'null') return;
+      if (isInitial && hydratingIdRef.current === dataset.id) return; // Prevent double initial hydration
+
+      // If initial load, set loading state
+      if (isInitial) {
+        if (!dataset.data || dataset.data.length === 0) setIsLoading(true);
+        hydratingIdRef.current = dataset.id;
+      } else {
+        setIsPolling(true);
+      }
+
+      try {
+        const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
+        const fullData = res.data;
+
+        if (isMounted) {
+          // Smart merge: only update if data changed (simple length check or version check could be added here)
           const hydrated = {
             ...dataset,
             ...fullData,
@@ -48,16 +60,36 @@ const ForensicCleanView: React.FC = () => {
             raw_data: fullData.raw_data || [],
             headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []
           };
+
+          // Only trigger update if headers or row count differs to standard react optimization
+          // For now, we update safely using local state setter to avoid loop
           setActiveDataset(hydrated);
-        } catch (e) {
-          console.error("Failed to hydrate dataset:", e);
-        } finally {
+        }
+      } catch (e) {
+        console.error("Sync failed:", e);
+      } finally {
+        if (isMounted) {
           setIsLoading(false);
+          setIsPolling(false);
         }
       }
     };
-    hydrateDataset();
-  }, [dataset, datasetId, workspaceId, setActiveDataset]); // Dependency on dataset might cause re-run if it changes, but condition prevents loop
+
+    // Initial Hydration
+    syncDataset(true);
+
+    // Realtime Polling (Every 10s)
+    pollInterval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        syncDataset(false);
+      }
+    }, 10000);
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+    };
+  }, [datasetId, workspaceId, setActiveDataset]); // Removed 'dataset' from dependency to stop loop!
 
   const [pendingActions, setPendingActions] = useState<CleaningAction[]>([]);
   const [insights, setInsights] = useState<AnalysisInsight[]>([]);
