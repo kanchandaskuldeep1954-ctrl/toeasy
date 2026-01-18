@@ -38,9 +38,12 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     const orderId = `ORDER_${req.user!.id}_${Date.now()}`;
 
     // Call Cashfree API
-    const cashfreeUrl = config.nodeEnv === 'production'
+    const isProduction = config.nodeEnv === 'production' || config.nodeEnv === 'deployment';
+    const cashfreeUrl = isProduction
       ? 'https://api.cashfree.com/pg/orders'
       : 'https://sandbox.cashfree.com/pg/orders';
+
+    console.log(`Using Cashfree Environment: ${isProduction ? 'Production' : 'Sandbox'} (${cashfreeUrl})`);
 
     const cashfreeResponse = await fetch(cashfreeUrl, {
       method: 'POST',
