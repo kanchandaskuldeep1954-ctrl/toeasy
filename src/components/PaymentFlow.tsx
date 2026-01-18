@@ -104,10 +104,11 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
         throw new Error('Payment gateway not available');
       }
     } catch (err: any) {
+      console.error('Payment creation error:', err);
       setPaymentState(prev => ({
         ...prev,
         status: 'failed',
-        error: err.response?.data?.error || 'Failed to create payment order',
+        error: err.response?.data?.error || err.message || 'Failed to create payment order',
         retryCount: prev.retryCount + 1,
       }));
     }
