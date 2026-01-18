@@ -13,7 +13,74 @@ router.use(checkSubscription);
 
 // Execute query on dataset
 router.post('/:workspaceId/datasets/:datasetId/query', async (req: AuthRequest, res) => {
-  // ... (original implementation remains)
+  try {
+    // Accept both query_text (from frontend) and queryText (from internal calls)
+    const queryText = req.body.query_text || req.body.queryText;
+    const type = req.body.type || 'sql';
+
+    if (!queryText) {
+      return res.status(400).json({ error: 'Query text required' });
+    }
+
+    // Get dataset
+    const datasetResult = await query(
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3',
+      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+    );
+
+    if (datasetResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    let rawData = datasetResult.rows[0].raw_data;
+    let data: any[] = [];
+
+    // Parse raw_data if it's a string
+    if (typeof rawData === 'string') {
+      data = JSON.parse(rawData);
+    } else {
+      data = rawData;
+    }
+
+    // Ensure data is an array
+    if (!Array.isArray(data)) {
+      const parsedData = data as any;
+      if (parsedData && typeof parsedData === 'object' && parsedData.data && Array.isArray(parsedData.data)) {
+        data = parsedData.data;
+      } else {
+        data = [];
+      }
+    }
+
+    let results: any[] = data;
+
+    if (type === 'natural') {
+      // Convert natural language to SQL using Groq
+      const sqlResponse = await GroqService.generateSQL({ data }, queryText) as any;
+
+      // Execute SQL-like operations on in-memory data
+      results = executeSimpleSQL(data, sqlResponse.sql);
+    } else if (type === 'sql') {
+      // Execute SQL-like query on in-memory data
+      results = executeSimpleSQL(data, queryText);
+    }
+
+    // Save query to history
+    await query(
+      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, result_count, executed_by) 
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.params.workspaceId, req.params.datasetId, queryText, type, results.length, req.user!.id]
+    );
+
+    res.json({
+      results,
+      count: results.length,
+      executedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Execute query error:', err);
+    res.status(500).json({ error: 'Failed to execute query' });
+  }
 });
 
 // List all queries in a workspace
@@ -70,75 +137,6 @@ router.delete('/:workspaceId/queries/:queryId', async (req: AuthRequest, res) =>
   }
 });
 
-try {
-  // Accept both query_text (from frontend) and queryText (from internal calls)
-  const queryText = req.body.query_text || req.body.queryText;
-  const type = req.body.type || 'sql';
-
-  if (!queryText) {
-    return res.status(400).json({ error: 'Query text required' });
-  }
-
-  // Get dataset
-  const datasetResult = await query(
-    'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3',
-    [req.params.datasetId, req.params.workspaceId, req.user!.id]
-  );
-
-  if (datasetResult.rows.length === 0) {
-    return res.status(404).json({ error: 'Dataset not found' });
-  }
-
-  let rawData = datasetResult.rows[0].raw_data;
-  let data: any[] = [];
-
-  // Parse raw_data if it's a string
-  if (typeof rawData === 'string') {
-    data = JSON.parse(rawData);
-  } else {
-    data = rawData;
-  }
-
-  // Ensure data is an array
-  if (!Array.isArray(data)) {
-    const parsedData = data as any;
-    if (parsedData && typeof parsedData === 'object' && parsedData.data && Array.isArray(parsedData.data)) {
-      data = parsedData.data;
-    } else {
-      data = [];
-    }
-  }
-
-  let results: any[] = data;
-
-  if (type === 'natural') {
-    // Convert natural language to SQL using Groq
-    const sqlResponse = await GroqService.generateSQL({ data }, queryText) as any;
-
-    // Execute SQL-like operations on in-memory data
-    results = executeSimpleSQL(data, sqlResponse.sql);
-  } else if (type === 'sql') {
-    // Execute SQL-like query on in-memory data
-    results = executeSimpleSQL(data, queryText);
-  }
-
-  // Save query to history
-  await query(
-    `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, result_count, executed_by) 
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-    [req.params.workspaceId, req.params.datasetId, queryText, type, results.length, req.user!.id]
-  );
-
-  res.json({
-    results,
-    count: results.length,
-    executedAt: new Date().toISOString()
-  });
-} catch (err) {
-  console.error('Execute query error:', err);
-  res.status(500).json({ error: 'Failed to execute query' });
-}
-});
 
 // List query history (with pagination)
 router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest, res) => {
