@@ -188,7 +188,7 @@ export const QueryHistory: React.FC = () => {
               {/* Actions */}
               <div className="mt-6 pt-6 border-t border-slate-800 space-y-2">
                 <button
-                  onClick={() => navigate(`/app/playground?query=${selectedQuery.id}`)}
+                  onClick={() => navigate(`/app/playground?workspace=${workspaceId}&dataset=${selectedQuery.dataset_id}&query=${selectedQuery.id}`)}
                   className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors text-sm"
                 >
                   Edit & Run

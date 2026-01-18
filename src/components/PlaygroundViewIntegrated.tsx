@@ -57,6 +57,8 @@ const PlaygroundViewIntegrated: React.FC = () => {
 
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
+  const queryId = searchParams.get('query');
+
   // Load saved queries on mount
   useEffect(() => {
     if (workspaceId && datasetId && token && workspaceId !== 'null' && datasetId !== 'null') {
@@ -64,6 +66,30 @@ const PlaygroundViewIntegrated: React.FC = () => {
       loadDatasetPreview();
     }
   }, [workspaceId, datasetId, token]);
+
+  useEffect(() => {
+    if (workspaceId && queryId && token && workspaceId !== 'null') {
+      loadSpecificQuery();
+    }
+  }, [workspaceId, queryId, token]);
+
+  const loadSpecificQuery = async () => {
+    try {
+      const response = await axios.get(
+        `${backendUrl}/workspaces/${workspaceId}/queries/${queryId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const q = response.data;
+      setMode(q.query_type === 'natural' ? 'ask' : 'sql');
+      if (q.query_type === 'natural') {
+        setQuery(q.query_text);
+      } else {
+        setSqlQuery(q.query_text);
+      }
+    } catch (err) {
+      console.error('Failed to load specific query:', err);
+    }
+  };
 
   const loadDatasetPreview = async () => {
     try {

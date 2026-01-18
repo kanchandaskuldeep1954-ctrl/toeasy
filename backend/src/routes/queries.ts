@@ -154,6 +154,26 @@ router.delete('/:workspaceId/queries/:queryId', async (req: AuthRequest, res) =>
   }
 });
 
+// Get a specific query
+router.get('/:workspaceId/queries/:queryId', async (req: AuthRequest, res) => {
+  try {
+    const { workspaceId, queryId } = req.params;
+    const result = await query(
+      'SELECT * FROM queries WHERE id = $1 AND workspace_id = $2 AND executed_by = $3',
+      [queryId, workspaceId, req.user!.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Query not found' });
+    }
+
+    res.json(result.rows[0]);
+  } catch (err) {
+    console.error('Get query error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
 // List query history (with pagination)
 router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest, res) => {
