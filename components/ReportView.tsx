@@ -300,6 +300,50 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
             </aside>
 
+            {/* Mobile Header with TOC Dropdown */}
+            <div className="xl:hidden fixed top-0 left-0 right-0 z-40 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between print:hidden">
+                <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-indigo-600 text-white rounded-lg flex items-center justify-center font-bold">T</div>
+                    <div>
+                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider">{reportType} Report</p>
+                        <p className="text-xs font-bold text-slate-900 dark:text-white truncate max-w-[150px]">{dataset?.name}</p>
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowExportModal(true)}
+                        className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
+                    </button>
+
+                    {/* Mobile Menu Trigger */}
+                    <div className="relative group">
+                        <button className="p-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16m-7 6h7" /></svg>
+                        </button>
+
+                        {/* Mobile Dropdown */}
+                        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-100 dark:border-slate-800 p-2 hidden group-focus-within:block">
+                            <p className="px-3 py-2 text-[10px] font-black uppercase text-slate-400 tracking-wider border-b border-slate-100 dark:border-slate-800 mb-1">Navigate Section</p>
+                            {report.sections.map((section, idx) => (
+                                <button
+                                    key={section.id}
+                                    onClick={() => {
+                                        setActiveSection(section.id);
+                                        document.getElementById(section.id)?.scrollIntoView({ behavior: 'smooth' });
+                                    }}
+                                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                >
+                                    {idx + 1}. {section.title}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* Export Modal */}
             {showExportModal && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in print:hidden">
@@ -345,8 +389,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             )}
 
             {/* Main Document View */}
-            <main className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth" ref={contentRef}>
-                <div className="max-w-[900px] mx-auto py-12 px-8 md:px-12 space-y-16 print:max-w-none print:p-0">
+            <main className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth pt-16 xl:pt-0" ref={contentRef}>
+                <div className="max-w-[900px] mx-auto py-8 md:py-12 px-4 md:px-12 space-y-12 md:space-y-16 print:max-w-none print:p-0">
 
                     {/* Cover Page */}
                     <div className="min-h-[60vh] flex flex-col justify-center border-b border-slate-200 dark:border-slate-800 pb-12 print:min-h-0 print:pb-4 print:border-none">

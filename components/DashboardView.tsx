@@ -575,12 +575,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         <div className="h-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 pb-40 relative">
 
             {/* Top Bar: Slicers & Context */}
-            <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-8 py-4 flex flex-col xl:flex-row justify-between gap-6 shadow-sm no-print">
-                <div className="flex items-center gap-4">
+            <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-4 flex flex-col xl:flex-row justify-between gap-4 shadow-sm no-print">
+                <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto">
                     <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white hidden md:block">Analytics OS</h2>
 
                     {/* Dynamic Filter Panel */}
-                    <div className="pl-6 border-l border-slate-200 dark:border-slate-800">
+                    <div className="w-full md:w-auto md:pl-6 md:border-l border-slate-200 dark:border-slate-800">
                         <FilterPanel
                             filters={config?.filters || []}
                             activeFilters={activeFilters}
@@ -593,14 +593,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     </div>
                 </div>
 
-                <div className="flex items-center gap-4">
+                <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar">
                     {/* Perspective Tabs */}
-                    <div className="flex gap-1 overflow-x-auto no-scrollbar bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto">
                         {(['Overview', 'Financials', 'Operational', 'Forensic', 'Patterns'] as DashboardPerspective[]).map(p => (
                             <button
                                 key={p}
                                 onClick={() => setPerspective(p)}
-                                className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${perspective === p
+                                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${perspective === p
                                     ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm scale-100'
                                     : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                                     }`}
@@ -613,7 +613,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     {/* Export Button */}
                     <button
                         onClick={() => setShowExportModal(true)}
-                        className="px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg flex items-center gap-2"
+                        className="hidden md:flex px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg items-center gap-2 shrink-0"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                         Export
@@ -621,7 +621,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                 </div>
             </div>
 
-            <div className="p-8 space-y-12">
+            <div className="p-4 md:p-8 space-y-6 md:space-y-12">
                 {/* KPI Grid */}
                 {/* KPI Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">

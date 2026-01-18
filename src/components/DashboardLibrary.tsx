@@ -95,20 +95,20 @@ export const DashboardLibrary: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
-        <div className="text-slate-400">Loading dashboards...</div>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
+        <div className="text-slate-500 dark:text-slate-400 font-medium animate-pulse">Loading dashboards...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 py-8 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4 transition-colors">
+      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Dashboards</h1>
-            <p className="text-slate-400">Create and manage dashboards</p>
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Dashboards</h1>
+            <p className="text-slate-500 dark:text-slate-400 font-medium">Create and manage your analytics workspaces</p>
           </div>
           {!showNewForm && (
             <button
@@ -128,8 +128,8 @@ export const DashboardLibrary: React.FC = () => {
 
         {/* New Dashboard Form */}
         {showNewForm && (
-          <div className="mb-8 p-6 bg-slate-900 border border-slate-800 rounded-xl">
-            <h2 className="text-xl font-bold text-white mb-4">Create New Dashboard</h2>
+          <div className="mb-8 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl animate-in fade-in slide-in-from-top-4">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Create New Dashboard</h2>
             <form onSubmit={handleCreateDashboard} className="space-y-4 max-w-md">
               <div>
                 <label className="text-sm text-slate-400 mb-2 block">Dashboard Name*</label>
@@ -138,7 +138,7 @@ export const DashboardLibrary: React.FC = () => {
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., Sales Overview"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                   required
                 />
               </div>
@@ -148,7 +148,7 @@ export const DashboardLibrary: React.FC = () => {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Optional description"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                   rows={3}
                 />
               </div>
@@ -174,8 +174,12 @@ export const DashboardLibrary: React.FC = () => {
 
         {/* Dashboards Grid */}
         {dashboards.length === 0 ? (
-          <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-xl">
-            <p className="text-slate-400 mb-4">No dashboards yet</p>
+          <div className="text-center py-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm border-dashed">
+            <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
+            </div>
+            <p className="text-slate-900 dark:text-white font-bold text-lg mb-2">No dashboards yet</p>
+            <p className="text-slate-500 max-w-sm mx-auto mb-6">Create your first dashboard to start visualizing your data and uncovering insights.</p>
             <button
               onClick={() => setShowNewForm(true)}
               className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
@@ -188,13 +192,26 @@ export const DashboardLibrary: React.FC = () => {
             {dashboards && Array.isArray(dashboards) && dashboards.map((dashboard) => (
               <div
                 key={dashboard.id}
-                className="p-6 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors cursor-pointer group"
+                className="group relative p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
                 onClick={() => navigate(`/app/dashboard?id=${dashboard.id}`)}
               >
-                <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 bg-indigo-600/20 rounded-lg flex items-center justify-center border border-indigo-500/50">
+                <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteDashboard(dashboard.id);
+                    }}
+                    className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 bg-white/80 dark:bg-slate-800/80 backdrop-blur rounded-full hover:shadow-lg transition-all"
+                    title="Delete Dashboard"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                  </button>
+                </div>
+
+                <div className="flex items-start justify-between mb-6">
+                  <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-600/10 rounded-2xl flex items-center justify-center border border-indigo-100 dark:border-indigo-500/20 group-hover:scale-110 transition-transform duration-300">
                     <svg
-                      className="w-6 h-6 text-indigo-400"
+                      className="w-7 h-7 text-indigo-600 dark:text-indigo-400"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -207,25 +224,9 @@ export const DashboardLibrary: React.FC = () => {
                       />
                     </svg>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteDashboard(dashboard.id);
-                    }}
-                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                      />
-                    </svg>
-                  </button>
                 </div>
 
-                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {dashboard.name}
                 </h3>
 
@@ -233,13 +234,16 @@ export const DashboardLibrary: React.FC = () => {
                   <p className="text-sm text-slate-400 mb-4 line-clamp-2">{dashboard.description}</p>
                 )}
 
-                <div className="pt-4 border-t border-slate-800 mt-4 flex items-center justify-between">
+                <div className="pt-6 border-t border-slate-100 dark:border-slate-800 mt-6 flex items-center justify-between">
                   <div className="text-sm">
-                    <p className="text-slate-400">Charts</p>
-                    <p className="text-lg font-bold text-white">{dashboard.charts_count || 0}</p>
+                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Charts</p>
+                    <p className="text-lg font-black text-slate-900 dark:text-white">{dashboard.charts_count || 0}</p>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {new Date(dashboard.created_at).toLocaleDateString()}
+                  <div className="text-right">
+                    <p className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">Created</p>
+                    <p className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                      {new Date(dashboard.created_at).toLocaleDateString()}
+                    </p>
                   </div>
                 </div>
               </div>

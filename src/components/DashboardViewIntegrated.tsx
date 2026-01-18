@@ -66,10 +66,10 @@ const DashboardViewIntegrated: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
         <div className="text-center space-y-4">
           <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="text-slate-400 font-bold">Loading Dashboard...</p>
+          <p className="text-slate-500 dark:text-slate-400 font-bold">Loading Dashboard...</p>
         </div>
       </div>
     );
@@ -77,15 +77,15 @@ const DashboardViewIntegrated: React.FC = () => {
 
   if (error || !dataset) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-950">
-        <div className="text-center space-y-6 max-w-md">
+      <div className="flex items-center justify-center h-screen bg-slate-50 dark:bg-slate-950 transition-colors">
+        <div className="text-center space-y-6 max-w-md p-6">
           <div>
-            <p className="text-red-400 text-lg font-bold mb-2">⚠️ Error</p>
-            <p className="text-slate-300 text-sm">{error || 'Failed to load dataset'}</p>
+            <p className="text-red-500 dark:text-red-400 text-lg font-bold mb-2">⚠️ Error</p>
+            <p className="text-slate-600 dark:text-slate-300 text-sm font-medium">{error || 'Failed to load dataset'}</p>
           </div>
           <button
             onClick={() => window.location.reload()}
-            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold"
+            className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-500/20"
           >
             Retry
           </button>
@@ -117,8 +117,8 @@ const DashboardViewIntegrated: React.FC = () => {
     <div className="relative h-screen overflow-hidden">
       <DashboardView dataset={dataset} />
 
-      {/* Agent Overlay - Collapsible */}
-      <div className={`absolute bottom-6 right-6 transition-all duration-300 z-50 flex flex-col items-end ${isAgentOpen ? 'w-80' : 'w-auto'}`}>
+      {/* Agent Overlay - Responsive */}
+      <div className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 transition-all duration-300 z-[100] flex flex-col items-end ${isAgentOpen ? 'w-[calc(100%-2rem)] md:w-80' : 'w-auto'}`}>
         {isAgentOpen ? (
           <div className="w-full bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200">
             {/* Header */}
@@ -133,7 +133,7 @@ const DashboardViewIntegrated: React.FC = () => {
             </div>
 
             {/* Chat Area */}
-            <div className="h-64 overflow-y-auto p-4 bg-slate-50 dark:bg-black/20 custom-scrollbar">
+            <div className="h-64 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-950/50 custom-scrollbar">
               {agentResponse ? (
                 <div className="bg-white dark:bg-slate-800 p-3 rounded-lg rounded-tl-none shadow-sm text-xs text-slate-700 dark:text-slate-300 leading-relaxed border border-slate-100 dark:border-slate-700">
                   {agentResponse}
