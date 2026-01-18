@@ -222,8 +222,8 @@ const PlaygroundViewIntegrated: React.FC = () => {
         name: response.data.name,
         description: response.data.description,
         sql: response.data.sql,
-        rowCount: response.data.result_count,
-        createdAt: response.data.created_at,
+        rowCount: response.data.rowCount,
+        createdAt: response.data.createdAt,
       };
       setSavedQueries([...savedQueries, savedQuery]);
 
