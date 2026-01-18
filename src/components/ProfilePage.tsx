@@ -280,8 +280,8 @@ export const ProfilePage: React.FC = () => {
 
                 {passwordMessage && (
                   <div className={`p-3 rounded-xl text-xs font-bold ${passwordMessage.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                      : 'bg-rose-50 text-rose-600 border border-rose-100'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                    : 'bg-rose-50 text-rose-600 border border-rose-100'
                     }`}>
                     {passwordMessage.text}
                   </div>
@@ -297,6 +297,36 @@ export const ProfilePage: React.FC = () => {
                   </button>
                 </div>
               </form>
+            </div>
+
+            {/* Legal & Support Section */}
+            <div className="glass-card rounded-3xl p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-600 dark:text-slate-300">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Legal & Support</h3>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { name: 'Contact Support', path: '/contact', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
+                  { name: 'Terms of Service', path: '/terms', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+                  { name: 'Privacy Policy', path: '/privacy', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
+                  { name: 'Refund Policy', path: '/refunds', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }
+                ].map((item, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => navigate(item.path)}
+                    className="flex items-center gap-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-950 border border-slate-100 dark:border-slate-800 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group"
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} /></svg>
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{item.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex justify-center pt-8">

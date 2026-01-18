@@ -36,6 +36,14 @@ import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 
+// Legal & Public Pages
+import PublicLayout from './src/components/Layout/PublicLayout';
+import LandingPage from './src/components/LandingPage';
+import ContactUs from './src/components/Legal/ContactUs';
+import TermsConditions from './src/components/Legal/TermsConditions';
+import PrivacyPolicy from './src/components/Legal/PrivacyPolicy';
+import RefundPolicy from './src/components/Legal/RefundPolicy';
+
 const AppLayout: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
   return (
@@ -80,6 +88,47 @@ function App() {
             <Routes>
               {/* Public Routes */}
               <Route
+                path="/"
+                element={
+                  <PublicLayout>
+                    <LandingPage />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/contact"
+                element={
+                  <PublicLayout>
+                    <ContactUs />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/terms"
+                element={
+                  <PublicLayout>
+                    <TermsConditions />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/privacy"
+                element={
+                  <PublicLayout>
+                    <PrivacyPolicy />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/refunds"
+                element={
+                  <PublicLayout>
+                    <RefundPolicy />
+                  </PublicLayout>
+                }
+              />
+
+              <Route
                 path="/login"
                 element={
                   <PublicRoute>
@@ -106,8 +155,8 @@ function App() {
                 }
               />
 
-              {/* Default redirect */}
-              <Route path="/" element={<Navigate to="/app/workspaces" replace />} />
+              {/* Default redirect for /app */}
+              <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
             </Routes>
           </Router>
         </DatasetProvider>
