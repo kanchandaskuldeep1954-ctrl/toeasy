@@ -216,17 +216,26 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
 // Save a new query
 router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest, res) => {
   try {
-    const { name, description, sql, type } = req.body;
+    const { name, description, sql, type, resultCount } = req.body;
 
     if (!name || !sql) {
       return res.status(400).json({ error: 'Name and SQL required' });
     }
 
     const result = await query(
-      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by, is_saved)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by, result_count, is_saved)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
        RETURNING id, created_at`,
-      [req.params.workspaceId, req.params.datasetId, sql, type || 'sql', name, description || '', req.user!.id]
+      [
+        req.params.workspaceId,
+        req.params.datasetId,
+        sql,
+        type || 'sql',
+        name,
+        description || '',
+        req.user!.id,
+        resultCount || 0
+      ]
     );
 
     res.status(201).json({
@@ -235,7 +244,8 @@ router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest
       description: description || '',
       sql,
       type: type || 'sql',
-      created_at: result.rows[0].created_at
+      rowCount: resultCount || 0,
+      createdAt: result.rows[0].created_at
     });
   } catch (err) {
     console.error('Save query error:', err);

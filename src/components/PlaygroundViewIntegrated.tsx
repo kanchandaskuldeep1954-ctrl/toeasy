@@ -211,21 +211,21 @@ const PlaygroundViewIntegrated: React.FC = () => {
           name: saveForm.name,
           description: saveForm.description,
           sql: queryToSave,
-          type: mode === 'ask' ? 'natural' : 'sql'
+          type: mode === 'ask' ? 'natural' : 'sql',
+          resultCount: results.length
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      // Add to local list
-      setSavedQueries([...savedQueries, {
+      const savedQuery: SavedQuery = {
         id: response.data.id,
-        name: saveForm.name,
-        description: saveForm.description,
-        sql: queryToSave,
+        name: response.data.name,
+        description: response.data.description,
+        sql: response.data.sql,
+        rowCount: response.data.result_count,
         createdAt: response.data.created_at,
-        executionTime: executionTime || undefined,
-        rowCount: rowCount
-      }]);
+      };
+      setSavedQueries([...savedQueries, savedQuery]);
 
       setShowSaveModal(false);
       setSaveForm({ name: '', description: '' });
