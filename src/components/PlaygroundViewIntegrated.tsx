@@ -479,7 +479,8 @@ const PlaygroundViewIntegrated: React.FC = () => {
           </div>
         )}
       </div>
-      );
+    </div>
+  );
 };
 
-      export default PlaygroundViewIntegrated;
+export default PlaygroundViewIntegrated;
