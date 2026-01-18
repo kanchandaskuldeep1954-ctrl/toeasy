@@ -13,6 +13,7 @@ export type DataflowNodeType =
     | 'report'
     | 'export'
     | 'dataset_creator'
+    | 'ai_creator'
     | 'custom';
 
 export interface DataflowNode {
@@ -70,6 +71,17 @@ export const NODE_CONFIGS: Record<DataflowNodeType, {
             { key: 'url', label: 'Target URL', type: 'text' },
             { key: 'depth', label: 'Crawl Depth', type: 'number' },
             { key: 'selector', label: 'CSS Selector (Optional)', type: 'text' }
+        ],
+    },
+    ai_creator: {
+        name: 'AI Data Generator',
+        icon: '✨',
+        color: '#8b5cf6',
+        description: 'Generate synthetic dataset from topic',
+        configFields: [
+            { key: 'topic', label: 'Topic (e.g., "Miami Real Estate")', type: 'text' },
+            { key: 'fields', label: 'Fields (comma separated)', type: 'text' },
+            { key: 'rowCount', label: 'Row Count', type: 'number' }
         ],
     },
     upload: {
