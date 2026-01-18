@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -17,9 +18,10 @@ interface Dashboard {
 
 export const DashboardLibrary: React.FC = () => {
   const { user, token } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace') || '';
+  const workspaceId = searchParams.get('workspace') || activeWorkspace?.id?.toString() || '';
 
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
   const [loading, setLoading] = useState(true);

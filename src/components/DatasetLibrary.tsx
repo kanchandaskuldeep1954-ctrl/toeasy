@@ -3,7 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useWorkspace, useWorkspaceNavigation } from '../hooks/useWorkspace';
 import { useDataset, useDatasetNavigation } from '../hooks/useDataset';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
 interface Dataset {
   id: string;
@@ -21,7 +20,15 @@ interface Dataset {
 export const DatasetLibrary: React.FC = () => {
   const { user, token } = useAuth();
   const { activeWorkspace } = useWorkspace();
-  const { setActiveDataset } = useDataset();
+  const {
+    datasets,
+    total,
+    setActiveDataset,
+    removeDataset,
+    isLoading: loading,
+    error: contextError,
+    fetchDatasets
+  } = useDataset();
   const { buildPath: buildWorkspacePath } = useWorkspaceNavigation();
   const { buildPath: buildDatasetPath } = useDatasetNavigation();
   const navigate = useNavigate();
@@ -30,73 +37,31 @@ export const DatasetLibrary: React.FC = () => {
   // Use context workspace, fall back to URL param, then redirect if neither
   const workspaceId = activeWorkspace?.id || searchParams.get('workspace');
 
-  const [datasets, setDatasets] = useState<Dataset[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [localError, setLocalError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [total, setTotal] = useState(0);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  const error = localError || contextError;
 
   useEffect(() => {
     if (!workspaceId) {
       navigate('/app/workspaces');
       return;
     }
-    fetchDatasets();
-  }, [token, workspaceId, page, pageSize, navigate]);
+    fetchDatasets(workspaceId.toString(), pageSize, (page - 1) * pageSize);
+  }, [workspaceId, page, pageSize, fetchDatasets]);
 
-  const fetchDatasets = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      console.log(`Fetching datasets for workspace: ${workspaceId}`);
-      const response = await axios.get(
-        `${backendUrl}/workspaces/${workspaceId}/datasets`,
-        {
-          params: {
-            limit: pageSize,
-            offset: (page - 1) * pageSize
-          },
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-      console.log('API Response:', response.data);
-      let data = [];
-      if (response.data.data && Array.isArray(response.data.data)) {
-        data = response.data.data;
-      } else if (response.data.datasets && Array.isArray(response.data.datasets)) {
-        data = response.data.datasets;
-      } else if (Array.isArray(response.data)) {
-        data = response.data;
-      }
-      console.log('Parsed datasets:', data);
-      setDatasets(data);
-      setTotal(response.data.total || response.data.pagination?.total || data.length || 0);
-    } catch (err) {
-      console.error('Error fetching datasets:', err);
-      const errorMsg = err instanceof Error ? err.message : 'Failed to fetch datasets';
-      setError(errorMsg);
-      setDatasets([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteDataset = async (id: string) => {
+  const handleDeleteDataset = async (id: number) => {
     if (!window.confirm('Delete this dataset?')) return;
 
     try {
-      await axios.delete(
-        `${backendUrl}/workspaces/${workspaceId}/datasets/${id}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDatasets(datasets.filter(d => d.id !== id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete dataset');
+      setLocalError(null);
+      await removeDataset(id);
+    } catch (err: any) {
+      setLocalError(err.message || 'Failed to delete dataset');
     }
   };
+
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';

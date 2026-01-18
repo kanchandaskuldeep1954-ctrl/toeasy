@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useNavigate } from 'react-router-dom';
-import axios from 'axios';
 
 interface Workspace {
   id: string;
@@ -17,76 +16,55 @@ interface Workspace {
 
 export const WorkspacesView: React.FC = () => {
   const { user, token } = useAuth();
-  const { setActiveWorkspace } = useWorkspace();
+  const {
+    workspaces,
+    activeWorkspace,
+    setActiveWorkspace,
+    addWorkspace,
+    removeWorkspace,
+    isLoading: loading,
+    error: contextError,
+    setError: setContextError
+  } = useWorkspace();
   const navigate = useNavigate();
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
-  useEffect(() => {
-    fetchWorkspaces();
-  }, [token]);
-
-  const fetchWorkspaces = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${backendUrl}/workspaces`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const data = response.data || [];
-      setWorkspaces(Array.isArray(data) ? data : []);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch workspaces');
-      console.error('Error fetching workspaces:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const error = localError || contextError;
 
   const handleCreateWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim()) {
-      setError('Workspace name is required');
+      setLocalError('Workspace name is required');
       return;
     }
 
     try {
       setSubmitting(true);
-      const response = await axios.post(
-        `${backendUrl}/workspaces`,
-        formData,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setWorkspaces([...workspaces, response.data]);
+      setLocalError(null);
+      await addWorkspace(formData);
       setFormData({ name: '', description: '' });
       setShowNewForm(false);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create workspace');
+    } catch (err: any) {
+      setLocalError(err.message || 'Failed to create workspace');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleDeleteWorkspace = async (id: string) => {
+  const handleDeleteWorkspace = async (id: number) => {
     if (!window.confirm('Are you sure? This cannot be undone.')) return;
 
     try {
-      await axios.delete(`${backendUrl}/workspaces/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setWorkspaces(workspaces.filter(w => w.id !== id));
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete workspace');
+      setLocalError(null);
+      await removeWorkspace(id);
+    } catch (err: any) {
+      setLocalError(err.message || 'Failed to delete workspace');
     }
   };
+
 
   if (loading) {
     return (

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
@@ -16,9 +17,10 @@ interface Query {
 
 export const QueryHistory: React.FC = () => {
   const { user, token } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace') || '';
+  const workspaceId = searchParams.get('workspace') || activeWorkspace?.id?.toString() || '';
 
   const [queries, setQueries] = useState<Query[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,10 +30,13 @@ export const QueryHistory: React.FC = () => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
-    if (workspaceId) {
+    if (workspaceId && token) {
       fetchQueries();
+    } else if (!workspaceId && token) {
+      setLoading(false); // No workspace selected, not an error but nothing to show
     }
   }, [token, workspaceId]);
+
 
   const fetchQueries = async () => {
     try {
@@ -107,11 +112,10 @@ export const QueryHistory: React.FC = () => {
                   <div
                     key={query.id}
                     onClick={() => setSelectedQuery(query)}
-                    className={`p-4 border rounded-lg cursor-pointer transition-all ${
-                      selectedQuery?.id === query.id
-                        ? 'bg-indigo-600/20 border-indigo-500'
-                        : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                    }`}
+                    className={`p-4 border rounded-lg cursor-pointer transition-all ${selectedQuery?.id === query.id
+                      ? 'bg-indigo-600/20 border-indigo-500'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                      }`}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">

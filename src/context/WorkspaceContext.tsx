@@ -1,4 +1,6 @@
-import React, { createContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useState, useCallback, useEffect, useRef } from 'react';
+import { workspaceAPI } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 export interface Workspace {
   id: number;
@@ -17,9 +19,10 @@ export interface WorkspaceContextType {
   error: string | null;
   setWorkspaces: (workspaces: Workspace[]) => void;
   setActiveWorkspace: (workspace: Workspace | null) => void;
-  addWorkspace: (workspace: Workspace) => void;
-  updateWorkspace: (id: number, updates: Partial<Workspace>) => void;
-  removeWorkspace: (id: number) => void;
+  addWorkspace: (workspace: { name: string; description?: string }) => Promise<void>;
+  updateWorkspace: (id: number, updates: { name?: string; description?: string }) => Promise<void>;
+  removeWorkspace: (id: number) => Promise<void>;
+  fetchWorkspaces: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 }
@@ -27,12 +30,14 @@ export interface WorkspaceContextType {
 export const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
 export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { token, user } = useAuth();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [activeWorkspace, setActiveWorkspaceState] = useState<Workspace | null>(null);
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const fetchedRef = useRef(false);
 
-  // Load active workspace from localStorage on mount
+  // Load active workspace from localStorage on mount (as a hint)
   useEffect(() => {
     const saved = localStorage.getItem('active_workspace');
     if (saved) {
@@ -45,7 +50,46 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  // Save active workspace to localStorage whenever it changes
+  const fetchWorkspaces = useCallback(async () => {
+    if (!token) return;
+    try {
+      setLoading(true);
+      const response = await workspaceAPI.list();
+      const data = response.data || [];
+      setWorkspaces(data);
+
+      // Sync active workspace if it exists in the new list
+      if (activeWorkspace) {
+        const current = data.find((ws: Workspace) => ws.id === activeWorkspace.id);
+        if (current) {
+          setActiveWorkspaceState(current);
+        } else {
+          // If active workspace is no longer in the list (deleted/archived elsewhere)
+          setActiveWorkspaceState(null);
+          localStorage.removeItem('active_workspace');
+        }
+      }
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch workspaces');
+      console.error('Fetch workspaces error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [token, activeWorkspace]);
+
+  // Initial fetch when token changes
+  useEffect(() => {
+    if (token && !fetchedRef.current) {
+      fetchWorkspaces();
+      fetchedRef.current = true;
+    } else if (!token) {
+      setWorkspaces([]);
+      setActiveWorkspaceState(null);
+      fetchedRef.current = false;
+    }
+  }, [token, fetchWorkspaces]);
+
   const setActiveWorkspace = useCallback((workspace: Workspace | null) => {
     setActiveWorkspaceState(workspace);
     if (workspace) {
@@ -55,26 +99,59 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  const addWorkspace = useCallback((workspace: Workspace) => {
-    setWorkspaces((prev) => [...prev, workspace]);
+  const addWorkspace = useCallback(async (data: { name: string; description?: string }) => {
+    try {
+      setLoading(true);
+      const response = await workspaceAPI.create(data);
+      const newWs = response.data;
+      setWorkspaces((prev) => [newWs, ...prev]);
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to create workspace');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const updateWorkspace = useCallback((id: number, updates: Partial<Workspace>) => {
-    setWorkspaces((prev) =>
-      prev.map((ws) => (ws.id === id ? { ...ws, ...updates } : ws))
-    );
+  const updateWorkspace = useCallback(async (id: number, updates: { name?: string; description?: string }) => {
+    try {
+      setLoading(true);
+      const response = await workspaceAPI.update(id.toString(), updates);
+      const updatedWs = response.data;
 
-    if (activeWorkspace?.id === id) {
-      const updated = { ...activeWorkspace, ...updates };
-      setActiveWorkspace(updated);
+      setWorkspaces((prev) =>
+        prev.map((ws) => (ws.id === id ? updatedWs : ws))
+      );
+
+      if (activeWorkspace?.id === id) {
+        setActiveWorkspace(updatedWs);
+      }
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to update workspace');
+      throw err;
+    } finally {
+      setLoading(false);
     }
   }, [activeWorkspace, setActiveWorkspace]);
 
-  const removeWorkspace = useCallback((id: number) => {
-    setWorkspaces((prev) => prev.filter((ws) => ws.id !== id));
+  const removeWorkspace = useCallback(async (id: number) => {
+    try {
+      setLoading(true);
+      await workspaceAPI.delete(id.toString());
 
-    if (activeWorkspace?.id === id) {
-      setActiveWorkspace(null);
+      setWorkspaces((prev) => prev.filter((ws) => ws.id !== id));
+
+      if (activeWorkspace?.id === id) {
+        setActiveWorkspace(null);
+      }
+      setError(null);
+    } catch (err: any) {
+      setError(err.message || 'Failed to delete workspace');
+      throw err;
+    } finally {
+      setLoading(false);
     }
   }, [activeWorkspace, setActiveWorkspace]);
 
@@ -90,6 +167,7 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         addWorkspace,
         updateWorkspace,
         removeWorkspace,
+        fetchWorkspaces,
         setLoading,
         setError
       }}
@@ -98,3 +176,4 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     </WorkspaceContext.Provider>
   );
 };
+
