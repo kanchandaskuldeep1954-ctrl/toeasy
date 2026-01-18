@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 import { GroqService } from '../services/groq.service.js';
 
 const router = Router();
@@ -9,6 +10,7 @@ const router = Router();
 // Apply auth and subscription middleware
 router.use(authenticateToken);
 router.use(checkSubscription);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
 
 // ==================== RECOVERY SCRIPTS ====================
 
@@ -79,7 +81,7 @@ router.post('/:workspaceId/datasets/:datasetId/scripts', async (req: AuthRequest
 // Update a recovery script
 router.put('/:workspaceId/datasets/:datasetId/scripts/:scriptId', async (req: AuthRequest, res) => {
     try {
-        const { scriptId, datasetId } = req.params;
+        const { scriptId, datasetId, workspaceId } = req.params;
         const { name, description, targetColumn, category, expression, healFunction, reasoning, isActive, isTemplate } = req.body;
 
         const result = await query(
@@ -94,10 +96,10 @@ router.put('/:workspaceId/datasets/:datasetId/scripts/:scriptId', async (req: Au
            is_active = COALESCE($8, is_active),
            is_template = COALESCE($9, is_template),
            updated_at = NOW()
-       WHERE id = $10 AND (dataset_id = $11 OR user_id = $12)
+       WHERE id = $10 AND (dataset_id = $11 OR workspace_id = $12)
        RETURNING *`,
             [name, description, targetColumn, category, expression, healFunction, reasoning, isActive, isTemplate,
-                scriptId, datasetId, req.user!.id]
+                scriptId, datasetId, workspaceId]
         );
 
         if (result.rows.length === 0) {
@@ -114,11 +116,11 @@ router.put('/:workspaceId/datasets/:datasetId/scripts/:scriptId', async (req: Au
 // Delete a recovery script
 router.delete('/:workspaceId/datasets/:datasetId/scripts/:scriptId', async (req: AuthRequest, res) => {
     try {
-        const { scriptId, datasetId } = req.params;
+        const { scriptId, datasetId, workspaceId } = req.params;
 
         const result = await query(
-            `DELETE FROM recovery_scripts WHERE id = $1 AND (dataset_id = $2 OR user_id = $3) RETURNING id, name`,
-            [scriptId, datasetId, req.user!.id]
+            `DELETE FROM recovery_scripts WHERE id = $1 AND (dataset_id = $2 OR workspace_id = $3) RETURNING id, name`,
+            [scriptId, datasetId, workspaceId]
         );
 
         if (result.rows.length === 0) {

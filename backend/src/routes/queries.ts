@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
-import { checkSubscription } from '../middleware/subscription.js';
+import { checkSubscription, checkTierLimit } from '../middleware/subscription.js';
 import { GroqService } from '../services/groq.service.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
 const groqService = new GroqService();
@@ -10,6 +11,7 @@ const groqService = new GroqService();
 // Apply auth and subscription middleware
 router.use(authenticateToken);
 router.use(checkSubscription);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
 
 // Execute query on dataset
 router.post('/:workspaceId/datasets/:datasetId/query', async (req: AuthRequest, res) => {
@@ -24,8 +26,8 @@ router.post('/:workspaceId/datasets/:datasetId/query', async (req: AuthRequest, 
 
     // Get dataset
     const datasetResult = await query(
-      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3',
-      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
     );
 
     if (datasetResult.rows.length === 0) {
@@ -83,8 +85,8 @@ router.post('/:workspaceId/datasets/:datasetId/query', async (req: AuthRequest, 
     } else {
       // Save new query to history
       await query(
-        `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, result_count, executed_by, is_saved) 
-           VALUES ($1, $2, $3, $4, $5, $6, false)`,
+        `INSERT INTO queries(workspace_id, dataset_id, query_text, query_type, result_count, executed_by, is_saved)
+VALUES($1, $2, $3, $4, $5, $6, false)`,
         [workspaceId, datasetId, queryText, type, results.length, req.user!.id]
       );
     }
@@ -108,18 +110,18 @@ router.get('/:workspaceId/queries', async (req: AuthRequest, res) => {
     const offset = parseInt(req.query.offset as string) || 0;
 
     const countResult = await query(
-      'SELECT COUNT(*) as total FROM queries WHERE workspace_id = $1 AND executed_by = $2',
-      [workspaceId, req.user!.id]
+      'SELECT COUNT(*) as total FROM queries WHERE workspace_id = $1',
+      [workspaceId]
     );
 
     const result = await query(
       `SELECT q.*, d.name as dataset_name 
        FROM queries q
        LEFT JOIN datasets d ON q.dataset_id = d.id
-       WHERE q.workspace_id = $1 AND q.executed_by = $2 AND q.is_saved = false
+       WHERE q.workspace_id = $1 AND q.is_saved = false
        ORDER BY q.updated_at DESC
-       LIMIT $3 OFFSET $4`,
-      [workspaceId, req.user!.id, limit, offset]
+       LIMIT $2 OFFSET $3`,
+      [workspaceId, limit, offset]
     );
 
     res.json({
@@ -140,8 +142,8 @@ router.delete('/:workspaceId/queries/:queryId', async (req: AuthRequest, res) =>
   try {
     const { workspaceId, queryId } = req.params;
     const result = await query(
-      'DELETE FROM queries WHERE id = $1 AND workspace_id = $2 AND executed_by = $3 RETURNING id',
-      [queryId, workspaceId, req.user!.id]
+      'DELETE FROM queries WHERE id = $1 AND workspace_id = $2 RETURNING id',
+      [queryId, workspaceId]
     );
 
     if (result.rows.length === 0) {
@@ -160,8 +162,8 @@ router.get('/:workspaceId/queries/:queryId', async (req: AuthRequest, res) => {
   try {
     const { workspaceId, queryId } = req.params;
     const result = await query(
-      'SELECT * FROM queries WHERE id = $1 AND workspace_id = $2 AND executed_by = $3',
-      [queryId, workspaceId, req.user!.id]
+      'SELECT * FROM queries WHERE id = $1 AND workspace_id = $2',
+      [queryId, workspaceId]
     );
 
     if (result.rows.length === 0) {
@@ -182,23 +184,21 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 500); // Max 500
     const offset = parseInt(req.query.offset as string) || 0;
 
-    // Get total count
     const countResult = await query(
       `SELECT COUNT(*) as total FROM queries 
-       WHERE dataset_id = $1 AND workspace_id = $2 AND executed_by = $3 AND is_saved = true`,
-      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+       WHERE dataset_id = $1 AND workspace_id = $2 AND is_saved = true`,
+      [req.params.datasetId, req.params.workspaceId]
     );
 
     const total = parseInt(countResult.rows[0].total);
 
-    // Get paginated results
     const result = await query(
       `SELECT id, query_text, query_type, result_count, name, description, created_at 
        FROM queries 
-       WHERE dataset_id = $1 AND workspace_id = $2 AND executed_by = $3 AND is_saved = true
+       WHERE dataset_id = $1 AND workspace_id = $2 AND is_saved = true
        ORDER BY created_at DESC 
-       LIMIT $4 OFFSET $5`,
-      [req.params.datasetId, req.params.workspaceId, req.user!.id, limit, offset]
+       LIMIT $3 OFFSET $4`,
+      [req.params.datasetId, req.params.workspaceId, limit, offset]
     );
 
     res.json({
@@ -224,8 +224,8 @@ router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest
     }
 
     const result = await query(
-      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by, result_count, is_saved)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
+      `INSERT INTO queries(workspace_id, dataset_id, query_text, query_type, name, description, executed_by, result_count, is_saved)
+VALUES($1, $2, $3, $4, $5, $6, $7, $8, true)
        RETURNING id, created_at`,
       [
         req.params.workspaceId,
@@ -281,7 +281,7 @@ router.post('/:workspaceId/datasets/:datasetId/queries/:queryId/export', async (
     // For now, return a template response
     // In production, you would fetch the actual query results
     const result = {
-      filename: `query-export.${format === 'csv' ? 'csv' : 'json'}`,
+      filename: `query -export.${format === 'csv' ? 'csv' : 'json'} `,
       data: format === 'csv' ? 'col1,col2\n1,2' : '[]'
     };
 
@@ -316,7 +316,7 @@ function executeSimpleSQL(data: any[], sqlQuery: string): any[] {
           try {
             // Simple evaluation of conditions like "age > 25"
             for (const [key, value] of Object.entries(row)) {
-              const conditionWithValue = condition.replace(new RegExp(`\\b${key}\\b`, 'g'), JSON.stringify(value));
+              const conditionWithValue = condition.replace(new RegExp(`\\b${key} \\b`, 'g'), JSON.stringify(value));
               if (eval(conditionWithValue)) return true;
             }
             return false;

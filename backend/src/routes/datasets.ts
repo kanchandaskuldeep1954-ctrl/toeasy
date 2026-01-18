@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription, checkTierLimit } from '../middleware/subscription.js';
 import { GroqService } from '../services/groq.service.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
 const groqService = new GroqService();
@@ -10,24 +11,7 @@ const groqService = new GroqService();
 // Apply auth and subscription middleware
 router.use(authenticateToken);
 router.use(checkSubscription);
-
-// Verify workspace ownership middleware
-const verifyWorkspaceOwnership = async (req: AuthRequest, res: any, next: Function) => {
-  try {
-    const result = await query(
-      'SELECT user_id FROM workspaces WHERE id = $1',
-      [req.params.workspaceId]
-    );
-    if (result.rows.length === 0 || result.rows[0].user_id !== parseInt(req.user!.id)) {
-      return res.status(403).json({ error: 'Unauthorized' });
-    }
-    next();
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
-};
-
-router.use('/:workspaceId/datasets', verifyWorkspaceOwnership);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
 
 // List datasets in workspace (with pagination)
 router.get('/:workspaceId/datasets', async (req: AuthRequest, res) => {
@@ -35,23 +19,21 @@ router.get('/:workspaceId/datasets', async (req: AuthRequest, res) => {
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 500); // Max 500
     const offset = parseInt(req.query.offset as string) || 0;
 
-    // Get total count
     const countResult = await query(
       `SELECT COUNT(*) as total FROM datasets 
-       WHERE workspace_id = $1 AND user_id = $2`,
-      [req.params.workspaceId, req.user!.id]
+       WHERE workspace_id = $1`,
+      [req.params.workspaceId]
     );
 
     const total = parseInt(countResult.rows[0].total);
 
-    // Get paginated results
     const result = await query(
       `SELECT id, name, file_name, row_count, column_count, file_size, created_at 
        FROM datasets 
-       WHERE workspace_id = $1 AND user_id = $2 
+       WHERE workspace_id = $1 
        ORDER BY created_at DESC
-       LIMIT $3 OFFSET $4`,
-      [req.params.workspaceId, req.user!.id, limit, offset]
+       LIMIT $2 OFFSET $3`,
+      [req.params.workspaceId, limit, offset]
     );
 
     res.json({
@@ -142,8 +124,8 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
     const result = await query(
       `SELECT id, name, row_count, column_count, file_size, raw_data, analysis_result, created_at 
        FROM datasets 
-       WHERE id = $1 AND workspace_id = $2 AND user_id = $3`,
-      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+       WHERE id = $1 AND workspace_id = $2`,
+      [req.params.datasetId, req.params.workspaceId]
     );
 
     if (result.rows.length === 0) {
@@ -374,8 +356,8 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
     const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
 
     const result = await query(
-      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3',
-      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
     );
 
     if (result.rows.length === 0) {
