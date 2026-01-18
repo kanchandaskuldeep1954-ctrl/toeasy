@@ -38,13 +38,18 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     const orderId = `ORDER_${req.user!.id}_${Date.now()}`;
 
     // Call Cashfree API
-    const cashfreeResponse = await fetch('https://api.cashfree.com/pg/orders', {
+    const cashfreeUrl = config.nodeEnv === 'production'
+      ? 'https://api.cashfree.com/pg/orders'
+      : 'https://sandbox.cashfree.com/pg/orders';
+
+    const cashfreeResponse = await fetch(cashfreeUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Api-Key': config.cashfree.apiKey || '',
-        'X-Request-Id': crypto.randomBytes(16).toString('hex'),
-        'x-api-version': '2022-09-01'
+        'x-client-id': config.cashfree.apiKey || '',
+        'x-client-secret': config.cashfree.secretKey || '',
+        'x-api-version': '2022-09-01',
+        'x-request-id': crypto.randomBytes(16).toString('hex')
       } as Record<string, string>,
       body: JSON.stringify({
         order_id: orderId,
@@ -63,7 +68,9 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     });
 
     if (!cashfreeResponse.ok) {
-      throw new Error('Cashfree API error');
+      const errorText = await cashfreeResponse.text();
+      console.error('Cashfree API error:', cashfreeResponse.status, errorText);
+      throw new Error(`Cashfree API error: ${cashfreeResponse.status} ${errorText}`);
     }
 
     const cashfreeData = await cashfreeResponse.json() as any;
@@ -72,7 +79,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     await query(
       `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, cashfree_order_id, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.user!.id, planId, amount / 100, 'INR', orderId, (cashfreeData as any).order_id, 'pending']
+      [req.user!.id, planId, amount, 'USD', orderId, (cashfreeData as any).order_id, 'pending']
     );
 
     res.json({
