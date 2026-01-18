@@ -65,12 +65,29 @@ router.post('/:workspaceId/datasets/:datasetId/query', async (req: AuthRequest, 
       results = executeSimpleSQL(data, queryText);
     }
 
-    // Save query to history
-    await query(
-      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, result_count, executed_by) 
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-      [req.params.workspaceId, req.params.datasetId, queryText, type, results.length, req.user!.id]
+    // --- History Deduplication & Save Logic ---
+    const { workspaceId, datasetId } = req.params;
+
+    // Check for existing history entry with identical SQL
+    const existingResult = await query(
+      'SELECT id FROM queries WHERE workspace_id = $1 AND dataset_id = $2 AND query_text = $3 AND executed_by = $4 AND is_saved = false',
+      [workspaceId, datasetId, queryText, req.user!.id]
     );
+
+    if (existingResult.rows.length > 0) {
+      // Update existing entry's timestamp and results
+      await query(
+        'UPDATE queries SET result_count = $1, updated_at = NOW() WHERE id = $2',
+        [results.length, existingResult.rows[0].id]
+      );
+    } else {
+      // Save new query to history
+      await query(
+        `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, result_count, executed_by, is_saved) 
+           VALUES ($1, $2, $3, $4, $5, $6, false)`,
+        [workspaceId, datasetId, queryText, type, results.length, req.user!.id]
+      );
+    }
 
     res.json({
       results,
@@ -99,8 +116,8 @@ router.get('/:workspaceId/queries', async (req: AuthRequest, res) => {
       `SELECT q.*, d.name as dataset_name 
        FROM queries q
        LEFT JOIN datasets d ON q.dataset_id = d.id
-       WHERE q.workspace_id = $1 AND q.executed_by = $2
-       ORDER BY q.created_at DESC
+       WHERE q.workspace_id = $1 AND q.executed_by = $2 AND q.is_saved = false
+       ORDER BY q.updated_at DESC
        LIMIT $3 OFFSET $4`,
       [workspaceId, req.user!.id, limit, offset]
     );
@@ -157,7 +174,7 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
     const result = await query(
       `SELECT id, query_text, query_type, result_count, name, description, created_at 
        FROM queries 
-       WHERE dataset_id = $1 AND workspace_id = $2 
+       WHERE dataset_id = $1 AND workspace_id = $2 AND is_saved = true
        ORDER BY created_at DESC 
        LIMIT $3 OFFSET $4`,
       [req.params.datasetId, req.params.workspaceId, limit, offset]
@@ -186,8 +203,8 @@ router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest
     }
 
     const result = await query(
-      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by, is_saved)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
        RETURNING id, created_at`,
       [req.params.workspaceId, req.params.datasetId, sql, type || 'sql', name, description || '', req.user!.id]
     );

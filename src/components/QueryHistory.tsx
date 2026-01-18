@@ -123,7 +123,7 @@ export const QueryHistory: React.FC = () => {
                           {(query as any).name || query.title || 'Untitled Query'}
                         </h3>
                         <p className="text-xs text-slate-400 mt-1">
-                          {new Date(query.created_at).toLocaleString()}
+                          {new Date(query.updated_at || query.created_at).toLocaleString()}
                         </p>
                       </div>
                       <button
@@ -165,9 +165,9 @@ export const QueryHistory: React.FC = () => {
                     </pre>
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 uppercase">Executed</label>
+                    <label className="text-xs text-slate-400 uppercase">Last Executed</label>
                     <p className="mt-1 text-white">
-                      {new Date(selectedQuery.created_at).toLocaleString()}
+                      {new Date(selectedQuery.updated_at || selectedQuery.created_at).toLocaleString()}
                     </p>
                   </div>
                 </div>
