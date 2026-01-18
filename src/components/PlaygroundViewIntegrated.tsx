@@ -211,7 +211,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
           name: saveForm.name,
           description: saveForm.description,
           sql: queryToSave,
-          type: mode === 'ask' ? 'natural_language' : 'sql'
+          type: mode === 'ask' ? 'natural' : 'sql'
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
