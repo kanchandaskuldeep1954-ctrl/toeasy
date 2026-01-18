@@ -74,6 +74,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 }];
 
             case 'bar-horizontal':
+            case 'bar_horizontal':
                 return [{
                     x: values,
                     y: labels,

@@ -865,14 +865,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Chart Type</label>
                                     <div className="grid grid-cols-4 gap-2">
-                                        {['bar', 'bar_horizontal', 'line', 'area', 'pie', 'donut', 'scatter', 'bubble', 'heatmap', 'radar', 'treemap', 'funnel', 'gauge', 'histogram', 'composed'].map(t => (
+                                        {['bar', 'bar-horizontal', 'line', 'area', 'pie', 'donut', 'scatter', 'bubble', 'heatmap', 'radar', 'treemap', 'funnel', 'gauge', 'histogram', 'composed'].map(t => (
                                             <button
                                                 key={t}
                                                 onClick={() => setEditedChart({ ...editedChart, type: t })}
                                                 className={`px-1 py-2 rounded-lg text-[8px] font-bold uppercase border transition-all truncate ${editedChart.type === t ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}
                                                 title={t}
                                             >
-                                                {t.replace('_', ' ')}
+                                                {t.replace(/[_-]/g, ' ')}
                                             </button>
                                         ))}
                                     </div>
