@@ -1,12 +1,8 @@
 export const up = async function (knex) {
-    // Add is_saved column to queries table
-    await knex.schema.alterTable('queries', (table) => {
-        table.boolean('is_saved').defaultTo(false);
-    });
+    // Placeholder to satisfy Knex migration integrity check
+    // Logic moved to 005_add_is_saved_to_queries.js
 };
 
 export const down = async function (knex) {
-    await knex.schema.alterTable('queries', (table) => {
-        table.dropColumn('is_saved');
-    });
+    // Placeholder
 };
