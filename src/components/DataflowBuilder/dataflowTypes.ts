@@ -11,7 +11,9 @@ export type DataflowNodeType =
     | 'analyze'
     | 'dashboard'
     | 'report'
-    | 'export';
+    | 'export'
+    | 'dataset_creator'
+    | 'custom';
 
 export interface DataflowNode {
     id: string;
@@ -59,6 +61,17 @@ export const NODE_CONFIGS: Record<DataflowNodeType, {
     description: string;
     configFields: Array<{ key: string; label: string; type: 'text' | 'select' | 'number' | 'boolean'; options?: string[] }>;
 }> = {
+    dataset_creator: {
+        name: 'Web Scraper',
+        icon: '🌐',
+        color: '#f43f5e',
+        description: 'Create dataset from web URL',
+        configFields: [
+            { key: 'url', label: 'Target URL', type: 'text' },
+            { key: 'depth', label: 'Crawl Depth', type: 'number' },
+            { key: 'selector', label: 'CSS Selector (Optional)', type: 'text' }
+        ],
+    },
     upload: {
         name: 'Upload Data',
         icon: '📤',
@@ -133,6 +146,16 @@ export const NODE_CONFIGS: Record<DataflowNodeType, {
         configFields: [
             { key: 'format', label: 'Format', type: 'select', options: ['csv', 'json', 'excel', 'pdf', 'powerbi', 'tableau'] },
             { key: 'includeMetadata', label: 'Include Metadata', type: 'boolean' },
+        ],
+    },
+    custom: {
+        name: 'Custom Script',
+        icon: '⚡',
+        color: '#808080',
+        description: 'Run custom Python/JS script',
+        configFields: [
+            { key: 'runtime', label: 'Runtime', type: 'select', options: ['python', 'nodejs'] },
+            { key: 'script', label: 'Script Code', type: 'text' },
         ],
     },
 };
