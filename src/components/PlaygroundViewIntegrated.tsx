@@ -329,159 +329,163 @@ const PlaygroundViewIntegrated: React.FC = () => {
           </div>
         </div>
       </div>
+    </div>
+  );
+};
 
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden pt-12 lg:pt-0">
-        {/* Header & Modes */}
-        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 shrink-0">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">SQL Playground</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Execute queries against your dataset.</p>
-          </div>
-          <div className="flex bg-white dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
-            <button onClick={() => setMode('ask')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'ask' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Natural Language</button>
-            <button onClick={() => setMode('sql')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'sql' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>SQL Editor</button>
-          </div>
-        </div>
+export default PlaygroundViewIntegrated;
 
-        {/* Mobile Tabs */}
-        <div className="flex lg:hidden bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
-          <button onClick={() => setMobileTab('editor')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'editor' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Editor</button>
-          <button onClick={() => setMobileTab('results')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'results' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Results ({results.length})</button>
-        </div>
+<div className="flex-1 flex flex-col gap-6 overflow-hidden pt-12 lg:pt-0">
+  {/* Header & Modes */}
+  <div className="flex flex-col sm:flex-row justify-between items-end gap-6 shrink-0">
+    <div className="space-y-1">
+      <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">SQL Playground</h2>
+      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Execute queries against your dataset.</p>
+    </div>
+    <div className="flex bg-white dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
+      <button onClick={() => setMode('ask')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'ask' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Natural Language</button>
+      <button onClick={() => setMode('sql')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'sql' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>SQL Editor</button>
+    </div>
+  </div>
 
-        {/* Desktop Split View / Mobile Tab View */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
+  {/* Mobile Tabs */}
+  <div className="flex lg:hidden bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
+    <button onClick={() => setMobileTab('editor')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'editor' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Editor</button>
+    <button onClick={() => setMobileTab('results')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'results' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Results ({results.length})</button>
+  </div>
 
-          {/* Input Area */}
-          <div className={`
+  {/* Desktop Split View / Mobile Tab View */}
+  <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
+
+    {/* Input Area */}
+    <div className={`
              flex-1 bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 lg:p-8 overflow-y-auto
              ${mobileTab === 'editor' ? 'flex' : 'hidden lg:flex'} flex-col
         `}>
-            <form onSubmit={(e) => {
-              executeQuery(e);
-              setMobileTab('results'); // Auto-switch to results on submit (mobile)
-            }} className="flex flex-col gap-6 h-full">
-              {mode === 'ask' ? (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-                    <span className="text-2xl">🤖</span>
-                  </div>
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Ask: 'Show me top 10 products by sales...'"
-                    className="w-full pl-16 pr-4 py-6 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 dark:focus:border-indigo-500/20 rounded-[30px] text-lg font-bold focus:ring-[15px] focus:ring-indigo-500/5 transition-all outline-none text-slate-900 dark:text-white"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4 flex-1 flex flex-col">
-                  <textarea
-                    value={sqlQuery}
-                    onChange={(e) => setSqlQuery(e.target.value)}
-                    className="w-full flex-1 p-8 font-mono text-xs bg-slate-950 text-indigo-400 rounded-[30px] focus:outline-none border border-white/5 shadow-2xl leading-relaxed resize-none"
-                    spellCheck={false}
-                  />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Write SQL to query your dataset</p>
-                </div>
-              )}
+      <form onSubmit={(e) => {
+        executeQuery(e);
+        setMobileTab('results'); // Auto-switch to results on submit (mobile)
+      }} className="flex flex-col gap-6 h-full">
+        {mode === 'ask' ? (
+          <div className="relative">
+            <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
+              <span className="text-2xl">🤖</span>
+            </div>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Ask: 'Show me top 10 products by sales...'"
+              className="w-full pl-16 pr-4 py-6 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 dark:focus:border-indigo-500/20 rounded-[30px] text-lg font-bold focus:ring-[15px] focus:ring-indigo-500/5 transition-all outline-none text-slate-900 dark:text-white"
+            />
+          </div>
+        ) : (
+          <div className="space-y-4 flex-1 flex flex-col">
+            <textarea
+              value={sqlQuery}
+              onChange={(e) => setSqlQuery(e.target.value)}
+              className="w-full flex-1 p-8 font-mono text-xs bg-slate-950 text-indigo-400 rounded-[30px] focus:outline-none border border-white/5 shadow-2xl leading-relaxed resize-none"
+              spellCheck={false}
+            />
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Write SQL to query your dataset</p>
+          </div>
+        )}
 
-              {error && (
-                <div className="p-6 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-[30px]">
-                  {error}
-                </div>
-              )}
+        {error && (
+          <div className="p-6 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-[30px]">
+            {error}
+          </div>
+        )}
 
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowSaveModal(true)}
-                  disabled={results.length === 0}
-                  className="px-8 py-4 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 transition-all"
-                >
-                  Save Query
-                </button>
-                <button
-                  type="submit"
-                  disabled={loading || !(query?.trim()) && !(sqlQuery?.trim())}
-                  className="px-12 py-4 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {loading ? 'Executing...' : 'Execute'}
-                </button>
-              </div>
-            </form>
-          </form>
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setShowSaveModal(true)}
+            disabled={results.length === 0}
+            className="px-8 py-4 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 transition-all"
+          >
+            Save Query
+          </button>
+          <button
+            type="submit"
+            disabled={loading || !(query?.trim()) && !(sqlQuery?.trim())}
+            className="px-12 py-4 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? 'Executing...' : 'Execute'}
+          </button>
         </div>
+      </form>
+    </div>
 
-        {/* Results Area */}
-        <div className={`
+    {/* Results Area */}
+    <div className={`
              flex-1 bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex-col
              ${mobileTab === 'results' ? 'flex' : 'hidden lg:flex'}
         `}>
-          <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-            <div>
-              <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest">Results</h3>
-              <p className="text-[9px] text-slate-500 mt-1">{rowCount} rows • {executionTime}ms</p>
-            </div>
-          </div>
-          <div className="flex-1 overflow-auto">
-            {results && Array.isArray(results) && results.length > 0 ? (
-              <table className="w-full text-left text-xs border-separate border-spacing-0">
-                <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm z-20">
-                  <tr>
-                    {results[0] && Object.keys(results[0]).map(h => (
-                      <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {results && Array.isArray(results) && results.map((row, i) => (
-                    <tr key={i} className="hover:bg-indigo-50/20 transition-colors">
-                      {row && Object.values(row).map((val: any, j) => (
-                        <td key={j} className="px-6 py-4 text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{String(val ?? '-')}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 opacity-30">
-                <div className="text-6xl mb-6">📊</div>
-                <p className="text-[10px] font-black uppercase tracking-widest">No results yet. Execute a query to begin.</p>
-              </div>
-            )}
-          </div>
+      <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+        <div>
+          <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest">Results</h3>
+          <p className="text-[9px] text-slate-500 mt-1">{rowCount} rows • {executionTime}ms</p>
         </div>
       </div>
-
-      {/* Save Modal */}
-      {showSaveModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800">
-            <h3 className="text-xl font-black uppercase tracking-tighter mb-6">Save Query</h3>
-            <div className="space-y-4">
-              <input
-                value={saveForm.name}
-                onChange={(e) => setSaveForm({ ...saveForm, name: e.target.value })}
-                placeholder="Query name..."
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
-                autoFocus
-              />
-              <textarea
-                value={saveForm.description}
-                onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
-                placeholder="Description..."
-                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
-              />
-            </div>
-            <div className="flex justify-end gap-3 mt-8">
-              <button onClick={() => setShowSaveModal(false)} className="px-6 py-3 rounded-xl text-xs font-bold uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-              <button onClick={saveQuery} disabled={!saveForm.name} className="px-6 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50">Save</button>
-            </div>
+      <div className="flex-1 overflow-auto">
+        {results && Array.isArray(results) && results.length > 0 ? (
+          <table className="w-full text-left text-xs border-separate border-spacing-0">
+            <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm z-20">
+              <tr>
+                {results[0] && Object.keys(results[0]).map(h => (
+                  <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {results && Array.isArray(results) && results.map((row, i) => (
+                <tr key={i} className="hover:bg-indigo-50/20 transition-colors">
+                  {row && Object.values(row).map((val: any, j) => (
+                    <td key={j} className="px-6 py-4 text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{String(val ?? '-')}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 opacity-30">
+            <div className="text-6xl mb-6">📊</div>
+            <p className="text-[10px] font-black uppercase tracking-widest">No results yet. Execute a query to begin.</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-  );
+  </div>
+
+  {/* Save Modal */}
+  {showSaveModal && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800">
+        <h3 className="text-xl font-black uppercase tracking-tighter mb-6">Save Query</h3>
+        <div className="space-y-4">
+          <input
+            value={saveForm.name}
+            onChange={(e) => setSaveForm({ ...saveForm, name: e.target.value })}
+            placeholder="Query name..."
+            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+            autoFocus
+          />
+          <textarea
+            value={saveForm.description}
+            onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
+            placeholder="Description..."
+            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
+          />
+        </div>
+        <div className="flex justify-end gap-3 mt-8">
+          <button onClick={() => setShowSaveModal(false)} className="px-6 py-3 rounded-xl text-xs font-bold uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
+          <button onClick={saveQuery} disabled={!saveForm.name} className="px-6 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50">Save</button>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
+      );
 };
 
 export default PlaygroundViewIntegrated;
