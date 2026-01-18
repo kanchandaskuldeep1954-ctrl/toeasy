@@ -9,7 +9,11 @@ const router = Router();
 router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const result = await query(
-      'SELECT id, email, full_name, avatar_url, created_at FROM users WHERE id = $1',
+      `SELECT u.id, u.email, u.full_name, u.avatar_url, u.created_at, s.tier 
+       FROM users u
+       LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status = 'active'
+       WHERE u.id = $1
+       ORDER BY s.created_at DESC LIMIT 1`,
       [req.user!.id]
     );
 
@@ -17,7 +21,10 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(result.rows[0]);
+    const userData = result.rows[0];
+    userData.tier = userData.tier || 'basic';
+
+    res.json(userData);
   } catch (err) {
     console.error('Get profile error:', err);
     res.status(500).json({ error: 'Internal server error' });

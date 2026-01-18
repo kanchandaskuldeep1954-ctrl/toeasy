@@ -35,7 +35,7 @@ interface PaymentFlowState {
 }
 
 const BillingViewIntegrated: React.FC = () => {
-  const { token } = useAuth();
+  const { token, refreshProfile } = useAuth();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [usage, setUsage] = useState<UsageData>({
     datasets_used: 0,
@@ -155,6 +155,8 @@ const BillingViewIntegrated: React.FC = () => {
   const handlePaymentSuccess = () => {
     // Refresh subscription data after successful payment
     loadSubscriptionAndUsage();
+    // Also refresh the global user profile to update sidebar tier/name
+    if (refreshProfile) refreshProfile();
     setPaymentFlow({ isOpen: false });
   };
 

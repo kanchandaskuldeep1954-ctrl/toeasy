@@ -125,6 +125,20 @@ async function invalidateRelatedCaches(
     await deleteCachedPattern(`cache:${userId}:GET:*dashboards*`);
   }
 
+  if (path.includes('/subscriptions') || path.includes('/payments')) {
+    await deleteCachedPattern(`cache:${userId}:GET:*subscriptions*`);
+    await deleteCachedPattern(`cache:${userId}:GET:*users*`);
+    await deleteCachedPattern(`cache:${userId}:GET:*analytics*`);
+  }
+
+  if (path.includes('/users')) {
+    await deleteCachedPattern(`cache:${userId}:GET:*users*`);
+  }
+
+  if (path.includes('/analytics')) {
+    await deleteCachedPattern(`cache:${userId}:GET:*analytics*`);
+  }
+
   logger.debug(`Cache invalidated for ${path}`);
 }
 

@@ -18,6 +18,7 @@ export interface AuthContextType {
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => void;
   refreshAuthToken: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -163,6 +164,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [refreshToken]);
 
+  const refreshProfile = useCallback(async () => {
+    if (!token) return;
+
+    try {
+      const response = await fetch(`${BACKEND_URL}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.ok) {
+        const userData: User = await response.json();
+        // Since /users/me might return tier, ensure it's handled
+        // If the backend doesn't return tier in /me, we might need another check
+        // But checking users.ts, it returns id, email, full_name, avatar_url
+        // Wait, does /me return tier? Let's check users.ts in backend
+        setUser(prev => {
+          const updated = { ...prev, ...userData } as User;
+          localStorage.setItem(USER_KEY, JSON.stringify(updated));
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.error('Failed to refresh profile:', err);
+    }
+  }, [token]);
+
   return (
     <AuthContext.Provider
       value={{
@@ -174,7 +200,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         signup,
         logout,
-        refreshAuthToken
+        refreshAuthToken,
+        refreshProfile
       }}
     >
       {children}
