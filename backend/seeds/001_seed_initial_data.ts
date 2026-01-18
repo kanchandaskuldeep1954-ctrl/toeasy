@@ -1,6 +1,6 @@
 import bcryptjs from 'bcryptjs';
 
-export const seed = async function(knex) {
+export const seed = async function (knex) {
   // Delete existing entries
   await knex('payment_orders').del();
   await knex('activity_logs').del();
@@ -19,7 +19,7 @@ export const seed = async function(knex) {
   const [userId] = await knex('users').insert({
     email: 'test@example.com',
     password_hash: passwordHash,
-    name: 'Test User'
+    full_name: 'Test User'
   }).returning('id');
 
   // Create subscription

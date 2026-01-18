@@ -142,8 +142,25 @@ router.post('/verify', authenticateToken, async (req: AuthRequest, res) => {
   }
 });
 
-// Get payment status (Keeping compatibility for now or removing if unused)
-// ... keeping simple status check if handy ...
+// Get payment status
+router.get('/status/:orderId', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { orderId } = req.params;
+    const result = await query(
+      'SELECT status FROM payment_orders WHERE cashfree_order_id = $1 AND user_id = $2',
+      [orderId, req.user!.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.json({ status: result.rows[0].status });
+  } catch (err) {
+    console.error('Get payment status error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 // List user payment history
 router.get('/history', authenticateToken, async (req: AuthRequest, res) => {

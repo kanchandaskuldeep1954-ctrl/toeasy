@@ -9,7 +9,7 @@ const router = Router();
 router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const result = await query(
-      'SELECT id, email, name, avatar_url, created_at FROM users WHERE id = $1',
+      'SELECT id, email, full_name, avatar_url, created_at FROM users WHERE id = $1',
       [req.user!.id]
     );
 
@@ -27,11 +27,11 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
 // Update user profile
 router.put('/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { name, avatarUrl } = req.body;
+    const { full_name, name, avatarUrl } = req.body;
 
     const result = await query(
-      'UPDATE users SET name = COALESCE($1, name), avatar_url = COALESCE($2, avatar_url), updated_at = NOW() WHERE id = $3 RETURNING id, email, name, avatar_url',
-      [name || null, avatarUrl || null, req.user!.id]
+      'UPDATE users SET full_name = COALESCE($1, full_name), avatar_url = COALESCE($2, avatar_url), updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, avatar_url',
+      [full_name || name || null, avatarUrl || null, req.user!.id]
     );
 
     if (result.rows.length === 0) {

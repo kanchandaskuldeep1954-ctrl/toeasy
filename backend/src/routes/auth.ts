@@ -7,7 +7,7 @@ const router = Router();
 
 router.post('/register', async (req, res) => {
   try {
-    const { email, password, name } = req.body;
+    const { email, password, full_name, name } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password required' });
@@ -24,8 +24,8 @@ router.post('/register', async (req, res) => {
 
     // Create user
     const result = await query(
-      'INSERT INTO users (email, password_hash, name) VALUES ($1, $2, $3) RETURNING id, email',
-      [email, hashedPassword, name || email]
+      'INSERT INTO users (email, password_hash, full_name) VALUES ($1, $2, $3) RETURNING id, email',
+      [email, hashedPassword, full_name || name || email]
     );
 
     const user = result.rows[0];
@@ -37,7 +37,7 @@ router.post('/register', async (req, res) => {
     );
 
     // Create default subscription (basic tier)
-    const periodEnd = new Date(Date.now() + 30*24*60*60*1000);
+    const periodEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     await query(
       `INSERT INTO subscriptions (user_id, tier, status, current_period_start, current_period_end, renewal_date) 
        VALUES ($1, $2, $3, $4, $5, $6)`,

@@ -1,10 +1,10 @@
-export const up = async function(knex) {
+export const up = async function (knex) {
   // Users table
   await knex.schema.createTable('users', (table) => {
     table.increments('id').primary();
     table.string('email').unique().notNullable();
     table.string('password_hash').notNullable();
-    table.string('name');
+    table.string('full_name');
     table.string('avatar_url');
     table.timestamps(true, true);
     table.index('email');
@@ -119,7 +119,7 @@ export const up = async function(knex) {
   });
 };
 
-export const down = async function(knex) {
+export const down = async function (knex) {
   await knex.schema.dropTableIfExists('payment_orders');
   await knex.schema.dropTableIfExists('activity_logs');
   await knex.schema.dropTableIfExists('validation_rules');

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   email VARCHAR(255) UNIQUE NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
-  name VARCHAR(255),
+  full_name VARCHAR(255),
   avatar_url VARCHAR(255),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -154,7 +154,7 @@ CREATE INDEX IF NOT EXISTS idx_validation_rules_jsonb ON validation_rules USING 
 CREATE INDEX IF NOT EXISTS idx_datasets_raw_data_jsonb ON datasets USING gin(raw_data);
 
 -- Insert test user
-INSERT INTO users (email, password_hash, name) VALUES 
+INSERT INTO users (email, password_hash, full_name) VALUES 
 ('test@example.com', '$2a$12$N9qo8uLOickgx2ZMRZoMyeIjZAgcg7b3XeKeUxWdeS86E36gZvQm2', 'Test User')
 ON CONFLICT (email) DO NOTHING;
 
