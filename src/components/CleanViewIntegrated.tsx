@@ -145,13 +145,29 @@ const ForensicCleanView: React.FC = () => {
 
   const displayHeaders = dataset?.headers ? dataset.headers.filter(h => h !== '__metadata') : [];
 
-  // Initialize view from dataset state (Cache Hit) & Logic Gates
+  // Initialization & AI Analysis Logic
+  const initializedDatasetRef = useRef<number | null>(null);
+
   useEffect(() => {
     const init = async () => {
       if (!dataset) return;
 
+      // prevent redundant re-initialization if we already processed this dataset ID
+      if (initializedDatasetRef.current === dataset.id) {
+        // Even if initialized, we might want to update local state like rules if they changed remotely
+        if (dataset.validationRules && JSON.stringify(dataset.validationRules) !== JSON.stringify(validationRules)) {
+          setValidationRules(dataset.validationRules);
+        }
+        return;
+      }
+
+      console.log("Initializing Clean View for dataset:", dataset.id);
+      initializedDatasetRef.current = dataset.id;
+
       setPreviewData(dataset.data || []);
-      setIsLoading(true);
+
+      // Only show loading if we are actually doing AI work
+      let needsAnalysis = false;
 
       // Check for cached suggestions
       if (dataset.cleaningSuggestions && dataset.cleaningSuggestions.length > 0) {
@@ -161,6 +177,8 @@ const ForensicCleanView: React.FC = () => {
 
       // Initialize Rules with Deep Semantic Analysis if needed
       if ((!dataset.validationRules || dataset.validationRules.length === 0) && (dataset.data || []).length > 0) {
+        needsAnalysis = true;
+        setIsLoading(true);
         try {
           if (onAIAction) onAIAction();
 
@@ -175,16 +193,19 @@ const ForensicCleanView: React.FC = () => {
           const suggested = await GroqService.suggestValidationRules(dataset, semantics);
 
           setValidationRules(suggested);
+          // Update the backend, but this is a one-time operation for this session
           onUpdate({ ...dataset, validationRules: suggested });
-        } catch (e) { console.error("Rule suggestion failed", e); }
+        } catch (e) {
+          console.error("Rule suggestion failed", e);
+        } finally {
+          setIsLoading(false);
+        }
       } else if (dataset.validationRules) {
         setValidationRules(dataset.validationRules);
       }
-
-      setIsLoading(false);
     };
     init();
-  }, [dataset?.id, dataset?.data, dataset?.validationRules]); // Re-run when data is loaded/hydrated
+  }, [dataset?.id]); // Only re-run if the DATASET ID changes, ignorance is bliss for deep properties to avoid loops
 
   const handleAutoGenerateLogic = async () => {
     if (!dataset || !ruleFormData.description) return;
