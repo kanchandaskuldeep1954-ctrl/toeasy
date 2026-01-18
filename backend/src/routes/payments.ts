@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
-import { config } from '../config.js';
+import { config, pricing } from '../config.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -9,10 +9,14 @@ const router = Router();
 // Create payment order with Cashfree
 router.post('/create-order', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { planId } = req.body;
+    const { planId, interval } = req.body;
 
     if (!planId || !['pro', 'enterprise'].includes(planId)) {
       return res.status(400).json({ error: 'Invalid plan' });
+    }
+
+    if (!interval || !['month', 'year'].includes(interval)) {
+      return res.status(400).json({ error: 'Invalid billing interval' });
     }
 
     // Get user
@@ -22,7 +26,15 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     }
 
     const user = userResult.rows[0];
-    const amount = planId === 'pro' ? 2999 : 99999; // Amount in cents (29.99 or 999.99)
+
+    // Calculate amount based on plan and interval
+    let amount = 0;
+    if (planId === 'pro') {
+      amount = interval === 'month' ? pricing.pro.monthly : pricing.pro.yearly;
+    } else if (planId === 'enterprise') {
+      amount = interval === 'month' ? pricing.enterprise.monthly : pricing.enterprise.yearly;
+    }
+
     const orderId = `ORDER_${req.user!.id}_${Date.now()}`;
 
     // Call Cashfree API
@@ -31,12 +43,13 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       headers: {
         'Content-Type': 'application/json',
         'X-Api-Key': config.cashfree.apiKey || '',
-        'X-Request-Id': crypto.randomBytes(16).toString('hex')
+        'X-Request-Id': crypto.randomBytes(16).toString('hex'),
+        'x-api-version': '2022-09-01'
       } as Record<string, string>,
       body: JSON.stringify({
         order_id: orderId,
-        order_amount: amount / 100,
-        order_currency: 'INR',
+        order_amount: amount,
+        order_currency: 'USD',
         customer_details: {
           customer_id: `CUST_${req.user!.id}`,
           customer_email: user.email,

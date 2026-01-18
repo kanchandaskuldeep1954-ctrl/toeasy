@@ -70,8 +70,9 @@ export const config: Config = {
 };
 
 // Pricing
+// Pricing
 export const pricing = {
   basic: { monthly: 0, yearly: 0 },
-  pro: { monthly: 29, yearly: 290 },
-  enterprise: { monthly: 0, yearly: 0 }, // Custom pricing
+  pro: { monthly: 29, yearly: 288 }, // $24/mo * 12 = 288
+  enterprise: { monthly: 99, yearly: 984 }, // $82/mo * 12 = 984
 };

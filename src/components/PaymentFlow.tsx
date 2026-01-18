@@ -62,7 +62,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
       if (redirectUrl && window.Cashfree) {
         // Initialize Cashfree SDK
         const cashfree = new window.Cashfree();
-        
+
         setPaymentState(prev => ({
           ...prev,
           status: 'awaiting_payment',
@@ -157,7 +157,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
             <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-900/20">
               <p className="text-sm text-indigo-600 dark:text-indigo-400">Amount</p>
               <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-                ₹{amount.toFixed(2)}
+                ${amount.toFixed(2)}
               </p>
             </div>
 
@@ -246,7 +246,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600 dark:text-slate-400">Amount Paid</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-500">₹{amount.toFixed(2)}</span>
+                <span className="font-semibold text-emerald-600 dark:text-emerald-500">${amount.toFixed(2)}</span>
               </div>
             </div>
 

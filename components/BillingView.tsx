@@ -55,10 +55,10 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
   const handleSubscription = async (planId: PlanTier, price: number) => {
     // If downgrading to basic (free), process immediately
     if (price === 0) {
-        if (confirm("Are you sure you want to downgrade? Some premium features will be locked.")) {
-            onUpgrade(planId, billingCycle);
-        }
-        return;
+      if (confirm("Are you sure you want to downgrade? Some premium features will be locked.")) {
+        onUpgrade(planId, billingCycle);
+      }
+      return;
     }
 
     setProcessingTier(planId);
@@ -67,7 +67,7 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
       // Call your backend API to create Cashfree payment session
       const totalAmount = billingCycle === 'year' ? price * 12 : price;
       const orderId = `toeasy_${Date.now()}`;
-      
+
       const response = await fetch('/api/create-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,6 +75,7 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
           orderId,
           amount: totalAmount,
           planId,
+          interval: billingCycle,
           customerName: 'Data Analyst',
           customerEmail: 'analyst@example.com',
           customerPhone: '9999999999'
@@ -105,13 +106,13 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
         </p>
 
         <div className="inline-flex items-center p-1 bg-white/5 border border-white/10 rounded-2xl">
-          <button 
+          <button
             onClick={() => setBillingCycle('month')}
             className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${billingCycle === 'month' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
           >
             Monthly
           </button>
-          <button 
+          <button
             onClick={() => setBillingCycle('year')}
             className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${billingCycle === 'year' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
           >
@@ -122,20 +123,19 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         {plans.map((plan) => (
-          <div 
-            key={plan.id} 
-            className={`relative flex flex-col p-8 glass-morphism rounded-[40px] border transition-all ${
-              plan.highlight 
-              ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10' 
-              : 'border-white/10 hover:border-white/20'
-            }`}
+          <div
+            key={plan.id}
+            className={`relative flex flex-col p-8 glass-morphism rounded-[40px] border transition-all ${plan.highlight
+                ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10'
+                : 'border-white/10 hover:border-white/20'
+              }`}
           >
             {plan.highlight && (
               <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-xl">
                 Recommended
               </div>
             )}
-            
+
             <div className="mb-8">
               <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
               <div className="flex items-baseline gap-1 mb-4">
@@ -156,24 +156,23 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
               ))}
             </div>
 
-            <button 
+            <button
               onClick={() => plan.id !== subscription.tier && handleSubscription(plan.id, plan.price)}
               disabled={plan.id === subscription.tier || processingTier !== null}
-              className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${
-                plan.id === subscription.tier 
-                ? 'bg-white/5 text-slate-500 cursor-default' 
-                : plan.highlight 
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30' 
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-              }`}
+              className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${plan.id === subscription.tier
+                  ? 'bg-white/5 text-slate-500 cursor-default'
+                  : plan.highlight
+                    ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30'
+                    : 'bg-white/10 hover:bg-white/20 text-white'
+                }`}
             >
               {processingTier === plan.id ? (
-                  <>
-                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                     Processing...
-                  </>
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Processing...
+                </>
               ) : (
-                  plan.buttonText
+                plan.buttonText
               )}
             </button>
           </div>
@@ -193,8 +192,8 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
                 <span>{usage.rowsProcessed.toLocaleString()} / {subscription.tier === 'basic' ? '500' : '50k+'}</span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 transition-all duration-1000" 
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-1000"
                   style={{ width: `${Math.min(100, (usage.rowsProcessed / (subscription.tier === 'basic' ? 500 : 50000)) * 100)}%` }}
                 ></div>
               </div>
@@ -205,8 +204,8 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
                 <span>{usage.aiQueriesUsed} / {subscription.tier === 'basic' ? '10' : 'Unlimited'}</span>
               </div>
               <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-indigo-500 transition-all duration-1000" 
+                <div
+                  className="h-full bg-indigo-500 transition-all duration-1000"
                   style={{ width: `${Math.min(100, (usage.aiQueriesUsed / (subscription.tier === 'basic' ? 10 : 100)) * 100)}%` }}
                 ></div>
               </div>
@@ -215,23 +214,23 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
         </div>
 
         <div className="glass-morphism rounded-[32px] border border-white/10 p-8 flex flex-col justify-center space-y-4 bg-emerald-500/[0.02]">
-           <div className="flex items-center gap-4">
-             <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl">⚡</div>
-             <div>
-                <p className="text-white font-bold">Secure Payment via Cashfree</p>
-                <p className="text-sm text-slate-400">Your transaction is processed securely. We never store your card details.</p>
-             </div>
-           </div>
-           <div className="pt-4 flex gap-3">
-              <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-                 <p className="text-[10px] text-slate-500 font-bold uppercase">Next Invoice</p>
-                 <p className="text-lg font-mono text-white">${plans.find(p => p.id === subscription.tier)?.price || 0}.00</p>
-              </div>
-              <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-                 <p className="text-[10px] text-slate-500 font-bold uppercase">Period Ends</p>
-                 <p className="text-lg font-mono text-white">{subscription.expiresAt.toLocaleDateString()}</p>
-              </div>
-           </div>
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl">⚡</div>
+            <div>
+              <p className="text-white font-bold">Secure Payment via Cashfree</p>
+              <p className="text-sm text-slate-400">Your transaction is processed securely. We never store your card details.</p>
+            </div>
+          </div>
+          <div className="pt-4 flex gap-3">
+            <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Next Invoice</p>
+              <p className="text-lg font-mono text-white">${plans.find(p => p.id === subscription.tier)?.price || 0}.00</p>
+            </div>
+            <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+              <p className="text-[10px] text-slate-500 font-bold uppercase">Period Ends</p>
+              <p className="text-lg font-mono text-white">{subscription.expiresAt.toLocaleDateString()}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
