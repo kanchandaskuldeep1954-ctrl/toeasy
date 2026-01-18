@@ -3,11 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
 import { GroqService } from '../services/groqService';
 import ReactMarkdown from 'react-markdown';
-import {
-    BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
-    XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area,
-    ScatterChart, Scatter, Treemap, ZAxis
-} from 'recharts';
+import PlotlyChart from './Dashboard/PlotlyChart';
 
 interface ReportViewProps {
     dataset: Dataset;
@@ -31,39 +27,31 @@ const createFallbackReport = (dataset: Dataset): StrategicReport => ({
             ],
             charts: [],
             kpis: []
-        },
-        {
-            id: 'recommendations',
-            title: 'Recommendations',
-            content: `### Suggested Next Steps\n\n1. **Explore the data** using the interactive dashboard\n2. **Run data cleaning** to improve quality\n3. **Generate custom visualizations** for specific insights`,
-            keyTakeaways: [
-                'Use dashboard for visual analysis',
-                'Consider data cleaning for improved quality'
-            ],
-            charts: [],
-            kpis: []
         }
     ],
     generatedAt: new Date().toISOString(),
     version: '1.0'
 });
 
+type ReportType = 'strategic' | 'operational' | 'financial' | 'quality' | 'risk';
+
 const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }) => {
     const [report, setReport] = useState<StrategicReport | null>(null);
     const [loading, setLoading] = useState(true);
+    const [reportType, setReportType] = useState<ReportType>('strategic');
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [activeSection, setActiveSection] = useState<string>('');
     const contentRef = useRef<HTMLDivElement>(null);
 
     // Generate report with timeout
-    const generateReportWithTimeout = async (timeoutMs: number = 30000): Promise<StrategicReport> => {
+    const generateReportWithTimeout = async (type: ReportType, timeoutMs: number = 45000): Promise<StrategicReport> => {
         return new Promise((resolve, reject) => {
             const timeoutId = setTimeout(() => {
                 reject(new Error(`Report generation timed out after ${timeoutMs / 1000} seconds`));
             }, timeoutMs);
 
-            GroqService.generateReport(dataset)
+            GroqService.generateReport(dataset, type)
                 .then(result => {
                     clearTimeout(timeoutId);
                     resolve(result);
@@ -82,6 +70,14 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         setRetryCount(prev => prev + 1);
     };
 
+    const handleReportTypeChange = (type: ReportType) => {
+        setReportType(type);
+        setLoading(true);
+        setReport(null);
+        setError(null);
+        setRetryCount(0);
+    };
+
     // Use fallback report
     const useFallback = () => {
         const fallback = createFallbackReport(dataset);
@@ -94,15 +90,6 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     useEffect(() => {
         if (!dataset) return;
 
-        // If report already exists, use it
-        if (dataset.strategicReport) {
-            setReport(dataset.strategicReport);
-            setActiveSection(dataset.strategicReport.sections?.[0]?.id || '');
-            setLoading(false);
-            setError(null);
-            return;
-        }
-
         // Generate new report
         const generate = async () => {
             setLoading(true);
@@ -111,8 +98,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             try {
                 if (onAIAction) onAIAction();
 
-                // Try with 30 second timeout
-                const content = await generateReportWithTimeout(30000);
+                // Try with 45 second timeout
+                const content = await generateReportWithTimeout(reportType, 45000);
 
                 // Validate response structure
                 if (!content || !content.sections || !Array.isArray(content.sections)) {
@@ -141,122 +128,21 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         };
 
         generate();
-    }, [dataset?.name, retryCount]);
-
-    const aggregateData = useCallback((chart: ChartSpec) => {
-        const data = dataset?.data;
-        if (!data || data.length === 0) return [];
-
-        // Safety check for keys
-        if (!chart.xAxis || !chart.yAxis) return [];
-
-        if (chart.type === 'scatter' || chart.type === 'heatmap') {
-            return data.map(row => ({
-                x: Number(row[chart.xAxis]) || 0,
-                y: Number(row[chart.yAxis]) || 0,
-                z: chart.zAxis ? (Number(row[chart.zAxis]) || 1) : 1,
-                name: row[dataset?.headers?.[0]] || 'Unknown'
-            })).slice(0, 300);
-        }
-
-        if (chart.type === 'treemap') {
-            const map = new Map<string, number>();
-            data.forEach(row => {
-                const key = String(row[chart.xAxis] || 'Unknown');
-                const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[chart.yAxis])) || 0);
-                map.set(key, (map.get(key) || 0) + val);
-            });
-            return Array.from(map.entries())
-                .map(([name, size]) => ({ name, size }))
-                .sort((a, b) => b.size - a.size)
-                .slice(0, 15);
-        }
-
-        const map = new Map<string, number>();
-        data.forEach(row => {
-            const key = String(row[chart.xAxis] || 'Unknown').trim();
-            if (key === 'Unknown' || key === 'undefined') return;
-            const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[chart.yAxis])) || 0);
-            map.set(key, (map.get(key) || 0) + val);
-        });
-
-        return Array.from(map.entries())
-            .map(([name, value]) => ({ name: name.length > 20 ? name.substring(0, 18) + '...' : name, value: Number(value.toFixed(2)) }))
-            .sort((a, b) => b.value - a.value)
-            .slice(0, 15);
-    }, [dataset?.data]);
+    }, [dataset?.name, retryCount, reportType]);
 
     const renderChart = (chart: ChartSpec) => {
-        const data = aggregateData(chart);
-        if (!data.length) return null;
-
-        const color = '#6366f1';
-        const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
-
         return (
-            <div className="my-8 p-6 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm break-inside-avoid">
+            <div className="my-8 p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm break-inside-avoid print:border-slate-300">
                 <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{chart.type} Visualization</h5>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-6">{chart.title}</h4>
-                <div className="h-64 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                        {chart.type === 'bar' ? (
-                            <BarChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={9} tickLine={false} axisLine={false} />
-                                <Tooltip cursor={{ fill: 'transparent' }} />
-                                <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
-                            </BarChart>
-                        ) : chart.type === 'line' ? (
-                            <LineChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={9} tickLine={false} axisLine={false} />
-                                <Tooltip />
-                                <Line type="monotone" dataKey="value" stroke={color} strokeWidth={3} dot={{ r: 3 }} />
-                            </LineChart>
-                        ) : chart.type === 'pie' ? (
-                            <PieChart>
-                                <Pie
-                                    data={data}
-                                    dataKey="value"
-                                    nameKey="name"
-                                    cx="50%"
-                                    cy="50%"
-                                    innerRadius={60}
-                                    outerRadius={80}
-                                    paddingAngle={2}
-                                    isAnimationActive={false} // Disable animation for report stability
-                                >
-                                    {data && Array.isArray(data) && data.map((_, i) => <Cell key={i} fill={colors[i % colors.length]} />)}
-                                </Pie>
-                                <Tooltip />
-                            </PieChart>
-                        ) : chart.type === 'scatter' ? (
-                            <ScatterChart>
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis type="number" dataKey="x" name={chart.xAxis} fontSize={9} />
-                                <YAxis type="number" dataKey="y" name={chart.yAxis} fontSize={9} />
-                                <ZAxis type="number" dataKey="z" range={[50, 400]} />
-                                <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                                <Scatter name={chart.title} data={data} fill={color} />
-                            </ScatterChart>
-                        ) : chart.type === 'treemap' ? (
-                            <Treemap data={data} dataKey="size" aspectRatio={4 / 3} stroke="#fff" fill={color} animationDuration={0} isAnimationActive={false}>
-                                <Tooltip />
-                            </Treemap>
-                        ) : (
-                            <AreaChart data={data} margin={{ top: 5, right: 5, bottom: 5, left: -20 }}>
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />
-                                <XAxis dataKey="name" fontSize={9} tickLine={false} axisLine={false} />
-                                <YAxis fontSize={9} tickLine={false} axisLine={false} />
-                                <Tooltip />
-                                <Area type="monotone" dataKey="value" fill={color} fillOpacity={0.2} stroke={color} />
-                            </AreaChart>
-                        )}
-                    </ResponsiveContainer>
+                <div className="h-72 w-full">
+                    <PlotlyChart
+                        chart={chart}
+                        height={288}
+                        data={chart.data} // Pass pre-calculated data
+                    />
                 </div>
-                <p className="mt-4 text-[10px] text-slate-500 italic text-center">{chart.description}</p>
+                <p className="mt-4 text-[11px] text-slate-500 italic text-center">{chart.description}</p>
             </div>
         );
     };
@@ -266,19 +152,19 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     };
 
     if (loading) return (
-        <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in">
+        <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in bg-slate-100 dark:bg-slate-950">
             <div className="w-20 h-20 border-[6px] border-indigo-100 dark:border-indigo-900/30 border-t-indigo-600 rounded-full animate-spin" />
             <div className="text-center space-y-2">
-                <h3 className="text-lg font-black uppercase tracking-widest text-indigo-600">Synthesizing Strategic Narrative</h3>
-                <p className="text-xs font-medium text-slate-400">Analyzing {(dataset?.data?.length || 0).toLocaleString()} records • Generating visuals • Drafting executive summary</p>
-                <p className="text-[10px] text-slate-300 mt-2">This may take up to 30 seconds...</p>
+                <h3 className="text-lg font-black uppercase tracking-widest text-indigo-600">Generating {reportType} Report</h3>
+                <p className="text-xs font-medium text-slate-400">Analyzing {(dataset?.data?.length || 0).toLocaleString()} records • Calculating KPIs • Building Visuals</p>
+                <p className="text-[10px] text-slate-300 mt-2">This may take up to 45 seconds...</p>
             </div>
         </div>
     );
 
     // Error state with retry and fallback options
     if (error) return (
-        <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in">
+        <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in bg-slate-100 dark:bg-slate-950">
             <div className="w-20 h-20 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center">
                 <svg className="w-10 h-10 text-rose-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -319,6 +205,23 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Report Structure</h2>
                     <p className="text-sm font-bold text-slate-900 dark:text-white truncate" title={report?.title}>{dataset?.name || 'Untitled'}</p>
                 </div>
+
+                {/* Report Type Selector */}
+                <div className="flex flex-col gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+                    {(['strategic', 'operational', 'financial', 'quality', 'risk'] as ReportType[]).map(type => (
+                        <button
+                            key={type}
+                            onClick={() => handleReportTypeChange(type)}
+                            className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg text-left transition-all ${reportType === type
+                                    ? 'bg-indigo-600 text-white shadow-md'
+                                    : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
+                                }`}
+                        >
+                            {type} Report
+                        </button>
+                    ))}
+                </div>
+
                 <nav className="space-y-1">
                     {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => (
                         <a
@@ -353,7 +256,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     {/* Cover Page */}
                     <div className="min-h-[60vh] flex flex-col justify-center border-b border-slate-200 dark:border-slate-800 pb-12 print:min-h-0 print:pb-4 print:border-none">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest w-fit mb-6 print:hidden">
-                            Strategic Intelligence v{report.version}
+                            {reportType} Intelligence v{report.version}
                         </div>
                         <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.9] mb-8">
                             {report.title}
@@ -365,9 +268,9 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         </div>
 
                         {/* Executive Summary Card */}
-                        <div className="mt-12 p-8 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl print:shadow-none print:border print:rounded-none">
+                        <div className="mt-12 p-8 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-slate-800 shadow-xl print:shadow-none print:border print:rounded-none break-inside-avoid">
                             <h3 className="text-xs font-black uppercase text-slate-400 tracking-[0.2em] mb-4">Executive Summary</h3>
-                            <p className="text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium">
+                            <p className="text-lg leading-relaxed text-slate-800 dark:text-slate-200 font-medium whitespace-pre-line">
                                 {report.executiveSummary}
                             </p>
                         </div>
@@ -395,7 +298,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
                                 {/* KPIs Grid */}
                                 {section.kpis && section.kpis.length > 0 && (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 break-inside-avoid">
                                         {section.kpis.map((kpi, k) => (
                                             <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border">
                                                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>

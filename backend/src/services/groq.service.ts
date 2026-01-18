@@ -595,39 +595,54 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
-  static async generateReport(dataset: any): Promise<any> {
+  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      const dataSize = dataset.data?.length || 0;
+      const data = dataset.data || [];
+      const dataSize = data.length;
 
-      const groqPrompt = `You are a business intelligence analyst. Generate a strategic data analysis report.
+      // 1. Generate Real Analytics Artifacts (KPIs & Charts)
+      const { kpis, charts } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
 
-Dataset: ${headers.slice(0, 10).join(', ')}
-Records: ${dataSize}
+      // Prepare context for LLM
+      const kpiSummary = kpis.map(k => `${k.label}: ${k.value} (${k.trendDirection || 'neutral'})`).join('\n');
+      const chartSummary = charts.map(c => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Desc: ${c.description || 'n/a'}`).join('\n');
 
-Generate a report with ONLY this valid JSON structure (no markdown, no explanation):
-{
-  "title": "Strategic Analysis Report",
-  "executiveSummary": "1-2 sentence summary of key findings",
-  "sections": [
-    {
-      "id": "section1",
-      "title": "Key Findings",
-      "content": "markdown content with insights",
-      "keyTakeaways": ["takeaway1", "takeaway2"]
-    },
-    {
-      "id": "section2",
-      "title": "Recommendations",
-      "content": "markdown content with recommendations",
-      "keyTakeaways": ["rec1", "rec2"]
-    }
-  ],
-  "generatedAt": "${new Date().toISOString()}",
-  "version": "1.0"
-}`;
+      const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
+      
+      DATASET CONTEXT:
+      - Rows: ${dataSize}
+      - Columns: ${headers.slice(0, 15).join(', ')}
 
-      const result = await this.callGroq(groqPrompt, 1500);
+      KEY METRICS (Real Data):
+      ${kpiSummary}
+
+      AVAILABLE VISUALS (Real Charts):
+      ${chartSummary}
+
+      TASK:
+      Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.
+      
+      RETURN JSON STRUCTURE (No Markdown):
+      {
+        "title": "Professional ${reportType} Analysis",
+        "executiveSummary": "High-level executive summary referencing key metrics.",
+        "sections": [
+          {
+            "id": "intro",
+            "title": "Strategic Overview",
+            "content": "Deep dive narrative...",
+            "keyTakeaways": ["insight 1", "insight 2"],
+            "chartIds": ["id_of_relevant_chart_1", "id_of_relevant_chart_2"],
+            "kpiIds": ["total_records", "total_revenue"]
+          }
+          // Add 3-4 more specific sections based on report type
+        ],
+        "generatedAt": "${new Date().toISOString()}",
+        "version": "2.0"
+      }`;
+
+      const result = await this.callGroq(groqPrompt, 2500);
       let jsonStr = result.trim();
 
       if (jsonStr.includes('```json')) {
@@ -636,23 +651,67 @@ Generate a report with ONLY this valid JSON structure (no markdown, no explanati
         jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
       }
 
-      return JSON.parse(jsonStr);
-    } catch (error) {
-      console.error('Report generation error:', error instanceof Error ? error.message : error);
-      return {
-        title: 'Data Analysis Report',
-        executiveSummary: `Analysis of ${(dataset.data?.length || 0).toLocaleString()} records across ${(dataset.headers || []).length} dimensions.`,
-        sections: [
-          {
-            id: 'overview',
-            title: 'Overview',
-            content: `Dataset contains ${(dataset.data?.length || 0).toLocaleString()} records with the following columns: ${(dataset.headers || []).join(', ')}`,
-            keyTakeaways: ['Data loaded successfully', 'Ready for detailed analysis']
+      const report = JSON.parse(jsonStr);
+
+      // Hydrate Charts and KPIs
+      report.sections = report.sections.map((section: any) => ({
+        ...section,
+        charts: (section.chartIds || []).map((id: string) => charts.find(c => c.id === id) || charts[0]).filter((c: any) => c),
+        kpis: (section.kpiIds || []).map((id: string) => kpis.find(k => k.id === id) || kpis.find(k => k.label.includes(id))).filter((k: any) => k)
+      }));
+
+      // Fallback: If no charts assigned, distribute them
+      const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
+      const unusedCharts = charts.filter(c => !usedChartIds.has(c.id));
+
+      if (unusedCharts.length > 0) {
+        // distribute unused charts to sections
+        report.sections.forEach((section: any, idx: number) => {
+          if (unusedCharts.length > 0 && idx > 0) { // skip intro
+            section.charts.push(unusedCharts.shift());
           }
-        ],
-        generatedAt: new Date().toISOString(),
-        version: '1.0'
-      };
+        });
+      }
+
+      return report;
+    } catch (error) {
+      console.error('Advanced report generation error:', error instanceof Error ? error.message : error);
+      // Robust Fallback using AnalyticsEngine even on Error
+      try {
+        const { kpis, charts } = await AnalyticsEngine.generateReportArtifacts(dataset.headers, dataset.data, reportType);
+        return {
+          title: `${reportType} Analysis Report (Auto-Generated)`,
+          executiveSummary: `Analysis of ${dataset.data?.length} records. Key metrics indicate ${kpis[0]?.label}: ${kpis[0]?.value}.`,
+          sections: [
+            {
+              id: 'overview',
+              title: 'Performance Overview',
+              content: 'Primary performance metrics and distribution analysis.',
+              keyTakeaways: kpis.slice(0, 3).map(k => `${k.label}: ${k.value}`),
+              charts: charts.slice(0, 2),
+              kpis: kpis.slice(0, 4)
+            },
+            {
+              id: 'trends',
+              title: 'Trend Analysis',
+              content: 'Detailed breakdown of trends over time and categories.',
+              keyTakeaways: ['Review detailed charts below'],
+              charts: charts.slice(2, 6),
+              kpis: kpis.slice(4, 8)
+            }
+          ],
+          generatedAt: new Date().toISOString(),
+          version: '2.0-fallback'
+        };
+      } catch (fallbackError) {
+        return {
+          title: 'Report Generation Failed',
+          executiveSummary: 'Could not generate report.',
+          sections: [],
+          generatedAt: new Date().toISOString(),
+          version: '0.0'
+        };
+      }
     }
   }
 

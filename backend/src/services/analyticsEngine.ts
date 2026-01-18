@@ -351,6 +351,63 @@ export class AnalyticsEngine {
         })).filter(d => !isNaN(d.value));
     }
 
+    static async generateReportArtifacts(headers: string[], data: any[], reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<{ kpis: KPI[], charts: ChartSpec[] }> {
+        // 1. Forensics
+        const sampleSize = Math.min(data.length, 2000);
+        const sample = data.slice(0, sampleSize);
+        const forensics = await DataForensicsEngine.analyze(headers, sample, sampleSize);
+
+        // 2. Base Analytics
+        const allKpis = this.generateKPIs(data, forensics.profiles);
+        const allCharts = this.generateCharts(data, forensics.profiles);
+
+        // 3. Filter & Enhance based on Report Type
+        let filteredKpis = allKpis;
+        let filteredCharts = allCharts;
+
+        switch (reportType) {
+            case 'financial':
+                filteredKpis = allKpis.filter(k => k.category === 'financial' || k.id === 'total_records');
+                filteredCharts = allCharts.filter(c =>
+                    c.title.toLowerCase().includes('cost') ||
+                    c.title.toLowerCase().includes('revenue') ||
+                    c.title.toLowerCase().includes('sales') ||
+                    c.title.toLowerCase().includes('price') ||
+                    c.type === 'waterfall'
+                );
+                // Add waterfall if missing
+                if (!filteredCharts.find(c => c.type === 'waterfall')) {
+                    // Try to finding positive/negative contributions
+                    // Placeholder for advanced logic
+                }
+                break;
+
+            case 'operational':
+                filteredKpis = allKpis.filter(k => k.category === 'operational' || k.category === 'efficiency');
+                filteredCharts = allCharts.filter(c => c.type === 'funnel' || c.type === 'line' || c.type === 'bar');
+                break;
+
+            case 'quality':
+                filteredKpis = allKpis.filter(k => k.category === 'quality');
+                filteredCharts = allCharts.filter(c => c.type === 'bar' || c.type === 'scatter'); // Distribution & Outliers
+                break;
+
+            case 'risk':
+                // Focus on potential outliers and "bad" status
+                filteredCharts = allCharts.filter(c => c.type === 'scatter' || c.type === 'heatmap');
+                break;
+
+            case 'strategic':
+            default:
+                // Mix of high-level KPIs and trends
+                filteredKpis = allKpis.slice(0, 8);
+                filteredCharts = allCharts.slice(0, 6);
+                break;
+        }
+
+        return { kpis: filteredKpis, charts: filteredCharts };
+    }
+
     private static generateLayout(charts: ChartSpec[]): any {
         return {
             columns: 4,
