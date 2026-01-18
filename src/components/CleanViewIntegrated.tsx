@@ -114,6 +114,9 @@ const ForensicCleanView: React.FC = () => {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
 
+  // Mobile Agent Sidebar State
+  const [isAgentSidebarOpen, setIsAgentSidebarOpen] = useState(false);
+
   const displayHeaders = dataset?.headers ? dataset.headers.filter(h => h !== '__metadata') : [];
 
   // Initialization & AI Analysis Logic
@@ -418,7 +421,7 @@ const ForensicCleanView: React.FC = () => {
   }
 
   return (
-    <div className="h-full flex flex-col gap-6 w-full max-w-[1900px] mx-auto overflow-hidden p-4 md:p-6 lg:p-8">
+    <div className="h-full flex flex-col gap-4 lg:gap-6 w-full max-w-[1900px] mx-auto overflow-hidden p-2 md:p-6 lg:p-8">
 
       {/* Header Panel */}
       <div className="glass-panel px-6 py-3 rounded-[32px] shadow-sm flex flex-col xl:flex-row gap-4 justify-between items-center shrink-0 z-50 border-b border-slate-100 dark:border-slate-800 bg-white/80 backdrop-blur-md dark:bg-slate-900/80 sticky top-0">
@@ -493,7 +496,7 @@ const ForensicCleanView: React.FC = () => {
                     {isGeneratingRule ? '...' : 'Create'}
                   </button>
                 </form>
-                <button onClick={() => openRuleEditor()} className="px-5 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all">
+                <button onClick={() => openRuleEditor()} className="px-5 py-3 bg-slate-900 dark:bg-white dark:text-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg hover:scale-105 transition-all whitespace-nowrap">
                   New Gate
                 </button>
               </div>
@@ -742,7 +745,26 @@ const ForensicCleanView: React.FC = () => {
               </div>
 
               {/* Forensic Agent Sidebar (Blue/Indigo) */}
-              <div className={`w-[350px] lg:w-[450px] glass-panel border-l border-slate-100 dark:border-slate-800 p-6 lg:p-8 flex flex-col gap-6 lg:gap-8 shadow-2xl shrink-0 transition-transform duration-500 bg-white dark:bg-slate-900`}>
+              {/* Mobile Agent Button */}
+              <button
+                className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 bg-indigo-600 rounded-full shadow-2xl flex items-center justify-center text-2xl text-white animate-bounce"
+                onClick={() => setIsAgentSidebarOpen(true)}
+              >
+                🧠
+              </button>
+
+              <div className={`
+                  fixed inset-y-0 right-0 z-50 lg:static w-[350px] lg:w-[450px] glass-panel border-l border-slate-100 dark:border-slate-800 p-6 lg:p-8 flex flex-col gap-6 lg:gap-8 shadow-2xl shrink-0 transition-transform duration-500 bg-white dark:bg-slate-900
+                  ${isAgentSidebarOpen ? 'translate-x-0' : 'translate-x-full lg:translate-x-0'}
+              `}>
+                {/* Mobile Close Button */}
+                <button
+                  className="lg:hidden absolute top-4 right-4 p-2 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-500"
+                  onClick={() => setIsAgentSidebarOpen(false)}
+                >
+                  ✕
+                </button>
+
                 {/* Agent Content */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-3">

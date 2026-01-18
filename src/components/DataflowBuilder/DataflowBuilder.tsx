@@ -67,6 +67,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
     const [isSaving, setIsSaving] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [sidebarOpen, setSidebarOpen] = useState(false); // Mobile sidebar toggle
 
     // Initial Setup / Template Loading
     const loadTemplate = (templateId: string) => {
@@ -240,10 +241,18 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
             {/* Header / Toolbar */}
             <div className="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl transition-colors">
                 <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">
+                    {/* Mobile Menu Toggle */}
+                    <button
+                        onClick={() => setSidebarOpen(!sidebarOpen)}
+                        className="lg:hidden p-2 -ml-2 text-slate-500 hover:text-slate-900 dark:hover:text-white"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20 shrink-0">
                         ⚡
                     </div>
-                    <div>
+                    <div className="hidden sm:block">
                         <input
                             value={dataflowName}
                             onChange={(e) => setDataflowName(e.target.value)}
@@ -252,7 +261,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         />
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                             <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                            Active Session
+                            <span className="hidden sm:inline">Active Session</span>
                         </div>
                     </div>
                 </div>
@@ -263,19 +272,19 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                             value={aiPrompt}
                             onChange={(e) => setAiPrompt(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleAiGenerate()}
-                            placeholder="✨ Describe workflow to generate..."
-                            className="w-80 bg-slate-950 border border-slate-700 rounded-xl px-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all"
+                            placeholder="✨ Describe workflow..."
+                            className="hidden md:block w-48 lg:w-80 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600"
                         />
                         <button
                             onClick={handleAiGenerate}
-                            className="absolute right-2 top-2 text-indigo-400 hover:text-white"
+                            className="absolute right-2 top-2 text-indigo-500 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-white hidden md:block"
                             disabled={isGenerating}
                         >
                             {isGenerating ? '...' : '↵'}
                         </button>
                     </div>
 
-                    <div className="h-8 w-px bg-slate-800 mx-2"></div>
+                    <div className="hidden sm:block h-8 w-px bg-slate-200 dark:bg-slate-800 mx-2"></div>
 
                     <button
                         onClick={handleSave}
@@ -292,17 +301,33 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                             ${isRunning ? 'bg-slate-700 cursor-wait' : 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500'}
                         `}
                     >
-                        {isRunning ? 'Running...' : '▶ Run Pipeline'}
+                        {isRunning ? 'Running...' : '▶ Run'}
                     </button>
+                    {/* Mobile AI Toggle */}
+                    <button className="md:hidden p-2 text-indigo-600 dark:text-indigo-400">✨</button>
                 </div>
             </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex overflow-hidden">
-                {/* Visual Sidebar (Draggable Nodes) */}
-                <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-10 transition-colors">
-                    <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex-1 flex overflow-hidden relative">
+                {/* Visual Sidebar (Draggable Nodes) - Drawer on Mobile */}
+                <div
+                    className={`
+                        fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-transform duration-300 ease-in-out
+                        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+                    `}
+                >
+                    {/* Mobile Backdrop Overlay - Only shows when sidebar is open on mobile */}
+                    {sidebarOpen && (
+                        <div
+                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[-1] lg:hidden"
+                            onClick={() => setSidebarOpen(false)}
+                        />
+                    )}
+
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
                         <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Toolbox</h3>
+                        <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-slate-400">✕</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {Object.entries(NODE_CONFIGS).map(([type, config]) => (
@@ -349,7 +374,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                 </div>
 
                 {/* React Flow Canvas */}
-                <div className="flex-1 relative" ref={reactFlowWrapper}>
+                <div className="flex-1 relative w-full" ref={reactFlowWrapper}>
                     <ReactFlow
                         nodes={nodes}
                         edges={edges}
@@ -384,9 +409,12 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                     </ReactFlow>
                 </div>
 
-                {/* Config Sidebar (Right) */}
+                {/* Config Sidebar (Right) - Slide Over on Mobile */}
                 {selectedNodeId && (
-                    <div className="w-80 bg-slate-900 border-l border-slate-800 flex flex-col z-10 animate-slide-in-right">
+                    <div className="fixed inset-y-0 right-0 lg:static w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col z-20 animate-slide-in-right shadow-2xl lg:shadow-none">
+                        <div className="lg:hidden absolute top-4 right-4 z-50">
+                            <button onClick={() => setSelectedNodeId(null)} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-full text-slate-500">✕</button>
+                        </div>
                         {(() => {
                             const node = nodes.find(n => n.id === selectedNodeId);
                             if (!node) return null;
@@ -394,7 +422,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
                             return (
                                 <>
-                                    <div className="p-6 border-b border-slate-800 bg-slate-900">
+                                    <div className="p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
                                         <div className="flex items-center gap-4 mb-4">
                                             <div
                                                 className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-lg"
@@ -403,8 +431,8 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                                                 {config.icon}
                                             </div>
                                             <div>
-                                                <h3 className="text-lg font-bold text-white">{node.data.name}</h3>
-                                                <p className="text-xs text-slate-400 uppercase tracking-widest">{config.name}</p>
+                                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">{node.data.name}</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 uppercase tracking-widest center">{config.name}</p>
                                             </div>
                                         </div>
                                         <p className="text-sm text-slate-400 leading-relaxed">
@@ -417,10 +445,10 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
                                         {config.configFields.map(field => (
                                             <div key={field.key} className="space-y-2">
-                                                <label className="text-sm font-semibold text-slate-300">{field.label}</label>
+                                                <label className="text-sm font-semibold text-slate-600 dark:text-slate-300">{field.label}</label>
                                                 {field.type === 'select' ? (
                                                     <select
-                                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-indigo-500 outline-none"
                                                         value={node.data.config[field.key] || ''}
                                                         onChange={(e) => {
                                                             setNodes(nds => nds.map(n =>
@@ -438,7 +466,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                                                 ) : (
                                                     <input
                                                         type="text"
-                                                        className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:border-indigo-500 outline-none"
+                                                        className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-900 dark:text-white focus:border-indigo-500 outline-none"
                                                         value={node.data.config[field.key] || ''}
                                                         onChange={(e) => {
                                                             setNodes(nds => nds.map(n =>
