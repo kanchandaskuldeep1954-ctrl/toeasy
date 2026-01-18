@@ -155,7 +155,7 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
 
     // Get paginated results
     const result = await query(
-      `SELECT id, query_text, query_type, result_count, created_at 
+      `SELECT id, query_text, query_type, result_count, name, description, created_at 
        FROM queries 
        WHERE dataset_id = $1 AND workspace_id = $2 
        ORDER BY created_at DESC 
@@ -186,10 +186,10 @@ router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest
     }
 
     const result = await query(
-      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, description, executed_by)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO queries (workspace_id, dataset_id, query_text, query_type, name, description, executed_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING id, created_at`,
-      [req.params.workspaceId, req.params.datasetId, sql, type || 'sql', description || '', req.user!.id]
+      [req.params.workspaceId, req.params.datasetId, sql, type || 'sql', name, description || '', req.user!.id]
     );
 
     res.status(201).json({
@@ -206,7 +206,26 @@ router.post('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest
   }
 });
 
-// Export query results
+// Delete a specific query from a dataset
+router.delete('/:workspaceId/datasets/:datasetId/queries/:queryId', async (req: AuthRequest, res) => {
+  try {
+    const { workspaceId, datasetId, queryId } = req.params;
+    const result = await query(
+      'DELETE FROM queries WHERE id = $1 AND workspace_id = $2 AND dataset_id = $3 AND executed_by = $4 RETURNING id',
+      [queryId, workspaceId, datasetId, req.user!.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Query not found' });
+    }
+
+    res.json({ message: 'Query deleted' });
+  } catch (err) {
+    console.error('Delete dataset query error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 router.post('/:workspaceId/datasets/:datasetId/queries/:queryId/export', async (req: AuthRequest, res) => {
   try {
     const { format } = req.body; // 'csv', 'json'

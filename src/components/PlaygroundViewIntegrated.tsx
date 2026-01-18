@@ -325,7 +325,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
               </button>
               <button
                 type="submit"
-                disabled={loading || !query.trim() && !sqlQuery.trim()}
+                disabled={loading || !(query?.trim()) && !(sqlQuery?.trim())}
                 className="px-12 py-4 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
               >
                 {loading ? 'Executing...' : 'Execute'}
