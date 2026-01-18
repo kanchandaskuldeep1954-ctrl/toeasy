@@ -1,4 +1,4 @@
-import { Dataset, AnalysisInsight, ChartSpec, CleaningAction, ValidationRule, DataRow, KPI, SourceType, RuleCategory, DashboardConfig, StrategicReport, QualityDimension } from "../types";
+import { Dataset, AnalysisInsight, ChartSpec, CleaningAction, ValidationRule, DataRow, KPI, SourceType, RuleCategory, DashboardConfig, StrategicReport, QualityDimension } from "../../types";
 import { apiClient } from "./apiClient.js";
 
 /**
@@ -260,8 +260,8 @@ export class GroqService {
   }
 
   // Generate report
-  static async generateReport(dataset: Dataset): Promise<StrategicReport> {
-    return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset });
+  static async generateReport(dataset: Dataset, reportType: string = 'strategic'): Promise<StrategicReport> {
+    return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset, reportType });
   }
 
   // Extract KPIs

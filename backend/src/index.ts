@@ -270,15 +270,15 @@ app.post('/api/generate-chart', authenticateToken, async (req: AuthRequest, res)
 // Generate Strategic Report
 app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { dataset } = req.body;
+    const { dataset, reportType } = req.body;
 
     if (!dataset) {
       return res.status(400).json({ error: 'Dataset required' });
     }
 
-    console.log('Generating strategic report');
+    console.log(`Generating ${reportType || 'strategic'} report`);
 
-    const report = await GroqService.generateReport(dataset);
+    const report = await GroqService.generateReport(dataset, reportType);
 
     res.json(report);
   } catch (err) {
