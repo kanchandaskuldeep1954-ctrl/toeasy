@@ -41,6 +41,7 @@ export interface Config {
     apiKey: string | undefined;
     secretKey: string | undefined;
     webhookSecret: string | undefined;
+    env: string;
   };
   redisUrl: string | undefined;
   frontendUrl: string;
@@ -58,9 +59,10 @@ export const config: Config = {
   refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || '30d',
   groqApiKey: process.env.GROQ_API_KEY,
   cashfree: {
-    apiKey: process.env.CASHFREE_API_KEY,
+    apiKey: process.env.CASHFREE_API_KEY || process.env.CASHFREE_APP_ID,
     secretKey: process.env.CASHFREE_SECRET_KEY,
     webhookSecret: process.env.CASHFREE_WEBHOOK_SECRET,
+    env: process.env.CASHFREE_ENV || 'production',
   },
   redisUrl: process.env.REDIS_URL,
   frontendUrl: process.env.FRONTEND_URL || 'https://toeasy.vercel.app',
