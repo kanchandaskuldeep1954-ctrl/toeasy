@@ -126,7 +126,8 @@ router.get('/:workspaceId/queries', async (req: AuthRequest, res) => {
       data: result.rows,
       total: parseInt(countResult.rows[0].total),
       limit,
-      offset
+      offset,
+      hasMore: offset + limit < parseInt(countResult.rows[0].total)
     });
   } catch (err) {
     console.error('List workspace queries error:', err);
@@ -184,8 +185,8 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
     // Get total count
     const countResult = await query(
       `SELECT COUNT(*) as total FROM queries 
-       WHERE dataset_id = $1 AND workspace_id = $2`,
-      [req.params.datasetId, req.params.workspaceId]
+       WHERE dataset_id = $1 AND workspace_id = $2 AND executed_by = $3 AND is_saved = true`,
+      [req.params.datasetId, req.params.workspaceId, req.user!.id]
     );
 
     const total = parseInt(countResult.rows[0].total);
@@ -194,10 +195,10 @@ router.get('/:workspaceId/datasets/:datasetId/queries', async (req: AuthRequest,
     const result = await query(
       `SELECT id, query_text, query_type, result_count, name, description, created_at 
        FROM queries 
-       WHERE dataset_id = $1 AND workspace_id = $2 AND is_saved = true
+       WHERE dataset_id = $1 AND workspace_id = $2 AND executed_by = $3 AND is_saved = true
        ORDER BY created_at DESC 
-       LIMIT $3 OFFSET $4`,
-      [req.params.datasetId, req.params.workspaceId, limit, offset]
+       LIMIT $4 OFFSET $5`,
+      [req.params.datasetId, req.params.workspaceId, req.user!.id, limit, offset]
     );
 
     res.json({

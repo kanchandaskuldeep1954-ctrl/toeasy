@@ -24,6 +24,7 @@ interface SavedQuery {
   name: string;
   description: string;
   sql: string;
+  type: 'sql' | 'natural';
   createdAt: string;
   executionTime?: number;
   rowCount?: number;
@@ -120,8 +121,9 @@ const PlaygroundViewIntegrated: React.FC = () => {
         name: q.name || "Untitled Query",
         description: q.description || "",
         sql: q.query_text || q.sql || "",
-        rowCount: q.result_count || 0,
-        createdAt: q.created_at || new Date().toISOString()
+        type: q.query_type || q.type || "sql",
+        rowCount: q.result_count !== undefined ? q.result_count : q.rowCount || 0,
+        createdAt: q.created_at || q.createdAt || new Date().toISOString()
       }));
       setSavedQueries(mappedQueries);
     } catch (err) {
@@ -222,6 +224,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
         name: response.data.name,
         description: response.data.description,
         sql: response.data.sql,
+        type: response.data.type,
         rowCount: response.data.rowCount,
         createdAt: response.data.createdAt,
       };
@@ -235,8 +238,12 @@ const PlaygroundViewIntegrated: React.FC = () => {
   };
 
   const loadQuery = (q: SavedQuery) => {
-    setMode('sql');
-    setSqlQuery(q.sql);
+    setMode(q.type === 'natural' ? 'ask' : 'sql');
+    if (q.type === 'natural') {
+      setQuery(q.sql);
+    } else {
+      setSqlQuery(q.sql);
+    }
     setGeneratedSql(null);
     setExplanation(null);
   };
