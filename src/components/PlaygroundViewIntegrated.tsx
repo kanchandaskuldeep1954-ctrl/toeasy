@@ -89,7 +89,15 @@ const PlaygroundViewIntegrated: React.FC = () => {
       );
       // Backend returns { data: Query[], total: number } or similar
       const queriesData = response.data.data || response.data || [];
-      setSavedQueries(Array.isArray(queriesData) ? queriesData : []);
+      const mappedQueries = (Array.isArray(queriesData) ? queriesData : []).map((q: any) => ({
+        id: q.id,
+        name: q.name || "Untitled Query",
+        description: q.description || "",
+        sql: q.query_text || q.sql || "",
+        rowCount: q.result_count || 0,
+        createdAt: q.created_at || new Date().toISOString()
+      }));
+      setSavedQueries(mappedQueries);
     } catch (err) {
       console.error('Failed to load saved queries:', err);
     } finally {

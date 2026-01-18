@@ -120,7 +120,7 @@ export const QueryHistory: React.FC = () => {
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
                         <h3 className="text-white font-semibold">
-                          {query.title || 'Untitled Query'}
+                          {(query as any).name || query.title || 'Untitled Query'}
                         </h3>
                         <p className="text-xs text-slate-400 mt-1">
                           {new Date(query.created_at).toLocaleString()}
@@ -144,7 +144,7 @@ export const QueryHistory: React.FC = () => {
                       </button>
                     </div>
                     <p className="text-sm text-slate-400 truncate font-mono bg-slate-800 px-3 py-2 rounded">
-                      {query.sql}
+                      {(query as any).query_text || query.sql}
                     </p>
                   </div>
                 ))}
@@ -161,7 +161,7 @@ export const QueryHistory: React.FC = () => {
                   <div>
                     <label className="text-xs text-slate-400 uppercase">SQL</label>
                     <pre className="mt-2 p-3 bg-slate-800 rounded text-sm text-slate-300 overflow-auto max-h-32">
-                      {selectedQuery.sql}
+                      {(selectedQuery as any).query_text || selectedQuery.sql}
                     </pre>
                   </div>
                   <div>
