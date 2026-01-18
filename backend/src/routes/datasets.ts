@@ -151,7 +151,7 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
     }
 
     const dataset = result.rows[0];
-    
+
     // Parse raw_data safely - it might already be an object or a JSON string
     let parsedRawData = [];
     try {
@@ -171,8 +171,8 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
     let parsedAnalysis = null;
     try {
       if (dataset.analysis_result) {
-        parsedAnalysis = typeof dataset.analysis_result === 'string' 
-          ? JSON.parse(dataset.analysis_result) 
+        parsedAnalysis = typeof dataset.analysis_result === 'string'
+          ? JSON.parse(dataset.analysis_result)
           : dataset.analysis_result;
       }
     } catch (parseErr) {
@@ -251,7 +251,7 @@ router.post('/:workspaceId/datasets/:datasetId/analyze', async (req: AuthRequest
     try {
       // Try to extract sections from the Groq response
       const textLower = analysisText.toLowerCase();
-      
+
       // Extract quality issues/anomalies
       if (analysisText.includes('Potential Quality Issues') || textLower.includes('quality issues')) {
         const match = analysisText.match(/(?:Potential Quality Issues|quality issues)[:\n]+([\s\S]*?)(?=\n\n|\*\*|$)/i);
@@ -358,9 +358,9 @@ router.post('/:workspaceId/datasets/:datasetId/export', async (req: AuthRequest,
       exportData = JSON.stringify(data, null, 2);
     }
 
-    res.json({ 
+    res.json({
       filename: `${name}.${format === 'csv' ? 'csv' : 'json'}`,
-      data: exportData 
+      data: exportData
     });
   } catch (err) {
     console.error('Export dataset error:', err);
@@ -368,8 +368,52 @@ router.post('/:workspaceId/datasets/:datasetId/export', async (req: AuthRequest,
   }
 });
 
+// Get dataset preview (sample of rows)
+router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
+
+    const result = await query(
+      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3',
+      [req.params.datasetId, req.params.workspaceId, req.user!.id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    const rawData = result.rows[0].raw_data;
+    let data: any[] = [];
+
+    if (typeof rawData === 'string') {
+      data = JSON.parse(rawData);
+    } else {
+      data = rawData;
+    }
+
+    // Ensure data is an array
+    if (!Array.isArray(data)) {
+      if (data && typeof data === 'object' && (data as any).data && Array.isArray((data as any).data)) {
+        data = (data as any).data;
+      } else {
+        data = [];
+      }
+    }
+
+    res.json({
+      data: data.slice(0, limit),
+      total: data.length,
+      preview: true
+    });
+  } catch (err) {
+    console.error('Dataset preview error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Delete dataset
 router.delete('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
+
   try {
     const result = await query(
       'DELETE FROM datasets WHERE id = $1 AND workspace_id = $2 AND user_id = $3 RETURNING id',

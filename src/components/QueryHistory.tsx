@@ -30,9 +30,9 @@ export const QueryHistory: React.FC = () => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
-    if (workspaceId && token) {
+    if (workspaceId && token && workspaceId !== 'null') {
       fetchQueries();
-    } else if (!workspaceId && token) {
+    } else if ((!workspaceId || workspaceId === 'null') && token) {
       setLoading(false); // No workspace selected, not an error but nothing to show
     }
   }, [token, workspaceId]);
@@ -45,7 +45,7 @@ export const QueryHistory: React.FC = () => {
         `${backendUrl}/workspaces/${workspaceId}/queries`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setQueries(response.data || []);
+      setQueries(response.data.data || response.data || []);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch queries');

@@ -31,6 +31,10 @@ const ForensicCleanView: React.FC = () => {
     const hydrateDataset = async () => {
       // Hydrate if we have rows but no data loaded (or empty array)
       if (dataset && dataset.row_count > 0 && (!dataset.data || dataset.data.length === 0)) {
+        if (workspaceId === 'null' || datasetId === 'null' || !workspaceId || !datasetId) {
+          console.log("Skipping hydration: null IDs");
+          return;
+        }
         console.log("Hydrating dataset logic...", dataset.id);
         setIsLoading(true);
         try {
