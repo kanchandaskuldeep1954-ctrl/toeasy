@@ -203,7 +203,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                     <svg className={`w-3 h-3 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
             </aside>
-            );
+        </>
+    );
 };
 
-            export default Sidebar;
+export default Sidebar;
