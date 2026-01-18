@@ -6,12 +6,12 @@ interface PublicLayoutProps {
 }
 
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
-    const navigate = useNavigate();
+    const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col">
             {/* Navigation */}
-            <nav className="sticky top-0 z-50 glass border-b border-white/20 dark:border-white/5">
+            <nav className="sticky top-0 z-50 glass border-b border-white/20 dark:border-white/5 relative">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between h-16 items-center">
                         <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('/')}>
@@ -29,7 +29,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                             <Link to="/contact" className="text-sm font-semibold hover:text-indigo-600 transition-colors">Contact Us</Link>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="hidden md:flex items-center gap-4">
                             <Link to="/login" className="text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                                 Sign In
                             </Link>
@@ -40,8 +40,47 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                                 Get Started
                             </Link>
                         </div>
+
+                        {/* Mobile Menu Button */}
+                        <div className="flex items-center gap-4 md:hidden">
+                            <button
+                                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+                                className="p-2 -mr-2 text-slate-600 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                            >
+                                {mobileMenuOpen ? (
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                ) : (
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
+
+                {/* Mobile Menu Overlay */}
+                {mobileMenuOpen && (
+                    <div className="absolute top-16 left-0 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-xl md:hidden animate-in">
+                        <div className="p-4 space-y-4">
+                            <div className="flex flex-col space-y-3">
+                                <Link to="/" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Features</Link>
+                                <Link to="/" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>How it Works</Link>
+                                <Link to="/contact" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Contact Us</Link>
+                            </div>
+                            <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-col gap-3">
+                                <Link to="/login" className="text-center py-2.5 font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors" onClick={() => setMobileMenuOpen(false)}>
+                                    Sign In
+                                </Link>
+                                <Link
+                                    to="/signup"
+                                    className="text-center py-3 rounded-xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-500/25"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                >
+                                    Get Started
+                                </Link>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </nav>
 
             <main className="flex-1">
