@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 
+// Contact Page for Toeasy AI - Updated with Indian HQ Details
 const ContactUs: React.FC = () => {
     const [status, setStatus] = useState<string | null>(null);
 
