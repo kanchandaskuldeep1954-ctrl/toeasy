@@ -236,9 +236,9 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
     };
 
     return (
-        <div className="h-full flex flex-col bg-slate-950 text-white overflow-hidden">
+        <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white overflow-hidden transition-colors">
             {/* Header / Toolbar */}
-            <div className="h-16 border-b border-slate-800 flex items-center justify-between px-6 bg-slate-900/50 backdrop-blur-xl">
+            <div className="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 bg-white/70 dark:bg-slate-900/50 backdrop-blur-xl transition-colors">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">
                         ⚡
@@ -247,7 +247,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         <input
                             value={dataflowName}
                             onChange={(e) => setDataflowName(e.target.value)}
-                            className="bg-transparent text-lg font-bold outline-none placeholder-slate-600"
+                            className="bg-transparent text-lg font-bold outline-none placeholder-slate-400 dark:placeholder-slate-600 text-slate-900 dark:text-white transition-colors"
                             placeholder="Pipeline Name..."
                         />
                         <div className="flex items-center gap-2 text-xs text-slate-500">
@@ -279,7 +279,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
                     <button
                         onClick={handleSave}
-                        className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800 transition-all border border-transparent hover:border-slate-700"
+                        className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-all border border-transparent hover:border-slate-300 dark:hover:border-slate-700"
                     >
                         Save
                     </button>
@@ -300,9 +300,9 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
             {/* Main Content Area */}
             <div className="flex-1 flex overflow-hidden">
                 {/* Visual Sidebar (Draggable Nodes) */}
-                <div className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col z-10">
-                    <div className="p-4 border-b border-slate-800">
-                        <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Toolbox</h3>
+                <div className="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-10 transition-colors">
+                    <div className="p-4 border-b border-slate-200 dark:border-slate-800">
+                        <h3 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Toolbox</h3>
                     </div>
                     <div className="flex-1 overflow-y-auto p-4 space-y-3">
                         {Object.entries(NODE_CONFIGS).map(([type, config]) => (
@@ -311,8 +311,8 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                                 onDragStart={(event) => onDragStart(event, type as DataflowNodeType)}
                                 draggable
                                 className="
-                                    group flex items-center gap-3 p-3 rounded-xl border border-slate-800 bg-slate-950/50 
-                                    hover:border-indigo-500 hover:bg-indigo-500/10 hover:shadow-lg hover:shadow-indigo-500/10 
+                                    group flex items-center gap-3 p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 
+                                    hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 hover:shadow-lg hover:shadow-indigo-500/10 
                                     cursor-grab active:cursor-grabbing transition-all
                                 "
                             >
@@ -323,7 +323,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                                     {config.icon}
                                 </div>
                                 <div>
-                                    <h4 className="text-sm font-bold text-slate-200 group-hover:text-white">{config.name}</h4>
+                                    <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 group-hover:text-indigo-600 dark:group-hover:text-white transition-colors">{config.name}</h4>
                                     <p className="text-[10px] text-slate-500 line-clamp-1">{config.description}</p>
                                 </div>
                             </div>
@@ -339,7 +339,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                                 <button
                                     key={t.id}
                                     onClick={() => loadTemplate(t.id)}
-                                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                                    className="w-full text-left px-3 py-2 rounded-lg text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 >
                                     {t.icon} {t.name}
                                 </button>
@@ -363,12 +363,13 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         nodeTypes={nodeTypes}
                         proOptions={{ hideAttribution: true }}
                         fitView
-                        className="bg-slate-950"
+                        fitView
+                        className="bg-slate-50 dark:bg-slate-950 transition-colors"
                     >
-                        <Background color="#334155" gap={20} size={1} variant={BackgroundVariant.Dots} />
-                        <Controls className="!bg-slate-800 !border-slate-700 !text-white [&>button]:!fill-white [&>button:hover]:!bg-slate-700" />
+                        <Background color="#94a3b8" gap={20} size={1} variant={BackgroundVariant.Dots} className="opacity-20 dark:opacity-40" />
+                        <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 !text-slate-900 dark:!text-white [&>button]:!fill-slate-900 dark:[&>button]:!fill-white [&>button:hover]:!bg-slate-100 dark:[&>button:hover]:!bg-slate-700" />
                         <MiniMap
-                            className="!bg-slate-900 !border-slate-800"
+                            className="!bg-white dark:!bg-slate-900 !border-slate-200 dark:!border-slate-800"
                             nodeColor={(n) => {
                                 const type = n.data?.type as DataflowNodeType;
                                 return NODE_CONFIGS[type]?.color || '#ffffff';
@@ -376,7 +377,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         />
                         <Panel position="top-center">
                             {nodes.length === 0 && (
-                                <div className="bg-slate-900/80 backdrop-blur px-6 py-3 rounded-full border border-slate-700 text-slate-400 text-sm animate-pulse">
+                                <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur px-6 py-3 rounded-full border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-sm animate-pulse shadow-sm">
                                     Drag nodes from the sidebar or ask AI to generate a flow ✨
                                 </div>
                             )}

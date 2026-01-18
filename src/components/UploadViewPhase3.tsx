@@ -155,12 +155,12 @@ export const UploadViewPhase3: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 py-8 px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4 transition-colors">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">Upload Dataset</h1>
-          <p className="text-slate-400">Import CSV or JSON files to your workspace</p>
+          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Upload Dataset</h1>
+          <p className="text-slate-600 dark:text-slate-400">Import CSV or JSON files to your workspace</p>
         </div>
 
         {error && (
@@ -169,7 +169,7 @@ export const UploadViewPhase3: React.FC = () => {
           </div>
         )}
 
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-8">
+        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm">
           <form onSubmit={handleUpload} className="space-y-6">
             {/* File Upload Area */}
             <div
@@ -178,8 +178,8 @@ export const UploadViewPhase3: React.FC = () => {
               onDragOver={handleDrag}
               onDrop={handleDrop}
               className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive
-                  ? 'border-indigo-500 bg-indigo-600/10'
-                  : 'border-slate-700 hover:border-slate-600'
+                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-600/10'
+                : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                 }`}
             >
               {file ? (
@@ -197,8 +197,8 @@ export const UploadViewPhase3: React.FC = () => {
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  <p className="text-white font-semibold">{file.name}</p>
-                  <p className="text-sm text-slate-400">
+                  <p className="text-slate-900 dark:text-white font-semibold">{file.name}</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">
                     {(file.size / 1024 / 1024).toFixed(2)} MB
                   </p>
                   <button
@@ -212,7 +212,7 @@ export const UploadViewPhase3: React.FC = () => {
               ) : (
                 <div className="space-y-3">
                   <svg
-                    className="w-12 h-12 mx-auto text-slate-400"
+                    className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500"
                     fill="none"
                     stroke="currentColor"
                     viewBox="0 0 24 24"
@@ -224,9 +224,9 @@ export const UploadViewPhase3: React.FC = () => {
                       d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  <p className="text-white font-semibold">Drag and drop your file</p>
-                  <p className="text-sm text-slate-400">or click to browse</p>
-                  <p className="text-xs text-slate-500">CSV or JSON files up to 500MB</p>
+                  <p className="text-slate-900 dark:text-white font-semibold">Drag and drop your file</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">or click to browse</p>
+                  <p className="text-xs text-slate-400 dark:text-slate-500">CSV or JSON files up to 500MB</p>
                 </div>
               )}
               <input
@@ -239,13 +239,13 @@ export const UploadViewPhase3: React.FC = () => {
 
             {/* Dataset Name */}
             <div>
-              <label className="text-sm text-slate-400 mb-2 block">Dataset Name*</label>
+              <label className="text-sm text-slate-600 dark:text-slate-400 mb-2 block">Dataset Name*</label>
               <input
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
                 placeholder="e.g., Customer Sales Q4"
-                className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                 required
               />
             </div>
@@ -254,10 +254,10 @@ export const UploadViewPhase3: React.FC = () => {
             {uploading && uploadProgress > 0 && (
               <div>
                 <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm text-slate-400">Upload Progress</label>
-                  <span className="text-sm text-indigo-400 font-semibold">{uploadProgress}%</span>
+                  <label className="text-sm text-slate-600 dark:text-slate-400">Upload Progress</label>
+                  <span className="text-sm text-indigo-600 dark:text-indigo-400 font-semibold">{uploadProgress}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-indigo-600 transition-all duration-300"
                     style={{ width: `${uploadProgress}%` }}
@@ -270,16 +270,16 @@ export const UploadViewPhase3: React.FC = () => {
             <button
               type="submit"
               disabled={!file || uploading}
-              className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
+              className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
             >
               {uploading ? `Uploading... ${uploadProgress}%` : 'Upload Dataset'}
             </button>
           </form>
 
           {/* Info Box */}
-          <div className="mt-8 pt-8 border-t border-slate-800 space-y-3">
-            <p className="text-sm text-slate-300 font-semibold">Supported Formats:</p>
-            <ul className="text-sm text-slate-400 space-y-1">
+          <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 space-y-3">
+            <p className="text-sm text-slate-700 dark:text-slate-300 font-semibold">Supported Formats:</p>
+            <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
               <li>• CSV with headers in first row</li>
               <li>• JSON with array of objects</li>
               <li>• Maximum file size: 500MB</li>

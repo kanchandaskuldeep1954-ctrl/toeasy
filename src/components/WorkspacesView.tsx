@@ -68,20 +68,20 @@ export const WorkspacesView: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-950">
-        <div className="text-slate-400">Loading workspaces...</div>
+      <div className="flex items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="text-slate-600 dark:text-slate-400">Loading workspaces...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 py-8 px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4 transition-colors">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Workspaces</h1>
-            <p className="text-slate-400">Organize your datasets and analyses</p>
+            <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Workspaces</h1>
+            <p className="text-slate-600 dark:text-slate-400">Organize your datasets and analyses</p>
           </div>
           {!showNewForm && (
             <button
@@ -101,27 +101,27 @@ export const WorkspacesView: React.FC = () => {
 
         {/* New Workspace Form */}
         {showNewForm && (
-          <div className="mb-8 p-6 bg-slate-900 border border-slate-800 rounded-xl">
-            <h2 className="text-xl font-bold text-white mb-4">Create New Workspace</h2>
+          <div className="mb-8 p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Create New Workspace</h2>
             <form onSubmit={handleCreateWorkspace} className="space-y-4 max-w-md">
               <div>
-                <label className="text-sm text-slate-400 mb-2 block">Workspace Name*</label>
+                <label className="text-sm text-slate-600 dark:text-slate-400 mb-2 block">Workspace Name*</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g., Customer Analytics"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                   required
                 />
               </div>
               <div>
-                <label className="text-sm text-slate-400 mb-2 block">Description</label>
+                <label className="text-sm text-slate-600 dark:text-slate-400 mb-2 block">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   placeholder="Optional description"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
                   rows={3}
                 />
               </div>
@@ -136,7 +136,7 @@ export const WorkspacesView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowNewForm(false)}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
+                  className="px-4 py-2 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-white rounded-lg font-semibold transition-colors"
                 >
                   Cancel
                 </button>
@@ -148,7 +148,7 @@ export const WorkspacesView: React.FC = () => {
         {/* Workspaces Grid */}
         {workspaces.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-slate-400 mb-4">No workspaces yet</p>
+            <p className="text-slate-600 dark:text-slate-400 mb-4">No workspaces yet</p>
             <button
               onClick={() => setShowNewForm(true)}
               className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
@@ -161,16 +161,16 @@ export const WorkspacesView: React.FC = () => {
             {workspaces && Array.isArray(workspaces) && workspaces.map((workspace) => (
               <div
                 key={workspace.id}
-                className="p-6 bg-slate-900 border border-slate-800 rounded-xl hover:border-slate-700 transition-colors cursor-pointer group"
+                className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl hover:border-indigo-200 dark:hover:border-slate-700 shadow-sm hover:shadow-md transition-all cursor-pointer group"
                 onClick={() => {
                   setActiveWorkspace(workspace);
                   navigate(`/app/datasets`);
                 }}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 bg-indigo-600/20 rounded-lg flex items-center justify-center border border-indigo-500/50">
+                  <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-600/20 rounded-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-500/50">
                     <svg
-                      className="w-6 h-6 text-indigo-400"
+                      className="w-6 h-6 text-indigo-600 dark:text-indigo-400"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -188,7 +188,7 @@ export const WorkspacesView: React.FC = () => {
                       e.stopPropagation();
                       handleDeleteWorkspace(workspace.id);
                     }}
-                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-900/20 rounded-lg transition-colors"
+                    className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
@@ -201,20 +201,20 @@ export const WorkspacesView: React.FC = () => {
                   </button>
                 </div>
 
-                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-indigo-400 transition-colors">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {workspace.name}
                 </h3>
 
                 {workspace.description && (
-                  <p className="text-sm text-slate-400 mb-4 line-clamp-2">{workspace.description}</p>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-2">{workspace.description}</p>
                 )}
 
-                <div className="pt-4 border-t border-slate-800 mt-4 flex items-center justify-between">
+                <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between">
                   <div className="text-sm">
-                    <p className="text-slate-400">Datasets</p>
-                    <p className="text-lg font-bold text-white">{workspace.dataset_count || 0}</p>
+                    <p className="text-slate-500 dark:text-slate-400">Datasets</p>
+                    <p className="text-lg font-bold text-slate-900 dark:text-white">{workspace.dataset_count || 0}</p>
                   </div>
-                  <div className="text-xs text-slate-500">
+                  <div className="text-xs text-slate-400 dark:text-slate-500">
                     {new Date(workspace.created_at).toLocaleDateString()}
                   </div>
                 </div>

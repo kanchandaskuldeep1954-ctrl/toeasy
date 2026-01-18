@@ -37,7 +37,7 @@ const LandingPage: React.FC = () => {
                         </Link>
                         <Link
                             to="/login"
-                            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold transition-all hover:bg-slate-50 dark:hover:bg-slate-800"
+                            className="w-full sm:w-auto px-8 py-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white font-bold transition-all hover:bg-slate-50 dark:hover:bg-slate-800 shadow-sm hover:shadow-md"
                         >
                             View Demo
                         </Link>
@@ -46,8 +46,8 @@ const LandingPage: React.FC = () => {
                     {/* Dashboard Preview Mockup */}
                     <div className="mt-16 md:mt-24 relative max-w-5xl mx-auto">
                         <div className="rounded-3xl border border-white/20 dark:border-white/5 shadow-2xl overflow-hidden glass-card p-2 md:p-4 rotate-x-6 transform-gpu">
-                            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-900 aspect-video relative">
-                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-transparent to-purple-500/20 pointer-events-none"></div>
+                            <div className="rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-900 aspect-video relative">
+                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 dark:from-indigo-500/20 via-transparent to-purple-500/10 dark:to-purple-500/20 pointer-events-none"></div>
                                 <div className="p-8 flex items-center justify-center h-full">
                                     <div className="text-center space-y-4">
                                         <div className="w-16 h-16 rounded-full bg-indigo-600/20 flex items-center justify-center mx-auto">
