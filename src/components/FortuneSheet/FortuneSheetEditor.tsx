@@ -124,7 +124,56 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const componentKey = `fs-${data.length}-${headers.length}`;
 
     return (
-        <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+        <div style={{ width: '100%', height: '100%', position: 'relative' }} className={theme === 'dark' ? 'fortune-dark-mode' : ''}>
+            <style>
+                {`
+                    .fortune-dark-mode .fortune-container {
+                        background-color: #0f172a !important;
+                        color: #f8fafc !important;
+                    }
+                    .fortune-dark-mode .fortune-toolbar {
+                        background-color: #1e293b !important;
+                        border-bottom: 1px solid #334155 !important;
+                    }
+                    .fortune-dark-mode .fortune-toolbar-button {
+                        color: #cbd5e1 !important;
+                    }
+                    .fortune-dark-mode .fortune-toolbar-button:hover,
+                    .fortune-dark-mode .fortune-toolbar-button-active {
+                        background-color: #334155 !important;
+                        color: #ffffff !important;
+                    }
+                    .fortune-dark-mode .fortune-col-header, 
+                    .fortune-dark-mode .fortune-row-header-content {
+                        background-color: #1e293b !important;
+                        color: #94a3b8 !important;
+                        border-color: #334155 !important;
+                    }
+                    .fortune-dark-mode .fortune-sheet-area {
+                        background-color: #1e293b !important;
+                        border-top: 1px solid #334155 !important;
+                        color: #94a3b8 !important;
+                    }
+                    .fortune-dark-mode .fortune-grid-window {
+                        background-color: #0f172a !important;
+                    }
+                    .fortune-dark-mode .fortune-input-box-container {
+                        background-color: #1e293b !important;
+                    }
+                    .fortune-dark-mode .fortune-input-box {
+                        background-color: #0f172a !important;
+                        color: #f8fafc !important;
+                        border: 1px solid #334155 !important;
+                    }
+                    .fortune-dark-mode .fortune-sheet-selection {
+                        background-color: rgba(99, 102, 241, 0.15) !important;
+                        border: 1px solid #6366f1 !important;
+                    }
+                    .fortune-dark-mode canvas {
+                        background-color: #0f172a !important;
+                    }
+                `}
+            </style>
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
@@ -132,8 +181,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                         name: "Data",
                         celldata: sheetData, // Use celldata for initialization
                         status: 1,
-                        // row: data.length + 50,  // Let it auto-expand or set reasonable default
-                        // column: headers.length + 10
                     }]}
                 />
             ) : (
