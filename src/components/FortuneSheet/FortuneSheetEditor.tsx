@@ -112,17 +112,20 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const componentKey = `fs-${data.length}-${headers.length}`;
 
     return (
-        <div
-            style={{
-                width: '100%',
-                height: '100%',
-                position: 'relative',
-                filter: theme === 'dark' ? 'invert(0.9) hue-rotate(180deg) brightness(1.1) contrast(1.1)' : 'none',
-                background: theme === 'dark' ? '#000' : '#fff',
-                transition: 'filter 0.3s ease'
-            }}
-            className="fortune-sheet-container"
-        >
+        <div className="fortune-sheet-container w-full h-full relative transition-all duration-300">
+            <style>
+                {`
+                    .fortune-sheet-container {
+                        background: #ffffff;
+                        filter: none;
+                    }
+                    /* Real-time reactivity via global class */
+                    :root.dark .fortune-sheet-container {
+                        filter: invert(0.9) hue-rotate(180deg) brightness(1.1) contrast(1.1);
+                        background: #000000 !important;
+                    }
+                `}
+            </style>
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
