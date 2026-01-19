@@ -54,7 +54,7 @@ const UniverCleanView: React.FC = () => {
             // If we are already hydrated for this exact dataset, skip
             if (hasHydratedRef.current === hydrateKey) return;
 
-            if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null') return;
+            if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null' || workspaceId === 'undefined' || datasetId === 'undefined') return;
 
             // Reset previous state when switching
             hasHydratedRef.current = hydrateKey;

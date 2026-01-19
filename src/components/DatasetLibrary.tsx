@@ -190,7 +190,9 @@ export const DatasetLibrary: React.FC = () => {
                         // Optimistically set active dataset
                         setActiveDataset(dataset);
                         // Navigate explicitly to the new dataset ID to avoid race condition with stale state
-                        navigate(`/app/clean?workspace=${dataset.workspace_id}&dataset=${dataset.id}`);
+                        // Use dataset.workspace_id or fall back to the current view's workspaceId
+                        const targetWorkspaceId = dataset.workspace_id || workspaceId;
+                        navigate(`/app/clean?workspace=${targetWorkspaceId}&dataset=${dataset.id}`);
                       }}
                     >
                       <td className="px-6 py-4">
