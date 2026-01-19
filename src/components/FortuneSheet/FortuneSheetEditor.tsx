@@ -28,18 +28,12 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const [sheetData, setSheetData] = useState<any[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
 
-    // Color definitions based on theme (Vibrant & Dark Mode Support)
-    const colors = {
-        bg: theme === 'dark' ? '#0f172a' : '#ffffff',
-        text: theme === 'dark' ? '#f8fafc' : '#000000',
-        headerBg: theme === 'dark' ? '#1e293b' : '#f1f5f9',
-        headerText: theme === 'dark' ? '#cbd5e1' : '#334155',
-        highlights: {
-            error: theme === 'dark' ? '#dc2626' : '#ff0000', // Stronger Reds
-            warning: theme === 'dark' ? '#d97706' : '#fbbf24', // Stronger Ambers
-            info: theme === 'dark' ? '#2563eb' : '#3b82f6', // Stronger Blues
-            recovered: theme === 'dark' ? '#059669' : '#10b981', // Stronger Greens
-        }
+    // Color definitions (Now only for Highlights)
+    const highlightColors = {
+        error: '#fca5a5',     // Light Red
+        warning: '#fcd34d',   // Light Amber
+        info: '#93c5fd',      // Light Blue
+        recovered: '#86efac', // Light Green
     };
 
     useEffect(() => {
@@ -47,8 +41,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         currentDataRef.current = data;
 
         const cellData: any[] = [];
-        // Limit for safety check (remove later if stable)
-        // const renderData = data.slice(0, 5000); 
         const renderData = data;
 
         // 1. Create Headers (Row 0)
@@ -60,38 +52,34 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     v: h,
                     m: h,
                     ct: { t: 'g', fa: 'General' },
-                    bg: colors.headerBg,
+                    bg: '#f1f5f9', // Standard light gray header
                     bl: 1, // bold
-                    fc: colors.headerText,
+                    fc: '#334155',
                 }
             });
         });
 
         // 2. Create Data Rows (Row 1+)
         renderData.forEach((row, rowIndex) => {
-            const sheetRowIndex = rowIndex + 1; // Start at row 1 (row 0 is header)
+            const sheetRowIndex = rowIndex + 1;
 
             headers.forEach((header, colIndex) => {
                 const value = row[header];
                 const displayValue = value === null || value === undefined ? '' : String(value);
 
                 let bg = undefined;
-                let fc = colors.text;
 
-                // Apply highlighting
+                // Apply highlighting (Only for specific cases)
                 if (row.__metadata?.recoveredFields?.includes(header)) {
-                    bg = colors.highlights.recovered;
-                    if (theme === 'dark') fc = '#ffffff'; // White text on colored backgrounds
+                    bg = highlightColors.recovered;
                 }
 
                 if (highlightIssues) {
                     const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
-                        if (issue.severity === 'error') bg = colors.highlights.error;
-                        else if (issue.severity === 'warning') bg = colors.highlights.warning;
-                        else bg = colors.highlights.info;
-
-                        if (theme === 'dark') fc = '#ffffff'; // white text on red/amber
+                        if (issue.severity === 'error') bg = highlightColors.error;
+                        else if (issue.severity === 'warning') bg = highlightColors.warning;
+                        else bg = highlightColors.info;
                     }
                 }
 
@@ -101,8 +89,8 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     v: {
                         v: value === null || value === undefined ? '' : value,
                         m: displayValue,
-                        bg: bg || colors.bg,
-                        fc,
+                        bg, // Only set if highlight exists
+                        fc: '#000000', // Standard black text
                         ct: { t: 'g', fa: 'General' },
                     }
                 });
@@ -110,7 +98,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         });
 
         setSheetData(cellData);
-    }, [data, headers, issues, highlightIssues, theme]);
+    }, [data, headers, issues, highlightIssues]); // Removed theme from dependency as filter handles it
 
     // Expose methods via ref
     React.useImperativeHandle(ref, () => ({
@@ -124,56 +112,17 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const componentKey = `fs-${data.length}-${headers.length}`;
 
     return (
-        <div style={{ width: '100%', height: '100%', position: 'relative' }} className={theme === 'dark' ? 'fortune-dark-mode' : ''}>
-            <style>
-                {`
-                    .fortune-dark-mode .fortune-container {
-                        background-color: #0f172a !important;
-                        color: #f8fafc !important;
-                    }
-                    .fortune-dark-mode .fortune-toolbar {
-                        background-color: #1e293b !important;
-                        border-bottom: 1px solid #334155 !important;
-                    }
-                    .fortune-dark-mode .fortune-toolbar-button {
-                        color: #cbd5e1 !important;
-                    }
-                    .fortune-dark-mode .fortune-toolbar-button:hover,
-                    .fortune-dark-mode .fortune-toolbar-button-active {
-                        background-color: #334155 !important;
-                        color: #ffffff !important;
-                    }
-                    .fortune-dark-mode .fortune-col-header, 
-                    .fortune-dark-mode .fortune-row-header-content {
-                        background-color: #1e293b !important;
-                        color: #94a3b8 !important;
-                        border-color: #334155 !important;
-                    }
-                    .fortune-dark-mode .fortune-sheet-area {
-                        background-color: #1e293b !important;
-                        border-top: 1px solid #334155 !important;
-                        color: #94a3b8 !important;
-                    }
-                    .fortune-dark-mode .fortune-grid-window {
-                        background-color: #0f172a !important;
-                    }
-                    .fortune-dark-mode .fortune-input-box-container {
-                        background-color: #1e293b !important;
-                    }
-                    .fortune-dark-mode .fortune-input-box {
-                        background-color: #0f172a !important;
-                        color: #f8fafc !important;
-                        border: 1px solid #334155 !important;
-                    }
-                    .fortune-dark-mode .fortune-sheet-selection {
-                        background-color: rgba(99, 102, 241, 0.15) !important;
-                        border: 1px solid #6366f1 !important;
-                    }
-                    .fortune-dark-mode canvas {
-                        background-color: #0f172a !important;
-                    }
-                `}
-            </style>
+        <div
+            style={{
+                width: '100%',
+                height: '100%',
+                position: 'relative',
+                filter: theme === 'dark' ? 'invert(0.9) hue-rotate(180deg) brightness(1.1) contrast(1.1)' : 'none',
+                background: theme === 'dark' ? '#000' : '#fff',
+                transition: 'filter 0.3s ease'
+            }}
+            className="fortune-sheet-container"
+        >
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
