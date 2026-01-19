@@ -22,7 +22,7 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'chart-vendor': ['recharts'],
-          'fortunesheet-vendor': ['fortunesheet'],
+          'fortunesheet-vendor': ['@fortunesheet/react'],
         }
       }
     }

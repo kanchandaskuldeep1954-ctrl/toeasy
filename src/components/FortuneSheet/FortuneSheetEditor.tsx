@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Workbook } from 'fortunesheet';
+import { Workbook } from '@fortunesheet/react';
 import '@fortunesheet/react/dist/index.css';
 import { DataRow, CellIssue } from '../../types';
 
