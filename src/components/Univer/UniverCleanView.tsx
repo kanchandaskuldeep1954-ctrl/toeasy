@@ -101,9 +101,19 @@ const UniverCleanView: React.FC = () => {
     // Initialize AI analysis when dataset loads
     useEffect(() => {
         const init = async () => {
-            if (!dataset || initializedRef.current === dataset.id) return;
+            // Using a unique key based on data length and first few rows to detect "new" data
+            const hydrationKey = dataset?.id ? `${dataset.id}-${dataset.data?.length || 0}` : null;
+
+            if (!dataset || initializedRef.current === dataset.id) {
+                // However, if it's the SAME ID but data just arrived (length > 0) 
+                // and we haven't analyzed it yet, we should proceed.
+                // initializedRef.current being dataset.id means we've already done THIS dataset.
+                // But hydrateOnce resets initializedRef.current = null, so this check works.
+                return;
+            }
             if (!dataset.data || dataset.data.length === 0) return;
 
+            console.log(`[UniverCleanView] Starting AI Analysis for dataset: ${dataset.id}`);
             initializedRef.current = dataset.id!;
             setIsLoading(true);
 
@@ -137,8 +147,10 @@ const UniverCleanView: React.FC = () => {
             }
         };
 
-        init();
-    }, [dataset?.id]);
+        if (dataset?.data?.length > 0) {
+            init();
+        }
+    }, [dataset?.id, dataset?.data?.length]); // Re-run if ID stays same but data arrives
 
     // Display headers (exclude metadata)
     const displayHeaders = useMemo(() => {
@@ -511,6 +523,11 @@ const UniverCleanView: React.FC = () => {
                                     theme={theme}
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         const header = displayHeaders[col];
+                                        if (!header) return;
+
+                                        console.log(`[UniverCleanView] Manual edit at [${row}, ${col}] (${header}): ${oldVal} -> ${newVal}`);
+
+                                        // 1. Update Change History
                                         const entry: ChangeHistoryEntry = {
                                             id: `edit-${Date.now()}`,
                                             timestamp: new Date(),
@@ -524,6 +541,23 @@ const UniverCleanView: React.FC = () => {
                                             canUndo: true,
                                         };
                                         setChangeHistory(prev => [...prev, entry]);
+
+                                        // 2. Sync with dataset state so "Confirm & Save" sees it
+                                        if (dataset && dataset.data) {
+                                            const newData = [...dataset.data];
+                                            if (newData[row]) {
+                                                newData[row] = {
+                                                    ...newData[row],
+                                                    [header]: newVal,
+                                                    __metadata: {
+                                                        ...newData[row].__metadata,
+                                                        manualEdit: true,
+                                                        lastModified: new Date().toISOString()
+                                                    }
+                                                };
+                                                updateDataset(dataset.id!, { data: newData, raw_data: newData });
+                                            }
+                                        }
                                     }}
                                 />
                             </React.Suspense>
