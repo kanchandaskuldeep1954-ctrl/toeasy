@@ -29,6 +29,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const currentDataRef = useRef<DataRow[]>(data);
 
     useEffect(() => {
+        // console.log('FortuneSheetEditor received data:', data?.length, 'rows');
         if (!data || data.length === 0) return;
         currentDataRef.current = data;
 
@@ -98,6 +99,8 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         }
     };
 
+    const componentKey = `fs-${data.length}-${headers.length}`;
+
     // Note: FortuneSheet requires a container with explicit dimensions
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
@@ -105,6 +108,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                  but ideally we handle updates via API */}
             {sheetData.length > 0 ? (
                 <Workbook
+                    key={componentKey}
                     data={[{
                         name: "Data",
                         data: sheetData, // 2D array
