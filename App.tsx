@@ -23,8 +23,9 @@ import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
 import { QueryHistory } from './src/components/QueryHistory';
 import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
-import CleanViewIntegrated from './src/components/CleanViewIntegrated';
-import { UniverCleanView } from './src/components/Univer';
+import ReportViewIntegrated from './src/components/ReportViewIntegrated';
+const CleanViewIntegrated = React.lazy(() => import('./src/components/CleanViewIntegrated'));
+const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
 import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
 import ReportView from './components/ReportView';
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
@@ -49,32 +50,34 @@ const AppLayout: React.FC = () => {
   return (
     <MainLayout>
       <UrlSync />
-      <Routes>
-        {/* Workspace & Dataset Management */}
-        <Route path="workspaces" element={<WorkspacesView />} />
-        <Route path="datasets" element={<DatasetLibrary />} />
-        <Route path="profile" element={<ProfilePage />} />
+      <React.Suspense fallback={<div className="flex items-center justify-center h-full w-full"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}>
+        <Routes>
+          {/* Workspace & Dataset Management */}
+          <Route path="workspaces" element={<WorkspacesView />} />
+          <Route path="datasets" element={<DatasetLibrary />} />
+          <Route path="profile" element={<ProfilePage />} />
 
-        {/* Data Operations */}
-        <Route path="upload" element={<UploadViewPhase3 />} />
-        <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
-        <Route path="clean" element={<UniverCleanView />} />
-        <Route path="clean-legacy" element={<CleanViewIntegrated />} />
-        <Route path="playground" element={<PlaygroundViewIntegrated />} />
-        <Route path="dashboard" element={<DashboardViewIntegrated />} />
-        <Route path="dashboards" element={<DashboardLibrary />} />
-        <Route path="report" element={<ReportViewIntegrated />} />
-        <Route path="queries" element={<QueryHistory />} />
-        <Route path="preview" element={<DataPreview />} />
-        <Route path="rules" element={<ValidationRulesManager />} />
-        <Route path="quarantine" element={<QuarantineVault />} />
-        <Route path="metrics" element={<UsageMetrics />} />
-        <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
-        <Route path="billing" element={<BillingViewIntegrated />} />
+          {/* Data Operations */}
+          <Route path="upload" element={<UploadViewPhase3 />} />
+          <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
+          <Route path="clean" element={<UniverCleanView />} />
+          <Route path="clean-legacy" element={<CleanViewIntegrated />} />
+          <Route path="playground" element={<PlaygroundViewIntegrated />} />
+          <Route path="dashboard" element={<DashboardViewIntegrated />} />
+          <Route path="dashboards" element={<DashboardLibrary />} />
+          <Route path="report" element={<ReportViewIntegrated />} />
+          <Route path="queries" element={<QueryHistory />} />
+          <Route path="preview" element={<DataPreview />} />
+          <Route path="rules" element={<ValidationRulesManager />} />
+          <Route path="quarantine" element={<QuarantineVault />} />
+          <Route path="metrics" element={<UsageMetrics />} />
+          <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
+          <Route path="billing" element={<BillingViewIntegrated />} />
 
-        {/* Default route */}
-        <Route path="/" element={<Navigate to="workspaces" replace />} />
-      </Routes>
+          {/* Default route */}
+          <Route path="/" element={<Navigate to="workspaces" replace />} />
+        </Routes>
+      </React.Suspense>
     </MainLayout>
   );
 };
