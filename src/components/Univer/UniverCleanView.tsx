@@ -508,6 +508,7 @@ const UniverCleanView: React.FC = () => {
                                     data={dataset?.raw_data || []}
                                     headers={dataset?.raw_data?.[0] ? Object.keys(dataset.raw_data[0]) : []}
                                     issues={issues}
+                                    theme={theme}
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         const header = displayHeaders[col];
                                         const entry: ChangeHistoryEntry = {
