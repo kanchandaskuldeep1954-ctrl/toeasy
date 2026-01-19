@@ -29,9 +29,12 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const currentDataRef = useRef<DataRow[]>(data);
 
     useEffect(() => {
-        // console.log('FortuneSheetEditor received data:', data?.length, 'rows');
         if (!data || data.length === 0) return;
         currentDataRef.current = data;
+
+        // PERFORMANCE: Limit to first 1000 rows for initial stable render
+        // Large datasets (50k+) can freeze the DOM/Canvas on initial mount
+        const renderData = data.slice(0, 1000);
 
         // Create header row
         const headerRow = headers.map(h => ({
@@ -43,7 +46,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         }));
 
         // Create data rows
-        const rows = data.map((row, rowIndex) => {
+        const rows = renderData.map((row, rowIndex) => {
             return headers.map((header, colIndex) => {
                 const value = row[header];
                 let bg = undefined;
@@ -54,8 +57,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                 }
 
                 // Check for issues to highlight
-                // Note: This is an initial static highlight. 
-                // Dynamic updates might need ref access to the sheet instance.
                 if (highlightIssues) {
                     const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
@@ -67,7 +68,9 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
 
                 return {
                     v: value === null || value === undefined ? '' : value,
+                    m: value === null || value === undefined ? '' : String(value),
                     bg,
+                    fc: '#000000', // Force black text
                 };
             });
         });
@@ -76,43 +79,28 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         setSheetData([headerRow, ...rows]);
     }, [data, headers, issues, highlightIssues]);
 
-    // Expose methods via ref
+    // Expose methods via ref (unchanged...)
     React.useImperativeHandle(ref, () => ({
-        getSheetData: () => {
-            // Return current data (simplified)
-            // In a real implementation, we would parse the current sheet state
-            return currentDataRef.current;
-        },
+        getSheetData: () => currentDataRef.current,
         animateCellFix: async (row: number, col: number, oldVal: any, newVal: any) => {
-            // Visual feedback not fully implemented for FortuneSheet yet
-            // Just update the data
             if (onCellEdit) onCellEdit(row, col, oldVal, newVal);
         },
-        applyIssueHighlighting: () => { } // Handled via props
+        applyIssueHighlighting: () => { }
     }));
-
-    // Configuration for FortuneSheet
-    const settings = {
-        data: sheetData,
-        onChange: (d: any) => {
-            // Handle data changes
-        }
-    };
 
     const componentKey = `fs-${data.length}-${headers.length}`;
 
-    // Note: FortuneSheet requires a container with explicit dimensions
     return (
         <div style={{ width: '100%', height: '100%', position: 'relative' }}>
-            {/* Key forces re-render when data significantly changes if needed, 
-                 but ideally we handle updates via API */}
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
                     data={[{
                         name: "Data",
-                        data: sheetData, // 2D array
-                        status: 1
+                        data: sheetData,
+                        status: 1,
+                        row: sheetData.length, // Explicit row count
+                        column: headers.length, // Explicit column count
                     }]}
                 />
             ) : (
