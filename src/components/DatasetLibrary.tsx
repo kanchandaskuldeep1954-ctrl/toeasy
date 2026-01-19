@@ -187,8 +187,10 @@ export const DatasetLibrary: React.FC = () => {
                       key={dataset.id}
                       className="border-b border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer group"
                       onClick={() => {
+                        // Optimistically set active dataset
                         setActiveDataset(dataset);
-                        navigate(buildDatasetPath('/app/clean'));
+                        // Navigate explicitly to the new dataset ID to avoid race condition with stale state
+                        navigate(`/app/clean?workspace=${dataset.workspace_id}&dataset=${dataset.id}`);
                       }}
                     >
                       <td className="px-6 py-4">
