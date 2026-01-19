@@ -50,14 +50,21 @@ const UniverCleanView: React.FC = () => {
     useEffect(() => {
         const hydrateOnce = async () => {
             const hydrateKey = `${workspaceId}-${datasetId}`;
+
+            // If we are already hydrated for this exact dataset, skip
             if (hasHydratedRef.current === hydrateKey) return;
+
             if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null') return;
 
+            // Reset previous state when switching
             hasHydratedRef.current = hydrateKey;
             setIsLoading(true);
             setLoadingStep('Loading dataset...');
+            setSemantics(null); // Reset analysis
+            setIssues([]); // Reset issues
 
             try {
+                console.log(`[UniverCleanView] Hydrating dataset: ${datasetId}`);
                 const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
                 const fullData = res.data;
 
@@ -69,8 +76,16 @@ const UniverCleanView: React.FC = () => {
                 };
 
                 setActiveDataset(hydrated);
+
+                // Reset editor if ref exists
+                if (univerEditorRef.current) {
+                    // Force update if needed
+                }
+
             } catch (e) {
                 console.error('Hydration failed:', e);
+                // Reset ref on failure so we can try again
+                hasHydratedRef.current = null;
             } finally {
                 setIsLoading(false);
             }
