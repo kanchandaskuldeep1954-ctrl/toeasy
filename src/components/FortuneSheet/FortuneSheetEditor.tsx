@@ -22,9 +22,8 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     readOnly = false,
     highlightIssues = true,
 }, ref) => {
-    // Transform DataRow[] to FortuneSheet cell data format
-    // FortuneSheet uses a 2D array of objects or values for cell data
-    // r: row, c: column, v: value
+    // Transform DataRow[] to FortuneSheet celldata format
+    // celldata is a 1D array of objects: {r, c, v: {v, m, bg, fc, ...}}
     const [sheetData, setSheetData] = useState<any[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
 
@@ -32,31 +31,42 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         if (!data || data.length === 0) return;
         currentDataRef.current = data;
 
-        // PERFORMANCE: Limit to first 1000 rows for initial stable render
-        // Large datasets (50k+) can freeze the DOM/Canvas on initial mount
-        const renderData = data.slice(0, 1000);
+        const cellData: any[] = [];
+        // Limit for safety check (remove later if stable)
+        // const renderData = data.slice(0, 5000); 
+        const renderData = data;
 
-        // Create header row
-        const headerRow = headers.map(h => ({
-            v: h,
-            ct: { t: 'g', fa: 'General' },
-            bg: '#f1f5f9',
-            bl: 1, // bold
-            fc: '#334155',
-        }));
+        // 1. Create Headers (Row 0)
+        headers.forEach((h, colIndex) => {
+            cellData.push({
+                r: 0,
+                c: colIndex,
+                v: {
+                    v: h,
+                    m: h,
+                    ct: { t: 'g', fa: 'General' },
+                    bg: '#f1f5f9',
+                    bl: 1, // bold
+                    fc: '#000000', // Black text
+                }
+            });
+        });
 
-        // Create data rows
-        const rows = renderData.map((row, rowIndex) => {
-            return headers.map((header, colIndex) => {
+        // 2. Create Data Rows (Row 1+)
+        renderData.forEach((row, rowIndex) => {
+            const sheetRowIndex = rowIndex + 1; // Start at row 1 (row 0 is header)
+
+            headers.forEach((header, colIndex) => {
                 const value = row[header];
+                const displayValue = value === null || value === undefined ? '' : String(value);
+
                 let bg = undefined;
 
-                // Apply highlighting for recovered fields
+                // Apply highlighting
                 if (row.__metadata?.recoveredFields?.includes(header)) {
-                    bg = '#d1fae5'; // Green for recovered
+                    bg = '#d1fae5';
                 }
 
-                // Check for issues to highlight
                 if (highlightIssues) {
                     const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
@@ -66,20 +76,24 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     }
                 }
 
-                return {
-                    v: value === null || value === undefined ? '' : value,
-                    m: value === null || value === undefined ? '' : String(value),
-                    bg,
-                    fc: '#000000', // Force black text
-                };
+                cellData.push({
+                    r: sheetRowIndex,
+                    c: colIndex,
+                    v: {
+                        v: value === null || value === undefined ? '' : value,
+                        m: displayValue,
+                        bg,
+                        fc: '#000000',
+                        ct: { t: 'g', fa: 'General' },
+                    }
+                });
             });
         });
 
-        // Combine
-        setSheetData([headerRow, ...rows]);
+        setSheetData(cellData);
     }, [data, headers, issues, highlightIssues]);
 
-    // Expose methods via ref (unchanged...)
+    // Expose methods via ref
     React.useImperativeHandle(ref, () => ({
         getSheetData: () => currentDataRef.current,
         animateCellFix: async (row: number, col: number, oldVal: any, newVal: any) => {
@@ -97,10 +111,10 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     key={componentKey}
                     data={[{
                         name: "Data",
-                        data: sheetData,
+                        celldata: sheetData, // Use celldata for initialization
                         status: 1,
-                        row: sheetData.length, // Explicit row count
-                        column: headers.length, // Explicit column count
+                        // row: data.length + 50,  // Let it auto-expand or set reasonable default
+                        // column: headers.length + 10
                     }]}
                 />
             ) : (
