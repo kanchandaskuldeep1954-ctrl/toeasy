@@ -19,6 +19,20 @@ export interface DataRow {
   };
 }
 
+// Cell issue type for data cleaning
+export interface CellIssue {
+  row: number;
+  col: number;
+  columnName: string;
+  currentValue: any;
+  issueType: 'missing' | 'invalid_format' | 'outlier' | 'duplicate' | 'inconsistent' | 'semantic_error';
+  severity: 'error' | 'warning' | 'info';
+  suggestedValue: any;
+  confidence: number;
+  explanation: string;
+  recoveryMethod?: 'ai_infer' | 'lookup' | 'calculate' | 'pattern' | 'default' | 'remove';
+}
+
 // Audit log entry for tracking data recovery actions
 export interface AuditLogEntry {
   action: 'recovered' | 'quarantined' | 'modified' | 'validated';

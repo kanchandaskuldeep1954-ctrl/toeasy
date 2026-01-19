@@ -9,8 +9,7 @@
  * - Lowest data loss rate through intelligent recovery
  */
 
-import { DataRow, ValidationRule, QualityDimension, Dataset } from '../../types';
-import { CellIssue } from '../components/Univer/UniverEditor';
+import { DataRow, ValidationRule, QualityDimension, Dataset, CellIssue } from '../../types';
 import { apiClient } from './apiClient';
 
 // Change history entry type

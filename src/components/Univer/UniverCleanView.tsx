@@ -5,8 +5,8 @@ import { useDataset } from '../../hooks/useDataset';
 import { apiClient } from '../../services/apiClient';
 import { GroqService } from '../../services/groqService';
 import AICleaningPanel from './AICleaningPanel';
-const UniverEditor = React.lazy(() => import('./UniverEditor'));
-import { CellIssue } from './UniverEditor';
+const FortuneSheetEditor = React.lazy(() => import('../FortuneSheet/FortuneSheetEditor'));
+import { CellIssue } from '../../../types';
 import ExportModal from '../ExportHub/ExportModal';
 import {
     analyzeDatasetSemantics,
@@ -481,15 +481,14 @@ const UniverCleanView: React.FC = () => {
                         <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
                             <React.Suspense fallback={
                                 <div className="flex items-center justify-center h-full">
-                                    <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                                 </div>
                             }>
-                                <UniverEditor
+                                <FortuneSheetEditor
                                     ref={univerEditorRef}
-                                    data={dataset.data || []}
-                                    headers={displayHeaders}
+                                    data={dataset?.raw_data || []}
+                                    headers={dataset?.raw_data?.[0] ? Object.keys(dataset.raw_data[0]) : []}
                                     issues={issues}
-                                    highlightIssues={true}
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         const header = displayHeaders[col];
                                         const entry: ChangeHistoryEntry = {
