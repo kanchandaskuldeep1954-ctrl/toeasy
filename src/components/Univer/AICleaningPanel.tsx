@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { ValidationRule, DataRow, QualityDimension } from '../../../types';
-import { CellIssue } from './UniverEditor';
+import { ValidationRule, DataRow, QualityDimension, CellIssue } from '../../../types';
 import { ChangeHistoryEntry } from '../../services/univerService';
 
 interface AICleaningPanelProps {

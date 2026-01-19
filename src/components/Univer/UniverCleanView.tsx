@@ -62,6 +62,7 @@ const UniverCleanView: React.FC = () => {
             setLoadingStep('Loading dataset...');
             setSemantics(null); // Reset analysis
             setIssues([]); // Reset issues
+            initializedRef.current = null; // Reset initialization state to allow re-analysis
 
             try {
                 console.log(`[UniverCleanView] Hydrating dataset: ${datasetId}`);
