@@ -19,6 +19,7 @@
   "dependencies": {
     "@types/d3": "^7.4.3",
     "axios": "^1.6.2",
+    "@fortunesheet/react": "^0.9.3",
     "d3": "^7.9.0",
     "papaparse": "^5.5.3",
     "plotly.js": "^3.3.1",
