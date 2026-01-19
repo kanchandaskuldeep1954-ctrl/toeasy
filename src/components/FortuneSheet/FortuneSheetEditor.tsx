@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Workbook } from '@fortunesheet/react';
-import '@fortunesheet/react/dist/index.css';
+import { Workbook } from '@fortune-sheet/react';
+import '@fortune-sheet/react/dist/index.css';
 import { DataRow, CellIssue } from '../../types';
 
 export interface FortuneSheetEditorProps {
