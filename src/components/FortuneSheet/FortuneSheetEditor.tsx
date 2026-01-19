@@ -28,18 +28,12 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     const [sheetData, setSheetData] = useState<any[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
 
-    // Color definitions for "Natural" look
-    const colors = {
-        bg: theme === 'dark' ? '#1e293b' : '#ffffff',   // Muted Slate for Dark, White for Light
-        text: theme === 'dark' ? '#f1f5f9' : '#1e293b', // Muted White for Dark, Slate for Light
-        headerBg: theme === 'dark' ? '#0f172a' : '#f1f5f9',
-        headerText: theme === 'dark' ? '#94a3b8' : '#334155',
-        highlights: {
-            error: theme === 'dark' ? '#ef4444' : '#fee2e2',     // Stronger for Dark, Soft for Light
-            warning: theme === 'dark' ? '#f59e0b' : '#fef3c7',
-            info: theme === 'dark' ? '#3b82f6' : '#dbeafe',
-            recovered: theme === 'dark' ? '#10b981' : '#d1fae5',
-        }
+    // Standard light colors (Filter will handle Dark Mode naturally)
+    const highlightColors = {
+        error: '#fca5a5',     // Soft Red
+        warning: '#fcd34d',   // Soft Amber
+        info: '#93c5fd',      // Soft Blue
+        recovered: '#86efac', // Soft Green
     };
 
     useEffect(() => {
@@ -58,9 +52,9 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     v: h,
                     m: h,
                     ct: { t: 'g', fa: 'General' },
-                    bg: colors.headerBg,
+                    bg: '#f1f5f9',
                     bl: 1, // bold
-                    fc: colors.headerText,
+                    fc: '#334155',
                 }
             });
         });
@@ -73,23 +67,19 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                 const value = row[header];
                 const displayValue = value === null || value === undefined ? '' : String(value);
 
-                let bg = colors.bg;
-                let fc = colors.text;
+                let bg = undefined;
 
                 // Apply highlighting
                 if (row.__metadata?.recoveredFields?.includes(header)) {
-                    bg = colors.highlights.recovered;
-                    if (theme === 'dark') fc = '#ffffff';
+                    bg = highlightColors.recovered;
                 }
 
                 if (highlightIssues) {
                     const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
-                        if (issue.severity === 'error') bg = colors.highlights.error;
-                        else if (issue.severity === 'warning') bg = colors.highlights.warning;
-                        else bg = colors.highlights.info;
-
-                        if (theme === 'dark') fc = '#ffffff';
+                        if (issue.severity === 'error') bg = highlightColors.error;
+                        else if (issue.severity === 'warning') bg = highlightColors.warning;
+                        else bg = highlightColors.info;
                     }
                 }
 
@@ -100,7 +90,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                         v: value === null || value === undefined ? '' : value,
                         m: displayValue,
                         bg,
-                        fc,
+                        fc: '#000000',
                         ct: { t: 'g', fa: 'General' },
                     }
                 });
@@ -108,7 +98,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         });
 
         setSheetData(cellData);
-    }, [data, headers, issues, highlightIssues, theme]); // Now depends on theme for "Natural" update
+    }, [data, headers, issues, highlightIssues]); // Use standard light mode generation
 
     // Expose methods via ref
     React.useImperativeHandle(ref, () => ({
@@ -119,23 +109,20 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         applyIssueHighlighting: () => { }
     }));
 
-    // Re-mount key ensures real-time theme updates across the whole component
-    const componentKey = `fs-${data.length}-${headers.length}-${theme}`;
+    const componentKey = `fs-${data.length}-${headers.length}`;
 
     return (
-        <div className="fortune-sheet-container w-full h-full relative overflow-hidden rounded-xl border border-slate-200 dark:border-slate-800">
-            <style>
-                {`
-                    /* Natural UI Skinning for Toolbar and UI Chrome */
-                    .fortune-sheet-container .fortune-container {
-                        background: ${theme === 'dark' ? '#0f172a' : '#ffffff'} !important;
-                    }
-                    .fortune-sheet-container .fortune-toolbar {
-                        background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'} !important;
-                        border-bottom: 1px solid ${theme === 'dark' ? '#334155' : '#e2e8f0'} !important;
-                    }
-                `}
-            </style>
+        <div
+            style={{
+                width: '100%',
+                height: '100%',
+                position: 'relative',
+                filter: theme === 'dark' ? 'invert(0.9) hue-rotate(180deg) brightness(1.1) contrast(1.1)' : 'none',
+                background: theme === 'dark' ? '#000' : '#fff',
+                transition: 'filter 0.3s ease'
+            }}
+            className="fortune-sheet-container"
+        >
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
@@ -146,7 +133,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     }]}
                 />
             ) : (
-                <div className="flex items-center justify-center h-full bg-slate-50 dark:bg-slate-900">
+                <div className="flex items-center justify-center h-full">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                 </div>
             )}
