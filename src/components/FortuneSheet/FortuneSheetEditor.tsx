@@ -11,6 +11,7 @@ export interface FortuneSheetEditorProps {
     onDataChange?: (data: DataRow[]) => void;
     readOnly?: boolean;
     highlightIssues?: boolean;
+    theme?: 'light' | 'dark';
 }
 
 const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({

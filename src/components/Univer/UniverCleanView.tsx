@@ -18,12 +18,15 @@ import {
     ChangeHistoryEntry,
 } from '../../services/univerService';
 
+import { useTheme } from '../../hooks/useTheme';
+
 const UniverCleanView: React.FC = () => {
     const [searchParams] = useSearchParams();
     const workspaceId = searchParams.get('workspace');
     const datasetId = searchParams.get('dataset');
 
     const { activeDataset: dataset, updateDataset, setActiveDataset } = useDataset();
+    const { theme } = useTheme(); // Get current theme
 
     // State
     const [activeTab, setActiveTab] = useState<'workspace' | 'original' | 'vault'>('workspace');
