@@ -22,15 +22,6 @@ export default defineConfig({
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
           'chart-vendor': ['recharts'],
-          'univer-vendor': [
-            '@univerjs/core',
-            '@univerjs/design',
-            '@univerjs/engine-formula',
-            '@univerjs/engine-render',
-            '@univerjs/sheets',
-            '@univerjs/sheets-ui',
-            '@univerjs/ui',
-          ],
         }
       }
     }

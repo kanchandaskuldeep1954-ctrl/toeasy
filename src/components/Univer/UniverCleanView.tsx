@@ -4,8 +4,9 @@ import { Dataset, ValidationRule, DataRow } from '../../../types';
 import { useDataset } from '../../hooks/useDataset';
 import { apiClient } from '../../services/apiClient';
 import { GroqService } from '../../services/groqService';
-import UniverEditor, { CellIssue } from './UniverEditor';
 import AICleaningPanel from './AICleaningPanel';
+const UniverEditor = React.lazy(() => import('./UniverEditor'));
+import { CellIssue } from './UniverEditor';
 import ExportModal from '../ExportHub/ExportModal';
 import {
     analyzeDatasetSemantics,
@@ -478,29 +479,35 @@ const UniverCleanView: React.FC = () => {
                     <>
                         {/* Univer Spreadsheet */}
                         <div className="flex-1 bg-white dark:bg-slate-900 rounded-2xl shadow-xl overflow-hidden border border-slate-200 dark:border-slate-800">
-                            <UniverEditor
-                                ref={univerEditorRef}
-                                data={dataset.data || []}
-                                headers={displayHeaders}
-                                issues={issues}
-                                highlightIssues={true}
-                                onCellEdit={(row, col, oldVal, newVal) => {
-                                    const header = displayHeaders[col];
-                                    const entry: ChangeHistoryEntry = {
-                                        id: `edit-${Date.now()}`,
-                                        timestamp: new Date(),
-                                        action: 'edit',
-                                        actor: 'user',
-                                        row,
-                                        column: header,
-                                        oldValue: oldVal,
-                                        newValue: newVal,
-                                        explanation: `Manual edit: "${oldVal}" → "${newVal}"`,
-                                        canUndo: true,
-                                    };
-                                    setChangeHistory(prev => [...prev, entry]);
-                                }}
-                            />
+                            <React.Suspense fallback={
+                                <div className="flex items-center justify-center h-full">
+                                    <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                                </div>
+                            }>
+                                <UniverEditor
+                                    ref={univerEditorRef}
+                                    data={dataset.data || []}
+                                    headers={displayHeaders}
+                                    issues={issues}
+                                    highlightIssues={true}
+                                    onCellEdit={(row, col, oldVal, newVal) => {
+                                        const header = displayHeaders[col];
+                                        const entry: ChangeHistoryEntry = {
+                                            id: `edit-${Date.now()}`,
+                                            timestamp: new Date(),
+                                            action: 'edit',
+                                            actor: 'user',
+                                            row,
+                                            column: header,
+                                            oldValue: oldVal,
+                                            newValue: newVal,
+                                            explanation: `Manual edit: "${oldVal}" → "${newVal}"`,
+                                            canUndo: true,
+                                        };
+                                        setChangeHistory(prev => [...prev, entry]);
+                                    }}
+                                />
+                            </React.Suspense>
                         </div>
 
                         {/* AI Panel Sidebar */}
