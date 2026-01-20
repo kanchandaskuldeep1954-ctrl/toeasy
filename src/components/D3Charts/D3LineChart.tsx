@@ -72,12 +72,12 @@ const D3LineChart: React.FC<LineChartProps> = ({
 
         // Scales
         const x = d3.scalePoint()
-            .domain(data.map(d => d.label))
+            .domain(data.map((d: DataPoint) => d.label))
             .range([0, dim.innerWidth])
             .padding(0.5);
 
         const y = d3.scaleLinear()
-            .domain([0, d3.max(data, d => d.value) || 0])
+            .domain([0, d3.max(data, (d: DataPoint) => d.value) || 0])
             .nice()
             .range([dim.innerHeight, 0]);
 
@@ -106,26 +106,39 @@ const D3LineChart: React.FC<LineChartProps> = ({
             .attr('fill', '#94a3b8')
             .attr('font-size', '10px');
 
+        // Logic to split data into "Solid" (Historical) and "Dashed" (Forecast)
+        // We find the transition point where type changes to 'forecast'
+        const forecastIndex = data.findIndex(d => d.type === 'forecast');
+
+        let solidData = data;
+        let dashedData: DataPoint[] = [];
+
+        if (forecastIndex > 0) {
+            // Include the point *before* the forecast starts to ensure connection
+            solidData = data.slice(0, forecastIndex + 1); // Historical + 1 overlap
+            dashedData = data.slice(forecastIndex - 1);   // Overlap + Forecast
+        }
+
         // Line generator
         const lineGenerator = d3.line<DataPoint>()
-            .x(d => x(d.label) || 0)
-            .y(d => y(d.value));
+            .x((d: DataPoint) => x(d.label) || 0)
+            .y((d: DataPoint) => y(d.value));
 
         if (curved) {
             lineGenerator.curve(d3.curveMonotoneX);
         }
 
-        // Area generator
+        // Area generator (Only for solid part usually, or full if desired. Let's do full for now but lighter)
         const areaGenerator = d3.area<DataPoint>()
-            .x(d => x(d.label) || 0)
+            .x((d: DataPoint) => x(d.label) || 0)
             .y0(dim.innerHeight)
-            .y1(d => y(d.value));
+            .y1((d: DataPoint) => y(d.value));
 
         if (curved) {
             areaGenerator.curve(d3.curveMonotoneX);
         }
 
-        // Draw area
+        // Draw area (Full data for continuity)
         if (showArea) {
             const area = g.append('path')
                 .datum(data)
@@ -141,26 +154,45 @@ const D3LineChart: React.FC<LineChartProps> = ({
             }
         }
 
-        // Draw line
-        const path = g.append('path')
-            .datum(data)
-            .attr('fill', 'none')
-            .attr('stroke', color)
-            .attr('stroke-width', 3)
-            .attr('stroke-linecap', 'round')
-            .attr('stroke-linejoin', 'round')
-            .attr('d', lineGenerator);
+        // Help draw a path with animation
+        const drawPath = (pathData: DataPoint[], isDashed: boolean) => {
+            const path = g.append('path')
+                .datum(pathData)
+                .attr('fill', 'none')
+                .attr('stroke', isDashed ? '#94a3b8' : color) // Slate-400 for forecast, Main color for history
+                .attr('stroke-width', 3)
+                .attr('stroke-linecap', 'round')
+                .attr('stroke-linejoin', 'round')
+                .attr('stroke-dasharray', isDashed ? '6, 6' : 'none')
+                .attr('d', lineGenerator);
 
-        // Animate line
-        if (animate) {
-            const totalLength = path.node()?.getTotalLength() || 0;
-            path
-                .attr('stroke-dasharray', `${totalLength} ${totalLength}`)
-                .attr('stroke-dashoffset', totalLength)
-                .transition()
-                .duration(1500)
-                .ease(d3.easeQuadOut)
-                .attr('stroke-dashoffset', 0);
+            if (animate) {
+                const totalLength = path.node()?.getTotalLength() || 0;
+
+                if (isDashed) {
+                    // For dashed, simple fade in is often better than draw animation which messes up dashes
+                    path.attr('opacity', 0)
+                        .transition()
+                        .delay(1000) // Wait for main line
+                        .duration(800)
+                        .attr('opacity', 1);
+                } else {
+                    path
+                        .attr('stroke-dasharray', `${totalLength} ${totalLength}`)
+                        .attr('stroke-dashoffset', totalLength)
+                        .transition()
+                        .duration(1500)
+                        .ease(d3.easeQuadOut)
+                        .attr('stroke-dashoffset', 0);
+                }
+            }
+        };
+
+        if (forecastIndex > 0) {
+            drawPath(solidData, false);
+            drawPath(dashedData, true);
+        } else {
+            drawPath(data, false);
         }
 
         // Draw dots
@@ -170,14 +202,14 @@ const D3LineChart: React.FC<LineChartProps> = ({
                 .enter()
                 .append('circle')
                 .attr('class', 'dot')
-                .attr('cx', d => x(d.label) || 0)
-                .attr('cy', d => y(d.value))
+                .attr('cx', (d: any) => x(d.label) || 0) // Cast to any or DataPoint to avoid unknown
+                .attr('cy', (d: any) => y(d.value))
                 .attr('r', 0)
                 .attr('fill', '#0f172a')
                 .attr('stroke', color)
                 .attr('stroke-width', 3)
                 .attr('cursor', onPointClick ? 'pointer' : 'default')
-                .on('mouseover', function (event, d) {
+                .on('mouseover', function (event, d: any) { // Type d as any or DataPoint
                     d3.select(this)
                         .transition()
                         .duration(200)
@@ -196,7 +228,7 @@ const D3LineChart: React.FC<LineChartProps> = ({
                         .attr('fill', '#0f172a');
                     hideTooltip(tooltip);
                 })
-                .on('click', function (event, d) {
+                .on('click', function (event, d: any) {
                     if (onPointClick) onPointClick(d, data.indexOf(d));
                 });
 
@@ -205,7 +237,7 @@ const D3LineChart: React.FC<LineChartProps> = ({
                 dots
                     .transition()
                     .duration(400)
-                    .delay((d, i) => 1200 + i * 50)
+                    .delay((d: any, i: number) => 1200 + i * 50)
                     .attr('r', 5);
             } else {
                 dots.attr('r', 5);

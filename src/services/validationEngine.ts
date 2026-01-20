@@ -70,38 +70,118 @@ export function validateLuhn(value: string): boolean {
 /**
  * Detects if a string is PII and its type.
  */
-export function detectPII(value: string): 'ssn' | 'credit_card' | 'iban' | 'email' | null {
-    if (!value) return null;
-    const s = value.replace(/\s|-/g, '');
+/**
+ * Detects if a string is PII and its type.
+ * Now supports Passport, Driver's License, VAT, IP, Phone, etc.
+ */
+export function detectPII(value: string): 'ssn' | 'credit_card' | 'iban' | 'email' | 'phone' | 'passport' | 'ip' | 'vat' | 'drivers_license' | null {
+    if (!value || typeof value !== 'string') return null;
+    const s = value.trim();
+    const compact = s.replace(/[\s\-\.]/g, '');
 
-    // 1. Credit Card
-    if (/^\d{13,19}$/.test(s) && validateLuhn(s)) return 'credit_card';
+    // 1. Credit Card (13-19 digits, Luhn check)
+    if (/^\d{13,19}$/.test(compact) && validateLuhn(compact)) return 'credit_card';
 
-    // 2. SSN (Basic US pattern)
-    if (/^\d{3}-?\d{2}-?\d{4}$/.test(value)) return 'ssn';
+    // 2. Email (Standard Regex)
+    if (/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(s)) return 'email';
 
-    // 3. IBAN (Basic)
-    if (/^[A-Z]{2}\d{2}[A-Z\d]{4,30}$/.test(s)) return 'iban';
+    // 3. IP Address (IPv4)
+    if (/^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/.test(s)) return 'ip';
 
-    // 4. Email
-    if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return 'email';
+    // 4. SSN (US: 3-2-4)
+    if (/^\d{3}-?\d{2}-?\d{4}$/.test(s) && compact.length === 9) return 'ssn';
+
+    // 5. Phone (International E.164 or US 10-digit)
+    // Matches: +1-555-555-5555, (555) 555-5555, 555.555.5555
+    if (/^(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}$/.test(s)) return 'phone';
+
+    // 6. IBAN (Country code + digits)
+    if (/^[A-Z]{2}\d{2}[A-Z\d]{4,30}$/.test(compact)) return 'iban';
+
+    // 7. Passport (Generic: 6-9 chars, usually alphanumeric)
+    // US: 9 digits. UK: 9 digits. India: 1 letter + 7 digits.
+    if (/^(?!^0+$)[a-zA-Z0-9]{6,9}$/.test(compact)) {
+        // Use heuristics to distinguish from other IDs if needed
+        // For now, if labeled as Passport in column, validationEngine usually handles. 
+        // This is a loose check for "potential" passport.
+        // Regex for US Passport (9 digits)
+        if (/^\d{9}$/.test(compact)) return 'passport'; // Ambiguous with other IDs, but acceptable estimate
+        // Regex for UK/India (Letter + digits)
+        if (/^[A-Z][0-9]{7,8}$/.test(compact)) return 'passport';
+    }
+
+    // 8. VAT/Tax ID (EU: 2 letter country + digits)
+    if (/^[A-Z]{2}[A-Z0-9]{2,12}$/.test(compact)) return 'vat';
+
+    // 9. Drivers License (US State Patterns - Generic)
+    // Most are 1 Letter + 6-12 digits OR 9 digits.
+    if (/^[A-Z]\d{6,12}$/.test(compact)) return 'drivers_license';
 
     return null;
 }
 
 /**
- * Masks sensitive data based on type.
+ * Masks sensitive data based on type using configurable strategy.
  */
-export function maskPII(value: string, type: string): string {
+export function maskPII(
+    value: string,
+    type: string,
+    strategy: 'redact' | 'partial' | 'hash' = 'partial'
+): string {
     if (!value) return value;
+
+    if (strategy === 'redact') {
+        return '[REDACTED]';
+    }
+
+    if (strategy === 'hash') {
+        // Simple hash simulation (in real app use SHA-256)
+        let hash = 0;
+        for (let i = 0; i < value.length; i++) {
+            hash = (hash << 5) - hash + value.charCodeAt(i);
+            hash |= 0;
+        }
+        return `hash_${Math.abs(hash).toString(16)}`;
+    }
+
+    // Partial Masking Strategy per Type
+    const v = value.trim();
+
     switch (type) {
-        case 'email':
-            const parts = value.split('@');
-            return parts[0].slice(0, 1) + '***@' + parts[1];
+        case 'email': {
+            const atIndex = v.indexOf('@');
+            if (atIndex < 0) return v;
+            const user = v.slice(0, atIndex);
+            const domain = v.slice(atIndex);
+            const visible = user.length > 2 ? user.slice(0, 2) : user.slice(0, 1);
+            return `${visible}***${domain}`;
+        }
+
         case 'credit_card':
-            return '****-****-****-' + value.slice(-4);
+            // Show last 4
+            return '****-****-****-' + v.slice(-4);
+
         case 'ssn':
-            return '***-**-' + value.slice(-4);
+            // Show last 4
+            return '***-**-' + v.slice(-4);
+
+        case 'phone':
+            // Show last 4
+            return '***-***-' + v.slice(-4);
+
+        case 'passport':
+        case 'drivers_license':
+            // Show first 1, last 2
+            return v.length > 3 ? v[0] + '*****' + v.slice(-2) : '***';
+
+        case 'iban':
+            // Show first 2 (Country) and last 4
+            return v.slice(0, 2) + '****' + v.slice(-4);
+
+        case 'ip':
+            // Mask last octet
+            return v.replace(/\d+$/, '***');
+
         default:
             return '********';
     }

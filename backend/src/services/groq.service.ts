@@ -602,11 +602,23 @@ Return ONLY valid JSON (no markdown, no explanation):
       const dataSize = data.length;
 
       // 1. Generate Real Analytics Artifacts (KPIs & Charts)
-      const { kpis, charts } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
+      const { kpis, charts, forensics } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
+
+      // Context Extraction
+      const piiColumns = forensics.profiles.filter(p => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map(p => p.column);
+      const hasPredictiveCharts = charts.some(c => c.type === 'line' && c.description?.includes('Forecast'));
 
       // Prepare context for LLM
       const kpiSummary = kpis.map(k => `${k.label}: ${k.value} (${k.trendDirection || 'neutral'})`).join('\n');
       const chartSummary = charts.map(c => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Desc: ${c.description || 'n/a'}`).join('\n');
+
+      const complianceContext = piiColumns.length > 0
+        ? `CRITICAL COMPLIANCE NOTICE: The following columns contain potential PII: ${piiColumns.join(', ')}. You MUST include a 'Compliance & Privacy' section with GDPR/CCPA warnings.`
+        : 'No PII detected in this dataset.';
+
+      const predictiveContext = hasPredictiveCharts
+        ? `PREDICTIVE INSIGHTS: Predictive models have generated forecasts. You MUST include a 'Future Outlook' section analyzing these trends.`
+        : '';
 
       const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
       
@@ -619,6 +631,12 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       AVAILABLE VISUALS (Real Charts):
       ${chartSummary}
+
+      COMPLIANCE CONTEXT:
+      ${complianceContext}
+
+      PREDICTIVE CONTEXT:
+      ${predictiveContext}
 
       TASK:
       Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.

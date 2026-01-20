@@ -1,5 +1,6 @@
 
-import { DataForensicsEngine, ColumnProfile, ColumnRole } from './dataForensicsEngine.js';
+import { DataForensicsEngine, ColumnProfile, ColumnRole, ForensicResult } from './dataForensicsEngine.js';
+import { PredictiveAnalytics } from './predictiveAnalytics.js';
 
 export interface DashboardConfig {
     kpis: KPI[];
@@ -69,6 +70,10 @@ export class AnalyticsEngine {
 
         // 5. Generate Insights
         const insights = this.generateInsights(kpis, charts);
+
+        // 6. Append Predictive Charts (Forecasts)
+        const predictiveCharts = this.generatePredictiveCharts(data, forensics.profiles);
+        charts.push(...predictiveCharts);
 
         return {
             kpis,
@@ -155,6 +160,82 @@ export class AnalyticsEngine {
             value: `${(qualityScore * 100).toFixed(1)}%`,
             category: 'quality',
             status: qualityScore > 0.9 ? 'on_track' : (qualityScore > 0.7 ? 'at_risk' : 'off_track')
+        });
+
+        // --- 5. Advanced Growth & Retention ---
+        const advancedKpis = this.generateAdvancedKPIs(data, profiles);
+        kpis.push(...advancedKpis);
+
+        return kpis;
+    }
+
+    private static generateAdvancedKPIs(data: any[], profiles: ColumnProfile[]): KPI[] {
+        const kpis: KPI[] = [];
+        const dateCol = profiles.find(p => p.role === 'timestamp' || p.dataType === 'date');
+        const numCols = profiles.filter(p => p.role === 'currency' || (p.dataType === 'number' && !p.column.toLowerCase().includes('id')));
+        const idCol = profiles.find(p => p.role === 'identifier' || p.column.toLowerCase().includes('id') || p.column.toLowerCase().includes('email'));
+
+        if (!dateCol) return kpis;
+
+        // 1. Growth Rates (MoM / YoY) for key metrics
+        numCols.slice(0, 3).forEach(col => {
+            const growth = this.calculateGrowth(data, dateCol.column, col.column);
+            if (growth) {
+                kpis.push({
+                    id: `${col.column}_growth`,
+                    label: `${col.column} Growth (MoM)`,
+                    value: `${growth.percent > 0 ? '+' : ''}${growth.percent.toFixed(1)}%`,
+                    trend: growth.percent,
+                    trendDirection: growth.percent >= 0 ? 'up' : 'down',
+                    status: growth.percent > 0 ? 'on_track' : 'at_risk',
+                    category: 'financial',
+                    sparklineData: growth.history
+                });
+            }
+        });
+
+        // 2. Retention / Churn (if ID column exists)
+        if (idCol) {
+            const retention = this.calculateRetention(data, dateCol.column, idCol.column);
+            if (retention) {
+                kpis.push({
+                    id: 'retention_rate',
+                    label: 'Retention Rate (30d)',
+                    value: `${(retention.rate * 100).toFixed(1)}%`,
+                    category: 'efficiency',
+                    status: retention.rate > 0.6 ? 'on_track' : 'off_track',
+                    trend: retention.trend, // Change from previous window
+                    trendDirection: retention.trend >= 0 ? 'up' : 'down'
+                });
+
+                kpis.push({
+                    id: 'churn_rate',
+                    label: 'Churn Rate',
+                    value: `${((1 - retention.rate) * 100).toFixed(1)}%`,
+                    category: 'efficiency',
+                    status: (1 - retention.rate) < 0.1 ? 'on_track' : 'at_risk',
+                    trendDirection: (1 - retention.rate) < 0.1 ? 'up' : 'down' // Lower churn is better 'up' status logic might need inversion visual
+                });
+            }
+        }
+
+        // 3. Statistical Variance (Stability)
+        numCols.slice(0, 2).forEach(col => {
+            const values = data.map(r => Number(r[col.column])).filter(n => !isNaN(n));
+            const mean = values.reduce((a, b) => a + b, 0) / values.length;
+            const variance = values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / values.length;
+            const stdDev = Math.sqrt(variance);
+            const cv = (stdDev / mean) * 100; // Coefficient of Variation
+
+            // If CV is low, data is stable/predictable
+            kpis.push({
+                id: `${col.column}_volatility`,
+                label: `${col.column} Volatility`,
+                value: `${cv.toFixed(1)}%`,
+                category: 'quality',
+                status: cv < 20 ? 'on_track' : 'at_risk',
+                trendDirection: cv < 20 ? 'up' : 'down'
+            });
         });
 
         return kpis;
@@ -351,7 +432,7 @@ export class AnalyticsEngine {
         })).filter(d => !isNaN(d.value));
     }
 
-    static async generateReportArtifacts(headers: string[], data: any[], reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<{ kpis: KPI[], charts: ChartSpec[] }> {
+    static async generateReportArtifacts(headers: string[], data: any[], reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<{ kpis: KPI[], charts: ChartSpec[], forensics: ForensicResult }> {
         // 1. Forensics
         const sampleSize = Math.min(data.length, 2000);
         const sample = data.slice(0, sampleSize);
@@ -405,7 +486,139 @@ export class AnalyticsEngine {
                 break;
         }
 
-        return { kpis: filteredKpis, charts: filteredCharts };
+        return { kpis: filteredKpis, charts: filteredCharts, forensics };
+    }
+
+    private static calculateGrowth(data: any[], dateCol: string, valCol: string): { percent: number, history: number[] } | null {
+        // Group by Month
+        const monthly: Record<string, number> = {};
+        data.forEach(r => {
+            const d = new Date(r[dateCol]);
+            if (isNaN(d.getTime())) return;
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const val = Number(r[valCol]) || 0;
+            monthly[key] = (monthly[key] || 0) + val;
+        });
+
+        const sortedKeys = Object.keys(monthly).sort();
+        if (sortedKeys.length < 2) return null;
+
+        const currentMonth = sortedKeys[sortedKeys.length - 1];
+        const prevMonth = sortedKeys[sortedKeys.length - 2];
+
+        const currentVal = monthly[currentMonth];
+        const prevVal = monthly[prevMonth];
+
+        if (prevVal === 0) return null;
+
+        const change = ((currentVal - prevVal) / prevVal) * 100;
+        const history = sortedKeys.map(k => monthly[k]);
+
+        return { percent: change, history };
+    }
+
+    private static calculateRetention(data: any[], dateCol: string, idCol: string): { rate: number, trend: number } | null {
+        // Simple Cohort: Users present in Previous Month vs Current Month
+        // This is a simplified proxy for standard retention
+        const monthlyUsers: Record<string, Set<string>> = {};
+
+        data.forEach(r => {
+            const d = new Date(r[dateCol]);
+            if (isNaN(d.getTime())) return;
+            // Group by Month
+            const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            const id = String(r[idCol]);
+            if (!monthlyUsers[key]) monthlyUsers[key] = new Set();
+            monthlyUsers[key].add(id);
+        });
+
+        const sortedKeys = Object.keys(monthlyUsers).sort();
+        if (sortedKeys.length < 2) return null;
+
+        const currentMonth = sortedKeys[sortedKeys.length - 1];
+        const prevMonth = sortedKeys[sortedKeys.length - 2];
+
+        const prevUsers = monthlyUsers[prevMonth];
+        const currentUsers = monthlyUsers[currentMonth];
+
+        // Retention: How many of Prev users are also in Current?
+        let retained = 0;
+        prevUsers.forEach(id => {
+            if (currentUsers.has(id)) retained++;
+        });
+
+        const rate = retained / prevUsers.size;
+
+        // Trend (compare to month before that if possible)
+        let trend = 0;
+        if (sortedKeys.length >= 3) {
+            const prevPrevMonth = sortedKeys[sortedKeys.length - 3];
+            const prevPrevUsers = monthlyUsers[prevPrevMonth];
+            let prevRetained = 0;
+            prevPrevUsers.forEach(id => {
+                if (prevUsers.has(id)) prevRetained++;
+            });
+            const prevRate = prevRetained / prevPrevUsers.size;
+            trend = (rate - prevRate) * 100;
+        }
+
+        return { rate, trend };
+    }
+
+    private static generatePredictiveCharts(data: any[], profiles: ColumnProfile[]): ChartSpec[] {
+        const charts: ChartSpec[] = [];
+        const dateCol = profiles.find(p => p.role === 'timestamp' || p.dataType === 'date');
+        const numCols = profiles.filter(p => p.role === 'currency' || (p.dataType === 'number' && !p.column.toLowerCase().includes('id')));
+
+        if (!dateCol || numCols.length === 0) return charts;
+
+        // 1. Forecast Trend for Primary Metric
+        const primaryMetric = numCols[0];
+        const timeSeriesData = this.aggregateByTime(data, dateCol.column, primaryMetric.column)
+            .map((d, i) => ({ x: i, y: d.value, label: d.name }));
+
+        if (timeSeriesData.length > 5) {
+            const regression = PredictiveAnalytics.performLinearRegression(timeSeriesData.map(d => ({ x: d.x, y: d.y })), 3);
+
+            if (regression.rSquared > 0.5) { // Only show if correlation is decent
+                // Create Forecast Data
+                const forecastData = regression.forecast.map((p, i) => ({
+                    name: `Forecast +${i + 1}`,
+                    value: p.y,
+                    type: 'forecast'
+                }));
+
+                charts.push({
+                    id: `forecast_${primaryMetric.column}`,
+                    title: `${primaryMetric.column} Forecast (Trend)`,
+                    type: 'line',
+                    priority: 'high',
+                    size: 'large',
+                    description: `Projected trend based on linear regression (R²=${regression.rSquared.toFixed(2)})`,
+                    data: [...timeSeriesData.map(d => ({ name: d.label, value: d.y })), ...forecastData],
+                    options: { xAxis: 'Time', yAxis: primaryMetric.column, showTrend: true }
+                });
+            }
+        }
+
+        // 2. Anomaly Detection
+        const values = data.map(r => Number(r[primaryMetric.column])).filter(n => !isNaN(n));
+        const anomalies = PredictiveAnalytics.detectAnomaliesZScore(values, 2.5);
+
+        if (anomalies.length > 0) {
+            charts.push({
+                id: `anomalies_${primaryMetric.column}`,
+                title: `${primaryMetric.column} Anomalies`,
+                type: 'scatter',
+                priority: 'medium',
+                size: 'medium',
+                description: `Detected ${anomalies.length} potential anomalies (Z-Score > 2.5)`,
+                data: anomalies.map(a => ({ x: a.index, y: a.value, label: `Row ${a.index}` })),
+                options: { xAxis: 'Row Index', yAxis: primaryMetric.column, color: '#ef4444' } // Red for anomalies
+            });
+        }
+
+        return charts;
     }
 
     private static generateLayout(charts: ChartSpec[]): any {
