@@ -304,6 +304,13 @@ const UniverCleanView: React.FC = () => {
                     // Cell-level fix
                     setProcessingStatus(`Fixing ${i + 1}/${totalIssues}: Row ${issue.row + 1}, ${issue.columnName}`);
 
+                    // Agentic Scrolling
+                    if (univerEditorRef.current?.scrollToCell && !rowsToRemove.has(issue.row)) {
+                        univerEditorRef.current.scrollToCell(issue.row, issue.col);
+                        // Brief pause to allow the user to see the "Agent" arrive at the cell
+                        await new Promise(resolve => setTimeout(resolve, 80));
+                    }
+
                     const plan: RecoveryPlan = {
                         row: issue.row,
                         column: issue.columnName,

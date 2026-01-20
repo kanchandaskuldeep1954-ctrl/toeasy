@@ -120,11 +120,22 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         setSheetData(cellData);
     }, [data, headers, issues, highlightIssues]); // Use standard light mode generation
 
+    const workbookRef = useRef<any>(null);
+
     // Expose methods via ref
     React.useImperativeHandle(ref, () => ({
         getSheetData: () => currentDataRef.current,
         animateCellFix: async (row: number, col: number, oldVal: any, newVal: any) => {
             if (onCellEdit) onCellEdit(row, col, oldVal, newVal);
+        },
+        scrollToCell: (row: number, col: number) => {
+            if (workbookRef.current) {
+                // FortuneSheet scroll method: takes row/column to scroll into view
+                workbookRef.current.scroll({
+                    row,
+                    column: col
+                });
+            }
         },
         applyIssueHighlighting: () => { }
     }));
@@ -146,6 +157,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
+                    ref={workbookRef}
                     data={[{
                         name: "Data",
                         celldata: sheetData,
