@@ -656,12 +656,12 @@ const UniverCleanView: React.FC = () => {
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                                 </div>
                             }>
-                                <FortuneSheetEditor
+                                <UniverEditor
                                     ref={univerEditorRef}
-                                    data={dataset?.raw_data || []}
-                                    headers={dataset?.raw_data?.[0] ? Object.keys(dataset.raw_data[0]) : []}
+                                    data={dataset?.data || []}
+                                    headers={displayHeaders}
                                     issues={issues}
-                                    theme={theme}
+                                    theme={theme as any}
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         const header = displayHeaders[col];
                                         if (!header) return;

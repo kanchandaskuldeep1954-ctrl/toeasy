@@ -1,5 +1,5 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Univer, LocaleType, merge, IWorkbookData, ICellData } from '@univerjs/core';
+import React, { useRef, useEffect, useState, useCallback, useImperativeHandle, forwardRef } from 'react';
+import { Univer, LocaleType, IWorkbookData, ICellData } from '@univerjs/core';
 import { FUniver } from '@univerjs/facade';
 import { defaultTheme } from '@univerjs/design';
 import { UniverSheetsPlugin } from '@univerjs/sheets';
@@ -13,21 +13,7 @@ import '@univerjs/design/lib/index.css';
 import '@univerjs/ui/lib/index.css';
 import '@univerjs/sheets-ui/lib/index.css';
 
-import { DataRow } from '../../../types';
-
-// Types for cell issues
-export interface CellIssue {
-    row: number;
-    col: number;
-    columnName: string;
-    currentValue: any;
-    issueType: 'missing' | 'invalid_format' | 'outlier' | 'duplicate' | 'inconsistent' | 'semantic_error';
-    severity: 'error' | 'warning' | 'info';
-    suggestedValue: any;
-    confidence: number;
-    explanation: string;
-    recoveryMethod?: 'ai_infer' | 'lookup' | 'calculate' | 'pattern' | 'default' | 'remove';
-}
+import { DataRow, CellIssue } from '../../../types';
 
 export interface UniverEditorProps {
     data: DataRow[];
@@ -38,6 +24,7 @@ export interface UniverEditorProps {
     onDataChange?: (data: DataRow[]) => void;
     readOnly?: boolean;
     highlightIssues?: boolean;
+    theme?: 'light' | 'dark';
 }
 
 // Convert DataRow[] to Univer workbook data format
@@ -85,8 +72,8 @@ const dataToWorkbook = (data: DataRow[], headers: string[]): IWorkbookData => {
             'sheet-1': {
                 id: 'sheet-1',
                 name: 'Data',
-                rowCount: data.length + 1,
-                columnCount: headers.length,
+                rowCount: Math.max(data.length + 10, 100), // Add some buffer
+                columnCount: Math.max(headers.length + 2, 26),
                 cellData,
                 defaultColumnWidth: 120,
                 defaultRowHeight: 28,
@@ -101,38 +88,7 @@ const dataToWorkbook = (data: DataRow[], headers: string[]): IWorkbookData => {
     };
 };
 
-// Apply issue-based highlighting to cells
-const applyIssueHighlighting = (
-    univerAPI: FUniver | null,
-    issues: CellIssue[],
-    headers: string[]
-) => {
-    if (!univerAPI) return;
-
-    try {
-        const sheet = univerAPI.getActiveWorkbook()?.getActiveSheet();
-        if (!sheet) return;
-
-        issues.forEach((issue) => {
-            const colIndex = headers.indexOf(issue.columnName);
-            if (colIndex === -1) return;
-
-            const range = sheet.getRange(issue.row + 1, colIndex, 1, 1);
-
-            if (issue.severity === 'error') {
-                range.setBackgroundColor('#fee2e2'); // Red background
-            } else if (issue.severity === 'warning') {
-                range.setBackgroundColor('#fef3c7'); // Yellow background
-            } else {
-                range.setBackgroundColor('#dbeafe'); // Blue background for info
-            }
-        });
-    } catch (e) {
-        console.error('Error applying issue highlighting:', e);
-    }
-};
-
-const UniverEditor: React.FC<UniverEditorProps> = ({
+const UniverEditor = forwardRef<any, UniverEditorProps>(({
     data,
     headers,
     issues = [],
@@ -141,7 +97,8 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
     onDataChange,
     readOnly = false,
     highlightIssues = true,
-}) => {
+    theme = 'light'
+}, ref) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const univerRef = useRef<Univer | null>(null);
     const univerAPIRef = useRef<FUniver | null>(null);
@@ -164,7 +121,7 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
                 univer.registerPlugin(UniverFormulaEnginePlugin);
                 univer.registerPlugin(UniverUIPlugin, {
                     container: containerRef.current!,
-                    header: false, // Hide default header for cleaner look
+                    header: false,
                     footer: false,
                 });
                 univer.registerPlugin(UniverSheetsPlugin);
@@ -174,21 +131,13 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
                 const workbookData = dataToWorkbook(data, headers);
                 univer.createUniverSheet(workbookData);
 
-                // Get Facade API for easier interaction
+                // Get Facade API
                 const univerAPI = FUniver.newAPI(univer);
-
                 univerRef.current = univer;
                 univerAPIRef.current = univerAPI;
                 setIsInitialized(true);
 
-                // Apply issue highlighting after initialization
-                if (highlightIssues && issues.length > 0) {
-                    setTimeout(() => {
-                        applyIssueHighlighting(univerAPI, issues, headers);
-                    }, 500);
-                }
-
-                console.log('Univer initialized successfully');
+                console.log('[UniverEditor] Initialized');
             } catch (error) {
                 console.error('Failed to initialize Univer:', error);
             }
@@ -196,7 +145,6 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
 
         initUniver();
 
-        // Cleanup
         return () => {
             if (univerRef.current) {
                 univerRef.current.dispose();
@@ -206,168 +154,130 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
         };
     }, []);
 
-    // Update highlighting when issues change
+    // Sync Data Efficiently (Matrix-based update)
     useEffect(() => {
-        if (isInitialized && highlightIssues && issues.length > 0) {
-            applyIssueHighlighting(univerAPIRef.current, issues, headers);
-        }
-    }, [issues, highlightIssues, isInitialized, headers]);
-
-    // Update data when it changes externally
-    useEffect(() => {
-        if (!isInitialized || !univerAPIRef.current) return;
+        if (!isInitialized || !univerAPIRef.current || !data) return;
 
         try {
             const workbook = univerAPIRef.current.getActiveWorkbook();
-            if (!workbook) return;
-
-            const sheet = workbook.getActiveSheet();
+            const sheet = workbook?.getActiveSheet();
             if (!sheet) return;
 
-            // 1. Sync Row Count
-            const currentDataRows = data.length;
-            const sheetRowCount = sheet.getRowCount() - 1; // Exclude header
+            // 1. Sync Dimensions
+            const currentSheetRows = sheet.getRowCount();
+            const targetRows = data.length + 1; // +1 for header
 
-            if (currentDataRows < sheetRowCount) {
-                // Garbage or removed rows exist in sheet but not in data
-                const rowsToDelete = sheetRowCount - currentDataRows;
-                console.log(`[UniverEditor] Syncing grid: Deleting ${rowsToDelete} rows`);
-                sheet.deleteRows(currentDataRows + 1, rowsToDelete);
+            if (targetRows < currentSheetRows) {
+                // Delete excess rows from the end
+                sheet.deleteRows(targetRows, currentSheetRows - targetRows);
+            } else if (targetRows > currentSheetRows) {
+                // Insert rows if needed
+                sheet.insertRows(currentSheetRows, targetRows - currentSheetRows);
             }
 
-            // 2. Sync Column Count
-            const currentHeaders = headers.length;
-            const sheetColCount = sheet.getColumnCount();
+            // 2. Build Matrix for SetValues (The "Excel Language" approach)
+            const matrix: any[][] = [];
 
-            if (currentHeaders < sheetColCount) {
-                // If columns were removed, it's safer to re-create the data map
-                // But for now, let's just update values. 
-                // Note: Univer doesn't easily support column deletion by name via Facade yet
-            }
+            // Re-sync Header just in case
+            const headerRow: any[] = headers.map(h => ({
+                v: h,
+                s: { bg: { rgb: '#f1f5f9' }, bl: 1 }
+            }));
+            matrix.push(headerRow);
 
-            // 3. Update cell values
-            data.forEach((row, rowIndex) => {
-                headers.forEach((header, colIndex) => {
+            // Sync Data Rows
+            data.forEach((row) => {
+                const rowValues = headers.map(header => {
                     const value = row[header];
-                    const range = sheet.getRange(rowIndex + 1, colIndex, 1, 1);
-                    range.setValue(value === null || value === undefined ? '' : value);
+                    const bg = row.__metadata?.recoveredFields?.includes(header) ? '#d1fae5' :
+                        (value === null || value === undefined || value === '') ? '#fef3c7' : '#ffffff';
 
-                    // Clear previous highlights if any (unless it's currently a recovered field)
-                    if (row.__metadata?.recoveredFields?.includes(header)) {
-                        range.setBackgroundColor('#d1fae5'); // Green for recovered
-                    } else {
-                        // Reset background if not recovered and not highlighted as issue
-                        // We reset it to plain white or default so shifting rows don't carry old styles
-                        range.setBackgroundColor('#ffffff');
+                    return {
+                        v: value === null || value === undefined ? '' : value,
+                        s: { bg: { rgb: bg } }
+                    };
+                });
+                matrix.push(rowValues);
+            });
+
+            // Set all values in one atomic operation (Elite Performance)
+            const range = sheet.getRange(0, 0, matrix.length, headers.length);
+            range.setValues(matrix);
+
+            // 3. Apply Issue Highlighting on top
+            if (highlightIssues && issues.length > 0) {
+                issues.forEach(issue => {
+                    const colIdx = headers.indexOf(issue.columnName);
+                    if (colIdx !== -1) {
+                        const cellRange = sheet.getRange(issue.row + 1, colIdx, 1, 1);
+                        const color = issue.severity === 'error' ? '#fee2e2' :
+                            issue.severity === 'warning' ? '#fef3c7' : '#dbeafe';
+                        cellRange.setBackgroundColor(color);
                     }
                 });
-            });
+            }
+
         } catch (e) {
-            console.error('Error updating Univer data:', e);
+            console.error('[UniverEditor] Sync failed:', e);
         }
-    }, [data, isInitialized, headers]);
+    }, [data, headers, isInitialized, highlightIssues, issues]);
 
-    // Get current data from Univer (for export or save)
-    const getSheetData = useCallback((): DataRow[] => {
-        if (!univerAPIRef.current) return data;
-
-        try {
-            const workbook = univerAPIRef.current.getActiveWorkbook();
-            if (!workbook) return data;
-
-            const sheet = workbook.getActiveSheet();
+    // Expose methods to parent
+    useImperativeHandle(ref, () => ({
+        getSheetData: (): DataRow[] => {
+            if (!univerAPIRef.current) return data;
+            const sheet = univerAPIRef.current.getActiveWorkbook()?.getActiveSheet();
             if (!sheet) return data;
 
             const result: DataRow[] = [];
-            for (let rowIndex = 1; rowIndex <= data.length; rowIndex++) {
-                const row: DataRow = {};
-                headers.forEach((header, colIndex) => {
-                    const range = sheet.getRange(rowIndex, colIndex, 1, 1);
-                    row[header] = range.getValue();
+            const rowCount = data.length;
+            const colCount = headers.length;
+
+            for (let r = 1; r <= rowCount; r++) {
+                const row: DataRow = { ...data[r - 1] };
+                headers.forEach((h, c) => {
+                    row[h] = sheet.getRange(r, c, 1, 1).getValue();
                 });
                 result.push(row);
             }
-
             return result;
-        } catch (e) {
-            console.error('Error getting sheet data:', e);
-            return data;
-        }
-    }, [data, headers]);
-
-    // Animate cell fix (for live cleaning visualization)
-    const animateCellFix = useCallback(async (
-        row: number,
-        col: number,
-        oldValue: any,
-        newValue: any,
-        explanation: string
-    ): Promise<void> => {
-        if (!univerAPIRef.current) return;
-
-        try {
+        },
+        animateCellFix: async (row: number, col: number, oldVal: any, newVal: any): Promise<void> => {
+            if (!univerAPIRef.current) return;
             const sheet = univerAPIRef.current.getActiveWorkbook()?.getActiveSheet();
             if (!sheet) return;
 
             const range = sheet.getRange(row + 1, col, 1, 1);
 
-            // Step 1: Flash red (processing)
-            range.setBackgroundColor('#fecaca');
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Step 2: Flash yellow (applying)
-            range.setBackgroundColor('#fef08a');
-            await new Promise(resolve => setTimeout(resolve, 200));
-
-            // Step 3: Set new value
-            range.setValue(newValue);
-
-            // Step 4: Flash green (completed)
-            range.setBackgroundColor('#86efac');
-            await new Promise(resolve => setTimeout(resolve, 300));
-
-            // Step 5: Settle to light green
-            range.setBackgroundColor('#d1fae5');
-
-            // Notify parent of cell edit
-            if (onCellEdit) {
-                onCellEdit(row, col, oldValue, newValue);
-            }
-        } catch (e) {
-            console.error('Error animating cell fix:', e);
+            // Visual feedback loop
+            range.setBackgroundColor('#fef08a'); // Applying
+            await new Promise(r => setTimeout(r, 150));
+            range.setValue(newVal);
+            range.setBackgroundColor('#86efac'); // Fixed
+            await new Promise(r => setTimeout(r, 200));
+            range.setBackgroundColor('#d1fae5'); // Settled
         }
-    }, [onCellEdit]);
-
-    // Expose methods via ref for parent component
-    React.useImperativeHandle(
-        React.useRef(),
-        () => ({
-            getSheetData,
-            animateCellFix,
-            applyIssueHighlighting: (issues: CellIssue[]) =>
-                applyIssueHighlighting(univerAPIRef.current, issues, headers),
-        }),
-        [getSheetData, animateCellFix, headers]
-    );
+    }));
 
     return (
-        <div className="relative w-full h-full">
+        <div className={`relative w-full h-full ${theme === 'dark' ? 'univer-dark' : ''}`}>
             <div
                 ref={containerRef}
-                className="w-full h-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-700"
-                style={{ minHeight: '400px' }}
+                className="w-full h-full rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800"
+                style={{ minHeight: '500px' }}
             />
-
             {!isInitialized && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-50">
+                <div className="absolute inset-0 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm">
                     <div className="flex flex-col items-center gap-4">
                         <div className="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                        <p className="text-sm font-bold text-slate-500">Loading Excel Editor...</p>
+                        <p className="text-sm font-bold text-indigo-600">Initializing Elite Grid...</p>
                     </div>
                 </div>
             )}
         </div>
     );
-};
+});
+
+UniverEditor.displayName = 'UniverEditor';
 
 export default UniverEditor;

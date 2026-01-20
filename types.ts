@@ -30,7 +30,7 @@ export interface CellIssue {
   suggestedValue: any;
   confidence: number;
   explanation: string;
-  recoveryMethod?: 'ai_infer' | 'lookup' | 'calculate' | 'pattern' | 'default' | 'remove';
+  recoveryMethod?: 'ai_infer' | 'lookup' | 'calculate' | 'pattern' | 'default' | 'remove' | 'remove_row' | 'remove_column';
 }
 
 // Audit log entry for tracking data recovery actions
