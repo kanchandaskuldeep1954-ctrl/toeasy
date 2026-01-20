@@ -111,7 +111,11 @@ const UniverCleanView: React.FC = () => {
                 // But hydrateOnce resets initializedRef.current = null, so this check works.
                 return;
             }
-            if (!dataset.data || dataset.data.length === 0) return;
+            if (!dataset || !dataset.data || dataset.data.length === 0) return;
+
+            // Critical check: don't re-run if we already did THIS dataset on THIS render cycle
+            // and don't re-run if we already have the analysis results we need.
+            if (initializedRef.current === dataset.id) return;
 
             console.log(`[UniverCleanView] Starting AI Analysis for dataset: ${dataset.id}`);
             initializedRef.current = dataset.id!;
@@ -119,23 +123,29 @@ const UniverCleanView: React.FC = () => {
 
             try {
                 // Step 1: Semantic Analysis
-                setLoadingStep('🔍 Deep Semantic Analysis...');
-                const semanticResult = await analyzeDatasetSemantics(dataset);
-                setSemantics(semanticResult);
+                let semanticResult = semantics;
+                if (!semanticResult) {
+                    setLoadingStep('🔍 Deep Semantic Analysis...');
+                    semanticResult = await analyzeDatasetSemantics(dataset);
+                    setSemantics(semanticResult);
+                }
 
                 // Step 2: Generate Recovery Plans
-                setLoadingStep('🧠 Generating Recovery Plans...');
-                const plans = generateRecoveryPlans(dataset.data, dataset.headers, semanticResult);
-                const cellIssues = recoveryPlansToCellIssues(plans, dataset.headers);
-                setIssues(cellIssues);
+                if (!issues || issues.length === 0) {
+                    setLoadingStep('🧠 Generating Recovery Plans...');
+                    const plans = generateRecoveryPlans(dataset.data, dataset.headers, semanticResult);
+                    const cellIssues = recoveryPlansToCellIssues(plans, dataset.headers);
+                    setIssues(cellIssues);
+                }
 
-                // Step 3: Generate Validation Rules (using existing GroqService)
+                // Step 3: Generate Validation Rules
                 setLoadingStep('⚒️ Creating Validation Rules...');
                 if (!dataset.validationRules || dataset.validationRules.length === 0) {
                     const rules = await GroqService.suggestValidationRules(dataset, semanticResult);
                     setValidationRules(rules);
+                    // Only update if it's genuinely missing from the DB
                     updateDataset(dataset.id!, { validationRules: rules });
-                } else {
+                } else if (!validationRules || validationRules.length === 0) {
                     setValidationRules(dataset.validationRules);
                 }
 

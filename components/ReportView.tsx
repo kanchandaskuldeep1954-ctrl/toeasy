@@ -88,8 +88,19 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         if (onUpdate) onUpdate({ ...dataset, strategicReport: fallback });
     };
 
+    const isMounted = useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
+
     useEffect(() => {
         if (!dataset) return;
+
+        // Skip if report already exists for this type
+        if (report && dataset.strategicReport && (dataset as any).lastReportType === reportType) {
+            return;
+        }
 
         // Generate new report
         const generate = async () => {
@@ -102,6 +113,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 // Try with 45 second timeout
                 const content = await generateReportWithTimeout(reportType, 45000);
 
+                if (!isMounted.current) return;
+
                 // Validate response structure
                 if (!content || !content.sections || !Array.isArray(content.sections)) {
                     throw new Error('Invalid report structure received');
@@ -110,11 +123,19 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 setReport(content);
                 setActiveSection(content.sections?.[0]?.id || '');
                 setError(null);
-                if (onUpdate) onUpdate({ ...dataset, strategicReport: content });
+                if (onUpdate) onUpdate({ ...dataset, strategicReport: content, lastReportType: reportType } as any);
 
-            } catch (e) {
+            } catch (e: any) {
+                if (!isMounted.current) return;
                 console.error('Report generation failed:', e);
-                const errorMessage = e instanceof Error ? e.message : 'Failed to generate report';
+
+                let errorMessage = e instanceof Error ? e.message : 'Failed to generate report';
+
+                if (e.message?.includes('429') || e.response?.status === 429) {
+                    errorMessage = "Server is under high load (Too Many Requests). Using basic template instead.";
+                    useFallback();
+                    return;
+                }
 
                 // After 2 retries, use fallback automatically
                 if (retryCount >= 2) {
@@ -124,7 +145,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     setError(errorMessage);
                 }
             } finally {
-                setLoading(false);
+                if (isMounted.current) setLoading(false);
             }
         };
 

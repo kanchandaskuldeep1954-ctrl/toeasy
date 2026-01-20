@@ -125,7 +125,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         });
     }, [config, filteredData]);
 
+    const isMounted = React.useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
+
     const initAnalysis = async () => {
+        if (config) return; // Already loaded
+
         setLoading(true);
         try {
             if (dataset.dashboardConfig) {
@@ -136,13 +144,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
             if (onAIAction) onAIAction();
             const generatedConfig = await GroqService.suggestDashboard(dataset);
+
+            if (!isMounted.current) return;
+
             setConfig(generatedConfig);
 
             if (onUpdate) {
                 onUpdate({ ...dataset, dashboardConfig: generatedConfig });
             }
         } catch (e) { console.error(e); }
-        finally { setLoading(false); }
+        finally { if (isMounted.current) setLoading(false); }
     };
 
     useEffect(() => { initAnalysis(); }, [dataset.name]);
