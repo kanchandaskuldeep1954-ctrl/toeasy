@@ -61,7 +61,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
     // App State
     const [dataflowId, setDataflowId] = useState<string | null>(null);
-    const [dataflowId, setDataflowId] = useState<string | null>(null);
+
     const [dataflowName, setDataflowName] = useState('New Enterprise Pipeline');
     const [schedule, setSchedule] = useState<string | null>(null);
     const [showScheduleModal, setShowScheduleModal] = useState(false);
@@ -103,7 +103,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
         }));
 
         setNodes(flowNodes);
-        setNodes(flowNodes);
+
         setEdges(flowEdges);
         setSchedule(template.dataflow.schedule || null);
     };
@@ -222,9 +222,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
             description: '',
             nodes: [], // TODO: Map back
             connections: [],
-            description: '',
-            nodes: [], // TODO: Map back
-            connections: [],
+
             schedule: schedule || undefined,
             isTemplate: false, isActive: true
         });
