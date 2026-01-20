@@ -233,18 +233,19 @@ export function detectFieldType(
 export function detectDomain(columns: string[], sampleData: DataRow[]): { domain: IndustryDomain; confidence: number } {
     const normalizedColumns = columns.map(c => c.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
+    // Deeper indicators for professional domains
     const domainIndicators: Record<IndustryDomain, string[]> = {
-        finance: ['revenue', 'profit', 'expense', 'balance', 'transaction', 'account', 'investment', 'portfolio'],
-        healthcare: ['patient', 'diagnosis', 'prescription', 'treatment', 'medication', 'doctor', 'hospital', 'medical'],
-        ecommerce: ['product', 'order', 'cart', 'sku', 'shipping', 'customer', 'price', 'quantity', 'discount'],
-        education: ['student', 'course', 'grade', 'enrollment', 'teacher', 'class', 'semester', 'gpa'],
-        logistics: ['shipment', 'tracking', 'delivery', 'warehouse', 'inventory', 'carrier', 'freight'],
-        retail: ['store', 'sale', 'product', 'inventory', 'sku', 'price', 'customer', 'receipt'],
-        manufacturing: ['production', 'batch', 'material', 'quality', 'defect', 'assembly', 'part'],
-        real_estate: ['property', 'listing', 'rent', 'lease', 'tenant', 'landlord', 'mortgage', 'sqft'],
-        hr: ['employee', 'salary', 'department', 'hire', 'performance', 'leave', 'position', 'manager'],
-        crm: ['lead', 'opportunity', 'contact', 'campaign', 'conversion', 'deal', 'pipeline'],
-        inventory: ['stock', 'warehouse', 'bin', 'location', 'reorder', 'sku', 'quantity'],
+        finance: ['revenue', 'profit', 'expense', 'balance', 'transaction', 'account', 'investment', 'portfolio', 'equity', 'ebitda', 'tax', 'asset', 'liability'],
+        healthcare: ['patient', 'diagnosis', 'prescription', 'treatment', 'medication', 'doctor', 'hospital', 'medical', 'billing', 'hicn', 'icd10', 'vitals'],
+        ecommerce: ['product', 'order', 'cart', 'sku', 'shipping', 'customer', 'price', 'quantity', 'discount', 'vendor', 'inventory', 'asin', 'upc'],
+        education: ['student', 'course', 'grade', 'enrollment', 'teacher', 'class', 'semester', 'gpa', 'tuition', 'degree', 'alumni'],
+        logistics: ['shipment', 'tracking', 'delivery', 'warehouse', 'inventory', 'carrier', 'freight', 'waybill', 'bol', 'etd', 'eta'],
+        retail: ['store', 'sale', 'product', 'inventory', 'sku', 'price', 'customer', 'receipt', 'pos', 'barcode', 'aisle'],
+        manufacturing: ['production', 'batch', 'material', 'quality', 'defect', 'assembly', 'part', 'oee', 'cycle_time', 'bom', 'wip'],
+        real_estate: ['property', 'listing', 'rent', 'lease', 'tenant', 'landlord', 'mortgage', 'sqft', 'parcel', 'mls', 'zoning'],
+        hr: ['employee', 'salary', 'department', 'hire', 'performance', 'leave', 'position', 'manager', 'payroll', 'benefits', 'ssn'],
+        crm: ['lead', 'opportunity', 'contact', 'campaign', 'conversion', 'deal', 'pipeline', 'funnel', 'stage', 'revenue_potential'],
+        inventory: ['stock', 'warehouse', 'bin', 'location', 'reorder', 'sku', 'quantity', 'safety_stock', 'lead_time', 'eoq'],
         general: [],
     };
 
@@ -255,16 +256,25 @@ export function detectDomain(columns: string[], sampleData: DataRow[]): { domain
         let score = 0;
         for (const indicator of indicators) {
             if (normalizedColumns.some(c => c.includes(indicator))) {
-                score += 1;
+                score += 2; // Exact header match
             }
         }
+
+        // Sample data inspection for domain context
+        const flattenedValues = sampleData.slice(0, 10).flatMap(row => Object.values(row).map(v => String(v).toLowerCase()));
+        for (const indicator of indicators) {
+            if (flattenedValues.some(v => v.includes(indicator))) {
+                score += 0.5; // Data value match
+            }
+        }
+
         if (score > maxScore) {
             maxScore = score;
             bestDomain = domain as IndustryDomain;
         }
     }
 
-    return { domain: bestDomain, confidence: Math.min(maxScore / 3, 1) };
+    return { domain: bestDomain, confidence: Math.min(maxScore / 5, 1) };
 }
 
 /**
@@ -382,51 +392,107 @@ function findInvalidValues(values: any[], fieldType: SemanticFieldType): any[] {
 }
 
 /**
- * Detect relationships between columns
+ * Detect relationships between columns using statistical and semantic cues
  */
 function detectColumnRelationships(headers: string[], data: DataRow[]): ColumnRelationship[] {
     const relationships: ColumnRelationship[] = [];
+    const cleanHeaders = headers.filter(h => h !== '__metadata');
 
-    // Look for calculation relationships (e.g., Total = Quantity * Price)
-    const numericColumns = headers.filter(h => {
-        const values = data.map(row => row[h]).filter(v => v !== null && v !== undefined);
-        return values.every(v => !isNaN(Number(v)));
+    // 1. Numerical Calculation Relationships (A * B = C)
+    const numericColumns = cleanHeaders.filter(h => {
+        const values = data.slice(0, 50).map(row => row[h]).filter(v => v !== null && v !== undefined && v !== '');
+        return values.length > 0 && values.every(v => !isNaN(Number(String(v).replace(/[$,%]/g, ''))));
     });
 
     for (let i = 0; i < numericColumns.length; i++) {
         for (let j = i + 1; j < numericColumns.length; j++) {
-            for (let k = j + 1; k < numericColumns.length; k++) {
-                const cols = [numericColumns[i], numericColumns[j], numericColumns[k]];
+            for (let k = 0; k < numericColumns.length; k++) {
+                if (k === i || k === j) continue;
 
-                // Check if any column is the product of the other two
-                for (let p = 0; p < 3; p++) {
-                    const product = cols[p];
-                    const factor1 = cols[(p + 1) % 3];
-                    const factor2 = cols[(p + 2) % 3];
+                const factor1 = numericColumns[i];
+                const factor2 = numericColumns[j];
+                const result = numericColumns[k];
 
-                    const matches = data.filter(row => {
-                        const pVal = Number(row[product]);
-                        const f1Val = Number(row[factor1]);
-                        const f2Val = Number(row[factor2]);
-                        return Math.abs(pVal - (f1Val * f2Val)) < 0.01;
-                    }).length;
+                const matches = data.slice(0, 100).filter(row => {
+                    const f1 = Number(String(row[factor1] || 0).replace(/[$,%]/g, ''));
+                    const f2 = Number(String(row[factor2] || 0).replace(/[$,%]/g, ''));
+                    const res = Number(String(row[result] || 0).replace(/[$,%]/g, ''));
+                    if (f1 === 0 || f2 === 0) return Math.abs(res - (f1 + f2)) < 0.01; // Try addition
+                    return Math.abs(res - (f1 * f2)) < 0.01 || Math.abs(res - (f1 + f2)) < 0.01;
+                }).length;
 
-                    if (matches / data.length > 0.9) {
-                        relationships.push({
-                            column1: product,
-                            column2: `${factor1} * ${factor2}`,
-                            type: 'calculation',
-                            formula: `${product} = ${factor1} * ${factor2}`,
-                            confidence: matches / data.length,
-                        });
-                    }
+                if (matches / Math.min(data.length, 100) > 0.8) {
+                    relationships.push({
+                        column1: result,
+                        column2: `${factor1}, ${factor2}`,
+                        type: 'calculation',
+                        formula: `${result} derived from ${factor1} and ${factor2}`,
+                        confidence: matches / Math.min(data.length, 100),
+                    });
                 }
             }
         }
     }
 
-    // Look for lookup relationships (same value patterns)
-    // This would be enhanced with AI for more complex patterns
+    // 2. Functional Dependency (If A then always B)
+    for (let i = 0; i < cleanHeaders.length; i++) {
+        for (let j = 0; j < cleanHeaders.length; j++) {
+            if (i === j) continue;
+
+            const colA = cleanHeaders[i];
+            const colB = cleanHeaders[j];
+
+            const mapping: Record<string, any> = {};
+            let consistent = true;
+            let pairs = 0;
+
+            for (const row of data.slice(0, 200)) {
+                const valA = String(row[colA]);
+                const valB = row[colB];
+                if (!row[colA] || !row[colB]) continue;
+
+                if (mapping[valA] !== undefined && mapping[valA] !== valB) {
+                    consistent = false;
+                    break;
+                }
+                mapping[valA] = valB;
+                pairs++;
+            }
+
+            if (consistent && pairs > 5 && Object.keys(mapping).length < pairs) {
+                relationships.push({
+                    column1: colA,
+                    column2: colB,
+                    type: 'lookup',
+                    confidence: 0.9,
+                });
+            }
+        }
+    }
+
+    // 3. Semantic Grouping (Address components, Name components)
+    const semanticGroups = [
+        ['first_name', 'last_name', 'full_name'],
+        ['address', 'city', 'state', 'country', 'postal_code'],
+        ['sku', 'product_name', 'price'],
+        ['order_id', 'customer_id', 'order_date']
+    ];
+
+    semanticGroups.forEach(group => {
+        const present = group.filter(h => cleanHeaders.some(ch => ch.toLowerCase().includes(h)));
+        if (present.length > 1) {
+            for (let i = 0; i < present.length; i++) {
+                for (let j = i + 1; j < present.length; j++) {
+                    relationships.push({
+                        column1: present[i],
+                        column2: present[j],
+                        type: 'dependency',
+                        confidence: 0.8,
+                    });
+                }
+            }
+        }
+    });
 
     return relationships;
 }
@@ -645,15 +711,15 @@ function createRecoveryPlan(
         };
     }
 
-    // Strategy 6: Remove/quarantine if no recovery possible
+    // Strategy 6: Semantic removal/quarantine
     return {
         row: rowIndex,
         column,
-        currentValue,
+        currentValue: currentValue || '(missing)',
         suggestedValue: null,
         strategy: 'remove',
-        confidence: 1,
-        explanation: 'No valid recovery method found - recommend quarantine',
+        confidence: 0.95,
+        explanation: `Critical ${colSem.fieldType} missing in ${column}. Data point is semantically incomplete for ${colSem.fieldType} standards.`,
         dataLossRisk: 'high',
     };
 }
@@ -763,7 +829,7 @@ export function recoveryPlansToCellIssues(
 }
 
 /**
- * Apply a single recovery plan to the data
+ * Apply a single recovery plan to the data with full audit tracking
  */
 export function applyRecoveryPlan(
     data: DataRow[],
@@ -775,13 +841,30 @@ export function applyRecoveryPlan(
     const oldValue = row[plan.column];
     row[plan.column] = plan.suggestedValue;
 
-    // Add recovery metadata
+    // 1. Initialize metadata
     if (!row.__metadata) row.__metadata = {};
     if (!row.__metadata.recoveredFields) row.__metadata.recoveredFields = [];
     if (!row.__metadata.recoveryExplanations) row.__metadata.recoveryExplanations = {};
+    if (!row.__metadata.auditLog) row.__metadata.auditLog = [];
 
-    row.__metadata.recoveredFields.push(plan.column);
+    // 2. Track recovery
+    if (!row.__metadata.recoveredFields.includes(plan.column)) {
+        row.__metadata.recoveredFields.push(plan.column);
+    }
     row.__metadata.recoveryExplanations[plan.column] = plan.explanation;
+    row.__metadata.lastModified = new Date().toISOString();
+
+    // 3. Create Audit Log Entry (Pro Analyst Requirement)
+    const auditEntry = {
+        action: 'recovered' as const,
+        field: plan.column,
+        from: String(oldValue || ''),
+        to: String(plan.suggestedValue || ''),
+        reason: plan.explanation,
+        timestamp: new Date().toISOString(),
+        rule: plan.strategy
+    };
+    row.__metadata.auditLog.push(auditEntry);
 
     newData[plan.row] = row;
 

@@ -546,13 +546,28 @@ const UniverCleanView: React.FC = () => {
                                         if (dataset && dataset.data) {
                                             const newData = [...dataset.data];
                                             if (newData[row]) {
+                                                const timestamp = new Date().toISOString();
+                                                const auditEntry = {
+                                                    action: 'modified' as const,
+                                                    field: header,
+                                                    from: String(oldVal || ''),
+                                                    to: String(newVal || ''),
+                                                    reason: 'Manual user edit',
+                                                    timestamp,
+                                                    actor: 'user'
+                                                };
+
                                                 newData[row] = {
                                                     ...newData[row],
                                                     [header]: newVal,
                                                     __metadata: {
                                                         ...newData[row].__metadata,
                                                         manualEdit: true,
-                                                        lastModified: new Date().toISOString()
+                                                        lastModified: timestamp,
+                                                        auditLog: [
+                                                            ...(newData[row].__metadata?.auditLog || []),
+                                                            auditEntry
+                                                        ]
                                                     }
                                                 };
                                                 updateDataset(dataset.id!, { data: newData, raw_data: newData });

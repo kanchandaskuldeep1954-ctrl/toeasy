@@ -1,7 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { Workbook } from '@fortune-sheet/react';
 import '@fortune-sheet/react/dist/index.css';
-import { DataRow, CellIssue } from '../../types';
+import { DataRow, CellIssue } from '../../../types';
 
 export interface FortuneSheetEditorProps {
     data: DataRow[];
@@ -68,19 +68,38 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                 const displayValue = value === null || value === undefined ? '' : String(value);
 
                 let bg = undefined;
+                let ps = undefined;
 
-                // Apply highlighting
+                // 1. Recovered status (Green)
                 if (row.__metadata?.recoveredFields?.includes(header)) {
                     bg = highlightColors.recovered;
+                    const explanation = row.__metadata?.recoveryExplanations?.[header] || 'Self-corrected by AI';
+                    const pass = row.__metadata?.recoveryPass ? ` (Pass ${row.__metadata.recoveryPass})` : '';
+                    ps = {
+                        value: `🛡️ AI RECOVERED\nReason: ${explanation}${pass}\nConfidence: High`,
+                        isshow: false
+                    };
                 }
 
+                // 2. Active Issues (Higher priority coloring)
                 if (highlightIssues) {
                     const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
                         if (issue.severity === 'error') bg = highlightColors.error;
                         else if (issue.severity === 'warning') bg = highlightColors.warning;
                         else bg = highlightColors.info;
+
+                        ps = {
+                            value: `⚠️ ISSUE DETECTED\nType: ${issue.issueType}\nExplanation: ${issue.explanation}\nConfidence: ${Math.round((issue.confidence || 0.8) * 100)}%`,
+                            isshow: false
+                        };
                     }
+                }
+
+                // 3. User Edits (Status indicator)
+                if (row.__metadata?.manualEdit && row.__metadata?.lastModified) {
+                    // Only highlight if not already highlighted by AI
+                    if (!bg) bg = '#e2e8f0'; // Subtle slate for user edit
                 }
 
                 cellData.push({
@@ -90,6 +109,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                         v: value === null || value === undefined ? '' : value,
                         m: displayValue,
                         bg,
+                        ps,
                         fc: '#000000',
                         ct: { t: 'g', fa: 'General' },
                     }

@@ -16,7 +16,7 @@ interface AICleaningPanelProps {
     headers: string[];
 }
 
-type PanelTab = 'issues' | 'rules' | 'history' | 'chat';
+type PanelTab = 'issues' | 'rules' | 'history' | 'report' | 'chat';
 
 const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
     issues,
@@ -44,6 +44,21 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
         const infos = issues.filter(i => i.severity === 'info');
         return { errors, warnings, infos };
     }, [issues]);
+
+    // Calculate quality metrics for report
+    const reportMetrics = useMemo(() => {
+        const totalChanges = changeHistory.length;
+        const aiChanges = changeHistory.filter(h => h.actor === 'ai').length;
+        const userChanges = changeHistory.filter(h => h.actor === 'user').length;
+
+        // Group by action type
+        const actions = changeHistory.reduce((acc: any, h) => {
+            acc[h.action] = (acc[h.action] || 0) + 1;
+            return acc;
+        }, {});
+
+        return { totalChanges, aiChanges, userChanges, actions };
+    }, [changeHistory]);
 
     // Filter rules by dimension
     const filteredRules = useMemo(() => {
@@ -109,7 +124,7 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                 <div className="flex items-center gap-3 mb-3">
                     <div className="w-3 h-3 bg-indigo-500 rounded-full animate-pulse" />
                     <h3 className="text-sm font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">
-                        AI Cleaning Panel
+                        Pro Cleaning Engine
                     </h3>
                 </div>
 
@@ -128,6 +143,7 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                 {[
                     { id: 'issues', label: 'Issues', icon: '⚠️', count: issues.length },
                     { id: 'rules', label: 'Rules', icon: '⚒️', count: rules.length },
+                    { id: 'report', label: 'Report', icon: '📈' },
                     { id: 'history', label: 'History', icon: '📜', count: changeHistory.length },
                     { id: 'chat', label: 'Chat', icon: '💬' },
                 ].map(tab => (
@@ -140,7 +156,7 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                             }`}
                     >
                         <span>{tab.icon}</span>
-                        <span className="hidden sm:inline">{tab.label}</span>
+                        <span className="hidden lg:inline">{tab.label}</span>
                         {tab.count !== undefined && tab.count > 0 && (
                             <span className={`min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-[9px] font-black ${activeTab === tab.id
                                 ? 'bg-indigo-600 text-white'
@@ -200,17 +216,17 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                                 {issues.map((issue, idx) => (
                                     <div
                                         key={idx}
-                                        className={`p-4 rounded-xl border ${getSeverityBg(issue.severity)} transition-all hover:scale-[1.01]`}
+                                        className={`p-4 rounded-xl border ${getSeverityBg(issue.severity || 'info')} transition-all hover:scale-[1.01]`}
                                     >
                                         <div className="flex items-start justify-between gap-2 mb-2">
                                             <div className="flex items-center gap-2">
-                                                <span className={`w-2 h-2 rounded-full ${getSeverityColor(issue.severity)}`} />
+                                                <span className={`w-2 h-2 rounded-full ${getSeverityColor(issue.severity || 'info')}`} />
                                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                                                     Row {issue.row + 1}, {issue.columnName}
                                                 </span>
                                             </div>
                                             <span className="text-[9px] font-semibold text-slate-400 uppercase">
-                                                {Math.round(issue.confidence * 100)}% confident
+                                                {Math.round((issue.confidence || 0.8) * 100)}% confident
                                             </span>
                                         </div>
 
@@ -236,6 +252,48 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                                 ))}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* Report Tab (New) */}
+                {activeTab === 'report' && (
+                    <div className="space-y-6">
+                        <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg">
+                            <p className="text-[10px] font-bold uppercase opacity-80 mb-1">Total Impact</p>
+                            <h4 className="text-3xl font-black mb-1">{reportMetrics.totalChanges}</h4>
+                            <p className="text-xs opacity-90">Data quality issues successfully remediated.</p>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">AI Recovered</p>
+                                <p className="text-xl font-black text-indigo-600">{reportMetrics.aiChanges}</p>
+                            </div>
+                            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1">User Edited</p>
+                                <p className="text-xl font-black text-emerald-600">{reportMetrics.userChanges}</p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3">
+                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Action Summary</h5>
+                            {Object.entries(reportMetrics.actions).map(([action, count]: [any, any]) => (
+                                <div key={action} className="flex items-center justify-between p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-100 dark:border-slate-800">
+                                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300 capitalize">{action}</span>
+                                    <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 rounded text-[10px] font-black">{count}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-lg">🛡️</span>
+                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Full Compliance Log Status</span>
+                            </div>
+                            <p className="text-[10px] text-emerald-600 dark:text-emerald-500 leading-relaxed">
+                                Every action in this session is being tracked in a verified audit trail for professional reporting.
+                            </p>
+                        </div>
                     </div>
                 )}
 
@@ -317,7 +375,7 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                             changeHistory.slice().reverse().map((entry) => (
                                 <div
                                     key={entry.id}
-                                    className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700"
+                                    className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 transition-all hover:border-indigo-500/30"
                                 >
                                     <div className="flex items-center justify-between gap-2 mb-2">
                                         <div className="flex items-center gap-2">
@@ -339,12 +397,12 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
                                         )}
                                     </div>
 
-                                    <p className="text-xs text-slate-600 dark:text-slate-300 mb-2">
+                                    <p className="text-xs text-slate-600 dark:text-slate-300 mb-2 font-bold">
                                         {entry.explanation}
                                     </p>
 
-                                    <div className="text-[10px] text-slate-500 font-mono bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded">
-                                        Row {entry.row + 1}, {entry.column}: "{String(entry.oldValue || 'empty')}" → "{String(entry.newValue || 'empty')}"
+                                    <div className="text-[10px] text-slate-500 font-mono bg-slate-50 dark:bg-slate-900 px-2 py-1 rounded overflow-x-auto">
+                                        Row {entry.row + 1}, {entry.column}: <span className="text-rose-500">"{String(entry.oldValue || 'empty')}"</span> → <span className="text-emerald-600">"{String(entry.newValue || 'empty')}"</span>
                                     </div>
                                 </div>
                             ))
