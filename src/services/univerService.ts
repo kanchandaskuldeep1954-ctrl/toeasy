@@ -57,6 +57,8 @@ export interface ColumnSemantics {
     inferredFormat?: string;
     relatedColumns?: string[];
     recoverySource?: string; // Column to use for recovery
+    isGarbage?: boolean;     // True if column is detected as structural garbage
+    garbageReason?: string;
 }
 
 // Dataset semantic analysis
@@ -82,7 +84,8 @@ export interface ColumnRelationship {
 // Recovery strategies
 export type RecoveryStrategy =
     | 'lookup' | 'calculate' | 'pattern' | 'mode' | 'mean' | 'median'
-    | 'interpolate' | 'forward_fill' | 'backward_fill' | 'default' | 'remove';
+    | 'interpolate' | 'forward_fill' | 'backward_fill' | 'default'
+    | 'remove' | 'remove_row' | 'remove_column';
 
 // Recovery plan for a cell
 export interface RecoveryPlan {
@@ -228,6 +231,36 @@ export function detectFieldType(
 }
 
 /**
+ * Detect if a column is structural garbage
+ */
+function detectGarbageColumn(column: string, values: any[], nullCount: number): { isGarbage: boolean; reason?: string } {
+    const totalCount = values.length;
+    if (totalCount === 0) return { isGarbage: false };
+
+    // 1. Column name is just a number (e.g. "56456")
+    if (/^\d+$/.test(column) && column.length > 3) {
+        return { isGarbage: true, reason: `Header "${column}" appears to be a random number, not a semantic title.` };
+    }
+
+    // 2. High null ratio (>90%) with low complexity
+    const nullRatio = nullCount / totalCount;
+    if (nullRatio > 0.9) {
+        const nonNull = values.filter(v => v !== null && v !== undefined && v !== '');
+        if (nonNull.length < 5) {
+            return { isGarbage: true, reason: `Over 90% of column "${column}" is empty and contains no significant data patterns.` };
+        }
+    }
+
+    // 3. Low entropy (all values same or random single chars)
+    const uniqueValues = [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))];
+    if (uniqueValues.length === 1 && totalCount > 10) {
+        return { isGarbage: true, reason: `Column "${column}" contains only one repeated value: "${uniqueValues[0]}".` };
+    }
+
+    return { isGarbage: false };
+}
+
+/**
  * Detect industry/domain from column names and values
  */
 export function detectDomain(columns: string[], sampleData: DataRow[]): { domain: IndustryDomain; confidence: number } {
@@ -307,7 +340,10 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
         }
 
         // Find invalid values
-        const invalidValues = findInvalidValues(values, type);
+        const invalidValues = findInvalidValues(values, type, column);
+
+        // Structural Garbage Detection
+        const { isGarbage, reason: garbageReason } = detectGarbageColumn(column, values, nullCount);
 
         return {
             column,
@@ -318,6 +354,8 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
             invalidValues,
             nullCount,
             uniqueCount: uniqueValues.length,
+            isGarbage,
+            garbageReason
         };
     });
 
@@ -346,8 +384,9 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
 
 /**
  * Find invalid values in a column based on semantic type
+ * ENHANCED: Detects nonsense "trash" values in text fields
  */
-function findInvalidValues(values: any[], fieldType: SemanticFieldType): any[] {
+function findInvalidValues(values: any[], fieldType: SemanticFieldType, column?: string): any[] {
     const invalid: any[] = [];
 
     values.forEach((value, idx) => {
@@ -380,6 +419,18 @@ function findInvalidValues(values: any[], fieldType: SemanticFieldType): any[] {
                 break;
             case 'url':
                 isValid = /^https?:\/\/[^\s]+$/.test(strValue);
+                break;
+            case 'text':
+            case 'description':
+            case 'comment':
+            case 'notes':
+                // TRASH DETECTION: Pure numeric strings in long text fields are usually garbage (e.g. '435345')
+                if (strValue.length > 4 && /^\d+$/.test(strValue.replace(/[\s\-\(\)\.]/g, ''))) {
+                    // Check if it's NOT a phone number or ID
+                    if (column && !['phone', 'id', 'sku', 'code', 'order'].some(k => column.toLowerCase().includes(k))) {
+                        isValid = false;
+                    }
+                }
                 break;
         }
 
@@ -527,10 +578,15 @@ function generateRecommendations(columns: ColumnSemantics[], relationships: Colu
 
     for (const col of columns) {
         if (col.nullCount > 0) {
-            const nullPercentage = Math.round((col.nullCount / (col.nullCount + col.uniqueCount)) * 100);
+            const total = col.nullCount + col.uniqueCount;
+            const nullPercentage = Math.round((col.nullCount / total) * 100);
             if (nullPercentage > 20) {
                 recommendations.push(`Column "${col.column}" has ${nullPercentage}% missing values - consider recovery or removal`);
             }
+        }
+
+        if (col.isGarbage) {
+            recommendations.push(`CRITICAL: Column "${col.column}" detected as structural garbage. Reason: ${col.garbageReason}`);
         }
 
         if (col.invalidValues.length > 0) {
@@ -578,7 +634,6 @@ export function generateRecoveryPlans(
             }
         });
 
-        // Handle invalid values
         for (const invalid of colSem.invalidValues) {
             const plan = createRecoveryPlan(
                 invalid.index,
@@ -589,6 +644,20 @@ export function generateRecoveryPlans(
                 data
             );
             if (plan) plans.push(plan);
+        }
+
+        // Handle Garbage Columns
+        if (colSem.isGarbage) {
+            plans.push({
+                row: -1, // Indicates whole column
+                column: colSem.column,
+                currentValue: null,
+                suggestedValue: null,
+                strategy: 'remove_column',
+                confidence: 1.0,
+                explanation: colSem.garbageReason || `Column ${colSem.column} is structural garbage.`,
+                dataLossRisk: 'medium',
+            });
         }
     }
 
@@ -711,7 +780,24 @@ function createRecoveryPlan(
         };
     }
 
-    // Strategy 6: Semantic removal/quarantine
+    // Strategy 6: Semantic removal/quarantine or Row Removal
+    // If it's a critical identifier (Name, ID) and recovery failed, suggest remove_row
+    const isCriticalIdentifier = ['name', 'full_name', 'id', 'sku', 'email'].includes(colSem.fieldType);
+
+    if (isCriticalIdentifier && (currentValue === null || currentValue === undefined || currentValue === '')) {
+        return {
+            row: rowIndex,
+            column,
+            currentValue: currentValue || '(missing)',
+            suggestedValue: null,
+            strategy: 'remove_row',
+            confidence: 0.9,
+            explanation: `Critical identifier "${column}" is missing and unrecoverable. Professional practice suggests removing this record to avoid data integrity issues.`,
+            dataLossRisk: 'low', // Low because it's only one row
+        };
+    }
+
+    // Default to cell-level removal (quarantine cell)
     return {
         row: rowIndex,
         column,
@@ -719,7 +805,7 @@ function createRecoveryPlan(
         suggestedValue: null,
         strategy: 'remove',
         confidence: 0.95,
-        explanation: `Critical ${colSem.fieldType} missing in ${column}. Data point is semantically incomplete for ${colSem.fieldType} standards.`,
+        explanation: `Critical ${colSem.fieldType} error in ${column}. Data point is semantically incomplete.`,
         dataLossRisk: 'high',
     };
 }

@@ -214,48 +214,126 @@ const UniverCleanView: React.FC = () => {
             const newHistory: ChangeHistoryEntry[] = [];
             const totalIssues = issues.length;
 
+            const rowsToRemove = new Set<number>();
+            const columnsToRemove = new Set<string>();
+
+            // 1. Process all issues
             for (let i = 0; i < issues.length; i++) {
                 const issue = issues[i];
-                setProcessingStatus(`Fixing ${i + 1}/${totalIssues}: Row ${issue.row + 1}, ${issue.columnName}`);
-                setCleaningProgress(Math.round(((i + 1) / totalIssues) * 100));
 
-                const plan: RecoveryPlan = {
-                    row: issue.row,
-                    column: issue.columnName,
-                    currentValue: issue.currentValue,
-                    suggestedValue: issue.suggestedValue,
-                    strategy: issue.recoveryMethod as any || 'ai_infer',
-                    confidence: issue.confidence,
-                    explanation: issue.explanation,
-                    dataLossRisk: issue.severity === 'error' ? 'medium' : 'low',
-                };
+                if (issue.recoveryMethod === 'remove_row') {
+                    rowsToRemove.add(issue.row);
+                    setProcessingStatus(`Flagging row ${issue.row + 1} for removal...`);
+                } else if (issue.recoveryMethod === 'remove_column') {
+                    columnsToRemove.add(issue.columnName);
+                    setProcessingStatus(`Flagging column "${issue.columnName}" for removal...`);
+                } else {
+                    // Cell-level fix
+                    setProcessingStatus(`Fixing ${i + 1}/${totalIssues}: Row ${issue.row + 1}, ${issue.columnName}`);
 
-                const { data: newData, historyEntry } = applyRecoveryPlan(currentData, plan);
-                currentData = newData;
-                newHistory.push(historyEntry);
+                    const plan: RecoveryPlan = {
+                        row: issue.row,
+                        column: issue.columnName,
+                        currentValue: issue.currentValue,
+                        suggestedValue: issue.suggestedValue,
+                        strategy: issue.recoveryMethod as any || 'ai_infer',
+                        confidence: issue.confidence,
+                        explanation: issue.explanation,
+                        dataLossRisk: issue.severity === 'error' ? 'medium' : 'low',
+                    };
 
-                // Animate each cell (with small delay for visual effect)
-                if (univerEditorRef.current?.animateCellFix) {
-                    await univerEditorRef.current.animateCellFix(
-                        issue.row,
-                        issue.col,
-                        issue.currentValue,
-                        issue.suggestedValue,
-                        issue.explanation
-                    );
+                    const { data: newData, historyEntry } = applyRecoveryPlan(currentData, plan);
+                    currentData = newData;
+                    newHistory.push(historyEntry);
+
+                    // Animate each cell (if applicable and not removed)
+                    if (univerEditorRef.current?.animateCellFix && !rowsToRemove.has(issue.row)) {
+                        await univerEditorRef.current.animateCellFix(
+                            issue.row,
+                            issue.col,
+                            issue.currentValue,
+                            issue.suggestedValue,
+                            issue.explanation
+                        );
+                    }
                 }
 
-                // Small delay between fixes for visual effect
-                await new Promise(resolve => setTimeout(resolve, 100));
+                setCleaningProgress(Math.round(((i + 1) / totalIssues) * 100));
+                if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 50));
+            }
+
+            // 2. Perform Structural Removals
+            if (rowsToRemove.size > 0 || columnsToRemove.size > 0) {
+                setProcessingStatus(`Performing structural cleanup (${rowsToRemove.size} rows, ${columnsToRemove.size} cols)...`);
+
+                // Filter rows
+                currentData = currentData.filter((_, idx) => !rowsToRemove.has(idx));
+
+                // Filter columns in each row
+                if (columnsToRemove.size > 0) {
+                    currentData = currentData.map(row => {
+                        const newRow = { ...row };
+                        columnsToRemove.forEach(col => {
+                            // Add column removal to history once
+                            if (!newHistory.some(h => h.action === 'remove_column' as any && h.column === col)) {
+                                newHistory.push({
+                                    id: `remove-col-${col}-${Date.now()}`,
+                                    timestamp: new Date(),
+                                    action: 'remove_column' as any,
+                                    actor: 'ai',
+                                    row: -1,
+                                    column: col,
+                                    oldValue: 'column',
+                                    newValue: 'deleted',
+                                    explanation: `Structural cleanup: Deleted garbage column "${col}"`,
+                                    canUndo: false
+                                });
+                            }
+                            delete newRow[col];
+                        });
+                        return newRow;
+                    });
+                }
+
+                // Add history entries for removed rows
+                rowsToRemove.forEach(rowIndex => {
+                    newHistory.push({
+                        id: `remove-row-${rowIndex}-${Date.now()}`,
+                        timestamp: new Date(),
+                        action: 'remove_row' as any,
+                        actor: 'ai',
+                        row: rowIndex,
+                        column: 'ALL',
+                        oldValue: 'record',
+                        newValue: 'deleted',
+                        explanation: `Integrity cleanup: Removed incomplete record at row ${rowIndex + 1}`,
+                        canUndo: false
+                    });
+                });
+
+                await new Promise(resolve => setTimeout(resolve, 500));
             }
 
             // Update all state
             setChangeHistory(prev => [...prev, ...newHistory]);
             setIssues([]);
-            updateDataset(dataset.id!, { data: currentData });
+
+            // Update dataset and force a semantic re-analysis for "real-time" feel
+            const updatedDataset = {
+                ...dataset,
+                data: currentData,
+                raw_data: currentData,
+                headers: dataset.headers.filter(h => !columnsToRemove.has(h))
+            };
+
+            updateDataset(dataset.id!, updatedDataset);
+
+            // Re-run semantic analysis silently to update Quality Score and Insights
+            const newSemantics = await analyzeDatasetSemantics(updatedDataset);
+            setSemantics(newSemantics);
 
             setProcessingStatus('✅ Cleaning complete!');
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise(resolve => setTimeout(resolve, 1500));
         } catch (e) {
             console.error('Failed to apply all fixes:', e);
             setProcessingStatus('❌ Error during cleaning');

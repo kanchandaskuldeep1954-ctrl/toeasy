@@ -51,9 +51,19 @@ const AICleaningPanel: React.FC<AICleaningPanelProps> = ({
         const aiChanges = changeHistory.filter(h => h.actor === 'ai').length;
         const userChanges = changeHistory.filter(h => h.actor === 'user').length;
 
-        // Group by action type
+        // Group by action type with prettier labels
+        const actionLabels: Record<string, string> = {
+            'recover': 'Cell Recoveries',
+            'edit': 'Manual Edits',
+            'fix': 'Validation Fixes',
+            'remove_row': 'Low Quality Rows Removed',
+            'remove_column': 'Garbage Columns Deleted',
+            'quarantine': 'Vaulted Records'
+        };
+
         const actions = changeHistory.reduce((acc: any, h) => {
-            acc[h.action] = (acc[h.action] || 0) + 1;
+            const label = actionLabels[h.action] || h.action;
+            acc[label] = (acc[label] || 0) + 1;
             return acc;
         }, {});
 
