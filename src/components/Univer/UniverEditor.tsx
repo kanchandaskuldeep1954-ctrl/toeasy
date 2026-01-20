@@ -224,16 +224,41 @@ const UniverEditor: React.FC<UniverEditorProps> = ({
             const sheet = workbook.getActiveSheet();
             if (!sheet) return;
 
-            // Update cell values
+            // 1. Sync Row Count
+            const currentDataRows = data.length;
+            const sheetRowCount = sheet.getRowCount() - 1; // Exclude header
+
+            if (currentDataRows < sheetRowCount) {
+                // Garbage or removed rows exist in sheet but not in data
+                const rowsToDelete = sheetRowCount - currentDataRows;
+                console.log(`[UniverEditor] Syncing grid: Deleting ${rowsToDelete} rows`);
+                sheet.deleteRows(currentDataRows + 1, rowsToDelete);
+            }
+
+            // 2. Sync Column Count
+            const currentHeaders = headers.length;
+            const sheetColCount = sheet.getColumnCount();
+
+            if (currentHeaders < sheetColCount) {
+                // If columns were removed, it's safer to re-create the data map
+                // But for now, let's just update values. 
+                // Note: Univer doesn't easily support column deletion by name via Facade yet
+            }
+
+            // 3. Update cell values
             data.forEach((row, rowIndex) => {
                 headers.forEach((header, colIndex) => {
                     const value = row[header];
                     const range = sheet.getRange(rowIndex + 1, colIndex, 1, 1);
                     range.setValue(value === null || value === undefined ? '' : value);
 
-                    // Apply recovered cell styling
+                    // Clear previous highlights if any (unless it's currently a recovered field)
                     if (row.__metadata?.recoveredFields?.includes(header)) {
                         range.setBackgroundColor('#d1fae5'); // Green for recovered
+                    } else {
+                        // Reset background if not recovered and not highlighted as issue
+                        // We reset it to plain white or default so shifting rows don't carry old styles
+                        range.setBackgroundColor('#ffffff');
                     }
                 });
             });

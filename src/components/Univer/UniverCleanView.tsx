@@ -165,34 +165,97 @@ const UniverCleanView: React.FC = () => {
         setProcessingStatus('Applying fix...');
 
         try {
-            const plan: RecoveryPlan = {
-                row: issue.row,
-                column: issue.columnName,
-                currentValue: issue.currentValue,
-                suggestedValue: issue.suggestedValue,
-                strategy: issue.recoveryMethod as any || 'ai_infer',
-                confidence: issue.confidence,
-                explanation: issue.explanation,
-                dataLossRisk: issue.severity === 'error' ? 'medium' : 'low',
-            };
+            let newData = [...dataset.data];
+            let newHeaders = [...dataset.headers];
+            let historyEntry: ChangeHistoryEntry;
 
-            const { data: newData, historyEntry } = applyRecoveryPlan(dataset.data, plan);
+            if (issue.recoveryMethod === 'remove_row') {
+                // Structural Removal: Row
+                newData = newData.filter((_, idx) => idx !== issue.row);
+                historyEntry = {
+                    id: `remove-row-${issue.row}-${Date.now()}`,
+                    timestamp: new Date(),
+                    action: 'remove_row' as any,
+                    actor: 'ai',
+                    row: issue.row,
+                    column: 'ALL',
+                    oldValue: 'record',
+                    newValue: 'deleted',
+                    explanation: `Integrity cleanup: Removed incomplete record at row ${issue.row + 1}`,
+                    canUndo: false
+                };
+            } else if (issue.recoveryMethod === 'remove_column') {
+                // Structural Removal: Column
+                newHeaders = newHeaders.filter(h => h !== issue.columnName);
+                newData = newData.map(row => {
+                    const newRow = { ...row };
+                    delete newRow[issue.columnName];
+                    return newRow;
+                });
+                historyEntry = {
+                    id: `remove-col-${issue.columnName}-${Date.now()}`,
+                    timestamp: new Date(),
+                    action: 'remove_column' as any,
+                    actor: 'ai',
+                    row: -1,
+                    column: issue.columnName,
+                    oldValue: 'column',
+                    newValue: 'deleted',
+                    explanation: `Structural cleanup: Deleted garbage column "${issue.columnName}"`,
+                    canUndo: false
+                };
+            } else {
+                // Standard Cell-level Fix
+                const plan: RecoveryPlan = {
+                    row: issue.row,
+                    column: issue.columnName,
+                    currentValue: issue.currentValue,
+                    suggestedValue: issue.suggestedValue,
+                    strategy: issue.recoveryMethod as any || 'ai_infer',
+                    confidence: issue.confidence,
+                    explanation: issue.explanation,
+                    dataLossRisk: issue.severity === 'error' ? 'medium' : 'low',
+                };
 
-            // Animate the cell fix
-            if (univerEditorRef.current?.animateCellFix) {
-                await univerEditorRef.current.animateCellFix(
-                    issue.row,
-                    issue.col,
-                    issue.currentValue,
-                    issue.suggestedValue,
-                    issue.explanation
-                );
+                const result = applyRecoveryPlan(dataset.data, plan);
+                newData = result.data;
+                historyEntry = result.historyEntry;
+
+                // Animate the cell fix
+                if (univerEditorRef.current?.animateCellFix) {
+                    await univerEditorRef.current.animateCellFix(
+                        issue.row,
+                        issue.col,
+                        issue.currentValue,
+                        issue.suggestedValue,
+                        issue.explanation
+                    );
+                }
             }
 
             // Update state
             setChangeHistory(prev => [...prev, historyEntry]);
             setIssues(prev => prev.filter(i => !(i.row === issue.row && i.col === issue.col)));
-            updateDataset(dataset.id!, { data: newData });
+
+            const updatedDataset = {
+                ...dataset,
+                data: newData,
+                raw_data: newData,
+                headers: newHeaders
+            };
+
+            updateDataset(dataset.id!, updatedDataset);
+
+            // Re-run semantic analysis and refresh issues if structural change occurred
+            if (issue.recoveryMethod?.startsWith('remove_')) {
+                const newSemantics = await analyzeDatasetSemantics(updatedDataset);
+                setSemantics(newSemantics);
+
+                const plans = generateRecoveryPlans(newData, newHeaders, newSemantics);
+                const cellIssues = recoveryPlansToCellIssues(plans, newHeaders);
+                setIssues(cellIssues);
+            }
+
         } catch (e) {
             console.error('Failed to apply fix:', e);
         } finally {
