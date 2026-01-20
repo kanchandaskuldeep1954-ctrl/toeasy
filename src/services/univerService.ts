@@ -924,7 +924,11 @@ function findLookupValue(
 /**
  * Find mode (most common value)
  */
-function findMode(values: any[]): any | null {
+
+/**
+ * Find mode (most common value)
+ */
+function findMode(values: any[]): any {
     const counts = new Map<any, number>();
     let maxCount = 0;
     let mode = null;
@@ -945,7 +949,7 @@ function findMode(values: any[]): any | null {
 /**
  * Get default value for a field type
  */
-function getDefaultValue(fieldType: SemanticFieldType): any | null {
+function getDefaultValue(fieldType: SemanticFieldType): any {
     const defaults: Partial<Record<SemanticFieldType, any>> = {
         boolean: false,
         status: 'Unknown',
