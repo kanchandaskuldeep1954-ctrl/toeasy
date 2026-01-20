@@ -12,6 +12,13 @@
 import { DataRow, ValidationRule, QualityDimension, Dataset, CellIssue } from '../../types';
 import { apiClient } from './apiClient';
 
+// Elite Layer Imports
+import * as CharNormalizer from './characterNormalizer';
+import * as NumNormalizer from './numericNormalizer';
+import * as DateNormalizer from './dateNormalizer';
+import * as ValidationEngine from './validationEngine';
+import * as StructuralCleaner from './structuralCleaner';
+
 // Change history entry type
 export interface ChangeHistoryEntry {
     id: string;
@@ -322,7 +329,18 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
     // Analyze each column
     const columns: ColumnSemantics[] = headers.filter(h => h !== '__metadata').map(column => {
         const values = data.map(row => row[column]);
-        const { type, confidence } = detectFieldType(column, values);
+
+        // Elite Layer: Character and Unicode cleaning before analysis
+        const cleanedValues = values.map(v => {
+            if (typeof v === 'string') {
+                let cleaned = CharNormalizer.stripInvisibleCharacters(v);
+                cleaned = CharNormalizer.normalizeWhitespace(cleaned, { convertNBSP: true, trimEnds: true });
+                return cleaned;
+            }
+            return v;
+        });
+
+        const { type, confidence } = detectFieldType(column, cleanedValues);
 
         const nullCount = values.filter(v => v === null || v === undefined || v === '').length;
         const uniqueValues = [...new Set(values.filter(v => v !== null && v !== undefined && v !== ''))];
@@ -707,265 +725,316 @@ function createRecoveryPlan(
                     dataLossRisk: 'none',
                 };
             }
-        }
-    }
+            // --- ELITE LAYER RECOVERY ---
 
-    // Strategy 2: Lookup from similar rows
-    // Find rows with similar values in other columns
-    const lookupValue = findLookupValue(rowIndex, column, data, colSem);
-    if (lookupValue !== null) {
-        return {
-            row: rowIndex,
-            column,
-            currentValue,
-            suggestedValue: lookupValue.value,
-            strategy: 'lookup',
-            confidence: lookupValue.confidence,
-            explanation: lookupValue.explanation,
-            dataLossRisk: 'low',
-        };
-    }
+            // Strategy 1: Numeric Normalization
+            if (['currency', 'price', 'amount', 'percentage', 'quantity', 'count'].includes(colSem.fieldType)) {
+                const cleanedNum = NumNormalizer.normalizeNumeric(String(currentValue || ''));
+                if (cleanedNum !== null && String(cleanedNum) !== String(currentValue)) {
+                    return {
+                        row: rowIndex,
+                        column,
+                        currentValue,
+                        suggestedValue: cleanedNum,
+                        strategy: 'calculate',
+                        confidence: 0.9,
+                        explanation: `Elite Numeric Parsing: Corrected from "${currentValue}" to ${cleanedNum}`,
+                        dataLossRisk: 'none',
+                    };
+                }
+            }
 
-    // Strategy 3: Use mode (most common value) for categorical
-    if (['status', 'category', 'type', 'boolean'].includes(colSem.fieldType)) {
-        const mode = findMode(data.map(r => r[column]));
-        if (mode !== null) {
+            // Strategy 2: Date Normalization
+            if (['date', 'datetime', 'year', 'month'].includes(colSem.fieldType)) {
+                const cleanedDate = DateNormalizer.normalizeDate(String(currentValue || ''));
+                if (cleanedDate && cleanedDate !== String(currentValue)) {
+                    return {
+                        row: rowIndex,
+                        column,
+                        currentValue,
+                        suggestedValue: cleanedDate,
+                        strategy: 'pattern',
+                        confidence: 0.85,
+                        explanation: `Elite Date Parsing: Normalized from "${currentValue}" to standard ISO`,
+                        dataLossRisk: 'none',
+                    };
+                }
+            }
+
+            // Strategy 3: Unicode/Character Normalization
+            if (typeof currentValue === 'string') {
+                let cleanedChar = CharNormalizer.repairMojibake(currentValue);
+                cleanedChar = CharNormalizer.normalizeWhitespace(cleanedChar, { convertNBSP: true, trimEnds: true });
+
+                if (cleanedChar !== currentValue) {
+                    return {
+                        row: rowIndex,
+                        column,
+                        currentValue,
+                        suggestedValue: cleanedChar,
+                        strategy: 'pattern',
+                        confidence: 0.95,
+                        explanation: `Elite Unicode Repair: Fixed encoding artifacts and whitespace`,
+                        dataLossRisk: 'none',
+                    };
+                }
+            }
+
+            // Strategy 4: Lookup value based on relationships
+            const lookupValue = findLookupValue(rowIndex, column, data, colSem);
+            if (lookupValue !== null) {
+                return {
+                    row: rowIndex,
+                    column,
+                    currentValue,
+                    suggestedValue: lookupValue.value,
+                    strategy: 'lookup',
+                    confidence: lookupValue.confidence,
+                    explanation: lookupValue.explanation,
+                    dataLossRisk: 'low',
+                };
+            }
+
+            // Strategy 3: Use mode (most common value) for categorical
+            if (['status', 'category', 'type', 'boolean'].includes(colSem.fieldType)) {
+                const mode = findMode(data.map(r => r[column]));
+                if (mode !== null) {
+                    return {
+                        row: rowIndex,
+                        column,
+                        currentValue,
+                        suggestedValue: mode,
+                        strategy: 'mode',
+                        confidence: 0.6,
+                        explanation: `Using most common value in column: "${mode}"`,
+                        dataLossRisk: 'low',
+                    };
+                }
+            }
+
+            // Strategy 4: Use mean/median for numeric
+            if (['price', 'amount', 'quantity', 'count'].includes(colSem.fieldType)) {
+                const values = data
+                    .map(r => r[column])
+                    .filter(v => v !== null && v !== undefined && !isNaN(Number(v)))
+                    .map(Number);
+
+                if (values.length > 0) {
+                    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                    return {
+                        row: rowIndex,
+                        column,
+                        currentValue,
+                        suggestedValue: Math.round(mean * 100) / 100,
+                        strategy: 'mean',
+                        confidence: 0.5,
+                        explanation: `Using column average: ${Math.round(mean * 100) / 100}`,
+                        dataLossRisk: 'medium',
+                    };
+                }
+            }
+
+            // Strategy 5: Default value for specific types
+            const defaultValue = getDefaultValue(colSem.fieldType);
+            if (defaultValue !== null) {
+                return {
+                    row: rowIndex,
+                    column,
+                    currentValue,
+                    suggestedValue: defaultValue,
+                    strategy: 'default',
+                    confidence: 0.3,
+                    explanation: `Using default value for ${colSem.fieldType} type`,
+                    dataLossRisk: 'medium',
+                };
+            }
+
+            // Strategy 6: Semantic removal/quarantine or Row Removal
+            // If it's a critical identifier (Name, ID) and recovery failed, suggest remove_row
+            const isCriticalIdentifier = ['name', 'full_name', 'id', 'sku', 'email'].includes(colSem.fieldType);
+
+            if (isCriticalIdentifier && (currentValue === null || currentValue === undefined || currentValue === '')) {
+                return {
+                    row: rowIndex,
+                    column,
+                    currentValue: currentValue || '(missing)',
+                    suggestedValue: null,
+                    strategy: 'remove_row',
+                    confidence: 0.9,
+                    explanation: `Critical identifier "${column}" is missing and unrecoverable. Professional practice suggests removing this record to avoid data integrity issues.`,
+                    dataLossRisk: 'low', // Low because it's only one row
+                };
+            }
+
+            // Default to cell-level removal (quarantine cell)
             return {
                 row: rowIndex,
                 column,
-                currentValue,
-                suggestedValue: mode,
-                strategy: 'mode',
-                confidence: 0.6,
-                explanation: `Using most common value in column: "${mode}"`,
-                dataLossRisk: 'low',
+                currentValue: currentValue || '(missing)',
+                suggestedValue: null,
+                strategy: 'remove',
+                confidence: 0.95,
+                explanation: `Critical ${colSem.fieldType} error in ${column}. Data point is semantically incomplete.`,
+                dataLossRisk: 'high',
             };
         }
-    }
 
-    // Strategy 4: Use mean/median for numeric
-    if (['price', 'amount', 'quantity', 'count'].includes(colSem.fieldType)) {
-        const values = data
-            .map(r => r[column])
-            .filter(v => v !== null && v !== undefined && !isNaN(Number(v)))
-            .map(Number);
+        /**
+         * Find value by looking up similar rows
+         */
+        function findLookupValue(
+            rowIndex: number,
+            column: string,
+            data: DataRow[],
+            colSem: ColumnSemantics
+        ): { value: any; confidence: number; explanation: string } | null {
+            const row = data[rowIndex];
 
-        if (values.length > 0) {
-            const mean = values.reduce((a, b) => a + b, 0) / values.length;
-            return {
-                row: rowIndex,
-                column,
-                currentValue,
-                suggestedValue: Math.round(mean * 100) / 100,
-                strategy: 'mean',
-                confidence: 0.5,
-                explanation: `Using column average: ${Math.round(mean * 100) / 100}`,
-                dataLossRisk: 'medium',
+            // Find similar rows based on other columns
+            for (const otherRow of data) {
+                if (otherRow === row) continue;
+
+                const targetValue = otherRow[column];
+                if (targetValue === null || targetValue === undefined || targetValue === '') continue;
+
+                // Count matching columns
+                let matches = 0;
+                let total = 0;
+
+                for (const col of Object.keys(row)) {
+                    if (col === column || col === '__metadata') continue;
+                    if (row[col] === otherRow[col]) matches++;
+                    total++;
+                }
+
+                if (total > 0 && matches / total > 0.8) {
+                    return {
+                        value: targetValue,
+                        confidence: matches / total,
+                        explanation: `Matched from similar row with ${Math.round(matches / total * 100)}% similarity`,
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        /**
+         * Find mode (most common value)
+         */
+        function findMode(values: any[]): any | null {
+            const counts = new Map<any, number>();
+            let maxCount = 0;
+            let mode = null;
+
+            for (const v of values) {
+                if (v === null || v === undefined || v === '') continue;
+                const count = (counts.get(v) || 0) + 1;
+                counts.set(v, count);
+                if (count > maxCount) {
+                    maxCount = count;
+                    mode = v;
+                }
+            }
+
+            return maxCount > 1 ? mode : null;
+        }
+
+        /**
+         * Get default value for a field type
+         */
+        function getDefaultValue(fieldType: SemanticFieldType): any | null {
+            const defaults: Partial<Record<SemanticFieldType, any>> = {
+                boolean: false,
+                status: 'Unknown',
+                category: 'Uncategorized',
+                quantity: 0,
+                count: 0,
+                price: 0,
+                amount: 0,
             };
-        }
-    }
 
-    // Strategy 5: Default value for specific types
-    const defaultValue = getDefaultValue(colSem.fieldType);
-    if (defaultValue !== null) {
-        return {
-            row: rowIndex,
-            column,
-            currentValue,
-            suggestedValue: defaultValue,
-            strategy: 'default',
-            confidence: 0.3,
-            explanation: `Using default value for ${colSem.fieldType} type`,
-            dataLossRisk: 'medium',
-        };
-    }
-
-    // Strategy 6: Semantic removal/quarantine or Row Removal
-    // If it's a critical identifier (Name, ID) and recovery failed, suggest remove_row
-    const isCriticalIdentifier = ['name', 'full_name', 'id', 'sku', 'email'].includes(colSem.fieldType);
-
-    if (isCriticalIdentifier && (currentValue === null || currentValue === undefined || currentValue === '')) {
-        return {
-            row: rowIndex,
-            column,
-            currentValue: currentValue || '(missing)',
-            suggestedValue: null,
-            strategy: 'remove_row',
-            confidence: 0.9,
-            explanation: `Critical identifier "${column}" is missing and unrecoverable. Professional practice suggests removing this record to avoid data integrity issues.`,
-            dataLossRisk: 'low', // Low because it's only one row
-        };
-    }
-
-    // Default to cell-level removal (quarantine cell)
-    return {
-        row: rowIndex,
-        column,
-        currentValue: currentValue || '(missing)',
-        suggestedValue: null,
-        strategy: 'remove',
-        confidence: 0.95,
-        explanation: `Critical ${colSem.fieldType} error in ${column}. Data point is semantically incomplete.`,
-        dataLossRisk: 'high',
-    };
-}
-
-/**
- * Find value by looking up similar rows
- */
-function findLookupValue(
-    rowIndex: number,
-    column: string,
-    data: DataRow[],
-    colSem: ColumnSemantics
-): { value: any; confidence: number; explanation: string } | null {
-    const row = data[rowIndex];
-
-    // Find similar rows based on other columns
-    for (const otherRow of data) {
-        if (otherRow === row) continue;
-
-        const targetValue = otherRow[column];
-        if (targetValue === null || targetValue === undefined || targetValue === '') continue;
-
-        // Count matching columns
-        let matches = 0;
-        let total = 0;
-
-        for (const col of Object.keys(row)) {
-            if (col === column || col === '__metadata') continue;
-            if (row[col] === otherRow[col]) matches++;
-            total++;
+            return defaults[fieldType] ?? null;
         }
 
-        if (total > 0 && matches / total > 0.8) {
-            return {
-                value: targetValue,
-                confidence: matches / total,
-                explanation: `Matched from similar row with ${Math.round(matches / total * 100)}% similarity`,
+        /**
+         * Convert recovery plans to cell issues for UI display
+         */
+        export function recoveryPlansToCellIssues(
+            plans: RecoveryPlan[],
+            headers: string[]
+        ): CellIssue[] {
+            return plans.map(plan => ({
+                row: plan.row,
+                col: headers.indexOf(plan.column),
+                columnName: plan.column,
+                currentValue: plan.currentValue,
+                issueType: plan.currentValue === null || plan.currentValue === undefined || plan.currentValue === ''
+                    ? 'missing'
+                    : 'invalid_format',
+                severity: plan.dataLossRisk === 'none' || plan.dataLossRisk === 'low' ? 'warning' : 'error',
+                suggestedValue: plan.suggestedValue,
+                confidence: plan.confidence,
+                explanation: plan.explanation,
+                recoveryMethod: plan.strategy === 'calculate' ? 'calculate' :
+                    plan.strategy === 'lookup' ? 'lookup' :
+                        plan.strategy === 'pattern' ? 'pattern' :
+                            plan.strategy === 'remove' ? 'remove' : 'ai_infer',
+            }));
+        }
+
+        /**
+         * Apply a single recovery plan to the data with full audit tracking
+         */
+        export function applyRecoveryPlan(
+            data: DataRow[],
+            plan: RecoveryPlan
+        ): { data: DataRow[]; historyEntry: ChangeHistoryEntry } {
+            const newData = [...data];
+            const row = { ...newData[plan.row] };
+
+            const oldValue = row[plan.column];
+            row[plan.column] = plan.suggestedValue;
+
+            // 1. Initialize metadata
+            if (!row.__metadata) row.__metadata = {};
+            if (!row.__metadata.recoveredFields) row.__metadata.recoveredFields = [];
+            if (!row.__metadata.recoveryExplanations) row.__metadata.recoveryExplanations = {};
+            if (!row.__metadata.auditLog) row.__metadata.auditLog = [];
+
+            // 2. Track recovery
+            if (!row.__metadata.recoveredFields.includes(plan.column)) {
+                row.__metadata.recoveredFields.push(plan.column);
+            }
+            row.__metadata.recoveryExplanations[plan.column] = plan.explanation;
+            row.__metadata.lastModified = new Date().toISOString();
+
+            // 3. Create Audit Log Entry (Pro Analyst Requirement)
+            const auditEntry = {
+                action: 'recovered' as const,
+                field: plan.column,
+                from: String(oldValue || ''),
+                to: String(plan.suggestedValue || ''),
+                reason: plan.explanation,
+                timestamp: new Date().toISOString(),
+                rule: plan.strategy
             };
+            row.__metadata.auditLog.push(auditEntry);
+
+            newData[plan.row] = row;
+
+            const historyEntry: ChangeHistoryEntry = {
+                id: `${Date.now()}-${plan.row}-${plan.column}`,
+                timestamp: new Date(),
+                action: 'recover',
+                actor: 'ai',
+                row: plan.row,
+                column: plan.column,
+                oldValue,
+                newValue: plan.suggestedValue,
+                explanation: plan.explanation,
+                canUndo: true,
+            };
+
+            return { data: newData, historyEntry };
         }
-    }
-
-    return null;
-}
-
-/**
- * Find mode (most common value)
- */
-function findMode(values: any[]): any | null {
-    const counts = new Map<any, number>();
-    let maxCount = 0;
-    let mode = null;
-
-    for (const v of values) {
-        if (v === null || v === undefined || v === '') continue;
-        const count = (counts.get(v) || 0) + 1;
-        counts.set(v, count);
-        if (count > maxCount) {
-            maxCount = count;
-            mode = v;
-        }
-    }
-
-    return maxCount > 1 ? mode : null;
-}
-
-/**
- * Get default value for a field type
- */
-function getDefaultValue(fieldType: SemanticFieldType): any | null {
-    const defaults: Partial<Record<SemanticFieldType, any>> = {
-        boolean: false,
-        status: 'Unknown',
-        category: 'Uncategorized',
-        quantity: 0,
-        count: 0,
-        price: 0,
-        amount: 0,
-    };
-
-    return defaults[fieldType] ?? null;
-}
-
-/**
- * Convert recovery plans to cell issues for UI display
- */
-export function recoveryPlansToCellIssues(
-    plans: RecoveryPlan[],
-    headers: string[]
-): CellIssue[] {
-    return plans.map(plan => ({
-        row: plan.row,
-        col: headers.indexOf(plan.column),
-        columnName: plan.column,
-        currentValue: plan.currentValue,
-        issueType: plan.currentValue === null || plan.currentValue === undefined || plan.currentValue === ''
-            ? 'missing'
-            : 'invalid_format',
-        severity: plan.dataLossRisk === 'none' || plan.dataLossRisk === 'low' ? 'warning' : 'error',
-        suggestedValue: plan.suggestedValue,
-        confidence: plan.confidence,
-        explanation: plan.explanation,
-        recoveryMethod: plan.strategy === 'calculate' ? 'calculate' :
-            plan.strategy === 'lookup' ? 'lookup' :
-                plan.strategy === 'pattern' ? 'pattern' :
-                    plan.strategy === 'remove' ? 'remove' : 'ai_infer',
-    }));
-}
-
-/**
- * Apply a single recovery plan to the data with full audit tracking
- */
-export function applyRecoveryPlan(
-    data: DataRow[],
-    plan: RecoveryPlan
-): { data: DataRow[]; historyEntry: ChangeHistoryEntry } {
-    const newData = [...data];
-    const row = { ...newData[plan.row] };
-
-    const oldValue = row[plan.column];
-    row[plan.column] = plan.suggestedValue;
-
-    // 1. Initialize metadata
-    if (!row.__metadata) row.__metadata = {};
-    if (!row.__metadata.recoveredFields) row.__metadata.recoveredFields = [];
-    if (!row.__metadata.recoveryExplanations) row.__metadata.recoveryExplanations = {};
-    if (!row.__metadata.auditLog) row.__metadata.auditLog = [];
-
-    // 2. Track recovery
-    if (!row.__metadata.recoveredFields.includes(plan.column)) {
-        row.__metadata.recoveredFields.push(plan.column);
-    }
-    row.__metadata.recoveryExplanations[plan.column] = plan.explanation;
-    row.__metadata.lastModified = new Date().toISOString();
-
-    // 3. Create Audit Log Entry (Pro Analyst Requirement)
-    const auditEntry = {
-        action: 'recovered' as const,
-        field: plan.column,
-        from: String(oldValue || ''),
-        to: String(plan.suggestedValue || ''),
-        reason: plan.explanation,
-        timestamp: new Date().toISOString(),
-        rule: plan.strategy
-    };
-    row.__metadata.auditLog.push(auditEntry);
-
-    newData[plan.row] = row;
-
-    const historyEntry: ChangeHistoryEntry = {
-        id: `${Date.now()}-${plan.row}-${plan.column}`,
-        timestamp: new Date(),
-        action: 'recover',
-        actor: 'ai',
-        row: plan.row,
-        column: plan.column,
-        oldValue,
-        newValue: plan.suggestedValue,
-        explanation: plan.explanation,
-        canUndo: true,
-    };
-
-    return { data: newData, historyEntry };
-}
