@@ -5,7 +5,7 @@ import { useDataset } from '../../hooks/useDataset';
 import { apiClient } from '../../services/apiClient';
 import { GroqService } from '../../services/groqService';
 import AICleaningPanel from './AICleaningPanel';
-const FortuneSheetEditor = React.lazy(() => import('../FortuneSheet/FortuneSheetEditor'));
+const UniverEditor = React.lazy(() => import('./UniverEditor'));
 import { CellIssue } from '../../../types';
 import ExportModal from '../ExportHub/ExportModal';
 import {
