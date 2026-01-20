@@ -34,15 +34,15 @@ const INVISIBLE_RE = /[\u200B-\u200D\u2060\uFEFF\u202A-\u202E\u2066-\u2069\uFE00
  */
 export function stripInvisibleCharacters(text: string, mode: 'aggressive' | 'safe' = 'safe'): string {
     if (!text) return text;
-    
+
     // Aggressive: strip all common invisibles
     let cleaned = text.replace(INVISIBLE_RE, '');
-    
+
     // Additional zero-width and control logic
     if (mode === 'aggressive') {
         // Strip even more obscure ones if needed
     }
-    
+
     return cleaned;
 }
 
@@ -108,7 +108,7 @@ export function normalizeWhitespace(text: string, options: {
     if (options.collapseMultiple) {
         processed = processed.replace(/ +/g, ' ');
     }
-    
+
     if (options.trimEnds) {
         processed = processed.trim();
     }
@@ -132,13 +132,13 @@ const LIGATURE_MAP: Record<string, string> = {
  */
 export function flattenCharacters(text: string): string {
     if (!text) return text;
-    
+
     // Normalize to NFD to separate marks
     let flattened = text.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    
+
     // Expand ligatures
     flattened = flattened.split('').map(char => LIGATURE_MAP[char] || char).join('');
-    
+
     return flattened;
 }
 
@@ -156,13 +156,13 @@ export function repairMojibake(text: string): string {
         'Ã\u00AC': 'ì', 'Ã\u00AD': 'í', 'Ã\u00AE': 'î', 'Ã\u00AF': 'ï',
         'Ã²': 'ò', 'Ã³': 'ó', 'Ã´': 'ô', 'Ãµ': 'õ', 'Ã¶': 'ö',
         'Ã¹': 'ù', 'Ãº': 'ú', 'Ã»': 'û', 'Ã¼': 'ü',
-        'Ã±': 'ñ', 'Ã§': 'ç', 'Ã\u00AF': 'ï',
+        'Ã±': 'ñ', 'Ã§': 'ç',
     };
-    
+
     let repaired = text;
     Object.entries(mojibakeMap).forEach(([bad, good]) => {
         repaired = repaired.replace(new RegExp(bad, 'g'), good);
     });
-    
+
     return repaired;
 }

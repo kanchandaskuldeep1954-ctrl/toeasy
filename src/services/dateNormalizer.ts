@@ -14,7 +14,7 @@ const MONTH_NAMES_MAP: Record<string, number> = {
     // fr
     'janvier': 0, 'février': 1, 'mars': 2, 'avr': 3, 'mai_fr': 4, 'juin': 5, 'juil': 6, 'août': 7, 'sep_fr': 8, 'oct_fr': 9, 'nov_fr': 10, 'dec_fr': 11,
     // de
-    'januar': 0, 'februar': 1, 'märz': 2, 'april_de': 3, 'mai_de': 4, 'juni': 5, 'juli': 6, 'august_de': 7, 'september_de': 8, 'oktober': 9, 'november': 10, 'dezember': 11,
+    'januar': 0, 'februar': 1, 'märz': 2, 'oktober_de': 9, 'november_de': 10, 'dezember_de': 11,
 };
 
 // --- 2. EXCEL EPOCH HANDLING ---
