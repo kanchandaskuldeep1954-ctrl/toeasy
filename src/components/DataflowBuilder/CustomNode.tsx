@@ -77,7 +77,28 @@ const CustomNode = ({ data, selected }: NodeProps) => {
             </div>
 
             {/* Output Handle */}
-            {type !== 'export' && (
+            {/* Output Handles */}
+            {type === 'if' ? (
+                <>
+                    <Handle
+                        type="source"
+                        id="true"
+                        position={Position.Right}
+                        style={{ top: '30%' }}
+                        className="!w-3 !h-3 !bg-emerald-500 !border-2 !border-slate-900 hover:!bg-emerald-400 transition-colors"
+                    />
+                    <div className="absolute right-3 top-[25%] text-[9px] font-bold text-emerald-500 pointer-events-none">TRUE</div>
+
+                    <Handle
+                        type="source"
+                        id="false"
+                        position={Position.Right}
+                        style={{ top: '70%' }}
+                        className="!w-3 !h-3 !bg-red-500 !border-2 !border-slate-900 hover:!bg-red-400 transition-colors"
+                    />
+                    <div className="absolute right-3 top-[65%] text-[9px] font-bold text-red-500 pointer-events-none">FALSE</div>
+                </>
+            ) : type !== 'export' && (
                 <Handle
                     type="source"
                     position={Position.Right}

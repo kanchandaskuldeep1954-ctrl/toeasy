@@ -61,7 +61,10 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
     // App State
     const [dataflowId, setDataflowId] = useState<string | null>(null);
+    const [dataflowId, setDataflowId] = useState<string | null>(null);
     const [dataflowName, setDataflowName] = useState('New Enterprise Pipeline');
+    const [schedule, setSchedule] = useState<string | null>(null);
+    const [showScheduleModal, setShowScheduleModal] = useState(false);
     const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
     const [isRunning, setIsRunning] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
@@ -100,7 +103,9 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
         }));
 
         setNodes(flowNodes);
+        setNodes(flowNodes);
         setEdges(flowEdges);
+        setSchedule(template.dataflow.schedule || null);
     };
 
     // Drag and Drop Handlers
@@ -217,6 +222,10 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
             description: '',
             nodes: [], // TODO: Map back
             connections: [],
+            description: '',
+            nodes: [], // TODO: Map back
+            connections: [],
+            schedule: schedule || undefined,
             isTemplate: false, isActive: true
         });
     };
@@ -302,6 +311,15 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                         `}
                     >
                         {isRunning ? 'Running...' : '▶ Run'}
+                    </button>
+                    <button
+                        onClick={() => setShowScheduleModal(true)}
+                        className={`
+                            px-4 py-2 rounded-xl text-sm font-semibold transition-all border
+                            ${schedule ? 'bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-900/30 dark:border-indigo-800 dark:text-indigo-300' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 border-transparent'}
+                        `}
+                    >
+                        {schedule ? '🕒 ' + schedule : '🕒 Schedule'}
                     </button>
                     {/* Mobile AI Toggle */}
                     <button className="md:hidden p-2 text-indigo-600 dark:text-indigo-400">✨</button>
@@ -493,6 +511,70 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Schedule Modal */}
+            {showScheduleModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md border border-slate-200 dark:border-slate-800 p-6 animate-scale-in">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">📅 Set Schedule</h3>
+                            <button onClick={() => setShowScheduleModal(false)} className="text-slate-400 hover:text-slate-600">✕</button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <button
+                                onClick={() => setSchedule('0 * * * *')}
+                                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${schedule === '0 * * * *' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'}`}
+                            >
+                                <div className="font-semibold text-slate-800 dark:text-slate-200">Hourly</div>
+                                <div className="text-xs text-slate-500">Run every hour at minute 0</div>
+                            </button>
+
+                            <button
+                                onClick={() => setSchedule('0 0 * * *')}
+                                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${schedule === '0 0 * * *' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'}`}
+                            >
+                                <div className="font-semibold text-slate-800 dark:text-slate-200">Daily</div>
+                                <div className="text-xs text-slate-500">Run every day at midnight</div>
+                            </button>
+
+                            <button
+                                onClick={() => setSchedule('0 0 * * 1')}
+                                className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${schedule === '0 0 * * 1' ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20 ring-1 ring-indigo-500' : 'border-slate-200 dark:border-slate-700 hover:border-indigo-300'}`}
+                            >
+                                <div className="font-semibold text-slate-800 dark:text-slate-200">Weekly</div>
+                                <div className="text-xs text-slate-500">Run every Monday at midnight</div>
+                            </button>
+
+                            <div>
+                                <label className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2 block">Custom Cron Expression</label>
+                                <input
+                                    type="text"
+                                    value={schedule || ''}
+                                    onChange={(e) => setSchedule(e.target.value)}
+                                    placeholder="* * * * *"
+                                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 font-mono text-sm"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-8 flex gap-3">
+                            <button
+                                onClick={() => { setSchedule(null); setShowScheduleModal(false); }}
+                                className="flex-1 px-4 py-2 rounded-xl text-slate-600 font-semibold hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-300"
+                            >
+                                Clear
+                            </button>
+                            <button
+                                onClick={() => setShowScheduleModal(false)}
+                                className="flex-1 px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-500/20"
+                            >
+                                Save Schedule
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

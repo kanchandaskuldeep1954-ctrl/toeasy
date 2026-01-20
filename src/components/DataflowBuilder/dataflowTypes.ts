@@ -14,6 +14,10 @@ export type DataflowNodeType =
     | 'export'
     | 'dataset_creator'
     | 'ai_creator'
+    | 'if'
+    | 'loop'
+    | 'merge'
+    | 'error'
     | 'custom';
 
 export interface DataflowNode {
@@ -168,6 +172,43 @@ export const NODE_CONFIGS: Record<DataflowNodeType, {
         configFields: [
             { key: 'runtime', label: 'Runtime', type: 'select', options: ['python', 'nodejs'] },
             { key: 'script', label: 'Script Code', type: 'text' },
+        ],
+    },
+    if: {
+        name: 'Condition (If/Else)',
+        icon: '❓',
+        color: '#f97316',
+        description: 'Split flow based on condition',
+        configFields: [
+            { key: 'condition', label: 'Condition Expression (JS)', type: 'text' },
+        ],
+    },
+    loop: {
+        name: 'Loop / Iterator',
+        icon: '🔁',
+        color: '#8b5cf6',
+        description: 'Iterate over list or range',
+        configFields: [
+            { key: 'target', label: 'Target Array Field', type: 'text' },
+        ],
+    },
+    merge: {
+        name: 'Merge Flows',
+        icon: '⛙',
+        color: '#64748b',
+        description: 'Merge multiple branches',
+        configFields: [
+            { key: 'strategy', label: 'Strategy', type: 'select', options: ['wait_all', 'first_wins'] },
+        ],
+    },
+    error: {
+        name: 'Error Handler',
+        icon: '🛡️',
+        color: '#ef4444',
+        description: 'Catch errors from connected nodes',
+        configFields: [
+            { key: 'action', label: 'Action', type: 'select', options: ['retry', 'notify', 'skip'] },
+            { key: 'retries', label: 'Max Retries', type: 'number' },
         ],
     },
 };
