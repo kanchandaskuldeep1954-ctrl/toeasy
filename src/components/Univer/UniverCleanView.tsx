@@ -5,7 +5,7 @@ import { useDataset } from '../../hooks/useDataset';
 import { apiClient } from '../../services/apiClient';
 import { GroqService } from '../../services/groqService';
 import AICleaningPanel from './AICleaningPanel';
-const UniverEditor = React.lazy(() => import('./UniverEditor'));
+const FortuneSheetEditor = React.lazy(() => import('../FortuneSheet/FortuneSheetEditor'));
 import { CellIssue } from '../../../types';
 import ExportModal from '../ExportHub/ExportModal';
 import {
@@ -656,7 +656,7 @@ const UniverCleanView: React.FC = () => {
                                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
                                 </div>
                             }>
-                                <UniverEditor
+                                <FortuneSheetEditor
                                     ref={univerEditorRef}
                                     data={dataset?.data || []}
                                     headers={displayHeaders}
