@@ -297,6 +297,36 @@ export const analyticsAPI = {
     getClient().post('/analytics/events', { event, metadata })
 };
 
+// ============================================
+// Cleaning Endpoints
+// ============================================
+
+export const cleaningAPI = {
+  getHistory: (workspaceId: string, datasetId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}/cleaning-history`),
+
+  analyzePro: (workspaceId: string, datasetId: string) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/analyze-pro`),
+
+  applyFix: (workspaceId: string, datasetId: string, rule: any) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/apply-suggested-fix`, { rule }),
+
+  saveCleaned: (workspaceId: string, datasetId: string, payload: any) =>
+    getClient().put(`/workspaces/${workspaceId}/datasets/${datasetId}/cleaned`, payload),
+
+  confirmClean: (workspaceId: string, datasetId: string, keepQuarantined: boolean = false) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/confirm-clean`, { keepQuarantined }),
+
+  revertClean: (workspaceId: string, datasetId: string) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/revert-clean`),
+
+  getScripts: (workspaceId: string, datasetId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}/scripts`),
+
+  generateScript: (workspaceId: string, datasetId: string, description: string, targetColumn?: string) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/scripts/generate`, { description, targetColumn })
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -311,5 +341,6 @@ export default {
   subscription: subscriptionAPI,
   payment: paymentAPI,
   analytics: analyticsAPI,
+  cleaning: cleaningAPI,
   initializeAPIClient
 };

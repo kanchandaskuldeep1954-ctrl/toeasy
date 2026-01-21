@@ -953,7 +953,103 @@ CRITICAL: Expression must return TRUE for VALID rows. Use row['columnName'] synt
     }
   }
 
-  // ===== SEMANTIC DATA ANALYSIS METHODS =====
+  // ===== PRO SEMANTIC DATA ANALYSIS METHODS =====
+
+  /**
+   * Pro: Analyze dataset semantics and deep relationships
+   */
+  static async analyzeSemantics(headers: string[], sample: any[], forensics: any): Promise<any> {
+    const prompt = `You are a Senior Data Scientist and Expert Data Architect. 
+Analyze this dataset to understand its deep root semantics, relationships, and hidden patterns.
+
+Dataset Context:
+Headers: ${headers.join(', ')}
+Sample Data (JSON): ${JSON.stringify(sample.slice(0, 10))}
+Forensic Profile Highlights: ${JSON.stringify({
+      garbageColumns: forensics.garbageColumns,
+      mathRelationships: forensics.mathRelationships.map((r: any) => r.formula),
+      detectedRoles: forensics.profiles.map((p: any) => ({ col: p.column, role: p.role }))
+    })}
+
+Task:
+1. Identify the CATEGORY and PURPOSE of this dataset.
+2. Identify "TRASH" columns or rows (e.g., random numbers that don't belong, header artifacts).
+3. Identify "JUNK" patterns within cells (e.g., numeric placeholders in text fields).
+4. Discover SEMANTIC RELATIONSHIPS (e.g., "If Status is Completed, ErrorReason must be empty").
+5. Identify RECOVERABLE PATTERNS (e.g., how can one column be inferred from others even if not purely mathematical).
+6. Patterns for SHIFTING: Identify if there are empty areas that need data shifting.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "category": "string",
+  "purpose": "string",
+  "semanticInsights": ["insight 1", ...],
+  "junkPatterns": [{ "column": "name", "pattern": "regex/description", "reason": "why" }],
+  "columnRelationships": [{ "source": "colA", "target": "colB", "type": "dependency/correlation", "logic": "explanation" }],
+  "recoverySuggestions": [{ "target": "col", "source": ["cols"], "logic": "how to recover" }]
+}`;
+
+    const result = await this.callGroq(prompt, 2000);
+    try {
+      let jsonStr = result.trim();
+      if (jsonStr.includes('```json')) {
+        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+      } else if (jsonStr.includes('```')) {
+        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+      }
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error('Semantic Analysis Parsing Failed:', e);
+      return { category: 'General', purpose: 'Data Management', semanticInsights: [], junkPatterns: [], columnRelationships: [], recoverySuggestions: [] };
+    }
+  }
+
+  /**
+   * Pro: Generate advanced cleaning rules based on semantic insights
+   */
+  static async generateAdvancedRules(headers: string[], sample: any[], semanticInsights: any): Promise<any[]> {
+    const prompt = `You are a High-Level Data Cleaning Agent. 
+Generate advanced cleaning and recovery rules based on these semantic insights:
+
+Insights: ${JSON.stringify(semanticInsights)}
+Headers: ${headers.join(', ')}
+
+Rules MUST focus on:
+1. DEEP RECOVERY: If a value is missing or "junk" (like '435345' in a reason field), how can we RECOVER it using semantic relations?
+2. AUDIT & TRASH: Identifying rows/columns that are complete garbage to be removed (e.g. random ID-like numbers as headers).
+3. DATA SHIFTING AVOIDANCE: Only remove if recovery is impossible.
+4. CONDITIONAL CLEANING: Handle logic like "Reason is only for Errors".
+
+For each rule, provide a JavaScript 'expression' (returns true if VALID) and a 'healFunction' (modifies row object to FIX it).
+Example Row Object: { "Date": "2024-01-01", "Amount": "100", "Status": "Completed", "Reason": "Error" }
+
+Return ONLY a JSON array of rules:
+[{
+  "description": "string",
+  "category": "Recovery" | "Audit",
+  "column": "column_name" | "*",
+  "qualityDimension": "string",
+  "expression": "row['Col'] !== 'junk'",
+  "healFunction": "if (row['Status'] === 'Completed') row['Reason'] = null;",
+  "severity": "critical" | "error" | "warning",
+  "reasoning": "string"
+}]`;
+
+    const result = await this.callGroq(prompt, 3000);
+    try {
+      let jsonStr = result.trim();
+      if (jsonStr.includes('```json')) {
+        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+      } else if (jsonStr.includes('```')) {
+        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+      }
+      return JSON.parse(jsonStr);
+    } catch (e) {
+      console.error('Advanced Rule generation failed:', e);
+      return [];
+    }
+  }
+
 
   static async detectColumnTypes(dataset: any): Promise<any[]> {
     try {

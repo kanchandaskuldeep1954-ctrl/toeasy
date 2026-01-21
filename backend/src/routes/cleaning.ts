@@ -4,6 +4,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
 import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 import { GroqService } from '../services/groq.service.js';
+import { ProCleaningAgent } from '../services/cleaningAgent.js';
 
 const router = Router();
 
@@ -270,6 +271,86 @@ router.post('/:workspaceId/datasets/:datasetId/scripts/generate', async (req: Au
     } catch (err) {
         console.error('Generate script error:', err);
         res.status(500).json({ error: 'Failed to generate script' });
+    }
+});
+
+// ==================== PRO CLEANING AGENT ====================
+
+// Deep analyze dataset using Pro Agent
+router.post('/:workspaceId/datasets/:datasetId/analyze-pro', async (req: AuthRequest, res) => {
+    try {
+        const { datasetId, workspaceId } = req.params;
+
+        // Get dataset data
+        const datasetResult = await query(
+            `SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2`,
+            [datasetId, workspaceId]
+        );
+
+        if (datasetResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Dataset not found' });
+        }
+
+        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const headers = Object.keys(rawData[0] || {});
+
+        // Run Pro Agent Analysis
+        const analysis = await ProCleaningAgent.analyze(headers, rawData);
+
+        res.json(analysis);
+    } catch (err) {
+        console.error('Pro Analyze error:', err);
+        res.status(500).json({ error: 'Failed to run Pro Analysis' });
+    }
+});
+
+// Apply a specific suggested fix rule
+router.post('/:workspaceId/datasets/:datasetId/apply-suggested-fix', async (req: AuthRequest, res) => {
+    try {
+        const { datasetId, workspaceId } = req.params;
+        const { rule } = req.body;
+
+        if (!rule) {
+            return res.status(400).json({ error: 'Rule is required' });
+        }
+
+        // Get current data
+        const datasetResult = await query(
+            `SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2`,
+            [datasetId, workspaceId]
+        );
+
+        if (datasetResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Dataset not found' });
+        }
+
+        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const headers = Object.keys(rawData[0] || {});
+
+        // Apply fix via Agent
+        const { data: newData, headers: newHeaders, affected } = await ProCleaningAgent.applyFix(rawData, rule, headers);
+
+        // Update dataset with new cleaned data and headers
+        await query(
+            `UPDATE datasets SET raw_data = $1, headers = $2, updated_at = NOW() WHERE id = $3`,
+            [JSON.stringify(newData), JSON.stringify(newHeaders), datasetId]
+        );
+
+        // Log to history
+        await query(
+            `INSERT INTO cleaning_history (dataset_id, user_id, action_type, details, rows_affected)
+             VALUES ($1, $2, 'fix_applied', $3, $4)`,
+            [datasetId, req.user!.id, JSON.stringify({ rule: rule.description, category: rule.category }), affected]
+        );
+
+        res.json({
+            message: 'Fix applied successfully',
+            rowsAffected: affected,
+            newData: newData.slice(0, 100) // Return sample for UI update
+        });
+    } catch (err) {
+        console.error('Apply fix error:', err);
+        res.status(500).json({ error: 'Failed to apply fix' });
     }
 });
 
