@@ -1506,6 +1506,18 @@ ANALYZE and return ONLY valid JSON (no markdown):
       // Handle Date objects if AI hallucinates them
       cleaned = cleaned.replace(/new Date\(([^)]*)\)/g, '"$1"');
 
+      // Fix single quoted keys/values: 'key': 'value' -> "key": "value"
+      // Use efficient regex that avoids matching internal apostrophes if possible
+      // This simple version handles 'string' but might break "It's" if inside single quotes. 
+      // Safe strategy: Only replace ' at start/end of value position.
+      cleaned = cleaned.replace(/:\s*'([^']*)'(?=\s*(?:,|}))/g, ': "$1"');
+      cleaned = cleaned.replace(/'([^']+)'\s*:/g, '"$1":');
+
+      // Fix unquoted "row..." expressions (common for code generation)
+      // Matches: key: row.value > 10, -> key: "row.value > 10",
+      cleaned = cleaned.replace(/:\s*(row\.[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
+      cleaned = cleaned.replace(/:\s*(row\[[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
+
       // Fix missing commas between objects (common hallucination)
       cleaned = cleaned.replace(/}\s*{/g, '}, {');
 
