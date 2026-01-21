@@ -516,11 +516,11 @@ router.put('/:workspaceId/datasets/:datasetId/cleaned', async (req: AuthRequest,
 router.post('/:workspaceId/datasets/:datasetId/confirm-clean', async (req: AuthRequest, res) => {
     try {
         const { datasetId, workspaceId } = req.params;
-        const { keepQuarantined } = req.body; // Whether to keep quarantined rows in a separate field
+        const { keepQuarantined } = req.body;
 
         // Get dataset
         const datasetResult = await query(
-            `SELECT raw_data, cleaned_data, quarantined_data, health_score FROM datasets 
+            `SELECT raw_data, cleaned_data, quarantined_data, health_score, cleaning_confirmed FROM datasets 
        WHERE id = $1 AND workspace_id = $2`,
             [datasetId, workspaceId]
         );
@@ -531,28 +531,45 @@ router.post('/:workspaceId/datasets/:datasetId/confirm-clean', async (req: AuthR
 
         const dataset = datasetResult.rows[0];
 
-        if (!dataset.cleaned_data) {
+        let cleanedData;
+        let originalData;
+
+        // SCENARIO 1: Server-side staging (Standard)
+        if (dataset.cleaned_data) {
+            cleanedData = typeof dataset.cleaned_data === 'string'
+                ? JSON.parse(dataset.cleaned_data)
+                : dataset.cleaned_data;
+
+            originalData = typeof dataset.raw_data === 'string'
+                ? JSON.parse(dataset.raw_data)
+                : dataset.raw_data;
+
+            // Overwrite raw_data with cleaned_data
+            await query(
+                `UPDATE datasets 
+           SET raw_data = cleaned_data,
+               row_count = $1,
+               cleaning_confirmed = true,
+               updated_at = NOW()
+           WHERE id = $2`,
+                [cleanedData.length, datasetId]
+            );
+        }
+        // SCENARIO 2: Client-side direct cleaning (UniverCleanView)
+        // The client ALREADY updated raw_data via PUT, so we just need to log it and cleanup
+        else if (dataset.cleaning_confirmed) {
+            console.log('[ConfirmClean] Cleaning already confirmed via PUT. Finalizing logs.');
+            // Treat current raw_data as the "cleaned" outcome
+            cleanedData = typeof dataset.raw_data === 'string'
+                ? JSON.parse(dataset.raw_data)
+                : dataset.raw_data;
+
+            // We don't have the "original" original anymore if it was overwritten, 
+            // but we can estimate or just log the current state.
+            originalData = cleanedData;
+        } else {
             return res.status(400).json({ error: 'No cleaned data to confirm. Run cleaning first.' });
         }
-
-        const cleanedData = typeof dataset.cleaned_data === 'string'
-            ? JSON.parse(dataset.cleaned_data)
-            : dataset.cleaned_data;
-
-        const originalData = typeof dataset.raw_data === 'string'
-            ? JSON.parse(dataset.raw_data)
-            : dataset.raw_data;
-
-        // Overwrite raw_data with cleaned_data
-        await query(
-            `UPDATE datasets 
-       SET raw_data = cleaned_data,
-           row_count = $1,
-           cleaning_confirmed = true,
-           updated_at = NOW()
-       WHERE id = $2`,
-            [cleanedData.length, datasetId]
-        );
 
         // If not keeping quarantined, clear it
         if (!keepQuarantined) {
@@ -562,21 +579,22 @@ router.post('/:workspaceId/datasets/:datasetId/confirm-clean', async (req: AuthR
             );
         }
 
-        // Log to cleaning history
+        // Log to cleaning history (if not duplicate?)
+        // We'll log it anyway to track the "Confirmation" event
         await query(
             `INSERT INTO cleaning_history (dataset_id, user_id, action_type, details, rows_affected, health_score_before, health_score_after)
        VALUES ($1, $2, 'confirmed', $3, $4, $5, $6)`,
             [datasetId, req.user!.id,
                 JSON.stringify({
-                    originalRows: originalData.length,
-                    newRows: cleanedData.length,
-                    quarantinedRows: dataset.quarantined_data ? JSON.parse(dataset.quarantined_data).length : 0
+                    mode: dataset.cleaned_data ? 'staged' : 'direct',
+                    finalRows: cleanedData.length,
+                    quarantinedRows: dataset.quarantined_data ? (typeof dataset.quarantined_data === 'string' ? JSON.parse(dataset.quarantined_data).length : dataset.quarantined_data.length) : 0
                 }),
                 cleanedData.length, 0, dataset.health_score || 100]
         );
 
         res.json({
-            message: 'Cleaning confirmed. Original data has been replaced with cleaned data.',
+            message: 'Cleaning confirmed successfully.',
             newRowCount: cleanedData.length,
             confirmed: true
         });

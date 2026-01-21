@@ -1503,6 +1503,12 @@ ANALYZE and return ONLY valid JSON (no markdown):
       cleaned = cleaned.replace(/:\s*Infinity/g, ': null');
       cleaned = cleaned.replace(/:\s*-Infinity/g, ': null');
 
+      // Handle Date objects if AI hallucinates them
+      cleaned = cleaned.replace(/new Date\(([^)]*)\)/g, '"$1"');
+
+      // Fix missing commas between objects (common hallucination)
+      cleaned = cleaned.replace(/}\s*{/g, '}, {');
+
       // 3. Fix trailing commas (common AI mistake)
       cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
 
