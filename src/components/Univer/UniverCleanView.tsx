@@ -74,16 +74,35 @@ const UniverCleanView: React.FC = () => {
                 const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
                 const fullData = res.data;
 
+                // Robust parsing helper since DB JSON might arrive as strings in some environments
+                const safeParse = (val: any) => {
+                    if (!val) return null;
+                    if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+                        try { return JSON.parse(val); } catch (e) { return val; }
+                    }
+                    return val;
+                };
+
+                const rawData = safeParse(fullData.raw_data) || [];
+                const headers = safeParse(fullData.headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
+                const summary = safeParse(fullData.cleaning_summary);
+                const quarantined = safeParse(fullData.quarantined_data) || [];
+
                 const hydrated = {
                     ...fullData,
                     workspace_id: workspaceId,
-                    data: fullData.raw_data || [],
-                    raw_data: fullData.raw_data || [],
-                    headers: (fullData.headers && JSON.parse(fullData.headers)) || (fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []),
+                    data: rawData,
+                    raw_data: rawData,
+                    headers: headers,
                 };
 
                 setActiveDataset(hydrated);
-                setQuarantinedData(fullData.quarantinedData || []);
+                setQuarantinedData(quarantined);
+
+                // Restore persistent change history
+                if (summary?.history) {
+                    setChangeHistory(summary.history);
+                }
 
                 if (univerEditorRef.current) {
                     // Force update if needed

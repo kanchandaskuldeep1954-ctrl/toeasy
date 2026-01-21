@@ -1476,7 +1476,13 @@ ANALYZE and return ONLY valid JSON (no markdown):
       // 3. Fix trailing commas (common AI mistake)
       cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
 
-      // 4. Emergency Bracket Pairing (Handle truncated responses)
+      // 4. Handle literal newlines inside double-quoted strings
+      // This is a common cause of SyntaxError: Unexpected token
+      cleaned = cleaned.replace(/"([^"]*)"/g, (match, p1) => {
+        return '"' + p1.replace(/\n/g, '\\n') + '"';
+      });
+
+      // 5. Emergency Bracket Pairing (Handle truncated responses)
       if (cleaned.startsWith('[') && !cleaned.endsWith(']')) {
         const lastObj = cleaned.lastIndexOf('}');
         if (lastObj !== -1) cleaned = cleaned.substring(0, lastObj + 1) + ']';
