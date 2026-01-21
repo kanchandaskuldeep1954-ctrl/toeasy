@@ -1028,21 +1028,22 @@ function createRecoveryPlan(
                 suggestedValue: null,
                 strategy: 'remove_row',
                 confidence: 0.98,
-                explanation: `Critical identifier "${column}" is missing and record has insufficient data for recovery. Professional practice suggests removing this hollow record to preserve data integrity.`,
+                explanation: `Critical identifier "${column}" is missing and record has insufficient data. Recommended action: Delete incomplete record.`,
                 dataLossRisk: 'low',
             };
         }
 
-        // Otherwise, just mark as semantic error but don't force row deletion yet
+        // Even if other data exists, a missing critical identifier often invalidates the record validity
+        // Change from cell-clear to row-removal suggestion, but mark as higher risk
         return {
             row: rowIndex,
             column,
             currentValue: currentValue || '(missing)',
             suggestedValue: null,
-            strategy: 'remove',
-            confidence: 0.7,
-            explanation: `Critical identifier "${column}" is missing. Record has other data points, but this identifier is unrecoverable. Action required: Manual verification or record disposal.`,
-            dataLossRisk: 'medium',
+            strategy: 'remove_row', // CHANGED from 'remove' to 'remove_row'
+            confidence: 0.85,
+            explanation: `Critical identifier "${column}" is missing. Although other data exists, this record cannot be reliably referenced. Recommended action: Delete record to maintain referential integrity.`,
+            dataLossRisk: 'high', // Mark as high risk so user pays attention
         };
     }
 
