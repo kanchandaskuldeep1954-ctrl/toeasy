@@ -90,15 +90,15 @@ router.post('/:workspaceId/datasets', checkTierLimit('maxDatasets'), async (req:
     let result;
     try {
       result = await query(
-        `INSERT INTO datasets (workspace_id, user_id, name, description, row_count, column_count, file_size, raw_data) 
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+        `INSERT INTO datasets (workspace_id, user_id, name, description, row_count, column_count, file_size, raw_data, original_data) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8) 
          RETURNING id, name, row_count, column_count, created_at`,
         [req.params.workspaceId, req.user.id, name, description || '', rowCount, columnCount, fileSize, JSON.stringify(data)]
       );
     } catch (descErr: any) {
-      // If description column doesn't exist, try without it
-      if (descErr.message.includes('column "description"') || descErr.message.includes('does not exist')) {
-        console.log('Description column not found in database, inserting without description');
+      // If description/original_data column issues, try fallback (but migrations should be run)
+      if (descErr.message.includes('column') || descErr.message.includes('does not exist')) {
+        console.warn('Dataset insert failed, trying fallback without optional columns', descErr);
         result = await query(
           `INSERT INTO datasets (workspace_id, user_id, name, row_count, column_count, file_size, raw_data) 
            VALUES ($1, $2, $3, $4, $5, $6, $7) 
