@@ -210,7 +210,7 @@ export class GroqService {
 
 
   // Suggest validation rules
-  static async suggestValidationRules(dataset: Dataset, semanticContext?: string): Promise<ValidationRule[]> {
+  static async suggestValidationRules(dataset: Dataset, semanticContext?: any): Promise<ValidationRule[]> {
     const result = await this.callApi<{ rules: ValidationRule[] }>('suggest-rules', 'POST', { dataset, semanticContext });
     return result.rules;
   }

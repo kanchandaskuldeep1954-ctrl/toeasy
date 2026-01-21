@@ -128,11 +128,28 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         animateCellFix: async (row: number, col: number, oldVal: any, newVal: any) => {
             if (onCellEdit) onCellEdit(row, col, oldVal, newVal);
         },
+        setCellValue: (row: number, col: number, value: any) => {
+            if (workbookRef.current) {
+                // sheetRow = dataRow + 1 (header is at row 0)
+                workbookRef.current.setCellValue(row + 1, col, value);
+            }
+        },
+        deleteRow: (row: number) => {
+            if (workbookRef.current) {
+                // sheetRow = dataRow + 1
+                workbookRef.current.deleteRow(row + 1);
+            }
+        },
+        deleteColumn: (col: number) => {
+            if (workbookRef.current) {
+                workbookRef.current.deleteColumn(col);
+            }
+        },
         scrollToCell: (row: number, col: number) => {
             if (workbookRef.current) {
-                // FortuneSheet scroll method: takes row/column to scroll into view
+                // FortuneSheet scroll method
                 workbookRef.current.scroll({
-                    row,
+                    row: row + 1,
                     column: col
                 });
             }

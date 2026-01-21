@@ -59,7 +59,7 @@ const UniverCleanView: React.FC = () => {
             // If we are already hydrated for this exact dataset, skip
             if (hasHydratedRef.current === hydrateKey) return;
 
-            if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null' || workspaceId === 'undefined' || datasetId === 'undefined') return;
+            if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null') return;
 
             // Reset previous state when switching
             hasHydratedRef.current = hydrateKey;
@@ -83,10 +83,10 @@ const UniverCleanView: React.FC = () => {
                     return val;
                 };
 
-                const rawData = safeParse(fullData.raw_data) || [];
-                const headers = safeParse(fullData.headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
-                const summary = safeParse(fullData.cleaning_summary);
-                const quarantined = safeParse(fullData.quarantined_data) || [];
+                const rawData = (fullData as any).raw_data || [];
+                const headers = safeParse((fullData as any).headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
+                const summary = safeParse((fullData as any).cleaning_summary);
+                const quarantined = safeParse((fullData as any).quarantined_data) || [];
 
                 const hydrated = {
                     ...fullData,
@@ -123,24 +123,16 @@ const UniverCleanView: React.FC = () => {
     // Initialize AI analysis when dataset loads
     useEffect(() => {
         const init = async () => {
-            // Using a unique key based on data length and first few rows to detect "new" data
-            const hydrationKey = dataset?.id ? `${dataset.id}-${dataset.data?.length || 0}` : null;
-
-            if (!dataset || initializedRef.current === dataset.id) {
-                // However, if it's the SAME ID but data just arrived (length > 0) 
-                // and we haven't analyzed it yet, we should proceed.
-                // initializedRef.current being dataset.id means we've already done THIS dataset.
-                // But hydrateOnce resets initializedRef.current = null, so this check works.
+            if (!dataset || initializedRef.current === Number(dataset.id)) {
                 return;
             }
             if (!dataset || !dataset.data || dataset.data.length === 0) return;
 
             // Critical check: don't re-run if we already did THIS dataset on THIS render cycle
-            // and don't re-run if we already have the analysis results we need.
-            if (initializedRef.current === dataset.id) return;
+            if (initializedRef.current === Number(dataset.id)) return;
 
             console.log(`[UniverCleanView] Starting AI Analysis for dataset: ${dataset.id}`);
-            initializedRef.current = dataset.id!;
+            initializedRef.current = Number(dataset.id);
             setIsLoading(true);
 
             try {
@@ -196,10 +188,10 @@ const UniverCleanView: React.FC = () => {
 
     // Original headers (always derived from raw_data to prevent empty original view)
     const originalHeaders = useMemo(() => {
-        const raw = dataset?.raw_data || [];
+        const raw = (dataset as any)?.raw_data || [];
         if (raw[0]) return Object.keys(raw[0]).filter(h => h !== '__metadata');
         return [];
-    }, [dataset?.raw_data]);
+    }, [(dataset as any)?.raw_data]);
 
     // Handle applying a single fix
     const handleApplyFix = useCallback(async (issue: CellIssue) => {
@@ -212,13 +204,19 @@ const UniverCleanView: React.FC = () => {
             let newData = [...dataset.data];
             let newHeaders = [...dataset.headers];
             let historyEntry: ChangeHistoryEntry;
+            let rowToVault: DataRow | null = null;
 
             if (issue.recoveryMethod === 'remove_row') {
+                // native removal for visual feedback
+                if (univerEditorRef.current?.deleteRow) {
+                    univerEditorRef.current.deleteRow(issue.row);
+                }
+
                 // Structural Removal: Row -> Vaulting
-                const rowToVault = { ...newData[issue.row] };
+                rowToVault = { ...newData[issue.row] };
                 if (!rowToVault.__metadata) rowToVault.__metadata = {};
-                rowToVault.__metadata.removalReason = issue.explanation || 'Integrity cleanup: Removed incomplete record';
-                rowToVault.__metadata.removedAt = new Date().toISOString();
+                (rowToVault.__metadata as any).removalReason = issue.explanation || 'Integrity cleanup: Removed incomplete record';
+                (rowToVault.__metadata as any).removedAt = new Date().toISOString();
 
                 setQuarantinedData(prev => [...prev, rowToVault]);
 
@@ -236,6 +234,11 @@ const UniverCleanView: React.FC = () => {
                     canUndo: false
                 };
             } else if (issue.recoveryMethod === 'remove_column') {
+                // native removal for visual feedback
+                if (univerEditorRef.current?.deleteColumn) {
+                    univerEditorRef.current.deleteColumn(issue.col);
+                }
+
                 // Structural Removal: Column
                 newHeaders = newHeaders.filter(h => h !== issue.columnName);
                 newData = newData.map(row => {
@@ -272,6 +275,11 @@ const UniverCleanView: React.FC = () => {
                 newData = result.data;
                 historyEntry = result.historyEntry;
 
+                // Native update for visual feedback
+                if (univerEditorRef.current?.setCellValue) {
+                    univerEditorRef.current.setCellValue(issue.row, issue.col, issue.suggestedValue);
+                }
+
                 // Animate the cell fix
                 if (univerEditorRef.current?.animateCellFix) {
                     await univerEditorRef.current.animateCellFix(
@@ -291,12 +299,12 @@ const UniverCleanView: React.FC = () => {
             const updatedDataset = {
                 ...dataset,
                 data: newData,
-                raw_data: newData,
+                originalData: dataset.originalData || newData, // Use originalData from type
                 headers: newHeaders,
-                quarantinedData: quarantinedData
+                quarantinedData: (dataset.quarantinedData || []).concat(rowToVault ? [rowToVault] : [])
             };
 
-            updateDataset(Number(dataset.id), updatedDataset as any);
+            await updateDataset(Number(dataset.id), updatedDataset as any);
 
             // Re-run semantic analysis and refresh issues if structural change occurred
             if (issue.recoveryMethod?.startsWith('remove_')) {
@@ -368,6 +376,11 @@ const UniverCleanView: React.FC = () => {
                     currentData = newData;
                     newHistory.push(historyEntry);
 
+                    // Real-time Native UI update
+                    if (univerEditorRef.current?.setCellValue && !rowsToRemove.has(issue.row)) {
+                        univerEditorRef.current.setCellValue(issue.row, issue.col, issue.suggestedValue);
+                    }
+
                     // Animate each cell (if applicable and not removed)
                     if (univerEditorRef.current?.animateCellFix && !rowsToRemove.has(issue.row)) {
                         await univerEditorRef.current.animateCellFix(
@@ -381,13 +394,40 @@ const UniverCleanView: React.FC = () => {
                 }
 
                 setCleaningProgress(Math.round(((i + 1) / totalIssues) * 100));
-                if (i % 5 === 0) await new Promise(resolve => setTimeout(resolve, 50));
+                // Slow down slightly for visual flair, unless it's a massive dataset
+                const delay = issues.length > 50 ? 10 : 30;
+                await new Promise(resolve => setTimeout(resolve, delay));
             }
+
+            const vaultedRows: DataRow[] = [];
 
             // 2. Perform Structural Removals
             if (rowsToRemove.size > 0 || columnsToRemove.size > 0) {
-                // Vault rows before filtering
-                const vaultedRows = currentData
+                // Visual cleanup: Native removals
+                // IMPORTANT: Delete in reverse order for rows to maintain index stability
+                const sortedRowsToRemove = Array.from(rowsToRemove).sort((a, b) => b - a);
+                if (univerEditorRef.current?.deleteRow) {
+                    for (const rowIdx of sortedRowsToRemove) {
+                        univerEditorRef.current.deleteRow(rowIdx);
+                        await new Promise(resolve => setTimeout(resolve, 50));
+                    }
+                }
+
+                // Native column removals
+                if (univerEditorRef.current?.deleteColumn && columnsToRemove.size > 0) {
+                    // Sort columns by their current index in reverse to maintain stability
+                    const colIndexesToRemove = Array.from(columnsToRemove)
+                        .map(name => displayHeaders.indexOf(name))
+                        .filter(idx => idx !== -1)
+                        .sort((a, b) => b - a);
+
+                    for (const colIdx of colIndexesToRemove) {
+                        univerEditorRef.current.deleteColumn(colIdx);
+                        await new Promise(resolve => setTimeout(resolve, 80));
+                    }
+                }
+
+                vaultedRows.push(...currentData
                     .filter((_, idx) => rowsToRemove.has(idx))
                     .map(row => ({
                         ...row,
@@ -396,7 +436,7 @@ const UniverCleanView: React.FC = () => {
                             removalReason: 'Automated batch removal by AI Cleaning Engine',
                             removedAt: new Date().toISOString()
                         }
-                    }));
+                    })));
 
                 setQuarantinedData(prev => [...prev, ...vaultedRows]);
 
@@ -459,7 +499,7 @@ const UniverCleanView: React.FC = () => {
             const updatedDataset = {
                 ...dataset,
                 data: currentData,
-                raw_data: currentData,
+                originalData: dataset.originalData || currentData,
                 headers: finalHeaders,
                 quarantinedData: finalQuarantined
             };
@@ -848,7 +888,7 @@ const UniverCleanView: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                                    {(dataset.raw_data || dataset.data || []).slice(0, 200).map((row, i) => (
+                                    {((dataset as any).raw_data || dataset.data || []).slice(0, 200).map((row, i) => (
                                         <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                             <td className="px-4 py-3 text-slate-400 font-mono text-xs">{i + 1}</td>
                                             {originalHeaders.map(h => (
