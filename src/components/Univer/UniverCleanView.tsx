@@ -79,7 +79,7 @@ const UniverCleanView: React.FC = () => {
                     workspace_id: workspaceId,
                     data: fullData.raw_data || [],
                     raw_data: fullData.raw_data || [],
-                    headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : [],
+                    headers: (fullData.headers && JSON.parse(fullData.headers)) || (fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : []),
                 };
 
                 setActiveDataset(hydrated);
@@ -167,8 +167,20 @@ const UniverCleanView: React.FC = () => {
 
     // Display headers (exclude metadata)
     const displayHeaders = useMemo(() => {
-        return dataset?.headers?.filter(h => h !== '__metadata') || [];
-    }, [dataset?.headers]);
+        const baseHeaders = (dataset?.headers && Array.isArray(dataset.headers)) ? dataset.headers : [];
+        if (baseHeaders.length > 0) return baseHeaders.filter(h => h !== '__metadata');
+
+        // Fallback: derive from live data
+        if (dataset?.data?.[0]) return Object.keys(dataset.data[0]).filter(k => k !== '__metadata');
+        return [];
+    }, [dataset?.headers, dataset?.data]);
+
+    // Original headers (always derived from raw_data to prevent empty original view)
+    const originalHeaders = useMemo(() => {
+        const raw = dataset?.raw_data || [];
+        if (raw[0]) return Object.keys(raw[0]).filter(h => h !== '__metadata');
+        return [];
+    }, [dataset?.raw_data]);
 
     // Handle applying a single fix
     const handleApplyFix = useCallback(async (issue: CellIssue) => {
@@ -421,16 +433,20 @@ const UniverCleanView: React.FC = () => {
             setChangeHistory(prev => [...prev, ...newHistory]);
             setIssues([]);
 
-            // Update dataset and force a semantic re-analysis for "real-time" feel
+            // Update dataset logic with fresh data
+            const finalHeaders = (dataset.headers || []).filter(h => !columnsToRemove.has(h));
+            const finalQuarantined = [...quarantinedData, ...vaultedRows];
+
             const updatedDataset = {
                 ...dataset,
                 data: currentData,
                 raw_data: currentData,
-                headers: dataset.headers.filter(h => !columnsToRemove.has(h)),
-                quarantinedData: quarantinedData
+                headers: finalHeaders,
+                quarantinedData: finalQuarantined
             };
 
-            updateDataset(Number(dataset.id), updatedDataset as any);
+            await updateDataset(Number(dataset.id), updatedDataset as any);
+            setQuarantinedData(finalQuarantined);
 
             // Re-run semantic analysis silently to update Quality Score and Insights
             const newSemantics = await analyzeDatasetSemantics(updatedDataset as any);
@@ -543,7 +559,13 @@ const UniverCleanView: React.FC = () => {
                 headers: JSON.stringify(dataset.headers),
                 health_score: semantics?.qualityScore || dataset.healthScore,
                 cleaning_confirmed: true,
-                quarantined_data: JSON.stringify(quarantinedData)
+                quarantined_data: JSON.stringify(quarantinedData),
+                cleaning_summary: JSON.stringify({
+                    history: changeHistory,
+                    semantics: semantics,
+                    finalIssueCount: issues.length,
+                    timestamp: new Date().toISOString()
+                })
             };
 
             await apiClient.put(`/workspaces/${workspaceId}/datasets/${dataset.id}`, payload);
@@ -799,7 +821,7 @@ const UniverCleanView: React.FC = () => {
                                 <thead className="bg-slate-50 dark:bg-slate-800 sticky top-0">
                                     <tr>
                                         <th className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-400 w-16">#</th>
-                                        {displayHeaders.map(h => (
+                                        {originalHeaders.map(h => (
                                             <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase text-slate-600 dark:text-slate-300">
                                                 {h}
                                             </th>
@@ -810,7 +832,7 @@ const UniverCleanView: React.FC = () => {
                                     {(dataset.raw_data || dataset.data || []).slice(0, 200).map((row, i) => (
                                         <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
                                             <td className="px-4 py-3 text-slate-400 font-mono text-xs">{i + 1}</td>
-                                            {displayHeaders.map(h => (
+                                            {originalHeaders.map(h => (
                                                 <td key={h} className="px-4 py-3 text-slate-600 dark:text-slate-300 truncate max-w-[200px]">
                                                     {String(row[h] ?? '')}
                                                 </td>
