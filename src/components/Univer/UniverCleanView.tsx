@@ -61,15 +61,22 @@ const UniverCleanView: React.FC = () => {
 
             if (!workspaceId || !datasetId || workspaceId === 'null' || datasetId === 'null') return;
 
-            // Reset previous state when switching
-            hasHydratedRef.current = hydrateKey;
-            setIsLoading(true);
-            setLoadingStep('Loading dataset...');
-            setSemantics(null); // Reset analysis
-            setIssues([]); // Reset issues
-            initializedRef.current = null; // Reset initialization state to allow re-analysis
-
             try {
+                // If it's the SAME dataset ID, don't reset analysis state unless it's a forced refresh
+                if (initializedRef.current === parseInt(datasetId)) {
+                    console.log(`[UniverCleanView] Same dataset ${datasetId}, skipping reset.`);
+                    setIsLoading(false);
+                    return;
+                }
+
+                // Reset previous state when switching
+                hasHydratedRef.current = hydrateKey;
+                setIsLoading(true);
+                setLoadingStep('Loading dataset...');
+                setSemantics(null); // Reset analysis
+                setIssues([]); // Reset issues
+                initializedRef.current = null; // Brand new dataset ID, allow one fresh analysis
+
                 console.log(`[UniverCleanView] Hydrating dataset: ${datasetId}`);
                 const res = await apiClient.get(`/workspaces/${workspaceId}/datasets/${datasetId}`);
                 const fullData = res.data;
@@ -127,6 +134,13 @@ const UniverCleanView: React.FC = () => {
                 return;
             }
             if (!dataset || !dataset.data || dataset.data.length === 0) return;
+
+            // If we already have rules and issues, we might not need a re-analyze unless requested
+            if (validationRules.length > 0 && issues.length > 0) {
+                console.log(`[UniverCleanView] Dataset ${dataset.id} already has rules/issues, skipping automatic re-analysis.`);
+                initializedRef.current = Number(dataset.id);
+                return;
+            }
 
             // Critical check: don't re-run if we already did THIS dataset on THIS render cycle
             if (initializedRef.current === Number(dataset.id)) return;

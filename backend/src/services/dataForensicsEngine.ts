@@ -54,6 +54,11 @@ export interface ColumnProfile {
     relatedColumns?: string[];        // Dependent columns
     isGarbage: boolean;               // Should be removed
     placeholders: PlaceholderInfo[];  // ERROR, UNKNOWN, etc.
+    stats?: {
+        skewness: number;
+        kurtosis: number;
+        zScores?: number[];          // Sample z-scores for outlier detection
+    };
 }
 
 export interface PlaceholderInfo {
@@ -177,7 +182,7 @@ export class DataForensicsEngine {
         // Step 1: Profile each column
         const profiles = this.profileAllColumns(headers, sample, data.length);
 
-        // Step 2: Detect mathematical relationships
+        // Step 2: Detect mathematical relationships (Sum, Multiply, Subtract)
         const mathRelationships = this.detectMathRelationships(headers, sample, profiles);
 
         // Step 3: Detect cross-field rules
@@ -313,7 +318,8 @@ export class DataForensicsEngine {
             detectedPatterns: this.detectPatterns(nonNullValues),
             validValues,
             isGarbage,
-            placeholders
+            placeholders,
+            stats: dataType === 'number' ? this.calculateStats(cleanValues.map(v => Number(v))) : undefined
         };
     }
 
@@ -414,6 +420,34 @@ export class DataForensicsEngine {
         if ((numericCount + dateCount) / total > 0.5) return 'mixed';
 
         return 'string';
+    }
+
+    /**
+     * Calculate advanced statistical markers (Skewness, Kurtosis)
+     */
+    private static calculateStats(values: number[]): { skewness: number; kurtosis: number } {
+        if (values.length < 3) return { skewness: 0, kurtosis: 0 };
+
+        const n = values.length;
+        const mean = values.reduce((a, b) => a + b, 0) / n;
+
+        const m2 = values.reduce((sum, v) => sum + Math.pow(v - mean, 2), 0) / n;
+        const m3 = values.reduce((sum, v) => sum + Math.pow(v - mean, 3), 0) / n;
+        const m4 = values.reduce((sum, v) => sum + Math.pow(v - mean, 4), 0) / n;
+
+        const std = Math.sqrt(m2);
+        if (std === 0) return { skewness: 0, kurtosis: 0 };
+
+        // Fisher-Pearson coefficient of skewness
+        const skewness = m3 / Math.pow(std, 3);
+
+        // Excess Kurtosis (normal distribution = 0)
+        const kurtosis = (m4 / Math.pow(m2, 2)) - 3;
+
+        return {
+            skewness: parseFloat(skewness.toFixed(3)),
+            kurtosis: parseFloat(kurtosis.toFixed(3))
+        };
     }
 
     /**
@@ -588,16 +622,30 @@ export class DataForensicsEngine {
                     const colB = numericProfiles[j].column;
                     const colResult = numericProfiles[k].column;
 
-                    const matches = this.testAdditionRelation(sample, colA, colB, colResult);
+                    const matchesAdd = this.testAdditionRelation(sample, colA, colB, colResult);
 
-                    if (matches > 0.8) {
+                    if (matchesAdd > 0.8) {
                         relationships.push({
                             resultColumn: colResult,
                             formula: `${colA} + ${colB}`,
                             expression: `parseFloat(row['${colA}']) + parseFloat(row['${colB}'])`,
                             dependsOn: [colA, colB],
                             canRecover: [colA, colB, colResult],
-                            confidence: matches
+                            confidence: matchesAdd
+                        });
+                        continue;
+                    }
+
+                    // Test subtraction (Result = A - B)
+                    const matchesSub = this.testSubtractionRelation(sample, colA, colB, colResult);
+                    if (matchesSub > 0.8) {
+                        relationships.push({
+                            resultColumn: colResult,
+                            formula: `${colA} - ${colB}`,
+                            expression: `parseFloat(row['${colA}']) - parseFloat(row['${colB}'])`,
+                            dependsOn: [colA, colB],
+                            canRecover: [colA, colB, colResult],
+                            confidence: matchesSub
                         });
                     }
                 }
@@ -605,6 +653,35 @@ export class DataForensicsEngine {
         }
 
         return relationships;
+    }
+
+    /**
+     * Test if Result ≈ A - B
+     */
+    private static testSubtractionRelation(
+        data: any[],
+        colA: string,
+        colB: string,
+        colResult: string
+    ): number {
+        let matches = 0;
+        let testable = 0;
+
+        for (const row of data) {
+            const a = parseFloat(row[colA]);
+            const b = parseFloat(row[colB]);
+            const result = parseFloat(row[colResult]);
+
+            if (isNaN(a) || isNaN(b) || isNaN(result)) continue;
+
+            testable++;
+            const expected = a - b;
+            if (Math.abs(expected - result) / Math.max(Math.abs(result), 1) < 0.01) {
+                matches++;
+            }
+        }
+
+        return testable > 10 ? matches / testable : 0;
     }
 
     /**
