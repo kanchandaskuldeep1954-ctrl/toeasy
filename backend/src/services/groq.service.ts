@@ -338,7 +338,7 @@ Respond ONLY with valid JSON, no markdown or extra text:
     return `SELECT ${columnStr} FROM data`;
   }
 
-  private static async callGroq(prompt: string, maxTokens: number = 1000): Promise<string> {
+  public static async callGroq(prompt: string, maxTokens: number = 1000): Promise<string> {
     // Check if API key is set
     if (!config.groqApiKey) {
       console.error('GROQ_API_KEY is not set in environment');
