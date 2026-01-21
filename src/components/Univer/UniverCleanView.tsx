@@ -313,8 +313,10 @@ const UniverCleanView: React.FC = () => {
             const updatedDataset = {
                 ...dataset,
                 data: newData,
-                originalData: dataset.originalData || newData, // Use originalData from type
+                raw_data: newData, // CRITICAL FIX
+                originalData: dataset.originalData || newData,
                 headers: newHeaders,
+                quarantined_data: (dataset.quarantinedData || []).concat(rowToVault ? [rowToVault] : []),
                 quarantinedData: (dataset.quarantinedData || []).concat(rowToVault ? [rowToVault] : [])
             };
 
@@ -518,8 +520,9 @@ const UniverCleanView: React.FC = () => {
             const updatedDataset = {
                 ...dataset,
                 data: currentData,
-                originalData: dataset.originalData || currentData,
+                raw_data: currentData, // CRITICAL FIX: explicit sync of raw_data for backend persistence
                 headers: finalHeaders,
+                quarantined_data: finalQuarantined, // specific backend field name
                 quarantinedData: finalQuarantined
             };
 
@@ -532,8 +535,12 @@ const UniverCleanView: React.FC = () => {
             }
 
             // Re-run semantic analysis silently to update Quality Score and Insights
+            // Use the UPDATED dataset context
             const newSemantics = await analyzeDatasetSemantics(updatedDataset as any);
             setSemantics(newSemantics);
+
+            // Explicitly force state update to reflect new quality score immediately
+            setActiveDataset(prev => prev ? { ...prev, ...updatedDataset } : prev);
 
             setProcessingStatus('✅ Cleaning complete!');
             await new Promise(resolve => setTimeout(resolve, 1500));
