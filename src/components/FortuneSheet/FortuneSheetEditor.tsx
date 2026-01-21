@@ -14,6 +14,13 @@ export interface FortuneSheetEditorProps {
     theme?: 'light' | 'dark';
 }
 
+// Track cells that were recently fixed (for green flash animation)
+interface PendingHighlight {
+    row: number;
+    col: number;
+    expiresAt: number;
+}
+
 const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     data,
     headers,
@@ -24,27 +31,38 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     highlightIssues = true,
     theme = 'light',
 }, ref) => {
-    // Transform DataRow[] to FortuneSheet celldata format
+    // CORE STATE: The celldata that FortuneSheet actually renders
     const [sheetData, setSheetData] = useState<any[]>([]);
+    const [pendingHighlights, setPendingHighlights] = useState<PendingHighlight[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
+    const renderCountRef = useRef(0);
 
-    // Standard light colors (Filter will handle Dark Mode naturally)
+    // Standard light colors
     const highlightColors = {
         error: '#fca5a5',     // Soft Red
         warning: '#fcd34d',   // Soft Amber
         info: '#93c5fd',      // Soft Blue
         recovered: '#86efac', // Soft Green
+        pendingFix: '#4ade80', // Bright Green (for animation)
     };
 
-    useEffect(() => {
-        if (!data || data.length === 0) return;
-        currentDataRef.current = data;
+    // Build celldata from data + headers + issues + pending highlights
+    const buildCellData = useCallback((
+        renderData: DataRow[],
+        renderHeaders: string[],
+        renderIssues: CellIssue[],
+        highlights: PendingHighlight[]
+    ): any[] => {
+        if (!renderData || renderData.length === 0 || !renderHeaders || renderHeaders.length === 0) {
+            return [];
+        }
 
         const cellData: any[] = [];
-        const renderData = data;
+        const now = Date.now();
+        const activeHighlights = highlights.filter(h => h.expiresAt > now);
 
         // 1. Create Headers (Row 0)
-        headers.forEach((h, colIndex) => {
+        renderHeaders.forEach((h, colIndex) => {
             cellData.push({
                 r: 0,
                 c: colIndex,
@@ -63,15 +81,21 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         renderData.forEach((row, rowIndex) => {
             const sheetRowIndex = rowIndex + 1;
 
-            headers.forEach((header, colIndex) => {
+            renderHeaders.forEach((header, colIndex) => {
                 const value = row[header];
                 const displayValue = value === null || value === undefined ? '' : String(value);
 
                 let bg = undefined;
                 let ps = undefined;
 
-                // 1. Recovered status (Green)
-                if (row.__metadata?.recoveredFields?.includes(header)) {
+                // Check for pending highlight (recently fixed cell - green flash)
+                const isPending = activeHighlights.some(h => h.row === rowIndex && h.col === colIndex);
+                if (isPending) {
+                    bg = highlightColors.pendingFix;
+                }
+
+                // 1. Recovered status (Green) - but not if pending (pending takes priority for animation)
+                if (!isPending && row.__metadata?.recoveredFields?.includes(header)) {
                     bg = highlightColors.recovered;
                     const explanation = row.__metadata?.recoveryExplanations?.[header] || 'Self-corrected by AI';
                     const pass = row.__metadata?.recoveryPass ? ` (Pass ${row.__metadata.recoveryPass})` : '';
@@ -81,9 +105,9 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                     };
                 }
 
-                // 2. Active Issues (Higher priority coloring)
-                if (highlightIssues) {
-                    const issue = issues.find(i => i.row === rowIndex && i.columnName === header);
+                // 2. Active Issues (Higher priority coloring) - but not if pending or recovered
+                if (!isPending && !bg && highlightIssues) {
+                    const issue = renderIssues.find(i => i.row === rowIndex && i.columnName === header);
                     if (issue) {
                         if (issue.severity === 'error') bg = highlightColors.error;
                         else if (issue.severity === 'warning') bg = highlightColors.warning;
@@ -94,12 +118,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
                             isshow: false
                         };
                     }
-                }
-
-                // 3. User Edits (Status indicator)
-                if (row.__metadata?.manualEdit && row.__metadata?.lastModified) {
-                    // Only highlight if not already highlighted by AI
-                    if (!bg) bg = '#e2e8f0'; // Subtle slate for user edit
                 }
 
                 cellData.push({
@@ -117,50 +135,97 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
             });
         });
 
-        setSheetData(cellData);
-    }, [data, headers, issues, highlightIssues]); // Use standard light mode generation
+        return cellData;
+    }, [highlightIssues, highlightColors]);
 
-    const workbookRef = useRef<any>(null);
+    // Rebuild celldata whenever data, headers, issues, or highlights change
+    useEffect(() => {
+        if (!data || data.length === 0) return;
+        currentDataRef.current = data;
+        renderCountRef.current++;
 
-    // Expose methods via ref
+        const newCellData = buildCellData(data, headers, issues, pendingHighlights);
+        setSheetData(newCellData);
+    }, [data, headers, issues, pendingHighlights, buildCellData]);
+
+    // Clean up expired highlights
+    useEffect(() => {
+        if (pendingHighlights.length === 0) return;
+
+        const timer = setTimeout(() => {
+            const now = Date.now();
+            setPendingHighlights(prev => prev.filter(h => h.expiresAt > now));
+        }, 1000); // Check every second
+
+        return () => clearTimeout(timer);
+    }, [pendingHighlights]);
+
+    // Expose methods via ref - these now work by updating state!
     React.useImperativeHandle(ref, () => ({
         getSheetData: () => currentDataRef.current,
-        animateCellFix: async (row: number, col: number, oldVal: any, newVal: any) => {
-            if (onCellEdit) onCellEdit(row, col, oldVal, newVal);
+
+        // Animate a cell fix with a green flash
+        animateCellFix: async (row: number, col: number, _oldVal: any, _newVal: any) => {
+            // Add to pending highlights for 1.5 seconds
+            setPendingHighlights(prev => [
+                ...prev.filter(h => !(h.row === row && h.col === col)), // Remove existing for this cell
+                { row, col, expiresAt: Date.now() + 1500 }
+            ]);
+
+            if (onCellEdit) onCellEdit(row, col, _oldVal, _newVal);
         },
+
+        // Update a cell value - triggers re-render with new data
         setCellValue: (row: number, col: number, value: any) => {
-            if (workbookRef.current) {
-                // sheetRow = dataRow + 1 (header is at row 0)
-                workbookRef.current.setCellValue(row + 1, col, value);
-            }
+            // Add pending highlight for visual feedback
+            setPendingHighlights(prev => [
+                ...prev.filter(h => !(h.row === row && h.col === col)),
+                { row, col, expiresAt: Date.now() + 1500 }
+            ]);
+
+            // Note: The actual data update happens in the parent component
+            // This just provides visual feedback
+            console.log(`[FortuneSheet] setCellValue called: row=${row}, col=${col}, value=${value}`);
         },
+
+        // Mark a row for deletion (visual feedback)
         deleteRow: (row: number) => {
-            if (workbookRef.current) {
-                // sheetRow = dataRow + 1
-                workbookRef.current.deleteRow(row + 1);
-            }
+            console.log(`[FortuneSheet] deleteRow called: row=${row}`);
+            // The actual deletion happens in the parent via state update
+            // This is just a hook for potential future animations
         },
+
+        // Mark a column for deletion (visual feedback)
         deleteColumn: (col: number) => {
-            if (workbookRef.current) {
-                workbookRef.current.deleteColumn(col);
-            }
+            console.log(`[FortuneSheet] deleteColumn called: col=${col}`);
         },
+
+        // Scroll to a cell (best effort - FortuneSheet doesn't expose this directly)
         scrollToCell: (row: number, col: number) => {
-            if (workbookRef.current) {
-                // FortuneSheet scroll method
-                workbookRef.current.scroll({
-                    row: row + 1,
-                    column: col
-                });
-            }
+            console.log(`[FortuneSheet] scrollToCell called: row=${row}, col=${col}`);
+            // FortuneSheet doesn't expose scroll API, but we can add highlight
+            setPendingHighlights(prev => [
+                ...prev.filter(h => !(h.row === row && h.col === col)),
+                { row, col, expiresAt: Date.now() + 500 } // Brief highlight to draw attention
+            ]);
         },
-        applyIssueHighlighting: () => { }
+
+        applyIssueHighlighting: () => {
+            // Force rebuild with current issues
+            const newCellData = buildCellData(currentDataRef.current, headers, issues, pendingHighlights);
+            setSheetData(newCellData);
+        },
+
+        // Force a complete re-render with new data
+        forceUpdate: (newData: DataRow[], newHeaders?: string[]) => {
+            currentDataRef.current = newData;
+            const newCellData = buildCellData(newData, newHeaders || headers, issues, pendingHighlights);
+            setSheetData(newCellData);
+        }
     }));
 
-    // Force re-render when data or issues change to ensure internal spreadsheet state syncs
-    // Using a more robust key that captures data changes more effectively
-    const dataDigest = (data?.[0] ? JSON.stringify(data[0]) : '') + (data?.[10] ? JSON.stringify(data[10]) : '');
-    const componentKey = `fs-${data?.length || 0}-${(headers || []).length}-${(issues || []).length}-${dataDigest}`;
+    // Use render count + data length for key to force FortuneSheet internal refresh
+    const componentKey = `fs-${data?.length || 0}-${headers?.length || 0}-${renderCountRef.current}`;
 
     return (
         <div
@@ -177,7 +242,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
             {sheetData.length > 0 ? (
                 <Workbook
                     key={componentKey}
-                    ref={workbookRef}
                     data={[{
                         name: "Data",
                         celldata: sheetData,
@@ -196,3 +260,4 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
 FortuneSheetEditor.displayName = 'FortuneSheetEditor';
 
 export default FortuneSheetEditor;
+

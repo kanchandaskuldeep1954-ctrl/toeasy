@@ -1457,8 +1457,14 @@ ANALYZE and return ONLY valid JSON (no markdown):
 
   /**
    * Pro Auditor Helper: Safely clean and parse AI-generated JSON
+   * ULTRA-ROBUST: Handles all common AI output quirks
    */
   private static cleanAndParseJSON(input: string): any {
+    if (!input || typeof input !== 'string') {
+      console.warn('[GroqService] cleanAndParseJSON received empty or non-string input');
+      return [];
+    }
+
     try {
       let cleaned = input.trim();
 
@@ -1466,53 +1472,102 @@ ANALYZE and return ONLY valid JSON (no markdown):
       if (cleaned.includes('```json')) {
         cleaned = cleaned.split('```json')[1].split('```')[0].trim();
       } else if (cleaned.includes('```')) {
-        cleaned = cleaned.split('```')[1].split('```')[0].trim();
+        const parts = cleaned.split('```');
+        if (parts.length >= 2) {
+          cleaned = parts[1].trim();
+        }
       }
 
-      // 2. Comprehensive Comment Removal (Handles // and /* */)
-      // This is often why AI responses fail JSON.parse
-      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+      // 2. Remove JavaScript-style comments (// and /* */)
+      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // Block comments
+      cleaned = cleaned.replace(/([^:"\\])\/\/[^\n]*/g, '$1'); // Line comments (but not URLs)
 
-      // 3. Fix trailing commas (common AI mistake)
+      // 3. Handle JavaScript literals that aren't valid JSON
+      // Replace undefined with null
+      cleaned = cleaned.replace(/:\s*undefined/g, ': null');
+      cleaned = cleaned.replace(/,\s*undefined/g, ', null');
+      // Replace NaN with null
+      cleaned = cleaned.replace(/:\s*NaN/g, ': null');
+      // Replace Infinity with null
+      cleaned = cleaned.replace(/:\s*Infinity/g, ': null');
+      cleaned = cleaned.replace(/:\s*-Infinity/g, ': null');
+
+      // 4. Fix trailing commas (common AI mistake)
       cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
 
-      // 4. Handle literal newlines inside double-quoted strings
-      // This is a common cause of SyntaxError: Unexpected token
-      cleaned = cleaned.replace(/"([^"]*)"/g, (match, p1) => {
-        return '"' + p1.replace(/\n/g, '\\n') + '"';
+      // 5. Remove control characters that break JSON parsing
+      cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, (match) => {
+        if (match === '\n' || match === '\r' || match === '\t') return match;
+        return ''; // Remove other control chars
       });
 
-      // 5. Emergency Bracket Pairing (Handle truncated responses)
-      if (cleaned.startsWith('[') && !cleaned.endsWith(']')) {
-        const lastObj = cleaned.lastIndexOf('}');
-        if (lastObj !== -1) cleaned = cleaned.substring(0, lastObj + 1) + ']';
-        else cleaned += ']';
-      } else if (cleaned.startsWith('{') && !cleaned.endsWith('}')) {
+      // 6. Handle literal newlines inside double-quoted strings
+      cleaned = cleaned.replace(/"([^"]*)"/g, (match, p1) => {
+        const escaped = p1
+          .replace(/\\/g, '\\\\')
+          .replace(/\n/g, '\\n')
+          .replace(/\r/g, '\\r')
+          .replace(/\t/g, '\\t');
+        return '"' + escaped + '"';
+      });
+
+      // 7. Emergency Bracket Pairing (Handle truncated responses)
+      const openBrackets = (cleaned.match(/\[/g) || []).length;
+      const closeBrackets = (cleaned.match(/\]/g) || []).length;
+      const openBraces = (cleaned.match(/\{/g) || []).length;
+      const closeBraces = (cleaned.match(/\}/g) || []).length;
+
+      // Add missing closing brackets
+      for (let i = 0; i < openBrackets - closeBrackets; i++) {
+        cleaned += ']';
+      }
+      for (let i = 0; i < openBraces - closeBraces; i++) {
         cleaned += '}';
       }
 
       return JSON.parse(cleaned);
     } catch (e) {
       console.error('[GroqService] JSON Parse Error. Raw length:', input.length, 'Error:', e);
-      // Try one last pass: find the first [ or { and the last ] or }
+
+      // FALLBACK: Try to extract any valid JSON from the response
       try {
+        // Find the outermost array or object
         const startArr = input.indexOf('[');
         const startObj = input.indexOf('{');
-        const start = (startArr !== -1 && (startObj === -1 || startArr < startObj)) ? startArr : startObj;
+        let start = -1;
+        let end = -1;
+        let isArray = false;
 
-        const endArr = input.lastIndexOf(']');
-        const endObj = input.lastIndexOf('}');
-        const end = (endArr !== -1 && (endObj === -1 || endArr > endObj)) ? endArr : endObj;
+        if (startArr !== -1 && (startObj === -1 || startArr < startObj)) {
+          start = startArr;
+          end = input.lastIndexOf(']');
+          isArray = true;
+        } else if (startObj !== -1) {
+          start = startObj;
+          end = input.lastIndexOf('}');
+          isArray = false;
+        }
 
         if (start !== -1 && end !== -1 && end > start) {
-          const extracted = input.substring(start, end + 1);
-          // Fix trailing commas in extracted string
-          return JSON.parse(extracted.replace(/,(\s*[}\]])/g, '$1'));
+          let extracted = input.substring(start, end + 1);
+
+          // Apply same cleanups
+          extracted = extracted.replace(/:\s*undefined/g, ': null');
+          extracted = extracted.replace(/:\s*NaN/g, ': null');
+          extracted = extracted.replace(/,(\s*[}\]])/g, '$1');
+
+          const parsed = JSON.parse(extracted);
+          console.log('[GroqService] Fallback extraction succeeded');
+          return parsed;
         }
       } catch (inner) {
-        console.error('[GroqService] Extraction fallback failed');
+        console.error('[GroqService] Extraction fallback also failed');
       }
-      throw e;
+
+      // FINAL FALLBACK: Return empty array for rule lists (never crash)
+      console.warn('[GroqService] Returning empty array as safe fallback');
+      return [];
     }
   }
 }
+

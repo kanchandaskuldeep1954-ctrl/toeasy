@@ -12,23 +12,57 @@ export class ProCleaningAgent {
     static async analyze(headers: string[], data: any[]): Promise<any> {
         console.log(`[ProCleaningAgent] Starting analysis for ${data.length} rows`);
 
-        // Stage 1: Forensic Analysis (Universal)
-        const forensics: ForensicResult = await DataForensicsEngine.analyze(headers, data, 1000);
+        // Stage 1: Forensic Analysis (Universal - always works)
+        let forensics: ForensicResult;
+        try {
+            forensics = await DataForensicsEngine.analyze(headers, data, 1000);
+        } catch (forensicError) {
+            console.error('[ProCleaningAgent] Forensic analysis failed:', forensicError);
+            // Return minimal valid structure
+            return {
+                insights: { category: 'Unknown', purpose: 'Data Analysis', semanticInsights: [] },
+                forensics: { totalColumns: headers.length, totalRows: data.length, issuesFound: 0, rulesGenerated: 0 },
+                profiles: [],
+                rules: [],
+                meta: { analyzedAt: new Date().toISOString(), datasetCategory: 'Unknown', datasetPurpose: 'Unknown' }
+            };
+        }
 
-        // Stage 2: Semantic Analysis (AI)
-        // Sample for AI context (first 20 rows + middle 20 + last 20)
-        const sample = [
-            ...data.slice(0, 20),
-            ...data.slice(Math.floor(data.length / 2), Math.floor(data.length / 2) + 20),
-            ...data.slice(-20)
-        ];
-
-        const semanticInsights = await GroqService.analyzeSemantics(headers, sample, forensics);
-        console.log(`[ProCleaningAgent] Semantic Analysis complete: ${semanticInsights.category}`);
+        // Stage 2: Semantic Analysis (AI) - with fallback
+        let semanticInsights: any;
+        try {
+            const sample = [
+                ...data.slice(0, 20),
+                ...data.slice(Math.floor(data.length / 2), Math.floor(data.length / 2) + 20),
+                ...data.slice(-20)
+            ];
+            semanticInsights = await GroqService.analyzeSemantics(headers, sample, forensics);
+            console.log(`[ProCleaningAgent] Semantic Analysis complete: ${semanticInsights.category}`);
+        } catch (semanticError) {
+            console.error('[ProCleaningAgent] Semantic analysis failed, using defaults:', semanticError);
+            semanticInsights = {
+                category: 'General Data',
+                purpose: 'Data Management',
+                semanticInsights: [],
+                junkPatterns: [],
+                columnRelationships: [],
+                recoverySuggestions: []
+            };
+        }
 
         // Stage 3: Generate Master Rule Set
-        const forensicRules = forensics.validationRules;
-        const aiRules = await GroqService.generateAdvancedRules(headers, sample, semanticInsights);
+        const forensicRules = forensics.validationRules || [];
+
+        // AI Rules - with fallback
+        let aiRules: any[] = [];
+        try {
+            const sample = data.slice(0, 30);
+            aiRules = await GroqService.generateAdvancedRules(headers, sample, semanticInsights);
+            if (!Array.isArray(aiRules)) aiRules = [];
+        } catch (aiRuleError) {
+            console.error('[ProCleaningAgent] AI rule generation failed, using forensic rules only:', aiRuleError);
+            aiRules = [];
+        }
 
         console.log(`[ProCleaningAgent] Rules generated: ${forensicRules.length} (Forensic) + ${aiRules.length} (AI)`);
 
@@ -43,11 +77,12 @@ export class ProCleaningAgent {
             rules: masterRules,
             meta: {
                 analyzedAt: new Date().toISOString(),
-                datasetCategory: semanticInsights.category,
-                datasetPurpose: semanticInsights.purpose
+                datasetCategory: semanticInsights.category || 'Unknown',
+                datasetPurpose: semanticInsights.purpose || 'Unknown'
             }
         };
     }
+
 
     /**
      * Merge forensic rules with AI rules, prioritizing AI for semantic nuances

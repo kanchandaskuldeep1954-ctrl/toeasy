@@ -320,6 +320,11 @@ const UniverCleanView: React.FC = () => {
 
             await updateDataset(Number(dataset.id), updatedDataset as any);
 
+            // Force FortuneSheet to re-render with the new data
+            if (univerEditorRef.current?.forceUpdate) {
+                univerEditorRef.current.forceUpdate(newData, newHeaders);
+            }
+
             // Re-run semantic analysis and refresh issues if structural change occurred
             if (issue.recoveryMethod?.startsWith('remove_')) {
                 const newSemantics = await analyzeDatasetSemantics(updatedDataset);
@@ -520,6 +525,11 @@ const UniverCleanView: React.FC = () => {
 
             await updateDataset(Number(dataset.id), updatedDataset as any);
             setQuarantinedData(finalQuarantined);
+
+            // Force FortuneSheet to re-render with the cleaned data
+            if (univerEditorRef.current?.forceUpdate) {
+                univerEditorRef.current.forceUpdate(currentData, finalHeaders);
+            }
 
             // Re-run semantic analysis silently to update Quality Score and Insights
             const newSemantics = await analyzeDatasetSemantics(updatedDataset as any);
