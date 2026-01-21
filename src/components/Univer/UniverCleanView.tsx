@@ -25,7 +25,8 @@ const UniverCleanView: React.FC = () => {
     const workspaceId = searchParams.get('workspace');
     const datasetId = searchParams.get('dataset');
 
-    const { activeDataset: dataset, updateDataset, setActiveDataset } = useDataset();
+    const { activeDataset, updateDataset, setActiveDataset } = useDataset();
+    const dataset = activeDataset as unknown as Dataset;
     const { theme } = useTheme(); // Get current theme
 
     // State
@@ -144,7 +145,7 @@ const UniverCleanView: React.FC = () => {
                     const rules = await GroqService.suggestValidationRules(dataset, semanticResult);
                     setValidationRules(rules);
                     // Only update if it's genuinely missing from the DB
-                    updateDataset(dataset.id!, { validationRules: rules });
+                    updateDataset(Number(dataset.id), { validationRules: rules } as any);
                 } else if (!validationRules || validationRules.length === 0) {
                     setValidationRules(dataset.validationRules);
                 }
@@ -254,7 +255,7 @@ const UniverCleanView: React.FC = () => {
                 headers: newHeaders
             };
 
-            updateDataset(dataset.id!, updatedDataset);
+            updateDataset(Number(dataset.id), updatedDataset as any);
 
             // Re-run semantic analysis and refresh issues if structural change occurred
             if (issue.recoveryMethod?.startsWith('remove_')) {
@@ -406,7 +407,7 @@ const UniverCleanView: React.FC = () => {
                 headers: dataset.headers.filter(h => !columnsToRemove.has(h))
             };
 
-            updateDataset(dataset.id!, updatedDataset);
+            updateDataset(Number(dataset.id), updatedDataset as any);
 
             // Re-run semantic analysis silently to update Quality Score and Insights
             const newSemantics = await analyzeDatasetSemantics(updatedDataset);
@@ -462,7 +463,7 @@ const UniverCleanView: React.FC = () => {
             ...prev.map(h => h.id === historyId ? { ...h, canUndo: false } : h),
             undoEntry,
         ]);
-        updateDataset(dataset.id!, { data: newData });
+        updateDataset(Number(dataset.id), { data: newData } as any);
 
         // Re-add issue
         const issue: CellIssue = {
@@ -487,7 +488,7 @@ const UniverCleanView: React.FC = () => {
             r.id === ruleId ? { ...r, active: !r.active } : r
         );
         setValidationRules(updatedRules);
-        updateDataset(dataset.id!, { validationRules: updatedRules });
+        updateDataset(Number(dataset.id), { validationRules: updatedRules } as any);
     }, [dataset, validationRules, updateDataset]);
 
     // Handle AI chat
@@ -680,6 +681,7 @@ const UniverCleanView: React.FC = () => {
                                     issues={issues}
                                     theme={theme as any}
                                     onCellEdit={(row, col, oldVal, newVal) => {
+                                        if (isCleaningLive) return; // Skip updates during automated bulk cleaning
                                         const header = displayHeaders[col];
                                         if (!header) return;
 
@@ -728,7 +730,7 @@ const UniverCleanView: React.FC = () => {
                                                         ]
                                                     }
                                                 };
-                                                updateDataset(dataset.id!, { data: newData, raw_data: newData });
+                                                updateDataset(Number(dataset.id), { data: newData, raw_data: newData } as any);
                                             }
                                         }
                                     }}

@@ -635,33 +635,35 @@ export function generateRecoveryPlans(
         const colIndex = headers.indexOf(colSem.column);
         if (colIndex === -1) continue;
 
-        // Handle missing values
-        data.forEach((row, rowIndex) => {
-            const value = row[colSem.column];
+        // Handle missing values - SKIP if column is garbage
+        if (!colSem.isGarbage) {
+            data.forEach((row, rowIndex) => {
+                const value = row[colSem.column];
 
-            if (value === null || value === undefined || value === '') {
+                if (value === null || value === undefined || value === '') {
+                    const plan = createRecoveryPlan(
+                        rowIndex,
+                        colSem.column,
+                        value,
+                        colSem,
+                        semantics.relationships,
+                        data
+                    );
+                    if (plan) plans.push(plan);
+                }
+            });
+
+            for (const invalid of colSem.invalidValues) {
                 const plan = createRecoveryPlan(
-                    rowIndex,
+                    invalid.index,
                     colSem.column,
-                    value,
+                    invalid.value,
                     colSem,
                     semantics.relationships,
                     data
                 );
                 if (plan) plans.push(plan);
             }
-        });
-
-        for (const invalid of colSem.invalidValues) {
-            const plan = createRecoveryPlan(
-                invalid.index,
-                colSem.column,
-                invalid.value,
-                colSem,
-                semantics.relationships,
-                data
-            );
-            if (plan) plans.push(plan);
         }
 
         // Handle Garbage Columns
@@ -750,15 +752,16 @@ function createRecoveryPlan(
     // Strategy 3: Date Normalization
     if (['date', 'datetime', 'year', 'month'].includes(colSem.fieldType)) {
         const cleanedDate = DateNormalizer.normalizeDate(String(currentValue || ''));
-        if (cleanedDate && cleanedDate !== String(currentValue)) {
+        const cleanedDateStr = cleanedDate ? cleanedDate.toISOString().split('T')[0] : null;
+        if (cleanedDateStr && cleanedDateStr !== String(currentValue)) {
             return {
                 row: rowIndex,
                 column,
                 currentValue,
-                suggestedValue: cleanedDate,
+                suggestedValue: cleanedDateStr,
                 strategy: 'pattern',
                 confidence: 0.85,
-                explanation: `Elite Date Parsing: Normalized from "${currentValue}" to standard ISO`,
+                explanation: `Elite Date Parsing: Normalized from "${currentValue}" to standard ISO (${cleanedDateStr})`,
                 dataLossRisk: 'none',
             };
         }
@@ -856,15 +859,33 @@ function createRecoveryPlan(
     const isCriticalIdentifier = ['name', 'full_name', 'id', 'sku', 'email'].includes(colSem.fieldType);
 
     if (isCriticalIdentifier && (currentValue === null || currentValue === undefined || currentValue === '')) {
+        // Professional Proactive Check: Is the rest of the row also empty or low value?
+        const row = data[rowIndex];
+        const nonNullCount = Object.values(row).filter(v => v !== null && v !== undefined && v !== '' && v !== '0').length;
+
+        if (nonNullCount < 3) {
+            return {
+                row: rowIndex,
+                column,
+                currentValue: currentValue || '(missing)',
+                suggestedValue: null,
+                strategy: 'remove_row',
+                confidence: 0.98,
+                explanation: `Critical identifier "${column}" is missing and record has insufficient data for recovery. Professional practice suggests removing this hollow record to preserve data integrity.`,
+                dataLossRisk: 'low',
+            };
+        }
+
+        // Otherwise, just mark as semantic error but don't force row deletion yet
         return {
             row: rowIndex,
             column,
             currentValue: currentValue || '(missing)',
             suggestedValue: null,
-            strategy: 'remove_row',
-            confidence: 0.9,
-            explanation: `Critical identifier "${column}" is missing and unrecoverable. Professional practice suggests removing this record to avoid data integrity issues.`,
-            dataLossRisk: 'low',
+            strategy: 'remove',
+            confidence: 0.7,
+            explanation: `Critical identifier "${column}" is missing. Record has other data points, but this identifier is unrecoverable. Action required: Manual verification or record disposal.`,
+            dataLossRisk: 'medium',
         };
     }
 
@@ -876,8 +897,8 @@ function createRecoveryPlan(
         suggestedValue: null,
         strategy: 'remove',
         confidence: 0.95,
-        explanation: `Critical ${colSem.fieldType} error in ${column}. Data point is semantically incomplete.`,
-        dataLossRisk: 'high',
+        explanation: `Field "${column}" (${colSem.fieldType}) contains semantic errors or missing data that breaks automation flows. Record remains, but data point is flagged for exclusion.`,
+        dataLossRisk: 'medium',
     };
 }
 
@@ -985,7 +1006,9 @@ export function recoveryPlansToCellIssues(
         recoveryMethod: plan.strategy === 'calculate' ? 'calculate' :
             plan.strategy === 'lookup' ? 'lookup' :
                 plan.strategy === 'pattern' ? 'pattern' :
-                    plan.strategy === 'remove' ? 'remove' : 'ai_infer',
+                    plan.strategy === 'remove' ? 'remove' :
+                        plan.strategy === 'remove_row' ? 'remove_row' :
+                            plan.strategy === 'remove_column' ? 'remove_column' : 'ai_infer',
     }));
 }
 
@@ -1016,12 +1039,19 @@ export function applyRecoveryPlan(
     row.__metadata.lastModified = new Date().toISOString();
 
     // 3. Create Audit Log Entry (Pro Analyst Requirement)
+    const auditAction = plan.strategy === 'remove' ? 'quarantined' :
+        plan.strategy === 'remove_row' ? 'modified' :
+            'recovered';
+
+    // Use a clearer reason for removals
+    const auditReason = plan.strategy === 'remove' ? `Cell-level cleanup: ${plan.explanation}` : plan.explanation;
+
     const auditEntry = {
-        action: 'recovered' as const,
+        action: auditAction as any,
         field: plan.column,
         from: String(oldValue || ''),
-        to: String(plan.suggestedValue || ''),
-        reason: plan.explanation,
+        to: String(plan.suggestedValue || 'CLEARED'),
+        reason: auditReason,
         timestamp: new Date().toISOString(),
         rule: plan.strategy
     };
@@ -1032,7 +1062,7 @@ export function applyRecoveryPlan(
     const historyEntry: ChangeHistoryEntry = {
         id: `${Date.now()}-${plan.row}-${plan.column}`,
         timestamp: new Date(),
-        action: 'recover',
+        action: plan.strategy === 'remove' ? 'quarantine' : 'recover',
         actor: 'ai',
         row: plan.row,
         column: plan.column,

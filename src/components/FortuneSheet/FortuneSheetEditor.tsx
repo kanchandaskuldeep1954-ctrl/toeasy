@@ -140,7 +140,8 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         applyIssueHighlighting: () => { }
     }));
 
-    const componentKey = `fs-${data.length}-${headers.length}`;
+    // Force re-render when data or issues change to ensure internal spreadsheet state syncs
+    const componentKey = `fs-${data.length}-${headers.length}-${issues.length}-${(data?.[0]?.__metadata?.lastModified) || ''}`;
 
     return (
         <div
