@@ -1118,18 +1118,20 @@ export function applyRecoveryPlan(
     row.__metadata.lastModified = new Date().toISOString();
 
     // 3. Create Audit Log Entry (Pro Analyst Requirement)
-    const auditAction = plan.strategy === 'remove' ? 'quarantined' :
-        plan.strategy === 'remove_row' ? 'modified' :
+    const auditAction = (plan.strategy as string) === 'remove' || (plan.strategy as string) === 'remove_row' ? 'quarantined' :
+        (plan.strategy as string) === 'remove_column' ? 'deleted' :
             'recovered';
 
     // Use a clearer reason for removals
-    const auditReason = plan.strategy === 'remove' ? `Cell-level cleanup: ${plan.explanation}` : plan.explanation;
+    const auditReason = plan.strategy === 'remove' || plan.strategy === 'remove_row'
+        ? `Integrity cleanup: ${plan.explanation}`
+        : plan.explanation;
 
     const auditEntry = {
         action: auditAction as any,
         field: plan.column,
         from: String(oldValue || ''),
-        to: String(plan.suggestedValue || 'CLEARED'),
+        to: String(plan.suggestedValue || (auditAction === 'quarantined' ? 'VAULTED' : 'CLEARED')),
         reason: auditReason,
         timestamp: new Date().toISOString(),
         rule: plan.strategy
@@ -1141,14 +1143,14 @@ export function applyRecoveryPlan(
     const historyEntry: ChangeHistoryEntry = {
         id: `${Date.now()}-${plan.row}-${plan.column}`,
         timestamp: new Date(),
-        action: plan.strategy === 'remove' ? 'quarantine' : 'recover',
+        action: (plan.strategy as string) === 'remove' || (plan.strategy as string) === 'remove_row' ? 'quarantine' : 'recover',
         actor: 'ai',
         row: plan.row,
         column: plan.column,
         oldValue,
         newValue: plan.suggestedValue,
         explanation: plan.explanation,
-        canUndo: true,
+        canUndo: plan.strategy !== 'remove_row' && plan.strategy !== 'remove_column', // Structural changes are harder to undo in batch
     };
 
     return { data: newData, historyEntry };

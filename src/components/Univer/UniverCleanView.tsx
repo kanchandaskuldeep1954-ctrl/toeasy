@@ -44,6 +44,7 @@ const UniverCleanView: React.FC = () => {
     const [showExportModal, setShowExportModal] = useState(false);
     const [isCleaningLive, setIsCleaningLive] = useState(false);
     const [cleaningProgress, setCleaningProgress] = useState(0);
+    const [quarantinedData, setQuarantinedData] = useState<DataRow[]>([]);
 
     // Refs
     const hasHydratedRef = useRef<string | null>(null);
@@ -82,6 +83,7 @@ const UniverCleanView: React.FC = () => {
                 };
 
                 setActiveDataset(hydrated);
+                setQuarantinedData(fullData.quarantinedData || []);
 
                 if (univerEditorRef.current) {
                     // Force update if needed
@@ -181,7 +183,14 @@ const UniverCleanView: React.FC = () => {
             let historyEntry: ChangeHistoryEntry;
 
             if (issue.recoveryMethod === 'remove_row') {
-                // Structural Removal: Row
+                // Structural Removal: Row -> Vaulting
+                const rowToVault = { ...newData[issue.row] };
+                if (!rowToVault.__metadata) rowToVault.__metadata = {};
+                rowToVault.__metadata.removalReason = issue.explanation || 'Integrity cleanup: Removed incomplete record';
+                rowToVault.__metadata.removedAt = new Date().toISOString();
+
+                setQuarantinedData(prev => [...prev, rowToVault]);
+
                 newData = newData.filter((_, idx) => idx !== issue.row);
                 historyEntry = {
                     id: `remove-row-${issue.row}-${Date.now()}`,
@@ -191,8 +200,8 @@ const UniverCleanView: React.FC = () => {
                     row: issue.row,
                     column: 'ALL',
                     oldValue: 'record',
-                    newValue: 'deleted',
-                    explanation: `Integrity cleanup: Removed incomplete record at row ${issue.row + 1}`,
+                    newValue: 'vaulted',
+                    explanation: `Integrity cleanup: Moved record to vault at row ${issue.row + 1}`,
                     canUndo: false
                 };
             } else if (issue.recoveryMethod === 'remove_column') {
@@ -252,7 +261,8 @@ const UniverCleanView: React.FC = () => {
                 ...dataset,
                 data: newData,
                 raw_data: newData,
-                headers: newHeaders
+                headers: newHeaders,
+                quarantinedData: quarantinedData
             };
 
             updateDataset(Number(dataset.id), updatedDataset as any);
@@ -345,7 +355,19 @@ const UniverCleanView: React.FC = () => {
 
             // 2. Perform Structural Removals
             if (rowsToRemove.size > 0 || columnsToRemove.size > 0) {
-                setProcessingStatus(`Performing structural cleanup (${rowsToRemove.size} rows, ${columnsToRemove.size} cols)...`);
+                // Vault rows before filtering
+                const vaultedRows = currentData
+                    .filter((_, idx) => rowsToRemove.has(idx))
+                    .map(row => ({
+                        ...row,
+                        __metadata: {
+                            ...row.__metadata,
+                            removalReason: 'Automated batch removal by AI Cleaning Engine',
+                            removedAt: new Date().toISOString()
+                        }
+                    }));
+
+                setQuarantinedData(prev => [...prev, ...vaultedRows]);
 
                 // Filter rows
                 currentData = currentData.filter((_, idx) => !rowsToRemove.has(idx));
@@ -404,13 +426,14 @@ const UniverCleanView: React.FC = () => {
                 ...dataset,
                 data: currentData,
                 raw_data: currentData,
-                headers: dataset.headers.filter(h => !columnsToRemove.has(h))
+                headers: dataset.headers.filter(h => !columnsToRemove.has(h)),
+                quarantinedData: quarantinedData
             };
 
             updateDataset(Number(dataset.id), updatedDataset as any);
 
             // Re-run semantic analysis silently to update Quality Score and Insights
-            const newSemantics = await analyzeDatasetSemantics(updatedDataset);
+            const newSemantics = await analyzeDatasetSemantics(updatedDataset as any);
             setSemantics(newSemantics);
 
             setProcessingStatus('✅ Cleaning complete!');
@@ -514,14 +537,17 @@ const UniverCleanView: React.FC = () => {
         setIsConfirming(true);
 
         try {
-            await apiClient.put(
-                `/workspaces/${dataset.workspace_id || workspaceId}/datasets/${dataset.id}/cleaned`,
-                {
-                    cleanedData: dataset.data,
-                    quarantinedData: dataset.quarantinedData || [],
-                    healthScore: dataset.healthScore || 100,
-                }
-            );
+            const payload = {
+                name: dataset.name,
+                raw_data: JSON.stringify(dataset.data),
+                headers: JSON.stringify(dataset.headers),
+                health_score: semantics?.qualityScore || dataset.healthScore,
+                cleaning_confirmed: true,
+                quarantined_data: JSON.stringify(quarantinedData)
+            };
+
+            await apiClient.put(`/workspaces/${workspaceId}/datasets/${dataset.id}`, payload);
+
             await apiClient.post(
                 `/workspaces/${dataset.workspace_id || workspaceId}/datasets/${dataset.id}/confirm-clean`,
                 { keepQuarantined: true }
@@ -573,7 +599,7 @@ const UniverCleanView: React.FC = () => {
                     {[
                         { id: 'workspace', label: '📊 Live Workspace', icon: '📊' },
                         { id: 'original', label: '📄 Original', icon: '📄' },
-                        { id: 'vault', label: '🛡️ Vault', icon: '🛡️', count: (dataset.quarantinedData || []).length },
+                        { id: 'vault', label: '🛡️ Vault', icon: '🛡️', count: (quarantinedData || []).length },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -809,7 +835,7 @@ const UniverCleanView: React.FC = () => {
                             </p>
                         </div>
                         <div className="overflow-auto h-[calc(100%-80px)] p-6">
-                            {(dataset.quarantinedData || []).length === 0 ? (
+                            {(quarantinedData || []).length === 0 ? (
                                 <div className="text-center py-20 text-slate-400">
                                     <div className="text-6xl mb-4">🛡️</div>
                                     <p className="font-bold text-xl">Vault Empty</p>
@@ -817,7 +843,7 @@ const UniverCleanView: React.FC = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-4">
-                                    {(dataset.quarantinedData || []).map((row, i) => (
+                                    {(quarantinedData || []).map((row, i) => (
                                         <div
                                             key={i}
                                             className="p-4 bg-rose-50 dark:bg-rose-900/20 rounded-xl border border-rose-200 dark:border-rose-800"
