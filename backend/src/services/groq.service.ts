@@ -69,42 +69,10 @@ Now generate exactly ${count} realistic objects:`;
 
     try {
       // Try to extract JSON array from response
-      let jsonStr = groqResponse.trim();
-
-      // If empty, log and throw error
-      if (!jsonStr) {
-        throw new Error('Groq API returned empty response');
-      }
-
-      // If wrapped in markdown code blocks, extract the JSON
-      if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
-
-      // Remove any leading/trailing whitespace
-      jsonStr = jsonStr.trim();
-
-      if (!jsonStr) {
+      const data = this.cleanAndParseJSON(groqResponse);
+      if (!data) {
         throw new Error('No JSON content found in response');
       }
-
-      // Fix common JSON issues
-      // 1. Remove trailing commas before closing brackets
-      jsonStr = jsonStr.replace(/,(\s*[}\]])/g, '$1');
-
-      // 2. If it starts with [ and doesn't have matching ], add it
-      if (jsonStr.startsWith('[') && !jsonStr.endsWith(']')) {
-        // Find the last complete object and close the array
-        const lastBracketIndex = jsonStr.lastIndexOf('}');
-        if (lastBracketIndex !== -1) {
-          jsonStr = jsonStr.substring(0, lastBracketIndex + 1) + ']';
-        }
-      }
-
-      console.log(`Parsing JSON of length: ${jsonStr.length}`);
-      const data = JSON.parse(jsonStr);
       const cleanedData = Array.isArray(data) ? data : [data];
 
       console.log(`Parsed ${cleanedData.length} records`);
@@ -1062,18 +1030,7 @@ Return ONLY a JSON array of rules:
 }]`;
 
     const result = await this.callGroq(prompt, 3000);
-    try {
-      let jsonStr = result.trim();
-      if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
-      return JSON.parse(jsonStr);
-    } catch (e) {
-      console.error('Advanced Rule generation failed:', e);
-      return [];
-    }
+    return this.cleanAndParseJSON(result);
   }
 
 
@@ -1495,6 +1452,61 @@ ANALYZE and return ONLY valid JSON (no markdown):
         label: String(item[xColumn] || 'Unknown'),
         value: Number(item[yColumn]) || 0
       }));
+    }
+  }
+
+  /**
+   * Pro Auditor Helper: Safely clean and parse AI-generated JSON
+   */
+  private static cleanAndParseJSON(input: string): any {
+    try {
+      let cleaned = input.trim();
+
+      // 1. Extract JSON from markdown blocks if present
+      if (cleaned.includes('```json')) {
+        cleaned = cleaned.split('```json')[1].split('```')[0].trim();
+      } else if (cleaned.includes('```')) {
+        cleaned = cleaned.split('```')[1].split('```')[0].trim();
+      }
+
+      // 2. Comprehensive Comment Removal (Handles // and /* */)
+      // This is often why AI responses fail JSON.parse
+      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+
+      // 3. Fix trailing commas (common AI mistake)
+      cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+
+      // 4. Emergency Bracket Pairing (Handle truncated responses)
+      if (cleaned.startsWith('[') && !cleaned.endsWith(']')) {
+        const lastObj = cleaned.lastIndexOf('}');
+        if (lastObj !== -1) cleaned = cleaned.substring(0, lastObj + 1) + ']';
+        else cleaned += ']';
+      } else if (cleaned.startsWith('{') && !cleaned.endsWith('}')) {
+        cleaned += '}';
+      }
+
+      return JSON.parse(cleaned);
+    } catch (e) {
+      console.error('[GroqService] JSON Parse Error. Raw length:', input.length, 'Error:', e);
+      // Try one last pass: find the first [ or { and the last ] or }
+      try {
+        const startArr = input.indexOf('[');
+        const startObj = input.indexOf('{');
+        const start = (startArr !== -1 && (startObj === -1 || startArr < startObj)) ? startArr : startObj;
+
+        const endArr = input.lastIndexOf(']');
+        const endObj = input.lastIndexOf('}');
+        const end = (endArr !== -1 && (endObj === -1 || endArr > endObj)) ? endArr : endObj;
+
+        if (start !== -1 && end !== -1 && end > start) {
+          const extracted = input.substring(start, end + 1);
+          // Fix trailing commas in extracted string
+          return JSON.parse(extracted.replace(/,(\s*[}\]])/g, '$1'));
+        }
+      } catch (inner) {
+        console.error('[GroqService] Extraction fallback failed');
+      }
+      throw e;
     }
   }
 }

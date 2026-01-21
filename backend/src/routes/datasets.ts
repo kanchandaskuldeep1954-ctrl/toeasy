@@ -396,9 +396,9 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
 // Update dataset (name, description, health_score, etc.)
 router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
   try {
-    const { name, description, health_score, cleaning_confirmed, raw_data, headers } = req.body;
+    const { name, description, health_score, cleaning_confirmed, raw_data, headers, quarantined_data } = req.body;
 
-    // Support updating data and headers in the generic PUT route
+    // Support updating data, headers, and quarantined objects in the generic PUT route
     const result = await query(
       `UPDATE datasets 
        SET name = COALESCE($1, name), 
@@ -407,8 +407,9 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
            cleaning_confirmed = COALESCE($4, cleaning_confirmed),
            raw_data = COALESCE($5, raw_data),
            headers = COALESCE($6, headers),
+           quarantined_data = COALESCE($7, quarantined_data),
            updated_at = NOW()
-       WHERE id = $7 AND workspace_id = $8
+       WHERE id = $8 AND workspace_id = $9
        RETURNING *`,
       [
         name !== undefined ? name : null,
@@ -417,6 +418,7 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
         cleaning_confirmed !== undefined ? cleaning_confirmed : null,
         raw_data !== undefined ? (typeof raw_data === 'string' ? raw_data : JSON.stringify(raw_data)) : null,
         headers !== undefined ? (typeof headers === 'string' ? headers : JSON.stringify(headers)) : null,
+        quarantined_data !== undefined ? (typeof quarantined_data === 'string' ? quarantined_data : JSON.stringify(quarantined_data)) : null,
         req.params.datasetId,
         req.params.workspaceId
       ]
