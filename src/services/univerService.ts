@@ -381,11 +381,41 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
     // Detect relationships between columns
     let relationships = detectColumnRelationships(headers, data);
 
-    // Calculate quality score
+    // Calculate quality score - Context Aware
+    // We shouldn't penalize for "valid" nulls (e.g. blank error reason when status is success)
+    let validNulls = 0;
+
+    const statusCol = headers.find(h => /status|state/i.test(h));
+    const reasonCol = headers.find(h => /reason|error|refund|comment|note/i.test(h));
+
+    if (statusCol && reasonCol) {
+        const reasonColIndex = headers.indexOf(reasonCol);
+        if (reasonColIndex !== -1) {
+            validNulls = data.filter(r => {
+                const statusVal = String(r[statusCol] || '').toLowerCase();
+                const isSuccess = ['completed', 'success', 'done', 'ok', 'active', 'approved'].some(s => statusVal.includes(s));
+                const reasonVal = r[reasonCol];
+                return isSuccess && (reasonVal === null || reasonVal === undefined || reasonVal === '');
+            }).length;
+        }
+    }
+
     const totalCells = data.length * headers.filter(h => h !== '__metadata').length;
-    const nullCells = columns.reduce((sum, c) => sum + c.nullCount, 0);
+    const rawNullCells = columns.reduce((sum, c) => sum + c.nullCount, 0);
+
+    // Adjusted null count (subtract valid nulls)
+    const penalizedNullCells = Math.max(0, rawNullCells - validNulls);
+
     const invalidCells = columns.reduce((sum, c) => sum + c.invalidValues.length, 0);
-    let qualityScore = Math.round(((totalCells - nullCells - invalidCells) / totalCells) * 100);
+
+    // Ensure we don't divide by zero
+    let qualityScore = 0;
+    if (totalCells > 0) {
+        qualityScore = Math.round(((totalCells - penalizedNullCells - invalidCells) / totalCells) * 100);
+    }
+
+    // Final sanity check
+    qualityScore = Math.max(0, Math.min(100, qualityScore));
 
     // Generate recommendations
     const recommendations = generateRecommendations(columns, relationships);
@@ -703,12 +733,19 @@ function generateRecommendations(columns: ColumnSemantics[], relationships: Colu
 /**
  * Generate recovery plans for all issues with lowest data loss
  */
+
 export function generateRecoveryPlans(
     data: DataRow[],
     headers: string[],
     semantics: DatasetSemantics
 ): RecoveryPlan[] {
     const plans: RecoveryPlan[] = [];
+
+    // BUILD CROSS-FIELD RELATIONSHIP MAP
+    // We need to know if one column implies requirement in another
+    const relationships = semantics.relationships || [];
+    const statusCol = headers.find(h => /status|state|condition/i.test(h));
+    const reasonCol = headers.find(h => /reason|error|refund|comment|note/i.test(h));
 
     for (const colSem of semantics.columns) {
         const colIndex = headers.indexOf(colSem.column);
@@ -719,26 +756,66 @@ export function generateRecoveryPlans(
             data.forEach((row, rowIndex) => {
                 const value = row[colSem.column];
 
+                // Check for blank/null values
                 if (value === null || value === undefined || value === '') {
+                    // CONTEXT CHECK: Is blank legitimate here?
+                    // E.g., if Status is "Completed", Reason field SHOULD be blank
+                    if (statusCol && reasonCol && colSem.column === reasonCol) {
+                        const statusVal = String(row[statusCol] || '').toLowerCase();
+                        const isSuccess = ['completed', 'success', 'done', 'ok', 'active', 'approved', 'paid'].some(s => statusVal.includes(s));
+
+                        if (isSuccess) {
+                            return; // SKIP: Blank reason is valid for successful transaction
+                        }
+                    }
+
                     const plan = createRecoveryPlan(
                         rowIndex,
                         colSem.column,
                         value,
                         colSem,
-                        semantics.relationships,
+                        relationships,
                         data
                     );
                     if (plan) plans.push(plan);
                 }
+                // Check for explicit garbage (e.g. "435345" in a Reason field)
+                else if (typeof value === 'string' && colSem.fieldType === 'text' || colSem.fieldType === 'description') {
+                    // If text field contains only numbers and is longer than 4 digits (likely garbage)
+                    if (/^\d{5,}$/.test(value.trim())) {
+                        const plan: RecoveryPlan = {
+                            row: rowIndex,
+                            column: colSem.column,
+                            currentValue: value,
+                            suggestedValue: '',
+                            strategy: 'remove',
+                            confidence: 0.95,
+                            explanation: `Field contains random numeric garbage "${value}" where text explanation is expected.`,
+                            dataLossRisk: 'low'
+                        };
+                        plans.push(plan);
+                    }
+                }
             });
 
             for (const invalid of colSem.invalidValues) {
+                // Double check if it's actually invalid contextually
+                if (statusCol && reasonCol && colSem.column === reasonCol) {
+                    const row = data[invalid.index];
+                    const statusVal = String(row[statusCol] || '').toLowerCase();
+                    const isSuccess = ['completed', 'success', 'done', 'ok', 'active', 'approved'].some(s => statusVal.includes(s));
+
+                    if (isSuccess && (invalid.value === null || invalid.value === undefined || invalid.value === '')) {
+                        continue; // Skip valid blanks
+                    }
+                }
+
                 const plan = createRecoveryPlan(
                     invalid.index,
                     colSem.column,
                     invalid.value,
                     colSem,
-                    semantics.relationships,
+                    relationships,
                     data
                 );
                 if (plan) plans.push(plan);
@@ -763,10 +840,10 @@ export function generateRecoveryPlans(
     // Sort by confidence (highest first) and data loss risk (lowest first)
     plans.sort((a, b) => {
         const riskOrder = { none: 0, low: 1, medium: 2, high: 3 };
-        if (riskOrder[a.dataLossRisk] !== riskOrder[b.dataLossRisk]) {
-            return riskOrder[a.dataLossRisk] - riskOrder[b.dataLossRisk];
+        if (riskOrder[a.dataLossRisk || 'medium'] !== riskOrder[b.dataLossRisk || 'medium']) {
+            return riskOrder[a.dataLossRisk || 'medium'] - riskOrder[b.dataLossRisk || 'medium'];
         }
-        return b.confidence - a.confidence;
+        return (b.confidence || 0) - (a.confidence || 0);
     });
 
     return plans;
@@ -808,6 +885,7 @@ function createRecoveryPlan(
             }
         }
     }
+
 
     // --- ELITE LAYER RECOVERY ---
 

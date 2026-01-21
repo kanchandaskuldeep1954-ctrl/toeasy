@@ -928,6 +928,11 @@ export class DataForensicsEngine {
 
         // 5. Null/completeness rules for non-garbage columns
         for (const profile of profiles.filter(p => !p.isGarbage && p.nullPercent > 5)) {
+            // SKIP if this column is already covered by a cross-field rule
+            // e.g. "Error Reason" is required when Status=Error, so don't flag "Error Reason" generally
+            const hasCrossFieldRule = crossFieldRules.some(r => r.requirement.includes(profile.column));
+            if (hasCrossFieldRule) continue;
+
             if (profile.role === 'identifier') {
                 rules.push({
                     id: `rule_${ruleId++}`,
