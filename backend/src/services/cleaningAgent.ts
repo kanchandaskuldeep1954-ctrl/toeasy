@@ -95,8 +95,15 @@ export class ProCleaningAgent {
             }
 
             // Normal healing logic
-            const healFn = new Function('row', `try { ${rule.healFunction} } catch(e) {}`);
-            const checkFn = rule.expression ? new Function('row', `try { return (${rule.expression}); } catch(e) { return true; }`) : null;
+            const healFn = new Function('row', `try { ${rule.healFunction} } catch(e) { console.error('Heal error:', e); }`);
+
+            // Smarter expression evaluation: If it contains 'return', assume it's a full script.
+            // Otherwise, wrap it in 'return (...)'.
+            const exprBody = rule.expression.includes('return ')
+                ? `try { ${rule.expression} } catch(e) { return true; }`
+                : `try { return (${rule.expression}); } catch(e) { return true; }`;
+
+            const checkFn = rule.expression ? new Function('row', exprBody) : null;
 
             newData.forEach(row => {
                 const needsFix = checkFn ? !checkFn(row) : true;
@@ -134,7 +141,11 @@ export class ProCleaningAgent {
             affected = 1;
         } else if (rule.expression) {
             // Row deletion based on expression
-            const checkFn = new Function('row', `try { return (${rule.expression}); } catch(e) { return true; }`);
+            const exprBody = rule.expression.includes('return ')
+                ? `try { ${rule.expression} } catch(e) { return true; }`
+                : `try { return (${rule.expression}); } catch(e) { return true; }`;
+
+            const checkFn = new Function('row', exprBody);
             const originalLen = newData.length;
             newData = newData.filter(row => checkFn(row));
             affected = originalLen - newData.length;

@@ -341,13 +341,14 @@ export class DataForensicsEngine {
             }
         }
 
-        // Check for numeric values in text fields (like "435345" in reason)
-        const numericOnlyPattern = /^\d+$/;
+        // Check for common suspicious numeric placeholders (like 0, -1, 9999) 
+        // but ONLY if they are heavily repeated (over 50% of data) 
+        // to avoid flagging real data like '100' or '250'.
+        const suspiciousNumbers = ['0', '-1', '999', '9999', '0000'];
         Object.entries(valueCounts).forEach(([val, count]) => {
-            if (numericOnlyPattern.test(val) && count > 1) {
-                // This might be garbage data in a text field
+            if (suspiciousNumbers.includes(val)) {
                 const percent = Math.round((count / values.length) * 100);
-                if (percent >= 1) { // At least 1% of values
+                if (percent >= 50) {
                     placeholders.push({
                         value: val,
                         count,

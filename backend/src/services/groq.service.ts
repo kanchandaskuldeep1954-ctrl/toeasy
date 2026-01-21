@@ -795,7 +795,13 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
           const testRow = data[0] || {};
           // Ensure special characters in column names don't break the function creation
           // We wrap the test in a try-catch block inside the function to handle runtime errors gracefully without flagging the rule as invalid syntax
-          const testFn = new Function('row', `try { return (${rule.expression}); } catch(e) { return true; }`);
+          // Smarter evaluation: If it contains 'return', assume it's a full script.
+          // Otherwise, wrap it in 'return (...)'.
+          const exprBody = rule.expression.includes('return ')
+            ? `try { ${rule.expression} } catch(e) { return true; }`
+            : `try { return (${rule.expression}); } catch(e) { return true; }`;
+
+          const testFn = new Function('row', exprBody);
           testFn(testRow);
         } catch (e) {
           console.warn(`Rule "${rule.description}" expression syntax warning:`, e);
@@ -1014,35 +1020,43 @@ Return ONLY valid JSON (no markdown, no explanation):
    * Pro: Generate advanced cleaning rules based on semantic insights
    */
   static async generateAdvancedRules(headers: string[], sample: any[], semanticInsights: any): Promise<any[]> {
-    const prompt = `You are a High-Level Data Cleaning Agent. 
+    const prompt = `You are an Elite Data Scientist and Data Cleaning Agent. 
 Generate advanced cleaning and recovery rules based on these semantic insights:
 
 Insights: ${JSON.stringify(semanticInsights)}
 Headers: ${headers.join(', ')}
 
-Rules MUST focus on:
-1. DEEP RECOVERY: If a value is missing or "junk" (like '435345' in a reason field), how can we RECOVER it using semantic relations?
-2. AUDIT & TRASH: Identifying rows/columns that are complete garbage to be removed.
-3. DATA SHIFTING AVOIDANCE: Only remove if recovery is impossible.
-4. CONDITIONAL CLEANING: Handle logic like "Reason is only for Errors".
+STRATEGIC GOALS:
+1. RECOVERY OVER REMOVAL: Only remove a row or column if it is 100% unrecoverable garbage. If there is ANY semantic relationship to recover data, use it.
+2. NO HALLUCINATED PLACEHOLDERS: Do NOT assume a numerical value (like '100', '250', '0') is a placeholder unless it perfectly matches a "junk pattern" or is logically impossible. Common amounts in a price column are NOT placeholders.
+3. CONTEXTUAL ACCURACY: If a column name is a number (e.g. '56456'), it might be a system ID or an artifact. Do NOT remove unless it's entirely null or contains random junk.
+4. COMPLEX LOGIC: You can use multi-line JavaScript with 'const' and 'return' for complex checks.
 
 CRITICAL SYNTAX RULES:
-- ALWAYS use bracket notation for column access: row['Column Name'], NEVER row.ColumnName.
-- Handle nulls safely: (row['Status'] || '') === 'Completed'.
+- ALWAYS use bracket notation for column access: row['Column Name'].
+- Handle nulls safely.
 - Return TRUE if the row is VALID (KEEP IT).
 - Return FALSE if the row is INVALID (NEEDS FIX).
+- 'healFunction' MUST be a valid JS snippet that modifies the 'row' object.
 
-For each rule, provide a JavaScript 'expression' (returns true if VALID) and a 'healFunction' (modifies row object to FIX it).
-Example Row Object: { "Date": "2024-01-01", "Amount": "100", "Status": "Completed", "Reason": "Error" }
+Example Rule:
+{
+  "description": "If Status is Refund, Reason must be provided",
+  "category": "Recovery",
+  "column": "*",
+  "expression": "const s = row['Status']; const r = row['Reason']; return s !== 'Refund' || (r && r.trim().length > 0);",
+  "healFunction": "if (row['Status'] === 'Refund') row['Reason'] = 'Manual cleanup required';",
+  "severity": "error"
+}
 
 Return ONLY a JSON array of rules:
 [{
   "description": "string",
   "category": "Recovery" | "Audit",
   "column": "column_name" | "*",
-  "qualityDimension": "string",
-  "expression": "row['Col'] !== 'junk'",
-  "healFunction": "if (row['Status'] === 'Completed') row['Reason'] = null;",
+  "qualityDimension": "Completeness" | "Validity" | "Consistency" | "Accuracy",
+  "expression": "javascript_expression_or_script",
+  "healFunction": "javascript_to_modify_row",
   "severity": "critical" | "error" | "warning",
   "reasoning": "string"
 }]`;

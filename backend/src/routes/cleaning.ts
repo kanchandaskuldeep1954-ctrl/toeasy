@@ -170,7 +170,8 @@ router.post('/:workspaceId/datasets/:datasetId/scripts/:scriptId/test', async (r
             return res.status(404).json({ error: 'Dataset not found' });
         }
 
-        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const rawDataRaw = datasetResult.rows[0].raw_data;
+        const rawData = typeof rawDataRaw === 'string' ? JSON.parse(rawDataRaw) : rawDataRaw;
         const sample = rawData.slice(0, sampleSize || 10);
 
         // Test the script
@@ -248,7 +249,8 @@ router.post('/:workspaceId/datasets/:datasetId/scripts/generate', async (req: Au
             return res.status(404).json({ error: 'Dataset not found' });
         }
 
-        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const rawDataRaw = datasetResult.rows[0].raw_data;
+        const rawData = typeof rawDataRaw === 'string' ? JSON.parse(rawDataRaw) : rawDataRaw;
         const headers = Object.keys(rawData[0] || {});
         const sample = rawData.slice(0, 5);
 
@@ -291,7 +293,8 @@ router.post('/:workspaceId/datasets/:datasetId/analyze-pro', async (req: AuthReq
             return res.status(404).json({ error: 'Dataset not found' });
         }
 
-        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const rawDataRaw = datasetResult.rows[0].raw_data;
+        const rawData = typeof rawDataRaw === 'string' ? JSON.parse(rawDataRaw) : rawDataRaw;
         const headers = Object.keys(rawData[0] || {});
 
         // Run Pro Agent Analysis
@@ -324,7 +327,8 @@ router.post('/:workspaceId/datasets/:datasetId/apply-suggested-fix', async (req:
             return res.status(404).json({ error: 'Dataset not found' });
         }
 
-        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const rawDataRaw = datasetResult.rows[0].raw_data;
+        const rawData = typeof rawDataRaw === 'string' ? JSON.parse(rawDataRaw) : rawDataRaw;
         const headers = Object.keys(rawData[0] || {});
 
         // Apply fix via Agent
@@ -374,7 +378,8 @@ router.post('/:workspaceId/datasets/:datasetId/chat', async (req: AuthRequest, r
             return res.status(404).json({ error: 'Dataset not found' });
         }
 
-        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const rawDataRaw = datasetResult.rows[0].raw_data;
+        const rawData = typeof rawDataRaw === 'string' ? JSON.parse(rawDataRaw) : rawDataRaw;
         const headers = Object.keys(rawData[0] || {});
         const sample = rawData.slice(0, 20); // First 20 rows context
 
