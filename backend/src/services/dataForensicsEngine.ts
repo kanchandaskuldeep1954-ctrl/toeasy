@@ -276,14 +276,14 @@ export class DataForensicsEngine {
         const uniqueCount = uniqueSet.size;
         const uniquePercent = Math.round((uniqueCount / Math.max(nonNullValues.length, 1)) * 100);
 
-        // Detect placeholders
-        const placeholders = this.detectPlaceholders(nonNullValues);
-
         // Detect data type
         const dataType = this.detectDataType(nonNullValues);
 
         // Detect role
         const role = this.detectColumnRole(column, nonNullValues, dataType, uniquePercent);
+
+        // Detect placeholders (now context-aware)
+        const placeholders = this.detectPlaceholders(nonNullValues, column, role);
 
         // Check if garbage (always null or placeholder)
         const isGarbage = nullPercent >= 95 ||
@@ -320,7 +320,7 @@ export class DataForensicsEngine {
     /**
      * Detect placeholder values in a column
      */
-    private static detectPlaceholders(values: any[]): PlaceholderInfo[] {
+    private static detectPlaceholders(values: any[], column?: string, role?: string): PlaceholderInfo[] {
         const placeholders: PlaceholderInfo[] = [];
         const valueCounts: Record<string, number> = {};
 
@@ -332,6 +332,15 @@ export class DataForensicsEngine {
         // Check known placeholders
         for (const placeholder of this.PLACEHOLDER_PATTERNS) {
             if (valueCounts[placeholder]) {
+                // False positive pruning: "Error" is often a valid Status or Category or Reason
+                const colLower = (column || '').toLowerCase();
+                if (['error', 'err', 'fail'].includes(placeholder.toLowerCase())) {
+                    if (role === 'status' || role === 'dimension' || role === 'reason' ||
+                        colLower.includes('status') || colLower.includes('reason') || colLower.includes('result')) {
+                        continue; // Skip flagging "Error" as placeholder in these contexts
+                    }
+                }
+
                 placeholders.push({
                     value: placeholder,
                     count: valueCounts[placeholder],
@@ -974,7 +983,7 @@ export class DataForensicsEngine {
                 category: 'Audit',
                 column: profile.column,
                 qualityDimension: 'Uniqueness',
-                expression: 'true', // Checked during batch processing
+                expression: `!(row['${profile.column}'] && row.__metadata?.duplicates?.includes('${profile.column}'))`, // Checked during batch processing
                 healFunction: '',
                 severity: 'critical',
                 confidence: 0.9,

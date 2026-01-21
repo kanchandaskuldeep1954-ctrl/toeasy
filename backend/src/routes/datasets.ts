@@ -396,20 +396,30 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
 // Update dataset (name, description, health_score, etc.)
 router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
   try {
-    const { name, description, health_score, cleaning_confirmed } = req.body;
+    const { name, description, health_score, cleaning_confirmed, raw_data, headers } = req.body;
 
-    // We only update metadata fields here. 
-    // Data updates are handled by the specific cleaning endpoints for performance and safety.
+    // Support updating data and headers in the generic PUT route
     const result = await query(
       `UPDATE datasets 
        SET name = COALESCE($1, name), 
            description = COALESCE($2, description),
            health_score = COALESCE($3, health_score),
            cleaning_confirmed = COALESCE($4, cleaning_confirmed),
+           raw_data = COALESCE($5, raw_data),
+           headers = COALESCE($6, headers),
            updated_at = NOW()
-       WHERE id = $5 AND workspace_id = $6
+       WHERE id = $7 AND workspace_id = $8
        RETURNING *`,
-      [name, description, health_score, cleaning_confirmed, req.params.datasetId, req.params.workspaceId]
+      [
+        name !== undefined ? name : null,
+        description !== undefined ? description : null,
+        health_score !== undefined ? health_score : null,
+        cleaning_confirmed !== undefined ? cleaning_confirmed : null,
+        raw_data !== undefined ? (typeof raw_data === 'string' ? raw_data : JSON.stringify(raw_data)) : null,
+        headers !== undefined ? (typeof headers === 'string' ? headers : JSON.stringify(headers)) : null,
+        req.params.datasetId,
+        req.params.workspaceId
+      ]
     );
 
     if (result.rows.length === 0) {

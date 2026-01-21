@@ -141,7 +141,9 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     }));
 
     // Force re-render when data or issues change to ensure internal spreadsheet state syncs
-    const componentKey = `fs-${data.length}-${headers.length}-${issues.length}-${(data?.[0]?.__metadata?.lastModified) || ''}`;
+    // Using a more robust key that captures data changes more effectively
+    const dataDigest = (data?.[0] ? JSON.stringify(data[0]) : '') + (data?.[10] ? JSON.stringify(data[10]) : '');
+    const componentKey = `fs-${data.length}-${headers.length}-${issues.length}-${dataDigest}`;
 
     return (
         <div
