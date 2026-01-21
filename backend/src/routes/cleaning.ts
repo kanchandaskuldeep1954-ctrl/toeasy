@@ -354,6 +354,50 @@ router.post('/:workspaceId/datasets/:datasetId/apply-suggested-fix', async (req:
     }
 });
 
+// Chat with Pro Cleaning Agent
+router.post('/:workspaceId/datasets/:datasetId/chat', async (req: AuthRequest, res) => {
+    try {
+        const { datasetId, workspaceId } = req.params;
+        const { message, context } = req.body;
+
+        if (!message) {
+            return res.status(400).json({ error: 'Message is required' });
+        }
+
+        // Get dataset sample
+        const datasetResult = await query(
+            `SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2`,
+            [datasetId, workspaceId]
+        );
+
+        if (datasetResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Dataset not found' });
+        }
+
+        const rawData = JSON.parse(datasetResult.rows[0].raw_data);
+        const headers = Object.keys(rawData[0] || {});
+        const sample = rawData.slice(0, 20); // First 20 rows context
+
+        // Generate response
+        const prompt = `You are the "Pro Data Cleaning Agent" for this dataset.
+User Question: "${message}"
+
+Dataset Context:
+Headers: ${headers.join(', ')}
+Sample Data: ${JSON.stringify(sample)}
+Previous Analysis Context: ${JSON.stringify(context || {})}
+
+Answer the user briefly and professionally. If they ask about data quality, cite specific columns. If they ask for a fix, explain the logic you would use (valid JavaScript).`;
+
+        const reply = await GroqService.callGroq(prompt, 1000);
+
+        res.json({ reply });
+    } catch (err) {
+        console.error('Chat error:', err);
+        res.status(500).json({ error: 'Failed to generate chat response' });
+    }
+});
+
 // ==================== CLEANING OPERATIONS ====================
 
 // Save cleaned data (without overwriting original)

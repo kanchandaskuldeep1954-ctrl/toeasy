@@ -324,7 +324,10 @@ export const cleaningAPI = {
     getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}/scripts`),
 
   generateScript: (workspaceId: string, datasetId: string, description: string, targetColumn?: string) =>
-    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/scripts/generate`, { description, targetColumn })
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/scripts/generate`, { description, targetColumn }),
+
+  chat: (workspaceId: string, datasetId: string, message: string, context?: any) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/chat`, { message, context })
 };
 
 // Default export for convenience

@@ -115,6 +115,7 @@ export interface SavedQuery {
 
 export interface Dataset {
   id?: string;
+  workspace_id?: string;
   createdAt?: string;
   rowCount?: number;
   cleaningActions?: CleaningAction[];

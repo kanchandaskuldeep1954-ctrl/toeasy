@@ -323,6 +323,7 @@ export function detectDomain(columns: string[], sampleData: DataRow[]): { domain
 export async function analyzeDatasetSemantics(dataset: Dataset): Promise<DatasetSemantics> {
     const { headers, data } = dataset;
 
+    // 1. Run Local Analysis (Base Layer)
     // Detect domain
     const { domain, confidence: domainConfidence } = detectDomain(headers, data);
 
@@ -378,18 +379,18 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
     });
 
     // Detect relationships between columns
-    const relationships = detectColumnRelationships(headers, data);
+    let relationships = detectColumnRelationships(headers, data);
 
     // Calculate quality score
     const totalCells = data.length * headers.filter(h => h !== '__metadata').length;
     const nullCells = columns.reduce((sum, c) => sum + c.nullCount, 0);
     const invalidCells = columns.reduce((sum, c) => sum + c.invalidValues.length, 0);
-    const qualityScore = Math.round(((totalCells - nullCells - invalidCells) / totalCells) * 100);
+    let qualityScore = Math.round(((totalCells - nullCells - invalidCells) / totalCells) * 100);
 
     // Generate recommendations
     const recommendations = generateRecommendations(columns, relationships);
 
-    return {
+    let result: DatasetSemantics = {
         domain,
         domainConfidence,
         businessContext: generateBusinessContext(domain, columns),
@@ -398,6 +399,84 @@ export async function analyzeDatasetSemantics(dataset: Dataset): Promise<Dataset
         qualityScore,
         recommendations,
     };
+
+    // 2. Try Pro Analysis (Backend/AI Enrichment)
+    try {
+        // Only run if we have IDs and sufficient data to justify API cost
+        if (dataset.workspace_id && dataset.id && data.length > 0) {
+            console.log("🚀 Starting Pro Semantic Analysis (Backend)...");
+            // Import dynamically to avoid circular dependencies if any
+            const { GroqService } = await import('./groqService');
+            const proResult = await GroqService.analyzePro(dataset);
+
+            if (proResult && proResult.semantic_profile) {
+                console.log("✅ Pro Analysis Successful. Merging insights...");
+
+                // Merge Domain & Context
+                if (proResult.semantic_profile.industry_context) {
+                    result.businessContext = proResult.semantic_profile.industry_context;
+                }
+                if (proResult.semantic_profile.data_quality_score) {
+                    // Average the scores for balance
+                    result.qualityScore = Math.round((result.qualityScore + proResult.semantic_profile.data_quality_score) / 2);
+                }
+
+                // Merge Column Insights
+                if (proResult.columns && Array.isArray(proResult.columns)) {
+                    proResult.columns.forEach((proCol: any) => {
+                        const localCol = result.columns.find(c => c.column === proCol.name);
+                        if (localCol) {
+                            // Override or enrich
+                            if (proCol.semantic_type && proCol.semantic_type !== 'unknown') {
+                                localCol.fieldType = proCol.semantic_type as SemanticFieldType;
+                            }
+                            if (proCol.is_garbage !== undefined) {
+                                localCol.isGarbage = proCol.is_garbage;
+                                if (proCol.is_garbage && proCol.garbage_reason) {
+                                    localCol.garbageReason = proCol.garbage_reason;
+                                }
+                            }
+                            if (proCol.description) {
+                                localCol.patterns.push(`Context: ${proCol.description}`);
+                            }
+                        }
+                    });
+                }
+
+                // Merge Relationships
+                if (proResult.relationships && Array.isArray(proResult.relationships)) {
+                    proResult.relationships.forEach((proRel: any) => {
+                        // Add if not duplicate
+                        const exists = result.relationships.some(r =>
+                            (r.column1 === proRel.source && r.column2 === proRel.target) ||
+                            (r.column1 === proRel.target && r.column2 === proRel.source)
+                        );
+                        if (!exists) {
+                            result.relationships.push({
+                                column1: proRel.source,
+                                column2: proRel.target,
+                                type: proRel.type || 'dependency',
+                                confidence: proRel.strength || 0.7,
+                                formula: proRel.details
+                            });
+                        }
+                    });
+                }
+
+                // Merge Recommendations
+                if (proResult.cleaning_recommendations && Array.isArray(proResult.cleaning_recommendations)) {
+                    result.recommendations = [
+                        ...result.recommendations,
+                        ...proResult.cleaning_recommendations
+                    ];
+                }
+            }
+        }
+    } catch (e) {
+        console.warn("⚠️ Pro Analysis failed or timed out, using local analysis only:", e);
+    }
+
+    return result;
 }
 
 /**

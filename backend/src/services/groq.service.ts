@@ -793,12 +793,18 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
         let expressionValid = true;
         try {
           const testRow = data[0] || {};
+          // Ensure special characters in column names don't break the function creation
+          // We wrap the test in a try-catch block inside the function to handle runtime errors gracefully without flagging the rule as invalid syntax
           const testFn = new Function('row', `try { return (${rule.expression}); } catch(e) { return true; }`);
           testFn(testRow);
         } catch (e) {
-          console.warn(`Rule "${rule.description}" expression invalid, fixing...`);
-          expressionValid = false;
-          rule.expression = `row['${rule.column}'] !== null && row['${rule.column}'] !== ''`;
+          console.warn(`Rule "${rule.description}" expression syntax warning:`, e);
+          // Only replace if it's a completely broken syntax that prevents compilation
+          // Otherwise, we trust the AI's logic might just need runtime safety
+          if (!rule.expression.includes("row['")) {
+            // Auto-fix common mistake: row.Col Name -> row['Col Name']
+            rule.expression = rule.expression.replace(/row\.([a-zA-Z0-9_]+)/g, "row['$1']");
+          }
         }
 
         // Test heal function if present
@@ -808,8 +814,8 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
             const healFn = new Function('row', rule.healFunction);
             healFn(testRow);
           } catch (e) {
-            console.warn(`Rule "${rule.description}" healFunction invalid, fixing...`);
-            rule.healFunction = `if (!row['${rule.column}']) row['${rule.column}'] = null`;
+            // Don't blindly replace, just log warning
+            console.warn(`Rule "${rule.description}" healFunction warning:`, e);
           }
         }
 
@@ -1016,9 +1022,15 @@ Headers: ${headers.join(', ')}
 
 Rules MUST focus on:
 1. DEEP RECOVERY: If a value is missing or "junk" (like '435345' in a reason field), how can we RECOVER it using semantic relations?
-2. AUDIT & TRASH: Identifying rows/columns that are complete garbage to be removed (e.g. random ID-like numbers as headers).
+2. AUDIT & TRASH: Identifying rows/columns that are complete garbage to be removed.
 3. DATA SHIFTING AVOIDANCE: Only remove if recovery is impossible.
 4. CONDITIONAL CLEANING: Handle logic like "Reason is only for Errors".
+
+CRITICAL SYNTAX RULES:
+- ALWAYS use bracket notation for column access: row['Column Name'], NEVER row.ColumnName.
+- Handle nulls safely: (row['Status'] || '') === 'Completed'.
+- Return TRUE if the row is VALID (KEEP IT).
+- Return FALSE if the row is INVALID (NEEDS FIX).
 
 For each rule, provide a JavaScript 'expression' (returns true if VALID) and a 'healFunction' (modifies row object to FIX it).
 Example Row Object: { "Date": "2024-01-01", "Amount": "100", "Status": "Completed", "Reason": "Error" }

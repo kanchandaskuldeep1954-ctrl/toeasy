@@ -230,8 +230,32 @@ export class GroqService {
 
   // Consult verified agent
   static async consultVerifiedAgent(dataset: Dataset, query: string, context?: any, history?: any[]): Promise<string> {
-    const result = await this.callApi<{ result: string }>('consult-agent', 'POST', { dataset, query, context, history });
-    return result.result;
+    try {
+      if (!dataset.id || !dataset.workspace_id) throw new Error("Dataset ID missing");
+      const response = await apiClient.post<{ reply: string }>(
+        `/workspaces/${dataset.workspace_id}/datasets/${dataset.id}/chat`,
+        { message: query, context }
+      );
+      return response.data.reply;
+    } catch (e) {
+      console.error("Agent chat failed", e);
+      return "I'm having trouble connecting to the Pro Cleaning Agent. Please try again.";
+    }
+  }
+
+  // Deep Semantic Analysis (Pro)
+  static async analyzePro(dataset: Dataset): Promise<any> {
+    if (!dataset.id || !dataset.workspace_id) return null;
+    try {
+      const response = await apiClient.post<{ analysis: any }>(
+        `/workspaces/${dataset.workspace_id}/datasets/${dataset.id}/analyze-pro`,
+        {}
+      );
+      return response.data.analysis;
+    } catch (e) {
+      console.error("Pro Analysis failed", e);
+      return null;
+    }
   }
 
   // Audit dataset (placeholder)

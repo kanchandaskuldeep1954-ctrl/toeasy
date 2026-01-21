@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { Dataset, AnalysisInsight, CleaningAction, DataRow } from '../types';
 import { GeminiService } from '../services/geminiService';
 import { GroqService } from '../services/groqService';
 import api from '../services/api';
+import CleaningChat from './components/Cleaning/CleaningChat';
 
 interface CleanViewProps {
     dataset: Dataset;

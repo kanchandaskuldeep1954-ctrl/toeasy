@@ -75,6 +75,7 @@ const UniverCleanView: React.FC = () => {
 
                 const hydrated = {
                     ...fullData,
+                    workspace_id: workspaceId,
                     data: fullData.raw_data || [],
                     raw_data: fullData.raw_data || [],
                     headers: fullData.raw_data?.[0] ? Object.keys(fullData.raw_data[0]) : [],
@@ -82,7 +83,6 @@ const UniverCleanView: React.FC = () => {
 
                 setActiveDataset(hydrated);
 
-                // Reset editor if ref exists
                 if (univerEditorRef.current) {
                     // Force update if needed
                 }
