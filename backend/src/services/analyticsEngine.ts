@@ -365,15 +365,39 @@ export class AnalyticsEngine {
         }
 
         // 8. Pro Visuals: Sunburst (if Hierarchical categories exist)
-        if (catCols.length >= 2) {
+        const reasonCol = cols.find(p => p.role === 'reason');
+        if (statusCol && reasonCol) {
+            charts.push({
+                id: 'root_cause_sunburst',
+                title: 'Operational Root Cause Analysis',
+                type: 'sunburst',
+                priority: 'high',
+                size: 'large',
+                data: this.aggregateByCategory(data, reasonCol.column, numCols[0]?.column),
+                options: { labels: reasonCol.column, parents: statusCol.column }
+            });
+        } else if (catCols.length >= 2) {
             charts.push({
                 id: 'category_sunburst',
                 title: 'Nested Category Discovery',
                 type: 'sunburst',
                 priority: 'medium',
                 size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, numCols[0]?.column), // Simplified for now
+                data: this.aggregateByCategory(data, catCols[0].column, numCols[0]?.column),
                 options: { labels: catCols[0].column, parents: catCols[1].column }
+            });
+        }
+
+        // 9. Pro Visuals: Heatmap (Quality Matrix)
+        if (catCols.length > 0 && statusCol) {
+            charts.push({
+                id: 'quality_heatmap',
+                title: 'Quality Matrix (Product vs Status)',
+                type: 'heatmap',
+                priority: 'medium',
+                size: 'medium',
+                data: [], // Handled by standard heatmapping logic in PlotlyChart
+                options: { xAxis: catCols[0].column, yAxis: statusCol.column, zAxis: numCols[0]?.column || 'Count' }
             });
         }
 
