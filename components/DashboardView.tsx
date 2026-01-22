@@ -7,6 +7,9 @@ import { PlotlyChart } from './Dashboard/PlotlyChart';
 import { KPICard } from './Dashboard/KPICard';
 import { FilterPanel } from './Dashboard/FilterPanel';
 import { InsightCard } from './Dashboard/InsightCard';
+import { ChartBuilderPanel } from './Dashboard/ChartBuilderPanel';
+import { DataPeekModal } from './Dashboard/DataPeekModal';
+import { aggregateData } from '../src/utils/dashboardHelper';
 
 interface DashboardViewProps {
     dataset: Dataset;
@@ -58,9 +61,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     // Edit Mode States
     const [editingChartId, setEditingChartId] = useState<string | null>(null);
-    const [editedChart, setEditedChart] = useState<ChartSpec | null>(null);
-    const [aiEditPrompt, setAiEditPrompt] = useState('');
-    const [isAiEditing, setIsAiEditing] = useState(false);
+    // const [editedChart, setEditedChart] = useState<ChartSpec | null>(null); // REMOVED: Handled by BuilderPanel
+    // const [aiEditPrompt, setAiEditPrompt] = useState(''); // REMOVED: Handled by BuilderPanel
+    // const [isAiEditing, setIsAiEditing] = useState(false); // REMOVED: Handled by BuilderPanel
+    const [isCreatingNew, setIsCreatingNew] = useState(false);
+
+    // Data Transparency
+    const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
+
     const [dashboardPrompt, setDashboardPrompt] = useState(''); // Global dashboard prompt
     const [isDashboardThinking, setIsDashboardThinking] = useState(false);
 
@@ -180,124 +188,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
 
 
-    const aggregateData = useCallback((chart: ChartSpec) => {
-        // PRIORITY 1: Use pre-aggregated data from backend if available
-        // This is the data pre-computed by AnalyticsEngine
-        if (chart.data && Array.isArray(chart.data) && chart.data.length > 0) {
-            // Normalize data to ensure it has the right format
-            return chart.data.map((d: any) => ({
-                name: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
-                value: Number(d.value ?? d.y ?? d.count ?? 0),
-                label: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
-                ...d
-            }));
-        }
-
-        // PRIORITY 2: Manual aggregation from raw data (for user-edited charts)
-        if (!filteredData || filteredData.length === 0) return [];
-
-        const xAxis = chart.xAxis;
-        const yAxis = chart.yAxis;
-        const zAxis = chart.zAxis;
-
-        // --- Histogram Logic ---
-        if (chart.type === 'histogram') {
-            const values = filteredData.map(d => Number(d[xAxis])).filter(n => !isNaN(n));
-            if (values.length === 0) return [];
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const binCount = 10;
-            const binSize = (max - min) / binCount;
-            const bins = Array.from({ length: binCount }, (_, i) => ({
-                range: `${(min + i * binSize).toFixed(1)} - ${(min + (i + 1) * binSize).toFixed(1)}`,
-                min: min + i * binSize,
-                max: min + (i + 1) * binSize,
-                count: 0
-            }));
-
-            values.forEach(v => {
-                const binIndex = Math.min(Math.floor((v - min) / binSize), binCount - 1);
-                if (bins[binIndex]) bins[binIndex].count++;
-            });
-
-            return bins.map(b => ({ label: b.range, value: b.count }));
-        }
-
-        // --- Scatter / Bubble / Heatmap Logic ---
-        if (chart.type === 'scatter' || chart.type === 'bubble' || chart.type === 'heatmap') {
-            if (chart.type === 'heatmap') {
-                // For heatmap, we treat X and Y as categorical buckets
-                const map = new Map<string, { x: string, y: string, z: number }>();
-                filteredData.forEach(row => {
-                    const xVal = String(row[xAxis] || 'Unknown');
-                    const yVal = String(row[yAxis] || 'Unknown');
-                    const key = `${xVal}::${yVal}`;
-                    const zVal = zAxis ? (Number(row[zAxis]) || 1) : 1; // Count or Sum Z
-
-                    if (map.has(key)) {
-                        map.get(key)!.z += zVal;
-                    } else {
-                        map.set(key, { x: xVal, y: yVal, z: zVal });
-                    }
-                });
-                return Array.from(map.values());
-            }
-
-            // Scatter / Bubble
-            return filteredData.map(row => ({
-                x: Number(row[xAxis]) || 0,
-                y: Number(row[yAxis]) || 0,
-                z: zAxis ? (Number(row[zAxis]) || 100) : 100, // Z determines bubble size
-                name: row[dataset.headers[0]]
-            })).slice(0, 500); // Limit points for performance
-        }
-
-        // --- Treemap Logic ---
-        if (chart.type === 'treemap') {
-            const map = new Map<string, number>();
-            filteredData.forEach(row => {
-                const key = String(row[xAxis] || 'Unknown');
-                const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[yAxis])) || 0);
-                map.set(key, (map.get(key) || 0) + val);
-            });
-            return Array.from(map.entries())
-                .map(([label, value]) => ({ label, value }))
-                .sort((a, b) => b.value - a.value)
-                .slice(0, 20);
-        }
-
-        // --- Standard Aggregation (Bar, Line, Area, Pie, Radar, Funnel, Gauge) ---
-        // IMPROVED: Use smart aggregation for high-cardinality data with automatic "Top N + Other" grouping
-        const limit = chart.limit || (chart.type === 'pie' ? 10 : 20);
-        const showOther = chart.showOther !== false; // Default true
-
-        // Use smart aggregation from GroqService for intelligent grouping
-        const smartData = GroqService.smartAggregateData(
-            filteredData,
-            xAxis,
-            yAxis,
-            chart.aggregation || 'sum',
-            limit,
-            showOther
-        );
-
-        // Handle truncation of labels for readability
-        let result = smartData.map(item => ({
-            label: item.label.length > 20 ? item.label.substring(0, 18) + '...' : item.label,
-            value: Number(item.value.toFixed(2))
-        }));
-
-        // Sorting typically helps standard charts (already done by smartAggregateData)
-        // Only re-sort if this is a time-series chart
-        if (chart.type === 'line' || chart.type === 'area') {
-            // For time-series, check if data looks like dates
-            if (result.length > 0 && !isNaN(Date.parse(result[0].label))) {
-                result.sort((a, b) => new Date(a.label).getTime() - new Date(b.label).getTime());
-            }
-        }
-
-        return result;
-    }, [filteredData, dataset.headers]);
+    const getChartData = useCallback((chart: ChartSpec) => {
+        return aggregateData(chart, dataset, filteredData);
+    }, [filteredData, dataset]);
 
     // --- Interaction Logic ---
     const handleChartClick = (data: any, chart: ChartSpec) => {
@@ -320,37 +213,26 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     // --- Editing Functions ---
 
-    const openEditor = (chart: ChartSpec) => {
-        setEditingChartId(chart.id);
-        setEditedChart(JSON.parse(JSON.stringify(chart))); // Deep copy
-        setAiEditPrompt('');
-    };
+    const handleSaveChart = (newChart: ChartSpec) => {
+        if (!config) return;
 
-    const saveEditedChart = () => {
-        if (!config || !editedChart) return;
-        const updatedCharts = config.charts.map(c => c.id === editedChart.id ? editedChart : c);
+        // Check if updating existing or adding new
+        const exists = config.charts.find(c => c.id === newChart.id);
+        let updatedCharts;
+
+        if (exists) {
+            updatedCharts = config.charts.map(c => c.id === newChart.id ? newChart : c);
+        } else {
+            updatedCharts = [newChart, ...config.charts];
+        }
+
         const newConfig = { ...config, charts: updatedCharts };
         setConfig(newConfig);
         if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-        setEditingChartId(null);
-        setEditedChart(null);
-    };
 
-    const handleAiEditChart = async () => {
-        if (!editedChart || !aiEditPrompt) return;
-        setIsAiEditing(true);
-        try {
-            if (onAIAction) onAIAction();
-            const newSpec = await GroqService.modifyChartWithAI(dataset, editedChart, aiEditPrompt);
-            // Preserve ID to ensure it replaces the correct chart
-            setEditedChart({ ...newSpec, id: editedChart.id });
-            setAiEditPrompt('');
-        } catch (e) {
-            console.error(e);
-            alert('AI modification failed. Please try again.');
-        } finally {
-            setIsAiEditing(false);
-        }
+        // Close modals
+        setEditingChartId(null);
+        setIsCreatingNew(false);
     };
 
     const handleGlobalDashboardPrompt = async (e: React.FormEvent) => {
@@ -390,7 +272,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         const visibleCharts = config?.charts || [];
 
         visibleCharts.forEach(chart => {
-            const rawData = aggregateData(chart);
+            const rawData = getChartData(chart);
             // Format for Chart.js
             chartDataMap[chart.id] = {
                 type: chart.type === 'bar' ? 'bar' : chart.type === 'line' ? 'line' : chart.type === 'pie' ? 'doughnut' : 'line',
@@ -723,8 +605,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                 {/* Charts Masonry Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
+                    {/* Add New Widget Card */}
+                    <button
+                        onClick={() => setIsCreatingNew(true)}
+                        className="bg-slate-50 dark:bg-slate-900/50 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-[32px] flex flex-col items-center justify-center p-8 hover:border-indigo-500/50 hover:bg-slate-100 dark:hover:bg-slate-800/80 transition-all group h-[400px]"
+                    >
+                        <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                            <span className="text-3xl text-slate-400 group-hover:text-indigo-500">+</span>
+                        </div>
+                        <h3 className="font-bold text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300">Add New Chart</h3>
+                        <p className="text-xs text-slate-400 mt-2">Build from scratch</p>
+                    </button>
+
                     {visibleCharts.map((chart, i) => {
-                        const data = aggregateData(chart);
+                        const data = getChartData(chart);
                         const validation = chartValidations[chart.id];
                         if (data.length === 0) return null;
                         const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
@@ -750,13 +644,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                         </div>
                                         <p className="text-[10px] text-slate-500 mt-1">{chart.description}</p>
                                     </div>
-                                    <button
-                                        onClick={() => openEditor(chart)}
-                                        className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 transition-all no-print flex items-center gap-1"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                        Edit
-                                    </button>
+                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity no-print">
+                                        <button
+                                            onClick={() => setViewingDataChart(chart)}
+                                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 transition-all flex items-center gap-1"
+                                            title="View Source Data"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                                        </button>
+                                        <button
+                                            onClick={() => setEditingChartId(chart.id)}
+                                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1"
+                                        >
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                            Edit
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex-1 w-full relative min-h-[300px] cursor-crosshair">
@@ -818,146 +721,24 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             </div>
 
             {/* Visual Studio (Chart Editor Modal) */}
-            {editingChartId && editedChart && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-[48px] w-full max-w-6xl h-[85vh] shadow-2xl flex overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+            {/* Visual Studio (Chart Editor Modal) - REPLACED WITH ChartBuilderPanel */}
+            {(editingChartId || isCreatingNew) && (
+                <ChartBuilderPanel
+                    dataset={dataset}
+                    initialChart={isCreatingNew ? undefined : config.charts.find(c => c.id === editingChartId)}
+                    onSave={handleSaveChart}
+                    onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }}
+                    onAIAction={onAIAction}
+                />
+            )}
 
-                        {/* Left: Preview Area */}
-                        <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-12 flex flex-col justify-center relative border-r border-slate-200 dark:border-slate-800">
-                            <div className="absolute top-8 left-8">
-                                <span className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.3em]">Live Preview</span>
-                            </div>
-                            <div className="h-[500px] w-full bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-inner">
-                                {(() => {
-                                    const previewData = aggregateData(editedChart);
-                                    if (previewData.length === 0) return <div className="flex items-center justify-center h-full text-slate-400 font-medium">Invalid Configuration or Empty Data</div>;
-                                    return (
-                                        <div className="w-full h-full">
-                                            <PlotlyChart chart={editedChart} data={previewData} />
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        </div>
-
-                        {/* Right: Controls Panel */}
-                        <div className="w-[400px] bg-white dark:bg-slate-900 p-8 flex flex-col gap-8 overflow-y-auto custom-scrollbar">
-                            <div className="flex justify-between items-center">
-                                <h3 className="text-xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Visual Studio</h3>
-                                <button onClick={() => setEditingChartId(null)} className="text-slate-400 hover:text-rose-500 transition-colors">✕</button>
-                            </div>
-
-                            {/* AI Magic Edit */}
-                            <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[32px] border border-indigo-100 dark:border-indigo-900/30">
-                                <label className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest mb-3 block flex items-center gap-2">
-                                    <span className="text-lg">✨</span> Magic Edit
-                                </label>
-                                <div className="relative">
-                                    <textarea
-                                        value={aiEditPrompt}
-                                        onChange={(e) => setAiEditPrompt(e.target.value)}
-                                        placeholder="e.g., 'Change to area chart showing trend'"
-                                        className="w-full bg-white dark:bg-slate-900 border-none rounded-xl p-4 text-xs font-bold min-h-[80px] resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
-                                    />
-                                    <button
-                                        onClick={handleAiEditChart}
-                                        disabled={!aiEditPrompt || isAiEditing}
-                                        className="absolute bottom-3 right-3 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
-                                    >
-                                        {isAiEditing ? '...' : 'Apply'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="h-px bg-slate-100 dark:bg-slate-800 w-full"></div>
-
-                            {/* Manual Controls */}
-                            <div className="space-y-6">
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Chart Type</label>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {['bar', 'bar-horizontal', 'line', 'area', 'pie', 'donut', 'scatter', 'bubble', 'heatmap', 'radar', 'treemap', 'funnel', 'gauge', 'histogram', 'composed'].map(t => (
-                                            <button
-                                                key={t}
-                                                onClick={() => setEditedChart({ ...editedChart, type: t })}
-                                                className={`px-1 py-2 rounded-lg text-[8px] font-bold uppercase border transition-all truncate ${editedChart.type === t ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}
-                                                title={t}
-                                            >
-                                                {t.replace(/[_-]/g, ' ')}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Title</label>
-                                    <input
-                                        value={editedChart.title}
-                                        onChange={(e) => setEditedChart({ ...editedChart, title: e.target.value })}
-                                        className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">X-Axis (Category)</label>
-                                        <select
-                                            value={editedChart.xAxis}
-                                            onChange={(e) => setEditedChart({ ...editedChart, xAxis: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                                        >
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Y-Axis (Value)</label>
-                                        <select
-                                            value={editedChart.yAxis}
-                                            onChange={(e) => setEditedChart({ ...editedChart, yAxis: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                                        >
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                                        </select>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Z-Axis (Size/Metric)</label>
-                                        <select
-                                            value={editedChart.zAxis || ''}
-                                            onChange={(e) => setEditedChart({ ...editedChart, zAxis: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                                        >
-                                            <option value="">None</option>
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                                        </select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Aggregation</label>
-                                        <select
-                                            value={editedChart.aggregation || 'sum'}
-                                            onChange={(e) => setEditedChart({ ...editedChart, aggregation: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
-                                        >
-                                            <option value="sum">Sum</option>
-                                            <option value="avg">Average</option>
-                                            <option value="count">Count</option>
-                                            <option value="max">Max</option>
-                                            <option value="min">Min</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="mt-auto pt-6">
-                                <button onClick={saveEditedChart} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-emerald-200 dark:shadow-none transition-all">
-                                    Save Changes
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {/* Data Peek Modal */}
+            {viewingDataChart && (
+                <DataPeekModal
+                    chart={viewingDataChart}
+                    data={getChartData(viewingDataChart)}
+                    onClose={() => setViewingDataChart(null)}
+                />
             )}
         </div>
     );

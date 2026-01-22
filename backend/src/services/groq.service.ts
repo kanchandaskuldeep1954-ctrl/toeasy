@@ -1518,6 +1518,10 @@ ANALYZE and return ONLY valid JSON (no markdown):
       cleaned = cleaned.replace(/:\s*(row\.[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
       cleaned = cleaned.replace(/:\s*(row\[[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
 
+      // Fix unquoted keys: { key: "val" } -> { "key": "val" }
+      // Matches identifier followed by colon, preceded by { or ,
+      cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+
       // Fix missing commas between objects (common hallucination)
       cleaned = cleaned.replace(/}\s*{/g, '}, {');
 
