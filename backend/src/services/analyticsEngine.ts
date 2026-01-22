@@ -308,12 +308,12 @@ export class AnalyticsEngine {
             });
         }
 
-        // 4. Funnel (if status exists)
+        // 4. Funnel (Workflows only - low cardinality)
         const statusCol = cols.find(p => p.role === 'status');
-        if (statusCol) {
+        if (statusCol && statusCol.uniqueCount <= 8) {
             charts.push({
                 id: 'status_funnel',
-                title: 'Process Funnel',
+                title: 'Process Operational Flow',
                 type: 'funnel',
                 priority: 'high',
                 size: 'medium',
@@ -322,15 +322,18 @@ export class AnalyticsEngine {
             });
         }
 
-        // 5. Ranking (Top 10)
+        // 5. Ranking (Top N)
         if (catCols.length > 0 && numCols.length > 0) {
+            const topN = Math.min(catCols[0].uniqueCount, 10);
             charts.push({
-                id: `top_10_${catCols[0].column}`,
-                title: `Top 10 ${catCols[0].column} by ${numCols[0].column}`,
+                id: `top_${topN}_${catCols[0].column}`,
+                title: `${topN > 1 ? `Top ${topN} ` : ''}${catCols[0].column} Distribution`,
                 type: 'bar-horizontal',
                 priority: 'high',
                 size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, numCols[0].column).sort((a: any, b: any) => b.value - a.value).slice(0, 10),
+                data: this.aggregateByCategory(data, catCols[0].column, numCols[0].column)
+                    .sort((a: any, b: any) => b.value - a.value)
+                    .slice(0, topN),
                 options: { xAxis: catCols[0].column, yAxis: numCols[0].column, orientation: 'horizontal' }
             });
         }
