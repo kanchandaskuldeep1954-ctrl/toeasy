@@ -129,6 +129,42 @@
       transform: translateY(0);
     }
   }
+
+  .animate-bounce-slow {
+    animation: bounce-slow 3s infinite;
+  }
+
+  @keyframes bounce-slow {
+
+    0%,
+    100% {
+      transform: translateY(-5%);
+      animation-timing-function: cubic-bezier(0.8, 0, 1, 1);
+    }
+
+    50% {
+      transform: translateY(0);
+      animation-timing-function: cubic-bezier(0, 0, 0.2, 1);
+    }
+  }
+
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0% {
+      transform: translateY(0px);
+    }
+
+    50% {
+      transform: translateY(-10px);
+    }
+
+    100% {
+      transform: translateY(0px);
+    }
+  }
 }
 
 /* Print Styles */

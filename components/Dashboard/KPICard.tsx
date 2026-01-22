@@ -1,14 +1,18 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 import { KPI } from '../../types';
 
 interface KPICardProps {
     kpi: KPI;
+    columns?: string[];
+    onUpdate?: (updatedKpi: KPI) => void;
 }
 
-export const KPICard: React.FC<KPICardProps> = ({ kpi }) => {
+export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate }) => {
     const { label, value, trend, trendDirection, status, sparklineData } = kpi;
+    const [isEditing, setIsEditing] = useState(false);
+    const [editConfig, setEditConfig] = useState(kpi);
 
     // Determine colors based on status or trend
     let statusColor = 'text-slate-400';
@@ -40,12 +44,96 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi }) => {
     // Format sparkline data for Recharts
     const chartData = sparklineData ? sparklineData.map((val, idx) => ({ i: idx, v: val })) : [];
 
+    const handleSave = () => {
+        if (onUpdate) {
+            onUpdate(editConfig);
+        }
+        setIsEditing(false);
+    };
+
+    if (isEditing) {
+        return (
+            <div className={`relative overflow-hidden rounded-xl border border-indigo-500/50 bg-slate-900 p-4 shadow-xl z-20 h-auto min-h-[160px] flex flex-col gap-3 animate-in zoom-in-95`}>
+                <input
+                    value={editConfig.label}
+                    onChange={e => setEditConfig({ ...editConfig, label: e.target.value })}
+                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs font-bold text-white mb-2"
+                    placeholder="KPI Title"
+                />
+
+                {editConfig.calculation && (
+                    <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase font-bold">Column</label>
+                            <select
+                                value={editConfig.calculation.column}
+                                onChange={e => setEditConfig({
+                                    ...editConfig,
+                                    calculation: { ...editConfig.calculation!, column: e.target.value }
+                                })}
+                                className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-[10px] text-white"
+                            >
+                                {columns.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">Operation</label>
+                            <select
+                                value={editConfig.calculation.operation}
+                                onChange={e => setEditConfig({
+                                    ...editConfig,
+                                    calculation: { ...editConfig.calculation!, operation: e.target.value as any }
+                                })}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-[10px] text-white focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all"
+                            >
+                                {['sum', 'avg', 'min', 'max', 'count', 'unique'].map(op => (
+                                    <option key={op} value={op}>{op.toUpperCase()}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="space-y-1 col-span-2">
+                            <label className="text-[9px] text-slate-400 uppercase font-bold tracking-widest">Format</label>
+                            <select
+                                value={editConfig.calculation.format || 'number'}
+                                onChange={e => setEditConfig({
+                                    ...editConfig,
+                                    calculation: { ...editConfig.calculation!, format: e.target.value as any }
+                                })}
+                                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-[10px] text-white focus:ring-2 focus:ring-indigo-500/30 outline-none transition-all"
+                            >
+                                <option value="number">Number (1,000)</option>
+                                <option value="currency">Currency ($1,000)</option>
+                                <option value="percentage">Percentage (50%)</option>
+                            </select>
+                        </div>
+                    </div>
+                )}
+
+                <div className="flex justify-end gap-2 mt-auto pt-2">
+                    <button onClick={() => setIsEditing(false)} className="text-[10px] font-bold text-slate-400 hover:text-white">Cancel</button>
+                    <button onClick={handleSave} className="px-3 py-1 bg-indigo-600 rounded text-[10px] font-bold text-white hover:bg-indigo-500">Save</button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className={`relative overflow-hidden rounded-xl border ${borderColor} ${bgColor} p-4 transition-all duration-300 hover:scale-[1.02] hover:shadow-lg backdrop-blur-sm group`}>
-            <div className="flex justify-between items-start mb-2">
-                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">{label}</h3>
+            {/* Edit Trigger */}
+            {onUpdate && (
+                <button
+                    onClick={() => { setEditConfig(kpi); setIsEditing(true); }}
+                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-slate-800/80 text-slate-400 hover:text-indigo-400 hover:bg-slate-900 transition-all z-10"
+                    title="Edit KPI"
+                >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+            )}
+
+            <div className="flex justify-between items-start mb-2 pr-6">
+                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider truncate" title={label}>{label}</h3>
                 {status && (
-                    <div className={`w-2 h-2 rounded-full ${statusColor.replace('text-', 'bg-')}`} />
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${statusColor.replace('text-', 'bg-')}`} />
                 )}
             </div>
 
