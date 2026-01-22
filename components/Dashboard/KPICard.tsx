@@ -20,30 +20,30 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi, dataset, columns = [], on
     const [isAiThinking, setIsAiThinking] = useState(false);
 
     // Determine colors based on status or trend
-    let statusColor = 'text-slate-400';
-    let trendColor = 'text-slate-500';
-    let bgColor = 'bg-slate-800/50';
-    let borderColor = 'border-slate-700/50';
+    let statusColor = 'text-slate-400 dark:text-slate-500';
+    let trendColor = 'text-slate-500 dark:text-slate-400';
+    let bgColor = 'bg-white dark:bg-slate-900/50';
+    let borderColor = 'border-slate-200 dark:border-slate-800/50';
     let sparklineColor = '#94a3b8'; // slate-400
 
     if (status === 'on_track' || trendDirection === 'up') {
-        statusColor = 'text-emerald-400';
-        trendColor = 'text-emerald-500';
+        statusColor = 'text-emerald-500 dark:text-emerald-400';
+        trendColor = 'text-emerald-600 dark:text-emerald-500';
         sparklineColor = '#10b981';
-        bgColor = 'bg-emerald-950/10';
-        borderColor = 'border-emerald-500/20';
+        bgColor = 'bg-emerald-50/50 dark:bg-emerald-950/10';
+        borderColor = 'border-emerald-200 dark:border-emerald-500/20';
     } else if (status === 'off_track' || trendDirection === 'down') {
-        statusColor = 'text-rose-400';
-        trendColor = 'text-rose-500';
+        statusColor = 'text-rose-500 dark:text-rose-400';
+        trendColor = 'text-rose-600 dark:text-rose-500';
         sparklineColor = '#f43f5e';
-        bgColor = 'bg-rose-950/10';
-        borderColor = 'border-rose-500/20';
+        bgColor = 'bg-rose-50/50 dark:bg-rose-950/10';
+        borderColor = 'border-rose-200 dark:border-rose-500/20';
     } else if (status === 'at_risk') {
-        statusColor = 'text-amber-400';
-        trendColor = 'text-amber-500';
+        statusColor = 'text-amber-500 dark:text-amber-400';
+        trendColor = 'text-amber-600 dark:text-amber-500';
         sparklineColor = '#f59e0b';
-        bgColor = 'bg-amber-950/10';
-        borderColor = 'border-amber-500/20';
+        bgColor = 'bg-amber-50/50 dark:bg-amber-950/10';
+        borderColor = 'border-amber-200 dark:border-amber-500/20';
     }
 
     // Format sparkline data for Recharts
@@ -188,14 +188,14 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi, dataset, columns = [], on
             )}
 
             <div className="flex justify-between items-start mb-2 pr-6">
-                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider truncate" title={label}>{label}</h3>
+                <h3 className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-wider truncate" title={label}>{label}</h3>
                 {status && (
                     <div className={`w-2 h-2 rounded-full shrink-0 ${statusColor.replace('text-', 'bg-')}`} />
                 )}
             </div>
 
             <div className="flex items-baseline gap-2 mb-1">
-                <span className="text-2xl font-black text-white tracking-tight">{value}</span>
+                <span className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{value}</span>
                 {trend !== undefined && trend !== 0 && (
                     <span className={`text-xs font-bold ${trendColor} flex items-center`}>
                         {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%

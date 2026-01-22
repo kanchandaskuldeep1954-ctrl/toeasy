@@ -9,34 +9,38 @@ interface PlotlyChartProps {
     onClick?: (data: any) => void;
 }
 
-// Professional color palette
+// Professional color palette - slightly more vibrant for light mode
 const COLORS = [
-    '#6366f1', '#8b5cf6', '#ec4899', '#f43f5e', '#f97316',
-    '#eab308', '#22c55e', '#14b8a6', '#06b6d4', '#3b82f6'
+    '#4f46e5', '#7c3aed', '#db2777', '#e11d48', '#ea580c',
+    '#ca8a04', '#16a34a', '#0d9488', '#0891b2', '#2563eb'
 ];
 
-// Modern dark theme layout
-const getLayout = (height: number, title?: string): Partial<Plotly.Layout> => ({
+// Modern theme-responsive layout
+const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => ({
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
-    font: { family: 'Inter, system-ui, sans-serif', color: '#94a3b8', size: 11 },
+    font: {
+        family: 'Inter, system-ui, sans-serif',
+        color: isDark ? '#94a3b8' : '#475569',
+        size: 11
+    },
     margin: { l: 60, r: 30, t: 30, b: 60 },
     showlegend: false,
     height,
     xaxis: {
-        gridcolor: 'rgba(148, 163, 184, 0.1)',
-        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
-        tickfont: { size: 10, color: '#94a3b8' }
+        gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
+        zerolinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
+        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }
     },
     yaxis: {
-        gridcolor: 'rgba(148, 163, 184, 0.1)',
-        zerolinecolor: 'rgba(148, 163, 184, 0.2)',
-        tickfont: { size: 10, color: '#94a3b8' }
+        gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
+        zerolinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
+        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }
     },
     hoverlabel: {
-        bgcolor: '#1e293b',
-        bordercolor: '#475569',
-        font: { color: '#f8fafc', size: 12 }
+        bgcolor: isDark ? '#1e293b' : '#ffffff',
+        bordercolor: isDark ? '#475569' : '#e2e8f0',
+        font: { color: isDark ? '#f8fafc' : '#0f172a', size: 12 }
     }
 });
 
@@ -280,28 +284,34 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
 
     // Build layout based on chart type
     const layout = useMemo((): Partial<Plotly.Layout> => {
-        const base = getLayout(height);
+        const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+        const base = getLayout(height, isDark);
 
         // Special layouts for certain chart types
         if (chart.type === 'radar') {
             return {
                 ...base,
                 polar: {
-                    radialaxis: { visible: true, range: [0, Math.max(...normalizedData.map(d => d.value)) * 1.1] },
+                    radialaxis: {
+                        visible: true,
+                        range: [0, Math.max(...normalizedData.map(d => d.value)) * 1.1],
+                        gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
+                        tickfont: { color: isDark ? '#94a3b8' : '#64748b' }
+                    },
                     bgcolor: 'transparent'
                 }
             };
         }
 
         if (chart.type === 'pie' || chart.type === 'donut' || chart.type === 'doughnut') {
-            return { ...base, showlegend: true, legend: { font: { color: '#94a3b8' } } };
+            return { ...base, showlegend: true, legend: { font: { color: isDark ? '#94a3b8' : '#475569' } } };
         }
 
         if (chart.type === 'gauge') {
             return { ...base, margin: { l: 30, r: 30, t: 30, b: 30 } };
         }
 
-        if (chart.type === 'bar-horizontal') {
+        if (chart.type === 'bar-horizontal' || chart.type === 'bar_horizontal') {
             return { ...base, yaxis: { ...base.yaxis, automargin: true } };
         }
 

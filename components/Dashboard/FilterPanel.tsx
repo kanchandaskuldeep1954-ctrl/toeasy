@@ -14,7 +14,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({ filters, activeFilters
 
     return (
         <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-2">Filters:</span>
+            <span className="text-[9px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest mr-2">Filters:</span>
 
             {filters.map(filter => {
                 const value = activeFilters[filter.column] || '';

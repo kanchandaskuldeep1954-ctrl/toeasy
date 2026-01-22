@@ -27,18 +27,18 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         const name = data.name || label || data.payload?.name || 'Record';
 
         return (
-            <div className="bg-slate-900/95 border border-slate-700/50 p-4 rounded-xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 z-[100] min-w-[150px]">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-[0.2em] border-b border-slate-700 pb-2">{name}</p>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 rounded-xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 z-[100] min-w-[150px]">
+                <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 mb-2 tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 pb-2">{name}</p>
                 <div className="space-y-1">
                     {payload.map((p: any, idx: number) => (
-                        <p key={idx} className="text-sm font-bold text-white flex justify-between gap-4">
+                        <p key={idx} className="text-sm font-bold text-slate-900 dark:text-white flex justify-between gap-4">
                             <span style={{ color: p.color }}>{p.name || 'Value'}:</span>
                             <span className="font-mono">{typeof p.value === 'number' ? p.value.toLocaleString() : p.value}</span>
                         </p>
                     ))}
                 </div>
                 {data.payload?.z !== undefined && (
-                    <p className="text-[10px] font-medium text-slate-500 mt-2 pt-2 border-t border-slate-800">
+                    <p className="text-[10px] font-medium text-slate-400 dark:text-slate-500 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800">
                         Metric (Z): {typeof data.payload.z === 'number' ? Math.round(data.payload.z).toLocaleString() : data.payload.z}
                     </p>
                 )}
@@ -578,14 +578,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                 <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar">
                     {/* Perspective Tabs */}
-                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto">
+                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto shadow-inner">
                         {(['Overview', 'Financials', 'Operational', 'Forensic', 'Patterns'] as DashboardPerspective[]).map(p => (
                             <button
                                 key={p}
                                 onClick={() => setPerspective(p)}
                                 className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${perspective === p
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm scale-100'
-                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm scale-100'
+                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                                     }`}
                             >
                                 {p}
@@ -596,7 +596,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     {/* Export Button */}
                     <button
                         onClick={() => setShowExportModal(true)}
-                        className="hidden md:flex px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg items-center gap-2 shrink-0"
+                        className="hidden md:flex px-4 py-2.5 bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg items-center gap-2 shrink-0 transition-colors"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                         Export
@@ -611,12 +611,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                         </div>
-                        <span className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Active Filter Stack</span>
+                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-[0.2em]">Active Filter Stack</span>
                     </div>
                     {Object.entries(activeFilters).map(([key, val]) => (
                         <div key={key} className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 pl-3 pr-1 py-1 rounded-full shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-900/50 transition-all group scale-100 hover:scale-105 active:scale-95">
-                            <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{key}</span>
-                            <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                            <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{key}</span>
+                            <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
                             <span className="text-[11px] font-black text-slate-900 dark:text-white uppercase">{String(val)}</span>
                             <button
                                 onClick={() => handleClearFilter(key)}
@@ -633,8 +633,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         Reset All
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
-                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-2" />
-                    <div className="text-[9px] font-bold text-slate-400 italic">
+                    <div className="h-4 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
+                    <div className="text-[9px] font-bold text-slate-400 dark:text-slate-500 italic">
                         {filteredData.length.toLocaleString()} matching records
                     </div>
                 </div>
@@ -658,29 +658,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     <div className="flex flex-col gap-2 min-h-[160px]">
                         <button
                             onClick={handleAddKPI}
-                            className="flex-1 group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5"
+                            className="flex-1 group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-slate-100 dark:hover:bg-indigo-500/5"
                         >
                             <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-500 transition-all">
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                             </div>
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-500 transition-all">Manual Metric</span>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-all">Manual Metric</span>
                         </button>
 
-                        <form onSubmit={handleAiAddKPI} className="group relative overflow-hidden rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 flex flex-col gap-2 transition-all hover:bg-indigo-500/10 h-[100px]">
+                        <form onSubmit={handleAiAddKPI} className="group relative overflow-hidden rounded-xl border border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-500/5 p-4 flex flex-col gap-2 transition-all hover:bg-indigo-100/50 dark:hover:bg-indigo-500/10 h-[100px]">
                             <div className="flex items-center gap-2">
-                                <svg className={`w-3 h-3 text-indigo-400 ${isKpiThinking ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400">AI Metric Draft</span>
+                                <svg className={`w-3 h-3 text-indigo-500 dark:text-indigo-400 ${isKpiThinking ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500 dark:text-indigo-400">AI Metric Draft</span>
                             </div>
                             <input
                                 value={kpiPrompt}
                                 onChange={e => setKpiPrompt(e.target.value)}
                                 placeholder="Describe metric..."
-                                className="bg-transparent border-b border-indigo-500/20 text-[10px] text-white outline-none py-1 placeholder:text-indigo-300/30 focus:border-indigo-400 transition-all"
+                                className="bg-transparent border-b border-indigo-500/20 text-[10px] text-slate-900 dark:text-white outline-none py-1 placeholder:text-indigo-400/50 focus:border-indigo-400 transition-all"
                             />
                             <button
                                 type="submit"
                                 disabled={isKpiThinking || !kpiPrompt}
-                                className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-right mt-auto"
+                                className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 disabled:opacity-50 text-right mt-auto"
                             >
                                 {isKpiThinking ? 'Thinking...' : 'Generate →'}
                             </button>
