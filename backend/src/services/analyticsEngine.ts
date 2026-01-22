@@ -268,16 +268,18 @@ export class AnalyticsEngine {
 
         // 2. Formatting Distribution (Categorical)
         catCols.slice(0, 4).forEach(cat => {
-            // Find a suitable metric to aggregate (first numeric col, or just count)
             const metric = numCols[0];
+            // Intelligent logic for high-value dimensions
+            const isClinicalAvgNeeded = /age|stay|satisfaction|rating|score/i.test(metric?.column || '');
+            const op = isClinicalAvgNeeded ? 'avg' : 'sum';
 
             charts.push({
                 id: `dist_${cat.column}`,
-                title: `${cat.column} Distribution`,
+                title: `${isClinicalAvgNeeded ? 'Avg ' : ''}${cat.column} Distribution ${isClinicalAvgNeeded ? `(${metric?.column})` : ''}`,
                 type: 'bar',
                 priority: 'medium',
                 size: 'medium',
-                data: this.aggregateByCategory(data, cat.column, metric?.column),
+                data: this.aggregateByCategory(data, cat.column, metric?.column, op),
                 options: { xAxis: cat.column, yAxis: metric ? metric.column : 'Count' }
             });
 
@@ -440,11 +442,11 @@ export class AnalyticsEngine {
         if (effCol && catCols.length > 0) {
             charts.push({
                 id: 'efficiency_by_condition',
-                title: `Clinical Efficiency: ${effCol.column} by ${catCols[0].column}`,
+                title: `Clinical Efficiency: Avg ${effCol.column} by ${catCols[0].column}`,
                 type: 'bar',
                 priority: 'high',
                 size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, effCol.column),
+                data: this.aggregateByCategory(data, catCols[0].column, effCol.column, 'avg'),
                 options: { xAxis: catCols[0].column, yAxis: effCol.column }
             });
         }
@@ -454,11 +456,11 @@ export class AnalyticsEngine {
         if (expCol && statusCol) {
             charts.push({
                 id: 'experience_vs_outcome',
-                title: `Patient Sentiment vs ${statusCol.column}`,
+                title: `Mean Patient Sentiment vs ${statusCol.column}`,
                 type: 'bar-horizontal',
                 priority: 'high',
                 size: 'medium',
-                data: this.aggregateByCategory(data, statusCol.column, expCol.column),
+                data: this.aggregateByCategory(data, statusCol.column, expCol.column, 'avg'),
                 options: { xAxis: statusCol.column, yAxis: expCol.column, orientation: 'horizontal' }
             });
         }
@@ -561,11 +563,14 @@ export class AnalyticsEngine {
         return data;
     }
 
-    private static aggregateByCategory(data: any[], catCol: string, metricCol?: string) {
-        const agg: Record<string, number> = {};
+    private static aggregateByCategory(data: any[], catCol: string, metricCol?: string, op: 'sum' | 'avg' | 'count' = 'sum') {
+        const sums: Record<string, number> = {};
+        const counts: Record<string, number> = {};
+
         data.forEach(row => {
             const key = row[catCol] || 'Unknown';
             let val = 1;
+
             if (metricCol) {
                 const rawVal = row[metricCol];
                 if (typeof rawVal === 'string') {
@@ -577,10 +582,19 @@ export class AnalyticsEngine {
                     val = parseFloat(rawVal) || 0;
                 }
             }
-            agg[key] = (agg[key] || 0) + val;
+
+            sums[key] = (sums[key] || 0) + val;
+            counts[key] = (counts[key] || 0) + 1;
         });
 
-        return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+        if (op === 'avg') {
+            return Object.entries(sums).map(([name, sum]) => ({
+                name,
+                value: parseFloat((sum / (counts[name] || 1)).toFixed(2))
+            })).sort((a, b) => b.value - a.value);
+        }
+
+        return Object.entries(sums).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
     }
 
     private static aggregateByTime(data: any[], dateCol: string, metricCol: string) {
