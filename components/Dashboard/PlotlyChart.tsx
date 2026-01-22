@@ -57,7 +57,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
             value: Number(d.value ?? d.y ?? d.count ?? 0),
             x: d.x,
             y: d.y,
-            size: d.size ?? d.z ?? 20
+            size: d.size ?? d.z ?? 20,
+            parent: d.parent
         })).filter(d => d.name !== 'Unknown' && d.name !== 'undefined' && !isNaN(d.value));
     }, [chart.data, data]);
 
@@ -77,9 +78,9 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     locationmode: 'country names',
                     locations: labels,
                     z: values,
-                    colorscale: 'Blues',
-                    reversescale: true,
-                    marker: { line: { color: isDark ? '#1e293b' : '#ffffff', width: 0.5 } },
+                    colorscale: 'Viridis',
+                    reversescale: false,
+                    marker: { line: { color: isDark ? '#1e293b' : '#94a3b8', width: 0.5 } },
                     hovertemplate: '<b>%{location}</b><br>Value: %{z:,.2f}<extra></extra>'
                 }];
 
@@ -92,9 +93,9 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     marker: {
                         size: values.map(v => Math.sqrt(v) * 2), // Scale bubble size
                         color: values,
-                        colorscale: 'Reds',
-                        line: { color: 'white', width: 0.5 },
-                        opacity: 0.8
+                        colorscale: 'Viridis',
+                        line: { color: isDark ? '#1e293b' : '#94a3b8', width: 0.5 },
+                        opacity: 0.9
                     },
                     hovertemplate: '<b>%{location}</b><br>Value: %{marker.color:,.2f}<extra></extra>'
                 }];
@@ -357,10 +358,12 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 geo: {
                     showframe: false,
                     showcoastlines: true,
+                    showcountries: true,
                     projection: { type: 'equirectangular' },
                     bgcolor: 'transparent',
-                    coastlinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
-                    landcolor: isDark ? 'rgba(30, 41, 59, 0.5)' : 'rgba(241, 245, 249, 0.5)'
+                    coastlinecolor: isDark ? 'rgba(148, 163, 184, 0.4)' : '#64748b',
+                    landcolor: isDark ? 'rgba(30, 41, 59, 1)' : '#f8fafc',
+                    countrycolor: isDark ? 'rgba(148, 163, 184, 0.2)' : '#cbd5e1'
                 },
                 margin: { l: 0, r: 0, t: 30, b: 0 }
             };
