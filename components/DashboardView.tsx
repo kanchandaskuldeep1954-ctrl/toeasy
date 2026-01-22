@@ -785,7 +785,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     {visibleCharts.map((chart, i) => {
                         const data = getChartData(chart);
                         const validation = chartValidations[chart.id];
-                        if (data.length === 0) return null;
+                        // Removed: if (data.length === 0) return null; - Let PlotlyChart show diagnostic state instead
                         const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
                         const hasWarnings = validation && (validation.warnings.length > 0 || !validation.valid);
                         const insights = data.length > 0 && chart.type !== 'scatter' && chart.type !== 'bubble'

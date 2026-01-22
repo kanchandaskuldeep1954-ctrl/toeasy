@@ -22,6 +22,9 @@ export type ColumnRole =
     | 'contact'         // Email, phone, address
     | 'currency'        // Money values
     | 'percentage'      // Percentage values
+    | 'country'         // Country names or ISO codes
+    | 'state'           // State/Province
+    | 'city'            // City names
     | 'calculated'      // Derived from other columns
     | 'garbage'         // Always null/empty - remove
     | 'unknown';        // Cannot determine
@@ -135,10 +138,8 @@ export class DataForensicsEngine {
 
     // Common ID column patterns
     private static readonly ID_PATTERNS = [
-        /^id$/i, /^.*_id$/i, /^.*id$/i, /^key$/i, /^.*_key$/i,
-        /^uuid$/i, /^guid$/i, /^code$/i, /^.*_code$/i,
-        /^sku$/i, /^ref$/i, /^.*_ref$/i, /^number$/i, /^.*_number$/i,
-        /^transaction.*$/i, /^order.*$/i, /^invoice.*$/i
+        /^transaction.*$/i, /^order.*$/i, /^invoice.*$/i,
+        /^iso$/i, /^iso2$/i, /^iso3$/i, /^country_code$/i // ISO codes act as IDs but are geography
     ];
 
     // Common date column patterns
@@ -503,6 +504,11 @@ export class DataForensicsEngine {
         if (/email|phone|tel|mobile|address|contact/i.test(column)) {
             return 'contact';
         }
+
+        // Check for geography
+        if (/country|nation|iso/i.test(column)) return 'country';
+        if (/state|province|region/i.test(column)) return 'state';
+        if (/city|town|municipality/i.test(column)) return 'city';
 
         // Infer from data characteristics
         if (dataType === 'number') {

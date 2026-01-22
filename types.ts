@@ -218,7 +218,7 @@ export interface ChartConfig {
 
 export interface ChartSpec {
   id: string;
-  type: string;
+  type: string; // bar, line, pie, donut, scatter, bubble, funnel, gauge, treemap, heatmap, choropleth, scattergeo, sunburst, box, violin
   title: string;
   description?: string;
   category?: string;
@@ -304,7 +304,7 @@ export interface ConnectorDef {
 
 // ===== SEMANTIC DATA ANALYSIS TYPES =====
 
-export type ColumnRole = 'dimension' | 'measure' | 'time' | 'geography' | 'id' | 'text' | 'unknown';
+export type ColumnRole = 'dimension' | 'measure' | 'time' | 'geography' | 'country' | 'state' | 'city' | 'id' | 'text' | 'unknown';
 
 export interface ColumnAnalysis {
   column: string;

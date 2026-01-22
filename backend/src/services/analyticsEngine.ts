@@ -30,7 +30,7 @@ export interface KPI {
 export interface ChartSpec {
     id: string;
     title: string;
-    type: 'line' | 'bar' | 'bar-horizontal' | 'pie' | 'doughnut' | 'donut' | 'scatter' | 'bubble' | 'heatmap' | 'funnel' | 'area' | 'treemap' | 'radar' | 'gauge' | 'waterfall' | 'histogram';
+    type: 'line' | 'bar' | 'bar-horizontal' | 'pie' | 'doughnut' | 'donut' | 'scatter' | 'bubble' | 'heatmap' | 'funnel' | 'area' | 'treemap' | 'radar' | 'gauge' | 'waterfall' | 'histogram' | 'choropleth' | 'scattergeo' | 'sunburst' | 'box' | 'violin';
     description?: string;
     data: any;
     options: any;
@@ -332,6 +332,48 @@ export class AnalyticsEngine {
                 size: 'medium',
                 data: this.aggregateByCategory(data, catCols[0].column, numCols[0].column).sort((a: any, b: any) => b.value - a.value).slice(0, 10),
                 options: { xAxis: catCols[0].column, yAxis: numCols[0].column, orientation: 'horizontal' }
+            });
+        }
+
+        // 6. Pro Visuals: Maps
+        if (geoCols.length > 0 && numCols.length > 0) {
+            const geo = geoCols[0];
+            const metric = numCols[0];
+            charts.push({
+                id: `geo_map_${geo.column}`,
+                title: `${metric.column} by ${geo.column} (Geographic)`,
+                type: geo.role === 'country' ? 'choropleth' : 'scattergeo',
+                priority: 'high',
+                size: 'large',
+                data: this.aggregateByCategory(data, geo.column, metric.column),
+                options: { xAxis: geo.column, yAxis: metric.column }
+            });
+        }
+
+        // 7. Pro Visuals: Statistical Distribution
+        if (numCols.length > 0) {
+            const num = numCols[0];
+            charts.push({
+                id: `dist_box_${num.column}`,
+                title: `${num.column} Distribution (Box Plot)`,
+                type: 'box',
+                priority: 'medium',
+                size: 'medium',
+                data: data.slice(0, 500).map(r => ({ name: 'Distribution', value: parseFloat(r[num.column]) })),
+                options: { yAxis: num.column }
+            });
+        }
+
+        // 8. Pro Visuals: Sunburst (if Hierarchical categories exist)
+        if (catCols.length >= 2) {
+            charts.push({
+                id: 'category_sunburst',
+                title: 'Nested Category Discovery',
+                type: 'sunburst',
+                priority: 'medium',
+                size: 'medium',
+                data: this.aggregateByCategory(data, catCols[0].column, numCols[0]?.column), // Simplified for now
+                options: { labels: catCols[0].column, parents: catCols[1].column }
             });
         }
 

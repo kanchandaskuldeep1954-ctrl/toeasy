@@ -67,6 +67,68 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
         const values = normalizedData.map(d => d.value);
 
         switch (chart.type) {
+            // ===== MAPS & CHOROPLETH =====
+            case 'map':
+            case 'choropleth':
+                return [{
+                    type: 'choropleth',
+                    locationmode: 'country names',
+                    locations: labels,
+                    z: values,
+                    colorscale: 'Blues',
+                    reversescale: true,
+                    marker: { line: { color: isDark ? '#1e293b' : '#ffffff', width: 0.5 } },
+                    hovertemplate: '<b>%{location}</b><br>Value: %{z:,.2f}<extra></extra>'
+                }];
+
+            case 'bubble_map':
+            case 'scattergeo':
+                return [{
+                    type: 'scattergeo',
+                    locationmode: 'country names',
+                    locations: labels,
+                    marker: {
+                        size: values.map(v => Math.sqrt(v) * 2), // Scale bubble size
+                        color: values,
+                        colorscale: 'Reds',
+                        line: { color: 'white', width: 0.5 },
+                        opacity: 0.8
+                    },
+                    hovertemplate: '<b>%{location}</b><br>Value: %{marker.color:,.2f}<extra></extra>'
+                }];
+
+            // ===== HIERARCHICAL =====
+            case 'sunburst':
+                return [{
+                    type: 'sunburst',
+                    labels: labels,
+                    parents: normalizedData.map(d => d.parent || ''), // Expect parent field if available
+                    values: values,
+                    leaf: { opacity: 0.8 },
+                    marker: { line: { width: 1, color: 'white' }, colorscale: 'Viridis' },
+                    hovertemplate: '<b>%{label}</b><br>Value: %{value:,.2f}<extra></extra>'
+                }];
+
+            // ===== STATISTICAL =====
+            case 'box':
+                return [{
+                    y: values,
+                    type: 'box',
+                    name: chart.title || 'Distribution',
+                    marker: { color: COLORS[0] },
+                    boxpoints: 'outliers'
+                }];
+
+            case 'violin':
+                return [{
+                    y: values,
+                    type: 'violin',
+                    name: chart.title || 'Distribution',
+                    marker: { color: COLORS[1] },
+                    box: { visible: true },
+                    meanline: { visible: true }
+                }];
+
             // ===== BAR CHARTS =====
             case 'bar':
                 return [{
@@ -288,6 +350,25 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
         const base = getLayout(height, isDark);
 
         // Special layouts for certain chart types
+        if (chart.type === 'choropleth' || chart.type === 'scattergeo' || chart.type === 'map' || chart.type === 'bubble_map') {
+            return {
+                ...base,
+                geo: {
+                    showframe: false,
+                    showcoastlines: true,
+                    projection: { type: 'equirectangular' },
+                    bgcolor: 'transparent',
+                    coastlinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
+                    landcolor: isDark ? 'rgba(30, 41, 59, 0.5)' : 'rgba(241, 245, 249, 0.5)'
+                },
+                margin: { l: 0, r: 0, t: 30, b: 0 }
+            };
+        }
+
+        if (chart.type === 'sunburst') {
+            return { ...base, margin: { l: 0, r: 0, t: 30, b: 0 } };
+        }
+
         if (chart.type === 'radar') {
             return {
                 ...base,
@@ -321,39 +402,54 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
     // Handle empty data
     if (normalizedData.length === 0) {
         return (
-            <div className="w-full h-full flex items-center justify-center bg-slate-800/20 rounded-xl border border-dashed border-slate-700">
-                <p className="text-slate-500 text-sm">No data available for {chart.title}</p>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 text-center animate-in fade-in duration-500">
+                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
+                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Diagnostic: No Data</h4>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed max-w-[200px]">
+                    The dataset has no matching entries for " {chart.title} " with the current filter stack.
+                </p>
             </div>
         );
     }
 
-    return (
-        <Plot
-            data={plotData}
-            layout={layout}
-            config={{
-                displayModeBar: true,
-                responsive: true,
-                displaylogo: false,
-                modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
-            }}
-            onClick={(event) => {
-                if (onClick && event.points && event.points.length > 0) {
-                    const point = event.points[0];
-                    onClick({
-                        activePayload: [{
-                            payload: {
-                                label: (point as any).x || (point as any).label || (point as any).y,
-                                value: (point as any).y || (point as any).value || (point as any).x
-                            }
-                        }]
-                    });
-                }
-            }}
-            style={{ width: '100%', height: '100%' }}
-            useResizeHandler={true}
-        />
-    );
+    try {
+        return (
+            <Plot
+                data={plotData}
+                layout={layout}
+                config={{
+                    displayModeBar: true,
+                    responsive: true,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'autoScale2d']
+                }}
+                onClick={(event) => {
+                    if (onClick && event.points && event.points.length > 0) {
+                        const point = event.points[0];
+                        onClick({
+                            activePayload: [{
+                                payload: {
+                                    label: (point as any).x || (point as any).label || (point as any).y || (point as any).location,
+                                    value: (point as any).y || (point as any).value || (point as any).x || (point as any).z
+                                }
+                            }]
+                        });
+                    }
+                }}
+                style={{ width: '100%', height: '100%' }}
+                useResizeHandler={true}
+            />
+        );
+    } catch (e) {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-rose-50 dark:bg-rose-950/10 rounded-2xl border border-rose-200 dark:border-rose-900/30 p-6 text-center">
+                <p className="text-[10px] font-bold text-rose-500 uppercase tracking-widest">Chart Engine Error</p>
+                <p className="text-[9px] text-rose-400 mt-1">Failed to initialize WebGL or Chart Layout.</p>
+            </div>
+        );
+    }
 };
 
 export default PlotlyChart;

@@ -493,81 +493,87 @@ User Request: "${prompt}"
 Available columns: ${headers.slice(0, 15).join(', ')}
 
 Return ONLY valid JSON (no markdown, no explanation):
-{"type": "bar|line|pie|area|scatter|radar|donut|funnel|gauge|treemap|heatmap", "title": "new title", "description": "description", "xAxis": "column_name", "yAxis": "column_name"}`;
+{"type": "bar|line|pie|area|scatter|radar|donut|funnel|gauge|treemap|heatmap|choropleth|sunburst|box|violin", "title": "new title", "description": "description", "xAxis": "column_name", "yAxis": "column_name"}
+For geographic data (countries, states, ISO codes), use "choropleth". For statistical distributions, prefer "box" or "violin". For hierarchical discovery, use "sunburst".`; `;
 
       const result = await this.callGroq(groqPrompt, 600);
       let jsonStr = result.trim();
 
       if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
-
-      const modified = JSON.parse(jsonStr);
-      return { ...chart, ...modified };
-    } catch (error) {
-      console.error('Chart modification error:', error instanceof Error ? error.message : error);
-      return chart;
+      jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+    } else if (jsonStr.includes('```')) {
+      jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
     }
+
+    const modified = JSON.parse(jsonStr);
+    return { ...chart, ...modified };
+  } catch(error) {
+    console.error('Chart modification error:', error instanceof Error ? error.message : error);
+    return chart;
   }
+}
 
-  static async generateChartFromPrompt(dataset: any, prompt: string): Promise<any> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+  static async generateChartFromPrompt(dataset: any, prompt: string): Promise < any > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
 
-      const groqPrompt = `You are a data visualization expert. Generate a chart specification based on this user request.
+    const groqPrompt = `You are a data visualization expert. Generate a chart specification based on this user request.
 
 Request: "${prompt}"
 Dataset columns: ${headers.slice(0, 15).join(', ')}
 Dataset size: ${dataset.data?.length || 0} rows
 
 Return ONLY valid JSON (no markdown, no explanation):
-{"type": "bar|line|pie|area|scatter|radar|donut|funnel|gauge|treemap|heatmap", "title": "chart title", "description": "chart description", "xAxis": "column_name", "yAxis": "column_name", "aggregation": "sum|count|avg|max|min"}`;
+{"type": "bar|line|pie|area|scatter|radar|donut|funnel|gauge|treemap|heatmap|choropleth|sunburst|box|violin", "title": "chart title", "description": "chart description", "xAxis": "column_name", "yAxis": "column_name", "aggregation": "sum|count|avg|max|min"}
+Rules:
+1. If data contains locations (Country, State, ISO), prefer "choropleth".
+2. If user asks for "distribution" or "spread", prefer "box" or "violin".
+3. If user asks for "composition" or "hierarchy", prefer "sunburst" or "treemap".
+4. If user asks for "map", use "choropleth".`;`;
 
       const result = await this.callGroq(groqPrompt, 600);
       let jsonStr = result.trim();
 
       if (jsonStr.includes('```json')) {
         jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
+} else if (jsonStr.includes('```')) {
+  jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+}
 
-      const spec = JSON.parse(jsonStr);
-      return {
-        id: `chart-${Date.now()}`,
-        type: spec.type || 'bar',
-        title: spec.title || 'Generated Chart',
-        description: spec.description || prompt.substring(0, 50),
-        category: 'Overview',
-        priority: 'high',
-        xAxis: spec.xAxis || headers[0] || 'x',
-        yAxis: spec.yAxis || headers[1] || headers[0] || 'y',
-        aggregation: spec.aggregation || 'count'
-      };
+const spec = JSON.parse(jsonStr);
+return {
+  id: `chart-${Date.now()}`,
+  type: spec.type || 'bar',
+  title: spec.title || 'Generated Chart',
+  description: spec.description || prompt.substring(0, 50),
+  category: 'Overview',
+  priority: 'high',
+  xAxis: spec.xAxis || headers[0] || 'x',
+  yAxis: spec.yAxis || headers[1] || headers[0] || 'y',
+  aggregation: spec.aggregation || 'count'
+};
     } catch (error) {
-      console.error('Chart generation error:', error instanceof Error ? error.message : error);
-      const headers = dataset.headers || [];
-      return {
-        id: `chart-${Date.now()}`,
-        type: 'bar',
-        title: 'Generated Chart',
-        description: prompt.substring(0, 50),
-        category: 'Overview',
-        priority: 'high',
-        xAxis: headers[0] || 'x',
-        yAxis: headers[1] || headers[0] || 'y',
-        aggregation: 'count'
-      };
-    }
+  console.error('Chart generation error:', error instanceof Error ? error.message : error);
+  const headers = dataset.headers || [];
+  return {
+    id: `chart-${Date.now()}`,
+    type: 'bar',
+    title: 'Generated Chart',
+    description: prompt.substring(0, 50),
+    category: 'Overview',
+    priority: 'high',
+    xAxis: headers[0] || 'x',
+    yAxis: headers[1] || headers[0] || 'y',
+    aggregation: 'count'
+  };
+}
   }
 
-  static async generateKPIFromPrompt(dataset: any, prompt: string): Promise<any> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+  static async generateKPIFromPrompt(dataset: any, prompt: string): Promise < any > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
 
-      const groqPrompt = `You are a data analyst. Generate a KPI (Key Performance Indicator) specification based on user request.
+    const groqPrompt = `You are a data analyst. Generate a KPI (Key Performance Indicator) specification based on user request.
 
 Request: "${prompt}"
 Dataset columns: ${headers.slice(0, 15).join(', ')}
@@ -575,36 +581,36 @@ Dataset columns: ${headers.slice(0, 15).join(', ')}
 Return ONLY valid JSON (no markdown, no explanation):
 {"label": "Metric Name", "column": "column_name", "operation": "sum|avg|count|min|max|unique", "format": "number|currency|percentage"}`;
 
-      const result = await this.callGroq(groqPrompt, 400);
-      const spec = this.cleanAndParseJSON(result);
+    const result = await this.callGroq(groqPrompt, 400);
+    const spec = this.cleanAndParseJSON(result);
 
-      return {
-        id: `kpi-${Date.now()}`,
-        label: spec.label || 'New Metric',
-        value: '-',
-        category: 'custom',
-        calculation: {
-          column: spec.column || headers[0],
-          operation: spec.operation || 'count',
-          format: spec.format || 'number'
-        }
-      };
-    } catch (error) {
-      console.error('KPI generation error:', error);
-      const headers = dataset.headers || [];
-      return {
-        id: `kpi-${Date.now()}`,
-        label: 'New Metric',
-        value: '-',
-        calculation: { column: headers[0], operation: 'count', format: 'number' }
-      };
-    }
+    return {
+      id: `kpi-${Date.now()}`,
+      label: spec.label || 'New Metric',
+      value: '-',
+      category: 'custom',
+      calculation: {
+        column: spec.column || headers[0],
+        operation: spec.operation || 'count',
+        format: spec.format || 'number'
+      }
+    };
+  } catch(error) {
+    console.error('KPI generation error:', error);
+    const headers = dataset.headers || [];
+    return {
+      id: `kpi-${Date.now()}`,
+      label: 'New Metric',
+      value: '-',
+      calculation: { column: headers[0], operation: 'count', format: 'number' }
+    };
   }
+}
 
-  static async modifyKPIWithAI(dataset: any, kpi: any, prompt: string): Promise<any> {
-    try {
-      const headers = dataset.headers || [];
-      const groqPrompt = `You are a data analyst. Modify this KPI specification based on user request.
+  static async modifyKPIWithAI(dataset: any, kpi: any, prompt: string): Promise < any > {
+  try {
+    const headers = dataset.headers || [];
+    const groqPrompt = `You are a data analyst. Modify this KPI specification based on user request.
 
 Current KPI:
 - Label: ${kpi.label}
@@ -618,51 +624,51 @@ Available columns: ${headers.slice(0, 15).join(', ')}
 Return ONLY valid JSON (no markdown, no explanation):
 {"label": "updated name", "column": "column_name", "operation": "sum|avg|count|min|max|unique", "format": "number|currency|percentage"}`;
 
-      const result = await this.callGroq(groqPrompt, 400);
-      const modified = this.cleanAndParseJSON(result);
+    const result = await this.callGroq(groqPrompt, 400);
+    const modified = this.cleanAndParseJSON(result);
 
-      return {
-        ...kpi,
-        label: modified.label || kpi.label,
-        calculation: {
-          ...kpi.calculation,
-          column: modified.column || kpi.calculation?.column,
-          operation: modified.operation || kpi.calculation?.operation,
-          format: modified.format || kpi.calculation?.format
-        }
-      };
-    } catch (error) {
-      console.error('KPI modification error:', error);
-      return kpi;
-    }
+    return {
+      ...kpi,
+      label: modified.label || kpi.label,
+      calculation: {
+        ...kpi.calculation,
+        column: modified.column || kpi.calculation?.column,
+        operation: modified.operation || kpi.calculation?.operation,
+        format: modified.format || kpi.calculation?.format
+      }
+    };
+  } catch(error) {
+    console.error('KPI modification error:', error);
+    return kpi;
   }
+}
 
-  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<any> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      const data = dataset.data || [];
-      const dataSize = data.length;
+  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise < any > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+    const data = dataset.data || [];
+    const dataSize = data.length;
 
-      // 1. Generate Real Analytics Artifacts (KPIs & Charts)
-      const { kpis, charts, forensics } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
+    // 1. Generate Real Analytics Artifacts (KPIs & Charts)
+    const { kpis, charts, forensics } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
 
-      // Context Extraction
-      const piiColumns = forensics.profiles.filter(p => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map(p => p.column);
-      const hasPredictiveCharts = charts.some(c => c.type === 'line' && c.description?.includes('Forecast'));
+    // Context Extraction
+    const piiColumns = forensics.profiles.filter(p => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map(p => p.column);
+    const hasPredictiveCharts = charts.some(c => c.type === 'line' && c.description?.includes('Forecast'));
 
-      // Prepare context for LLM
-      const kpiSummary = kpis.map(k => `${k.label}: ${k.value} (${k.trendDirection || 'neutral'})`).join('\n');
-      const chartSummary = charts.map(c => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Desc: ${c.description || 'n/a'}`).join('\n');
+    // Prepare context for LLM
+    const kpiSummary = kpis.map(k => `${k.label}: ${k.value} (${k.trendDirection || 'neutral'})`).join('\n');
+    const chartSummary = charts.map(c => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Desc: ${c.description || 'n/a'}`).join('\n');
 
-      const complianceContext = piiColumns.length > 0
-        ? `CRITICAL COMPLIANCE NOTICE: The following columns contain potential PII: ${piiColumns.join(', ')}. You MUST include a 'Compliance & Privacy' section with GDPR/CCPA warnings.`
-        : 'No PII detected in this dataset.';
+    const complianceContext = piiColumns.length > 0
+      ? `CRITICAL COMPLIANCE NOTICE: The following columns contain potential PII: ${piiColumns.join(', ')}. You MUST include a 'Compliance & Privacy' section with GDPR/CCPA warnings.`
+      : 'No PII detected in this dataset.';
 
-      const predictiveContext = hasPredictiveCharts
-        ? `PREDICTIVE INSIGHTS: Predictive models have generated forecasts. You MUST include a 'Future Outlook' section analyzing these trends.`
-        : '';
+    const predictiveContext = hasPredictiveCharts
+      ? `PREDICTIVE INSIGHTS: Predictive models have generated forecasts. You MUST include a 'Future Outlook' section analyzing these trends.`
+      : '';
 
-      const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
+    const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
       
       DATASET CONTEXT:
       - Rows: ${dataSize}
@@ -702,85 +708,85 @@ Return ONLY valid JSON (no markdown, no explanation):
         "version": "2.0"
       }`;
 
-      const result = await this.callGroq(groqPrompt, 2500);
-      let jsonStr = result.trim();
+    const result = await this.callGroq(groqPrompt, 2500);
+    let jsonStr = result.trim();
 
-      if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
+    if(jsonStr.includes('```json')) {
+  jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+} else if (jsonStr.includes('```')) {
+  jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+}
 
-      const report = JSON.parse(jsonStr);
+const report = JSON.parse(jsonStr);
 
-      // Hydrate Charts and KPIs
-      report.sections = report.sections.map((section: any) => ({
-        ...section,
-        charts: (section.chartIds || []).map((id: string) => charts.find(c => c.id === id) || charts[0]).filter((c: any) => c),
-        kpis: (section.kpiIds || []).map((id: string) => kpis.find(k => k.id === id) || kpis.find(k => k.label.includes(id))).filter((k: any) => k)
-      }));
+// Hydrate Charts and KPIs
+report.sections = report.sections.map((section: any) => ({
+  ...section,
+  charts: (section.chartIds || []).map((id: string) => charts.find(c => c.id === id) || charts[0]).filter((c: any) => c),
+  kpis: (section.kpiIds || []).map((id: string) => kpis.find(k => k.id === id) || kpis.find(k => k.label.includes(id))).filter((k: any) => k)
+}));
 
-      // Fallback: If no charts assigned, distribute them
-      const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
-      const unusedCharts = charts.filter(c => !usedChartIds.has(c.id));
+// Fallback: If no charts assigned, distribute them
+const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
+const unusedCharts = charts.filter(c => !usedChartIds.has(c.id));
 
-      if (unusedCharts.length > 0) {
-        // distribute unused charts to sections
-        report.sections.forEach((section: any, idx: number) => {
-          if (unusedCharts.length > 0 && idx > 0) { // skip intro
-            section.charts.push(unusedCharts.shift());
-          }
-        });
-      }
-
-      return report;
-    } catch (error) {
-      console.error('Advanced report generation error:', error instanceof Error ? error.message : error);
-      // Robust Fallback using AnalyticsEngine even on Error
-      try {
-        const { kpis, charts } = await AnalyticsEngine.generateReportArtifacts(dataset.headers, dataset.data, reportType);
-        return {
-          title: `${reportType} Analysis Report (Auto-Generated)`,
-          executiveSummary: `Analysis of ${dataset.data?.length} records. Key metrics indicate ${kpis[0]?.label}: ${kpis[0]?.value}.`,
-          sections: [
-            {
-              id: 'overview',
-              title: 'Performance Overview',
-              content: 'Primary performance metrics and distribution analysis.',
-              keyTakeaways: kpis.slice(0, 3).map(k => `${k.label}: ${k.value}`),
-              charts: charts.slice(0, 2),
-              kpis: kpis.slice(0, 4)
-            },
-            {
-              id: 'trends',
-              title: 'Trend Analysis',
-              content: 'Detailed breakdown of trends over time and categories.',
-              keyTakeaways: ['Review detailed charts below'],
-              charts: charts.slice(2, 6),
-              kpis: kpis.slice(4, 8)
-            }
-          ],
-          generatedAt: new Date().toISOString(),
-          version: '2.0-fallback'
-        };
-      } catch (fallbackError) {
-        return {
-          title: 'Report Generation Failed',
-          executiveSummary: 'Could not generate report.',
-          sections: [],
-          generatedAt: new Date().toISOString(),
-          version: '0.0'
-        };
-      }
+if (unusedCharts.length > 0) {
+  // distribute unused charts to sections
+  report.sections.forEach((section: any, idx: number) => {
+    if (unusedCharts.length > 0 && idx > 0) { // skip intro
+      section.charts.push(unusedCharts.shift());
     }
+  });
+}
+
+return report;
+    } catch (error) {
+  console.error('Advanced report generation error:', error instanceof Error ? error.message : error);
+  // Robust Fallback using AnalyticsEngine even on Error
+  try {
+    const { kpis, charts } = await AnalyticsEngine.generateReportArtifacts(dataset.headers, dataset.data, reportType);
+    return {
+      title: `${reportType} Analysis Report (Auto-Generated)`,
+      executiveSummary: `Analysis of ${dataset.data?.length} records. Key metrics indicate ${kpis[0]?.label}: ${kpis[0]?.value}.`,
+      sections: [
+        {
+          id: 'overview',
+          title: 'Performance Overview',
+          content: 'Primary performance metrics and distribution analysis.',
+          keyTakeaways: kpis.slice(0, 3).map(k => `${k.label}: ${k.value}`),
+          charts: charts.slice(0, 2),
+          kpis: kpis.slice(0, 4)
+        },
+        {
+          id: 'trends',
+          title: 'Trend Analysis',
+          content: 'Detailed breakdown of trends over time and categories.',
+          keyTakeaways: ['Review detailed charts below'],
+          charts: charts.slice(2, 6),
+          kpis: kpis.slice(4, 8)
+        }
+      ],
+      generatedAt: new Date().toISOString(),
+      version: '2.0-fallback'
+    };
+  } catch (fallbackError) {
+    return {
+      title: 'Report Generation Failed',
+      executiveSummary: 'Could not generate report.',
+      sections: [],
+      generatedAt: new Date().toISOString(),
+      version: '0.0'
+    };
+  }
+}
   }
 
-  static async consultAgent(dataset: any, query: string, context?: any, history?: any[]): Promise<string> {
-    try {
-      const headers = dataset.headers || [];
-      const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
+  static async consultAgent(dataset: any, query: string, context ?: any, history ?: any[]): Promise < string > {
+  try {
+    const headers = dataset.headers || [];
+    const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
 
-      const groqPrompt = `You are a data analyst AI assistant. Answer this question about the dataset concisely.
+    const groqPrompt = `You are a data analyst AI assistant. Answer this question about the dataset concisely.
 
 Dataset columns: ${headers.join(', ')}
 Total records: ${dataset.data?.length || 0}
@@ -796,123 +802,123 @@ If the user explicitly asks to perform an action (delete row, delete column, or 
 
 Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
 
-      return await this.callGroq(groqPrompt, 400);
-    } catch (error) {
-      console.error('Agent error:', error instanceof Error ? error.message : error);
-      return 'Unable to analyze data at this moment. Please try again.';
-    }
+    return await this.callGroq(groqPrompt, 400);
+  } catch(error) {
+    console.error('Agent error:', error instanceof Error ? error.message : error);
+    return 'Unable to analyze data at this moment. Please try again.';
   }
+}
 
   /**
    * ENHANCED: Universal Data Forensics Rule Generation
    * Uses DataForensicsEngine for comprehensive analysis of ANY dataset
    * Generates 50-100+ rules covering all quality dimensions
    */
-  static async suggestValidationRules(dataset: any, semanticContext?: string): Promise<any[]> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      const data = dataset.data || [];
+  static async suggestValidationRules(dataset: any, semanticContext ?: string): Promise < any[] > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+    const data = dataset.data || [];
 
-      if (data.length === 0 || headers.length === 0) {
-        return [];
-      }
+    if(data.length === 0 || headers.length === 0) {
+  return [];
+}
 
-      console.log(`[Forensics] Analyzing dataset: ${headers.length} columns, ${data.length} rows`);
+console.log(`[Forensics] Analyzing dataset: ${headers.length} columns, ${data.length} rows`);
 
-      // Use the DataForensicsEngine for comprehensive analysis
-      const forensicResult = await DataForensicsEngine.analyze(headers, data, 500);
+// Use the DataForensicsEngine for comprehensive analysis
+const forensicResult = await DataForensicsEngine.analyze(headers, data, 500);
 
-      console.log(`[Forensics] Analysis complete:
+console.log(`[Forensics] Analysis complete:
         - ${forensicResult.profiles.length} columns profiled
         - ${forensicResult.mathRelationships.length} math relationships detected
         - ${forensicResult.crossFieldRules.length} cross-field rules
         - ${forensicResult.garbageColumns.length} garbage columns
         - ${forensicResult.validationRules.length} rules generated`);
 
-      // If forensics found good rules, validate them
-      const validatedRules = forensicResult.validationRules.map((rule: any) => {
-        // Test expression syntax
-        let expressionValid = true;
-        try {
-          const testRow = data[0] || {};
-          // Ensure special characters in column names don't break the function creation
-          // We wrap the test in a try-catch block inside the function to handle runtime errors gracefully without flagging the rule as invalid syntax
-          // Smarter evaluation: If it contains 'return', assume it's a full script.
-          // Otherwise, wrap it in 'return (...)'.
-          const exprBody = rule.expression.includes('return ')
-            ? `try { ${rule.expression} } catch(e) { return true; }`
-            : `try { return (${rule.expression}); } catch(e) { return true; }`;
+// If forensics found good rules, validate them
+const validatedRules = forensicResult.validationRules.map((rule: any) => {
+  // Test expression syntax
+  let expressionValid = true;
+  try {
+    const testRow = data[0] || {};
+    // Ensure special characters in column names don't break the function creation
+    // We wrap the test in a try-catch block inside the function to handle runtime errors gracefully without flagging the rule as invalid syntax
+    // Smarter evaluation: If it contains 'return', assume it's a full script.
+    // Otherwise, wrap it in 'return (...)'.
+    const exprBody = rule.expression.includes('return ')
+      ? `try { ${rule.expression} } catch(e) { return true; }`
+      : `try { return (${rule.expression}); } catch(e) { return true; }`;
 
-          const testFn = new Function('row', exprBody);
-          testFn(testRow);
-        } catch (e) {
-          console.warn(`Rule "${rule.description}" expression syntax warning:`, e);
-          // Only replace if it's a completely broken syntax that prevents compilation
-          // Otherwise, we trust the AI's logic might just need runtime safety
-          if (!rule.expression.includes("row['")) {
-            // Auto-fix common mistake: row.Col Name -> row['Col Name']
-            rule.expression = rule.expression.replace(/row\.([a-zA-Z0-9_]+)/g, "row['$1']");
-          }
-        }
+    const testFn = new Function('row', exprBody);
+    testFn(testRow);
+  } catch (e) {
+    console.warn(`Rule "${rule.description}" expression syntax warning:`, e);
+    // Only replace if it's a completely broken syntax that prevents compilation
+    // Otherwise, we trust the AI's logic might just need runtime safety
+    if (!rule.expression.includes("row['")) {
+      // Auto-fix common mistake: row.Col Name -> row['Col Name']
+      rule.expression = rule.expression.replace(/row\.([a-zA-Z0-9_]+)/g, "row['$1']");
+    }
+  }
 
-        // Test heal function if present
-        if (rule.healFunction && rule.category === 'Recovery') {
-          try {
-            const testRow = { ...data[0] };
-            const healFn = new Function('row', rule.healFunction);
-            healFn(testRow);
-          } catch (e) {
-            // Don't blindly replace, just log warning
-            console.warn(`Rule "${rule.description}" healFunction warning:`, e);
-          }
-        }
+  // Test heal function if present
+  if (rule.healFunction && rule.category === 'Recovery') {
+    try {
+      const testRow = { ...data[0] };
+      const healFn = new Function('row', rule.healFunction);
+      healFn(testRow);
+    } catch (e) {
+      // Don't blindly replace, just log warning
+      console.warn(`Rule "${rule.description}" healFunction warning:`, e);
+    }
+  }
 
-        return {
-          ...rule,
-          validated: expressionValid,
-          confidenceScore: expressionValid ? (rule.confidence || 0.8) : 0.5
-        };
-      });
+  return {
+    ...rule,
+    validated: expressionValid,
+    confidenceScore: expressionValid ? (rule.confidence || 0.8) : 0.5
+  };
+});
 
-      // If not enough rules, supplement with AI-generated rules
-      if (validatedRules.length < 10 && data.length > 0) {
-        console.log('[Forensics] Supplementing with AI-generated rules...');
-        const aiRules = await this.generateAISupplementRules(headers, data.slice(0, 20), forensicResult.profiles);
-        validatedRules.push(...aiRules);
-      }
+// If not enough rules, supplement with AI-generated rules
+if (validatedRules.length < 10 && data.length > 0) {
+  console.log('[Forensics] Supplementing with AI-generated rules...');
+  const aiRules = await this.generateAISupplementRules(headers, data.slice(0, 20), forensicResult.profiles);
+  validatedRules.push(...aiRules);
+}
 
-      console.log(`[Forensics] Final rule count: ${validatedRules.length}`);
-      return validatedRules;
+console.log(`[Forensics] Final rule count: ${validatedRules.length}`);
+return validatedRules;
 
     } catch (error) {
-      console.error("Suggest rules error:", error);
-      // Return safe fallback rules
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      return headers.slice(0, 3).map((col: string) => ({
-        id: Math.random().toString(36).substr(2),
-        description: `Check ${col} is not empty`,
-        category: 'Audit',
-        column: col,
-        qualityDimension: 'Completeness',
-        expression: `row['${col}'] !== null && row['${col}'] !== ''`,
-        healFunction: '',
-        active: true,
-        confidence: 0.5,
-        reasoning: 'Fallback rule due to analysis error'
-      }));
-    }
+  console.error("Suggest rules error:", error);
+  // Return safe fallback rules
+  const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+  return headers.slice(0, 3).map((col: string) => ({
+    id: Math.random().toString(36).substr(2),
+    description: `Check ${col} is not empty`,
+    category: 'Audit',
+    column: col,
+    qualityDimension: 'Completeness',
+    expression: `row['${col}'] !== null && row['${col}'] !== ''`,
+    healFunction: '',
+    active: true,
+    confidence: 0.5,
+    reasoning: 'Fallback rule due to analysis error'
+  }));
+}
   }
 
   /**
    * Generate AI-supplemented rules for complex patterns the forensics engine might miss
    */
-  private static async generateAISupplementRules(headers: string[], sample: any[], profiles: any[]): Promise<any[]> {
-    try {
-      const profileSummary = profiles.slice(0, 8).map((p: any) =>
-        `${p.column}: ${p.role} (${p.dataType}, ${p.nullPercent}% null, placeholders: ${p.placeholders?.map((ph: any) => ph.value).join(', ') || 'none'})`
-      ).join('\n');
+  private static async generateAISupplementRules(headers: string[], sample: any[], profiles: any[]): Promise < any[] > {
+  try {
+    const profileSummary = profiles.slice(0, 8).map((p: any) =>
+      `${p.column}: ${p.role} (${p.dataType}, ${p.nullPercent}% null, placeholders: ${p.placeholders?.map((ph: any) => ph.value).join(', ') || 'none'})`
+    ).join('\n');
 
-      const prompt = `You are a data quality expert. Analyze this dataset and generate validation rules.
+    const prompt = `You are a data quality expert. Analyze this dataset and generate validation rules.
 
 COLUMN PROFILES:
 ${profileSummary}
@@ -942,36 +948,36 @@ Return ONLY valid JSON array (no markdown):
 
 CRITICAL: Expression must return TRUE for VALID rows. Use row['columnName'] syntax.`;
 
-      const result = await this.callGroq(prompt, 2500);
+    const result = await this.callGroq(prompt, 2500);
 
-      let rules: any[] = [];
-      try {
-        rules = this.cleanAndParseJSON(result);
-      } catch (e) {
-        console.warn('Failed to parse AI supplement rules:', e);
-        return [];
-      }
-
-      return rules.map((r: any) => ({
-        ...r,
-        id: Math.random().toString(36).substr(2),
-        active: true,
-        severity: 'warning',
-        validated: false
-      }));
-
-    } catch (error) {
-      console.error('AI supplement rules error:', error);
+    let rules: any[] = [];
+    try {
+      rules = this.cleanAndParseJSON(result);
+    } catch(e) {
+      console.warn('Failed to parse AI supplement rules:', e);
       return [];
     }
+
+      return rules.map((r: any) => ({
+      ...r,
+      id: Math.random().toString(36).substr(2),
+      active: true,
+      severity: 'warning',
+      validated: false
+    }));
+
+  } catch(error) {
+    console.error('AI supplement rules error:', error);
+    return [];
   }
+}
 
 
-  static async generateLogicFromDescription(dataset: any, category: string, description: string): Promise<any> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+  static async generateLogicFromDescription(dataset: any, category: string, description: string): Promise < any > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
 
-      const prompt = `Generate JavaScript logic for a data validation rule.
+    const prompt = `Generate JavaScript logic for a data validation rule.
           
           Headers: ${headers.join(', ')}
           Rule Description: "${description}"
@@ -985,39 +991,39 @@ CRITICAL: Expression must return TRUE for VALID rows. Use row['columnName'] synt
               "relationshipType": "Lookup|Calculation|Pattern|Validation"
           }`;
 
-      const result = await this.callGroq(prompt, 1000);
-      let logic = {};
-      try {
-        let jsonStr = result.trim();
-        if (jsonStr.includes('```json')) jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-        else if (jsonStr.includes('```')) jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-        logic = JSON.parse(jsonStr);
-      } catch (e) { console.error("Logic parsing failed", e); }
+    const result = await this.callGroq(prompt, 1000);
+    let logic = {};
+    try {
+      let jsonStr = result.trim();
+      if(jsonStr.includes('```json')) jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+      else if(jsonStr.includes('```')) jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+      logic = JSON.parse(jsonStr);
+    } catch(e) { console.error("Logic parsing failed", e); }
 
       return logic;
-    } catch (error) {
-      console.error("Generate logic error:", error);
-      return { expression: 'true', healFunction: '' };
-    }
+  } catch(error) {
+    console.error("Generate logic error:", error);
+    return { expression: 'true', healFunction: '' };
   }
+}
 
   // ===== PRO SEMANTIC DATA ANALYSIS METHODS =====
 
   /**
    * Pro: Analyze dataset semantics and deep relationships
    */
-  static async analyzeSemantics(headers: string[], sample: any[], forensics: any): Promise<any> {
-    const prompt = `You are a Senior Data Scientist and Expert Data Architect. 
+  static async analyzeSemantics(headers: string[], sample: any[], forensics: any): Promise < any > {
+  const prompt = `You are a Senior Data Scientist and Expert Data Architect. 
 Analyze this dataset to understand its deep root semantics, relationships, and hidden patterns.
 
 Dataset Context:
 Headers: ${headers.join(', ')}
 Sample Data (JSON): ${JSON.stringify(sample.slice(0, 10))}
 Forensic Profile Highlights: ${JSON.stringify({
-      garbageColumns: forensics.garbageColumns,
-      mathRelationships: forensics.mathRelationships.map((r: any) => r.formula),
-      detectedRoles: forensics.profiles.map((p: any) => ({ col: p.column, role: p.role }))
-    })}
+    garbageColumns: forensics.garbageColumns,
+    mathRelationships: forensics.mathRelationships.map((r: any) => r.formula),
+    detectedRoles: forensics.profiles.map((p: any) => ({ col: p.column, role: p.role }))
+  })}
 
 Task:
 1. Identify the CATEGORY and PURPOSE of this dataset.
@@ -1037,26 +1043,26 @@ Return ONLY valid JSON (no markdown, no explanation):
   "recoverySuggestions": [{ "target": "col", "source": ["cols"], "logic": "how to recover" }]
 }`;
 
-    const result = await this.callGroq(prompt, 2000);
-    try {
-      let jsonStr = result.trim();
-      if (jsonStr.includes('```json')) {
-        jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-      } else if (jsonStr.includes('```')) {
-        jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-      }
-      return JSON.parse(jsonStr);
+  const result = await this.callGroq(prompt, 2000);
+  try {
+    let jsonStr = result.trim();
+    if(jsonStr.includes('```json')) {
+  jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+} else if (jsonStr.includes('```')) {
+  jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+}
+return JSON.parse(jsonStr);
     } catch (e) {
-      console.error('Semantic Analysis Parsing Failed:', e);
-      return { category: 'General', purpose: 'Data Management', semanticInsights: [], junkPatterns: [], columnRelationships: [], recoverySuggestions: [] };
-    }
+  console.error('Semantic Analysis Parsing Failed:', e);
+  return { category: 'General', purpose: 'Data Management', semanticInsights: [], junkPatterns: [], columnRelationships: [], recoverySuggestions: [] };
+}
   }
 
   /**
    * Pro: Generate advanced cleaning rules based on semantic insights
    */
-  static async generateAdvancedRules(headers: string[], sample: any[], semanticInsights: any): Promise<any[]> {
-    const prompt = `You are an Elite Data Scientist and Data Cleaning Agent. 
+  static async generateAdvancedRules(headers: string[], sample: any[], semanticInsights: any): Promise < any[] > {
+  const prompt = `You are an Elite Data Scientist and Data Cleaning Agent. 
 Generate advanced cleaning and recovery rules based on these semantic insights:
 
 Insights: ${JSON.stringify(semanticInsights)}
@@ -1097,107 +1103,107 @@ Return ONLY a JSON array of rules:
   "reasoning": "string"
 }]`;
 
-    const result = await this.callGroq(prompt, 3000);
-    return this.cleanAndParseJSON(result);
-  }
+  const result = await this.callGroq(prompt, 3000);
+  return this.cleanAndParseJSON(result);
+}
 
 
-  static async detectColumnTypes(dataset: any): Promise<any[]> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      const sample = dataset.data?.slice(0, 100) || [];
+  static async detectColumnTypes(dataset: any): Promise < any[] > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+    const sample = dataset.data?.slice(0, 100) || [];
 
-      const analysis: any[] = [];
+    const analysis: any[] = [];
 
-      for (const col of headers) {
-        const values = sample.map((r: any) => r[col]).filter((v: any) => v !== null && v !== undefined && v !== '');
+    for(const col of headers) {
+      const values = sample.map((r: any) => r[col]).filter((v: any) => v !== null && v !== undefined && v !== '');
 
-        if (values.length === 0) {
-          analysis.push({ column: col, type: 'unknown', cardinality: 0, nullness: 100, confidence: 0 });
-          continue;
-        }
-
-        // Analyze first 10 non-null values
-        const samples = values.slice(0, 10);
-        let type = 'unknown';
-        let confidence = 0.5;
-
-        // Check for datetime
-        const dateCount = samples.filter((v: any) => {
-          const dateStr = String(v);
-          return !isNaN(Date.parse(dateStr)) || /^\d{4}-\d{2}-\d{2}/.test(dateStr);
-        }).length;
-        if (dateCount / samples.length > 0.8) {
-          type = 'datetime';
-          confidence = 0.95;
-        }
-
-        // Check for numeric
-        if (type === 'unknown') {
-          const numCount = samples.filter((v: any) => !isNaN(Number(v)) && v !== '').length;
-          if (numCount / samples.length > 0.8) {
-            // Check if it's currency or percentage
-            const currencyCount = samples.filter((v: any) => String(v).match(/[$€£¥]/)).length;
-            const percentCount = samples.filter((v: any) => String(v).match(/%/)).length;
-
-            if (currencyCount / samples.length > 0.5) {
-              type = 'currency';
-            } else if (percentCount / samples.length > 0.5) {
-              type = 'percentage';
-            } else {
-              type = 'numeric';
-            }
-            confidence = 0.95;
-          }
-        }
-
-        // Check for ID-like (very high cardinality numeric or mixed)
-        if (type === 'unknown') {
-          const uniqueCount = new Set(values).size;
-          if (uniqueCount / values.length > 0.8) {
-            type = 'id';
-            confidence = 0.9;
-          }
-        }
-
-        // Default to categorical
-        if (type === 'unknown') {
-          type = 'categorical';
-          confidence = 0.7;
-        }
-
-        const uniqueCount = new Set(values).size;
-        const nullness = ((sample.length - values.length) / sample.length) * 100;
-
-        analysis.push({
-          column: col,
-          type,
-          cardinality: uniqueCount,
-          nullness: Math.round(nullness),
-          confidence,
-          sampleValues: samples.slice(0, 3)
-        });
+      if (values.length === 0) {
+        analysis.push({ column: col, type: 'unknown', cardinality: 0, nullness: 100, confidence: 0 });
+        continue;
       }
 
-      return analysis;
-    } catch (error) {
-      console.error('Column type detection error:', error);
-      return [];
+      // Analyze first 10 non-null values
+      const samples = values.slice(0, 10);
+      let type = 'unknown';
+      let confidence = 0.5;
+
+      // Check for datetime
+      const dateCount = samples.filter((v: any) => {
+        const dateStr = String(v);
+        return !isNaN(Date.parse(dateStr)) || /^\d{4}-\d{2}-\d{2}/.test(dateStr);
+      }).length;
+      if (dateCount / samples.length > 0.8) {
+        type = 'datetime';
+        confidence = 0.95;
+      }
+
+      // Check for numeric
+      if (type === 'unknown') {
+        const numCount = samples.filter((v: any) => !isNaN(Number(v)) && v !== '').length;
+        if (numCount / samples.length > 0.8) {
+          // Check if it's currency or percentage
+          const currencyCount = samples.filter((v: any) => String(v).match(/[$€£¥]/)).length;
+          const percentCount = samples.filter((v: any) => String(v).match(/%/)).length;
+
+          if (currencyCount / samples.length > 0.5) {
+            type = 'currency';
+          } else if (percentCount / samples.length > 0.5) {
+            type = 'percentage';
+          } else {
+            type = 'numeric';
+          }
+          confidence = 0.95;
+        }
+      }
+
+      // Check for ID-like (very high cardinality numeric or mixed)
+      if (type === 'unknown') {
+        const uniqueCount = new Set(values).size;
+        if (uniqueCount / values.length > 0.8) {
+          type = 'id';
+          confidence = 0.9;
+        }
+      }
+
+      // Default to categorical
+      if (type === 'unknown') {
+        type = 'categorical';
+        confidence = 0.7;
+      }
+
+      const uniqueCount = new Set(values).size;
+      const nullness = ((sample.length - values.length) / sample.length) * 100;
+
+      analysis.push({
+        column: col,
+        type,
+        cardinality: uniqueCount,
+        nullness: Math.round(nullness),
+        confidence,
+        sampleValues: samples.slice(0, 3)
+      });
     }
+
+      return analysis;
+  } catch(error) {
+    console.error('Column type detection error:', error);
+    return [];
   }
+}
 
-  static async analyzeDatasetSemantics(dataset: any): Promise<any> {
-    try {
-      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
-      const sample = dataset.data?.slice(0, 20) || [];
-      const columnTypes = await this.detectColumnTypes(dataset);
+  static async analyzeDatasetSemantics(dataset: any): Promise < any > {
+  try {
+    const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+    const sample = dataset.data?.slice(0, 20) || [];
+    const columnTypes = await this.detectColumnTypes(dataset);
 
-      // Create analysis prompt for Groq
-      const typesSummary = columnTypes
-        .map((ct: any) => `${ct.column}: ${ct.type} (${ct.cardinality} unique values)`)
-        .join('; ');
+    // Create analysis prompt for Groq
+    const typesSummary = columnTypes
+      .map((ct: any) => `${ct.column}: ${ct.type} (${ct.cardinality} unique values)`)
+      .join('; ');
 
-      const semanticPrompt = `Analyze this dataset and provide semantic insights.
+    const semanticPrompt = `Analyze this dataset and provide semantic insights.
 
 Columns (${headers.length}): ${headers.join(', ')}
 Column Types: ${typesSummary}
@@ -1214,113 +1220,113 @@ ANALYZE and return ONLY valid JSON (no markdown):
   "recommendedCharts": ["chart_type1", "chart_type2"]
 }`;
 
-      const result = await this.callGroq(semanticPrompt, 800);
-      let analysis = {};
+    const result = await this.callGroq(semanticPrompt, 800);
+    let analysis = {};
 
-      try {
-        // Extract JSON from markdown if needed
-        let jsonStr = result.trim();
-        if (jsonStr.includes('```json')) {
-          jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
-        } else if (jsonStr.includes('```')) {
-          jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
-        }
-        analysis = JSON.parse(jsonStr);
+    try {
+      // Extract JSON from markdown if needed
+      let jsonStr = result.trim();
+      if(jsonStr.includes('```json')) {
+  jsonStr = jsonStr.split('```json')[1].split('```')[0].trim();
+} else if (jsonStr.includes('```')) {
+  jsonStr = jsonStr.split('```')[1].split('```')[0].trim();
+}
+analysis = JSON.parse(jsonStr);
       } catch (e) {
-        console.warn('Failed to parse semantic analysis, using defaults:', e);
-        analysis = {
-          domain: 'unknown',
-          businessContext: 'Data analysis',
-          keyInsights: [],
-          recommendedCharts: ['bar', 'line']
-        };
-      }
+  console.warn('Failed to parse semantic analysis, using defaults:', e);
+  analysis = {
+    domain: 'unknown',
+    businessContext: 'Data analysis',
+    keyInsights: [],
+    recommendedCharts: ['bar', 'line']
+  };
+}
 
-      // Build quality score
-      const nullAvg = columnTypes.reduce((sum: number, ct: any) => sum + ct.nullness, 0) / columnTypes.length;
-      const completeness = 100 - nullAvg;
-      const quality = {
-        completeness: Math.round(completeness),
-        uniqueness: Math.round(columnTypes.reduce((sum: any, ct: any) => sum + (ct.cardinality / sample.length), 0) * 100 / columnTypes.length),
-        consistency: 85, // placeholder
-        validity: 90, // placeholder
-        overall: Math.round((completeness + 85 + 90) / 3),
-        warnings: nullAvg > 30 ? ['High number of null values detected'] : []
-      };
+// Build quality score
+const nullAvg = columnTypes.reduce((sum: number, ct: any) => sum + ct.nullness, 0) / columnTypes.length;
+const completeness = 100 - nullAvg;
+const quality = {
+  completeness: Math.round(completeness),
+  uniqueness: Math.round(columnTypes.reduce((sum: any, ct: any) => sum + (ct.cardinality / sample.length), 0) * 100 / columnTypes.length),
+  consistency: 85, // placeholder
+  validity: 90, // placeholder
+  overall: Math.round((completeness + 85 + 90) / 3),
+  warnings: nullAvg > 30 ? ['High number of null values detected'] : []
+};
 
-      return {
-        columnRoles: columnTypes,
-        ...analysis,
-        quality,
-        isTimeSeriesData: !!(analysis as any).timeColumn,
-        hasGeographicData: headers.some((h: string) => /city|country|state|region|location|geo/i.test(h))
-      };
+return {
+  columnRoles: columnTypes,
+  ...analysis,
+  quality,
+  isTimeSeriesData: !!(analysis as any).timeColumn,
+  hasGeographicData: headers.some((h: string) => /city|country|state|region|location|geo/i.test(h))
+};
     } catch (error) {
-      console.error('Semantic analysis error:', error);
-      return {
-        columnRoles: [],
-        domain: 'unknown',
-        keyInsights: [],
-        quality: { completeness: 50, uniqueness: 50, consistency: 50, validity: 50, overall: 50, warnings: [] },
-        isTimeSeriesData: false,
-        hasGeographicData: false
-      };
-    }
+  console.error('Semantic analysis error:', error);
+  return {
+    columnRoles: [],
+    domain: 'unknown',
+    keyInsights: [],
+    quality: { completeness: 50, uniqueness: 50, consistency: 50, validity: 50, overall: 50, warnings: [] },
+    isTimeSeriesData: false,
+    hasGeographicData: false
+  };
+}
   }
 
-  static async detectRelationships(dataset: any): Promise<any[]> {
-    try {
-      const columnTypes = await this.detectColumnTypes(dataset);
-      const numericCols = columnTypes.filter((ct: any) => ct.type === 'numeric' || ct.type === 'currency');
-      const categoricalCols = columnTypes.filter((ct: any) => ct.type === 'categorical');
-      const timeCols = columnTypes.filter((ct: any) => ct.type === 'datetime');
+  static async detectRelationships(dataset: any): Promise < any[] > {
+  try {
+    const columnTypes = await this.detectColumnTypes(dataset);
+    const numericCols = columnTypes.filter((ct: any) => ct.type === 'numeric' || ct.type === 'currency');
+    const categoricalCols = columnTypes.filter((ct: any) => ct.type === 'categorical');
+    const timeCols = columnTypes.filter((ct: any) => ct.type === 'datetime');
 
-      const relationships = [];
+    const relationships = [];
 
-      // All numeric pairs → correlation
-      for (let i = 0; i < numericCols.length; i++) {
-        for (let j = i + 1; j < numericCols.length; j++) {
-          const col1 = numericCols[i].column;
-          const col2 = numericCols[j].column;
-          relationships.push({
-            column1: col1,
-            column2: col2,
-            type: 'correlation',
-            strength: 0.5, // placeholder - could calculate correlation coefficient
-            description: `Correlation between ${col1} and ${col2}`
-          });
-        }
-      }
+    // All numeric pairs → correlation
+    for(let i = 0; i <numericCols.length; i++) {
+  for (let j = i + 1; j < numericCols.length; j++) {
+    const col1 = numericCols[i].column;
+    const col2 = numericCols[j].column;
+    relationships.push({
+      column1: col1,
+      column2: col2,
+      type: 'correlation',
+      strength: 0.5, // placeholder - could calculate correlation coefficient
+      description: `Correlation between ${col1} and ${col2}`
+    });
+  }
+}
 
-      // Time + numeric → time series
-      if (timeCols.length > 0 && numericCols.length > 0) {
-        relationships.push({
-          column1: timeCols[0].column,
-          column2: numericCols[0].column,
-          type: 'time-series',
-          strength: 0.9,
-          description: `Time series of ${numericCols[0].column}`
-        });
-      }
+// Time + numeric → time series
+if (timeCols.length > 0 && numericCols.length > 0) {
+  relationships.push({
+    column1: timeCols[0].column,
+    column2: numericCols[0].column,
+    type: 'time-series',
+    strength: 0.9,
+    description: `Time series of ${numericCols[0].column}`
+  });
+}
 
-      // Categorical + numeric → categorical-numeric relationship
-      for (const cat of categoricalCols.slice(0, 2)) {
-        for (const num of numericCols.slice(0, 2)) {
-          relationships.push({
-            column1: cat.column,
-            column2: num.column,
-            type: 'categorical-numeric',
-            strength: 0.7,
-            description: `Distribution of ${num.column} by ${cat.column}`
-          });
-        }
-      }
+// Categorical + numeric → categorical-numeric relationship
+for (const cat of categoricalCols.slice(0, 2)) {
+  for (const num of numericCols.slice(0, 2)) {
+    relationships.push({
+      column1: cat.column,
+      column2: num.column,
+      type: 'categorical-numeric',
+      strength: 0.7,
+      description: `Distribution of ${num.column} by ${cat.column}`
+    });
+  }
+}
 
-      return relationships;
+return relationships;
     } catch (error) {
-      console.error('Relationship detection error:', error);
-      return [];
-    }
+  console.error('Relationship detection error:', error);
+  return [];
+}
   }
 
   /**
@@ -1328,107 +1334,107 @@ ANALYZE and return ONLY valid JSON (no markdown):
    * Converts relationships and column types into production-ready chart configs
    */
   static async generateChartSpecFromAnalysis(
-    analysis: any,
-    relationships: any[],
-    dataset: any
-  ): Promise<any[]> {
-    try {
-      const charts = [];
-      const columnTypes = analysis.columnRoles || [];
-      const numericCols = columnTypes.filter((c: any) => c.type === 'numeric' || c.type === 'currency').map((c: any) => c.column);
-      const categoricalCols = columnTypes.filter((c: any) => c.type === 'categorical').map((c: any) => c.column);
+  analysis: any,
+  relationships: any[],
+  dataset: any
+): Promise < any[] > {
+  try {
+    const charts = [];
+    const columnTypes = analysis.columnRoles || [];
+    const numericCols = columnTypes.filter((c: any) => c.type === 'numeric' || c.type === 'currency').map((c: any) => c.column);
+    const categoricalCols = columnTypes.filter((c: any) => c.type === 'categorical').map((c: any) => c.column);
 
-      // Sort relationships by strength
-      const sortedRels = [...relationships].sort((a: any, b: any) => (b.strength || 0) - (a.strength || 0));
+    // Sort relationships by strength
+    const sortedRels = [...relationships].sort((a: any, b: any) => (b.strength || 0) - (a.strength || 0));
 
-      // Generate charts from strongest relationships
-      for (let i = 0; i < sortedRels.length && charts.length < 6; i++) {
-        const rel = sortedRels[i];
-        const cardinalityCap = 15;
+    // Generate charts from strongest relationships
+    for(let i = 0; i <sortedRels.length && charts.length < 6; i++) {
+  const rel = sortedRels[i];
+  const cardinalityCap = 15;
 
-        // Skip if high cardinality without proper aggregation
-        if (rel.type === 'categorical-numeric') {
-          const distinctCount = new Set((dataset.data || []).map((r: any) => r[rel.column1])).size;
-          if (distinctCount > cardinalityCap) {
-            // Use aggregation for high cardinality
-            charts.push({
-              id: `chart-${Date.now()}-${i}`,
-              type: 'bar',
-              title: `Top ${cardinalityCap} by ${rel.column2}`,
-              description: rel.description,
-              xAxis: rel.column1,
-              yAxis: rel.column2,
-              aggregation: 'sum',
-              limit: cardinalityCap,
-              showOther: true,
-              category: i === 0 ? 'Overview' : 'Analysis',
-              priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
-            });
-          } else {
-            // Direct bar chart for low cardinality
-            charts.push({
-              id: `chart-${Date.now()}-${i}`,
-              type: 'bar',
-              title: `${rel.column2} by ${rel.column1}`,
-              description: rel.description,
-              xAxis: rel.column1,
-              yAxis: rel.column2,
-              aggregation: 'sum',
-              category: i === 0 ? 'Overview' : 'Analysis',
-              priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
-            });
-          }
-        } else if (rel.type === 'time-series') {
-          // Time series → line chart
-          charts.push({
-            id: `chart-${Date.now()}-${i}`,
-            type: 'line',
-            title: `${rel.column2} Over Time`,
-            description: rel.description,
-            xAxis: rel.column1,
-            yAxis: rel.column2,
-            aggregation: 'sum',
-            category: 'Trends',
-            priority: i === 0 ? 'critical' : 'high'
-          });
-        } else if (rel.type === 'correlation') {
-          // Correlation → scatter
-          charts.push({
-            id: `chart-${Date.now()}-${i}`,
-            type: 'scatter',
-            title: `${rel.column1} vs ${rel.column2}`,
-            description: rel.description,
-            xAxis: rel.column1,
-            yAxis: rel.column2,
-            aggregation: 'none',
-            category: 'Patterns',
-            priority: 'medium'
-          });
-        }
-      }
-
-      // Fallback: Add pie chart if we have categorical data
-      if (charts.length < 4 && categoricalCols.length > 0) {
-        charts.push({
-          id: `chart-${Date.now()}-pie`,
-          type: 'pie',
-          title: `Distribution of ${categoricalCols[0]}`,
-          description: 'Market composition or category breakdown',
-          xAxis: categoricalCols[0],
-          yAxis: 'count',
-          aggregation: 'count',
-          limit: 10,
-          showOther: true,
-          category: 'Overview',
-          priority: 'high'
-        });
-      }
-
-      return charts.slice(0, 6);
-    } catch (error) {
-      console.error('Chart spec generation error:', error);
-      return [];
+  // Skip if high cardinality without proper aggregation
+  if (rel.type === 'categorical-numeric') {
+    const distinctCount = new Set((dataset.data || []).map((r: any) => r[rel.column1])).size;
+    if (distinctCount > cardinalityCap) {
+      // Use aggregation for high cardinality
+      charts.push({
+        id: `chart-${Date.now()}-${i}`,
+        type: 'bar',
+        title: `Top ${cardinalityCap} by ${rel.column2}`,
+        description: rel.description,
+        xAxis: rel.column1,
+        yAxis: rel.column2,
+        aggregation: 'sum',
+        limit: cardinalityCap,
+        showOther: true,
+        category: i === 0 ? 'Overview' : 'Analysis',
+        priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
+      });
+    } else {
+      // Direct bar chart for low cardinality
+      charts.push({
+        id: `chart-${Date.now()}-${i}`,
+        type: 'bar',
+        title: `${rel.column2} by ${rel.column1}`,
+        description: rel.description,
+        xAxis: rel.column1,
+        yAxis: rel.column2,
+        aggregation: 'sum',
+        category: i === 0 ? 'Overview' : 'Analysis',
+        priority: i === 0 ? 'critical' : i < 3 ? 'high' : 'medium'
+      });
     }
+  } else if (rel.type === 'time-series') {
+    // Time series → line chart
+    charts.push({
+      id: `chart-${Date.now()}-${i}`,
+      type: 'line',
+      title: `${rel.column2} Over Time`,
+      description: rel.description,
+      xAxis: rel.column1,
+      yAxis: rel.column2,
+      aggregation: 'sum',
+      category: 'Trends',
+      priority: i === 0 ? 'critical' : 'high'
+    });
+  } else if (rel.type === 'correlation') {
+    // Correlation → scatter
+    charts.push({
+      id: `chart-${Date.now()}-${i}`,
+      type: 'scatter',
+      title: `${rel.column1} vs ${rel.column2}`,
+      description: rel.description,
+      xAxis: rel.column1,
+      yAxis: rel.column2,
+      aggregation: 'none',
+      category: 'Patterns',
+      priority: 'medium'
+    });
+  }
+}
+
+// Fallback: Add pie chart if we have categorical data
+if (charts.length < 4 && categoricalCols.length > 0) {
+  charts.push({
+    id: `chart-${Date.now()}-pie`,
+    type: 'pie',
+    title: `Distribution of ${categoricalCols[0]}`,
+    description: 'Market composition or category breakdown',
+    xAxis: categoricalCols[0],
+    yAxis: 'count',
+    aggregation: 'count',
+    limit: 10,
+    showOther: true,
+    category: 'Overview',
+    priority: 'high'
+  });
+}
+
+return charts.slice(0, 6);
+    } catch (error) {
+  console.error('Chart spec generation error:', error);
+  return [];
+}
   }
 
   /**
@@ -1436,193 +1442,193 @@ ANALYZE and return ONLY valid JSON (no markdown):
    * Groups high-cardinality data, aggregates dates, handles nulls intelligently
    */
   static smartAggregateData(
-    data: any[],
-    xColumn: string,
-    yColumn: string,
-    aggregation: string = 'sum',
-    limit: number = 15,
-    showOther: boolean = true
-  ): any[] {
-    try {
-      if (!data || data.length === 0) return [];
+  data: any[],
+  xColumn: string,
+  yColumn: string,
+  aggregation: string = 'sum',
+  limit: number = 15,
+  showOther: boolean = true
+): any[] {
+  try {
+    if (!data || data.length === 0) return [];
 
-      const aggregated: { [key: string]: any } = {};
+    const aggregated: { [key: string]: any } = {};
 
-      // Group data
-      for (const row of data) {
-        const xVal = String(row[xColumn] || 'Unknown').trim();
-        const yVal = Number(row[yColumn]) || 0;
+    // Group data
+    for (const row of data) {
+      const xVal = String(row[xColumn] || 'Unknown').trim();
+      const yVal = Number(row[yColumn]) || 0;
 
-        if (!aggregated[xVal]) {
-          aggregated[xVal] = {
-            label: xVal,
-            value: 0,
-            count: 0,
-            sum: 0,
-            max: yVal,
-            min: yVal
-          };
-        }
-
-        aggregated[xVal].sum += yVal;
-        aggregated[xVal].count += 1;
-        aggregated[xVal].max = Math.max(aggregated[xVal].max, yVal);
-        aggregated[xVal].min = Math.min(aggregated[xVal].min, yVal);
+      if (!aggregated[xVal]) {
+        aggregated[xVal] = {
+          label: xVal,
+          value: 0,
+          count: 0,
+          sum: 0,
+          max: yVal,
+          min: yVal
+        };
       }
 
-      // Apply aggregation function
-      const result = Object.values(aggregated).map((item: any) => {
-        let value = 0;
-        switch (aggregation.toLowerCase()) {
-          case 'sum':
-            value = item.sum;
-            break;
-          case 'avg':
-          case 'average':
-            value = item.sum / item.count;
-            break;
-          case 'count':
-            value = item.count;
-            break;
-          case 'max':
-            value = item.max;
-            break;
-          case 'min':
-            value = item.min;
-            break;
-          default:
-            value = item.sum;
-        }
-
-        return { label: item.label, value };
-      });
-
-      // Sort by value descending
-      result.sort((a: any, b: any) => b.value - a.value);
-
-      // Handle limit and "Other" category
-      if (result.length > limit) {
-        const topItems = result.slice(0, limit);
-        const otherItems = result.slice(limit);
-
-        if (showOther && otherItems.length > 0) {
-          const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
-          topItems.push({ label: 'Other', value: otherValue });
-        }
-
-        return topItems;
-      }
-
-      return result;
-    } catch (error) {
-      console.error('Smart aggregation error:', error);
-      return data.slice(0, limit).map((item: any) => ({
-        label: String(item[xColumn] || 'Unknown'),
-        value: Number(item[yColumn]) || 0
-      }));
+      aggregated[xVal].sum += yVal;
+      aggregated[xVal].count += 1;
+      aggregated[xVal].max = Math.max(aggregated[xVal].max, yVal);
+      aggregated[xVal].min = Math.min(aggregated[xVal].min, yVal);
     }
+
+    // Apply aggregation function
+    const result = Object.values(aggregated).map((item: any) => {
+      let value = 0;
+      switch (aggregation.toLowerCase()) {
+        case 'sum':
+          value = item.sum;
+          break;
+        case 'avg':
+        case 'average':
+          value = item.sum / item.count;
+          break;
+        case 'count':
+          value = item.count;
+          break;
+        case 'max':
+          value = item.max;
+          break;
+        case 'min':
+          value = item.min;
+          break;
+        default:
+          value = item.sum;
+      }
+
+      return { label: item.label, value };
+    });
+
+    // Sort by value descending
+    result.sort((a: any, b: any) => b.value - a.value);
+
+    // Handle limit and "Other" category
+    if (result.length > limit) {
+      const topItems = result.slice(0, limit);
+      const otherItems = result.slice(limit);
+
+      if (showOther && otherItems.length > 0) {
+        const otherValue = otherItems.reduce((sum: number, item: any) => sum + item.value, 0);
+        topItems.push({ label: 'Other', value: otherValue });
+      }
+
+      return topItems;
+    }
+
+    return result;
+  } catch (error) {
+    console.error('Smart aggregation error:', error);
+    return data.slice(0, limit).map((item: any) => ({
+      label: String(item[xColumn] || 'Unknown'),
+      value: Number(item[yColumn]) || 0
+    }));
   }
+}
 
   /**
    * Pro Auditor Helper: Safely clean and parse AI-generated JSON
    * ULTRA-ROBUST: Handles all common AI output quirks using substring extraction
    */
   private static cleanAndParseJSON(input: string): any {
-    if (!input || typeof input !== 'string') {
-      console.warn('[GroqService] cleanAndParseJSON received empty or non-string input');
-      return [];
-    }
+  if (!input || typeof input !== 'string') {
+    console.warn('[GroqService] cleanAndParseJSON received empty or non-string input');
+    return [];
+  }
 
-    let cleaned = input.trim();
+  let cleaned = input.trim();
 
-    // STRATEGY 0: Substring Extraction (The Nuclear Option)
-    // Find the first '[' or '{' and the last ']' or '}'
-    const firstSquare = cleaned.indexOf('[');
-    const firstCurly = cleaned.indexOf('{');
+  // STRATEGY 0: Substring Extraction (The Nuclear Option)
+  // Find the first '[' or '{' and the last ']' or '}'
+  const firstSquare = cleaned.indexOf('[');
+  const firstCurly = cleaned.indexOf('{');
 
-    let startIndex = -1;
-    let endIndex = -1;
-    let mode: 'array' | 'object' = 'array';
+  let startIndex = -1;
+  let endIndex = -1;
+  let mode: 'array' | 'object' = 'array';
 
-    if (firstSquare === -1 && firstCurly === -1) {
-      // No JSON found
-      return [];
-    }
+  if (firstSquare === -1 && firstCurly === -1) {
+    // No JSON found
+    return [];
+  }
 
-    if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
-      startIndex = firstSquare;
-      endIndex = cleaned.lastIndexOf(']');
-      mode = 'array';
-    } else {
-      startIndex = firstCurly;
-      endIndex = cleaned.lastIndexOf('}');
-      mode = 'object';
-    }
+  if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
+    startIndex = firstSquare;
+    endIndex = cleaned.lastIndexOf(']');
+    mode = 'array';
+  } else {
+    startIndex = firstCurly;
+    endIndex = cleaned.lastIndexOf('}');
+    mode = 'object';
+  }
 
-    if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
-      cleaned = cleaned.substring(startIndex, endIndex + 1);
-    } else {
-      return [];
-    }
+  if (startIndex !== -1 && endIndex !== -1 && endIndex > startIndex) {
+    cleaned = cleaned.substring(startIndex, endIndex + 1);
+  } else {
+    return [];
+  }
+
+  try {
+    // 1. Remove JavaScript-style comments (// and /* */)
+    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // Block comments
+    cleaned = cleaned.replace(/([^:"\\])\/\/[^\n]*/g, '$1'); // Line comments
+
+    // 2. Handle JavaScript literals that aren't valid JSON
+    cleaned = cleaned.replace(/:\s*undefined/g, ': null');
+    cleaned = cleaned.replace(/,\s*undefined/g, ', null');
+    cleaned = cleaned.replace(/:\s*NaN/g, ': null');
+    cleaned = cleaned.replace(/:\s*Infinity/g, ': null');
+    cleaned = cleaned.replace(/:\s*-Infinity/g, ': null');
+
+    // Handle Date objects if AI hallucinates them
+    cleaned = cleaned.replace(/new Date\(([^)]*)\)/g, '"$1"');
+
+    // Fix single quoted keys/values: 'key': 'value' -> "key": "value"
+    // Use efficient regex that avoids matching internal apostrophes if possible
+    // This simple version handles 'string' but might break "It's" if inside single quotes. 
+    // Safe strategy: Only replace ' at start/end of value position.
+    cleaned = cleaned.replace(/:\s*'([^']*)'(?=\s*(?:,|}))/g, ': "$1"');
+    cleaned = cleaned.replace(/'([^']+)'\s*:/g, '"$1":');
+
+    // Fix unquoted "row..." expressions (common for code generation)
+    // Matches: key: row.value > 10, -> key: "row.value > 10",
+    cleaned = cleaned.replace(/:\s*(row\.[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
+    cleaned = cleaned.replace(/:\s*(row\[[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
+
+    // Fix unquoted keys: { key: "val" } -> { "key": "val" }
+    // Matches identifier followed by colon, preceded by { or ,
+    cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
+
+    // Fix missing commas between objects (common hallucination)
+    cleaned = cleaned.replace(/}\s*{/g, '}, {');
+
+    // 3. Fix trailing commas (common AI mistake)
+    cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+
+    // 4. Try parsing
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.warn('[GroqService] First parse attempt failed, trying aggressive repair...', e);
+    // Futher aggressive cleaning if simple extraction failed
+
+    // Remove control characters
+    cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, '');
 
     try {
-      // 1. Remove JavaScript-style comments (// and /* */)
-      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // Block comments
-      cleaned = cleaned.replace(/([^:"\\])\/\/[^\n]*/g, '$1'); // Line comments
-
-      // 2. Handle JavaScript literals that aren't valid JSON
-      cleaned = cleaned.replace(/:\s*undefined/g, ': null');
-      cleaned = cleaned.replace(/,\s*undefined/g, ', null');
-      cleaned = cleaned.replace(/:\s*NaN/g, ': null');
-      cleaned = cleaned.replace(/:\s*Infinity/g, ': null');
-      cleaned = cleaned.replace(/:\s*-Infinity/g, ': null');
-
-      // Handle Date objects if AI hallucinates them
-      cleaned = cleaned.replace(/new Date\(([^)]*)\)/g, '"$1"');
-
-      // Fix single quoted keys/values: 'key': 'value' -> "key": "value"
-      // Use efficient regex that avoids matching internal apostrophes if possible
-      // This simple version handles 'string' but might break "It's" if inside single quotes. 
-      // Safe strategy: Only replace ' at start/end of value position.
-      cleaned = cleaned.replace(/:\s*'([^']*)'(?=\s*(?:,|}))/g, ': "$1"');
-      cleaned = cleaned.replace(/'([^']+)'\s*:/g, '"$1":');
-
-      // Fix unquoted "row..." expressions (common for code generation)
-      // Matches: key: row.value > 10, -> key: "row.value > 10",
-      cleaned = cleaned.replace(/:\s*(row\.[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
-      cleaned = cleaned.replace(/:\s*(row\[[^,}\n]*?)(?=\s*(?:,|}|\n))/g, ': "$1"');
-
-      // Fix unquoted keys: { key: "val" } -> { "key": "val" }
-      // Matches identifier followed by colon, preceded by { or ,
-      cleaned = cleaned.replace(/([{,]\s*)([a-zA-Z_][a-zA-Z0-9_]*)\s*:/g, '$1"$2":');
-
-      // Fix missing commas between objects (common hallucination)
-      cleaned = cleaned.replace(/}\s*{/g, '}, {');
-
-      // 3. Fix trailing commas (common AI mistake)
-      cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
-
-      // 4. Try parsing
       return JSON.parse(cleaned);
-    } catch (e) {
-      console.warn('[GroqService] First parse attempt failed, trying aggressive repair...', e);
-      // Futher aggressive cleaning if simple extraction failed
-
-      // Remove control characters
-      cleaned = cleaned.replace(/[\x00-\x1F\x7F]/g, '');
-
-      try {
-        return JSON.parse(cleaned);
-      } catch (e2) {
-        console.error('[GroqService] JSON Parse Critical Failure', {
-          original: input.substring(0, 100) + '...',
-          extracted: cleaned.substring(0, 100) + '...',
-          error: e2
-        });
-        return mode === 'array' ? [] : {};
-      }
+    } catch (e2) {
+      console.error('[GroqService] JSON Parse Critical Failure', {
+        original: input.substring(0, 100) + '...',
+        extracted: cleaned.substring(0, 100) + '...',
+        error: e2
+      });
+      return mode === 'array' ? [] : {};
     }
   }
+}
 
 
 }
