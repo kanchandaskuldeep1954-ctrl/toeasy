@@ -7,9 +7,10 @@ interface KPICardProps {
     kpi: KPI;
     columns?: string[];
     onUpdate?: (updatedKpi: KPI) => void;
+    onDelete?: (id: string) => void;
 }
 
-export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate }) => {
+export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate, onDelete }) => {
     const { label, value, trend, trendDirection, status, sparklineData } = kpi;
     const [isEditing, setIsEditing] = useState(false);
     const [editConfig, setEditConfig] = useState(kpi);
@@ -54,12 +55,23 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate })
     if (isEditing) {
         return (
             <div className={`relative overflow-hidden rounded-xl border border-indigo-500/50 bg-slate-900 p-4 shadow-xl z-20 h-auto min-h-[160px] flex flex-col gap-3 animate-in zoom-in-95`}>
-                <input
-                    value={editConfig.label}
-                    onChange={e => setEditConfig({ ...editConfig, label: e.target.value })}
-                    className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-xs font-bold text-white mb-2"
-                    placeholder="KPI Title"
-                />
+                <div className="flex justify-between items-center mb-2">
+                    <input
+                        value={editConfig.label}
+                        onChange={e => setEditConfig({ ...editConfig, label: e.target.value })}
+                        className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2 py-1.5 text-xs font-bold text-white outline-none focus:ring-2 focus:ring-indigo-500/30"
+                        placeholder="KPI Title"
+                    />
+                    {onDelete && (
+                        <button
+                            onClick={() => onDelete(kpi.id)}
+                            className="ml-2 p-1.5 rounded-lg bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white transition-all"
+                            title="Delete KPI"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        </button>
+                    )}
+                </div>
 
                 {editConfig.calculation && (
                     <div className="grid grid-cols-2 gap-2">

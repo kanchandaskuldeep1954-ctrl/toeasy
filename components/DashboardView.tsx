@@ -245,6 +245,33 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
     };
 
+    const handleRemoveKPI = (id: string) => {
+        if (!config || !config.kpis) return;
+        const updatedKPIs = config.kpis.filter(k => k.id !== id);
+        const newConfig = { ...config, kpis: updatedKPIs };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+    };
+
+    const handleAddKPI = () => {
+        if (!config) return;
+        const firstCol = dataset.headers[0];
+        const newKpi: KPI = {
+            id: 'kpi-' + Date.now(),
+            label: 'New KPI Metric',
+            value: '-',
+            calculation: {
+                column: firstCol,
+                operation: 'count',
+                format: 'number'
+            }
+        };
+        const updatedKPIs = [...(config.kpis || []), newKpi];
+        const newConfig = { ...config, kpis: updatedKPIs };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+    };
+
     const handleClearFilter = (key: string) => {
         setActiveFilters(prev => {
             const { [key]: _, ...rest } = prev;
@@ -602,8 +629,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             kpi={kpi}
                             columns={dataset.headers}
                             onUpdate={handleUpdateKPI}
+                            onDelete={handleRemoveKPI}
                         />
                     ))}
+                    {/* Add New KPI Card */}
+                    <button
+                        onClick={handleAddKPI}
+                        className="group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-8 flex flex-col items-center justify-center gap-3 transition-all hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 min-h-[160px]"
+                    >
+                        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-500 transition-all">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-500 transition-all">Add Metric</span>
+                    </button>
                 </div>
 
                 {/* Data Quality Warnings Section */}
