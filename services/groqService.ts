@@ -217,6 +217,16 @@ export class GroqService {
     return await this.callApi<ChartSpec>('generate-chart', 'POST', { dataset, prompt });
   }
 
+  // Generate KPI from prompt
+  static async generateKPIFromPrompt(dataset: Dataset, prompt: string): Promise<KPI> {
+    return await this.callApi<KPI>('generate-kpi', 'POST', { dataset, prompt });
+  }
+
+  // Modify KPI with AI
+  static async modifyKPIWithAI(dataset: Dataset, kpi: KPI, prompt: string): Promise<KPI> {
+    return await this.callApi<KPI>('modify-kpi', 'POST', { dataset, kpi, prompt });
+  }
+
   // Generate report
   static async generateReport(dataset: Dataset): Promise<StrategicReport> {
     return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset });

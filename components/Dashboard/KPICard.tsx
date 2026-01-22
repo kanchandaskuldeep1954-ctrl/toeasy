@@ -1,19 +1,23 @@
 
 import React, { useState } from 'react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
-import { KPI } from '../../types';
+import { KPI, Dataset } from '../../types';
+import { GroqService } from '../../services/groqService';
 
 interface KPICardProps {
     kpi: KPI;
+    dataset: Dataset;
     columns?: string[];
     onUpdate?: (updatedKpi: KPI) => void;
     onDelete?: (id: string) => void;
 }
 
-export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate, onDelete }) => {
+export const KPICard: React.FC<KPICardProps> = ({ kpi, dataset, columns = [], onUpdate, onDelete }) => {
     const { label, value, trend, trendDirection, status, sparklineData } = kpi;
     const [isEditing, setIsEditing] = useState(false);
     const [editConfig, setEditConfig] = useState(kpi);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isAiThinking, setIsAiThinking] = useState(false);
 
     // Determine colors based on status or trend
     let statusColor = 'text-slate-400';
@@ -50,6 +54,21 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate, o
             onUpdate(editConfig);
         }
         setIsEditing(false);
+    };
+
+    const handleAiAssist = async () => {
+        if (!aiPrompt) return;
+        setIsAiThinking(true);
+        try {
+            const modified = await GroqService.modifyKPIWithAI(dataset, editConfig, aiPrompt);
+            setEditConfig(modified);
+            setAiPrompt('');
+        } catch (e) {
+            console.error(e);
+            alert("AI could not modify this metric.");
+        } finally {
+            setIsAiThinking(false);
+        }
     };
 
     if (isEditing) {
@@ -120,6 +139,32 @@ export const KPICard: React.FC<KPICardProps> = ({ kpi, columns = [], onUpdate, o
                         </div>
                     </div>
                 )}
+
+                {/* AI Assist Section */}
+                <div className="mt-2 pt-2 border-t border-slate-800">
+                    <div className="flex items-center gap-2 mb-2">
+                        <div className="w-4 h-4 rounded-full bg-indigo-500/20 flex items-center justify-center">
+                            <svg className={`w-2.5 h-2.5 text-indigo-400 ${isAiThinking ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">AI Assist</span>
+                    </div>
+                    <div className="flex gap-2">
+                        <input
+                            value={aiPrompt}
+                            onChange={e => setAiPrompt(e.target.value)}
+                            onKeyDown={e => e.key === 'Enter' && handleAiAssist()}
+                            placeholder="Ask AI to change settings..."
+                            className="flex-1 bg-slate-800/50 border border-slate-700/50 rounded-lg px-2 py-1.5 text-[11px] text-white outline-none focus:border-indigo-500/50 transition-all placeholder:text-slate-600"
+                        />
+                        <button
+                            onClick={handleAiAssist}
+                            disabled={isAiThinking || !aiPrompt}
+                            className="p-1.5 rounded-lg bg-indigo-500 text-white hover:bg-indigo-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" /></svg>
+                        </button>
+                    </div>
+                </div>
 
                 <div className="flex justify-end gap-2 mt-auto pt-2">
                     <button onClick={() => setIsEditing(false)} className="text-[10px] font-bold text-slate-400 hover:text-white">Cancel</button>

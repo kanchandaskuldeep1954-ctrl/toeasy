@@ -267,6 +267,32 @@ app.post('/api/generate-chart', authenticateToken, async (req: AuthRequest, res)
   }
 });
 
+// Generate KPI from Prompt
+app.post('/api/generate-kpi', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, prompt } = req.body;
+    if (!dataset || !prompt) return res.status(400).json({ error: 'Dataset and prompt required' });
+    const kpi = await GroqService.generateKPIFromPrompt(dataset, prompt);
+    res.json(kpi);
+  } catch (err) {
+    console.error('Generate KPI error:', err);
+    res.status(500).json({ error: 'Failed to generate KPI' });
+  }
+});
+
+// Modify KPI with AI
+app.post('/api/modify-kpi', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, kpi, prompt } = req.body;
+    if (!dataset || !kpi || !prompt) return res.status(400).json({ error: 'Dataset, KPI, and prompt required' });
+    const modifiedKpi = await GroqService.modifyKPIWithAI(dataset, kpi, prompt);
+    res.json(modifiedKpi);
+  } catch (err) {
+    console.error('Modify KPI error:', err);
+    res.status(500).json({ error: 'Failed to modify KPI' });
+  }
+});
+
 // Generate Strategic Report
 app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res) => {
   try {

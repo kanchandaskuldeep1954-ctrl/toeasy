@@ -563,6 +563,80 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
+  static async generateKPIFromPrompt(dataset: any, prompt: string): Promise<any> {
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+
+      const groqPrompt = `You are a data analyst. Generate a KPI (Key Performance Indicator) specification based on user request.
+
+Request: "${prompt}"
+Dataset columns: ${headers.slice(0, 15).join(', ')}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"label": "Metric Name", "column": "column_name", "operation": "sum|avg|count|min|max|unique", "format": "number|currency|percentage"}`;
+
+      const result = await this.callGroq(groqPrompt, 400);
+      const spec = this.cleanAndParseJSON(result);
+
+      return {
+        id: `kpi-${Date.now()}`,
+        label: spec.label || 'New Metric',
+        value: '-',
+        category: 'custom',
+        calculation: {
+          column: spec.column || headers[0],
+          operation: spec.operation || 'count',
+          format: spec.format || 'number'
+        }
+      };
+    } catch (error) {
+      console.error('KPI generation error:', error);
+      const headers = dataset.headers || [];
+      return {
+        id: `kpi-${Date.now()}`,
+        label: 'New Metric',
+        value: '-',
+        calculation: { column: headers[0], operation: 'count', format: 'number' }
+      };
+    }
+  }
+
+  static async modifyKPIWithAI(dataset: any, kpi: any, prompt: string): Promise<any> {
+    try {
+      const headers = dataset.headers || [];
+      const groqPrompt = `You are a data analyst. Modify this KPI specification based on user request.
+
+Current KPI:
+- Label: ${kpi.label}
+- Column: ${kpi.calculation?.column}
+- Operation: ${kpi.calculation?.operation}
+
+User Request: "${prompt}"
+
+Available columns: ${headers.slice(0, 15).join(', ')}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{"label": "updated name", "column": "column_name", "operation": "sum|avg|count|min|max|unique", "format": "number|currency|percentage"}`;
+
+      const result = await this.callGroq(groqPrompt, 400);
+      const modified = this.cleanAndParseJSON(result);
+
+      return {
+        ...kpi,
+        label: modified.label || kpi.label,
+        calculation: {
+          ...kpi.calculation,
+          column: modified.column || kpi.calculation?.column,
+          operation: modified.operation || kpi.calculation?.operation,
+          format: modified.format || kpi.calculation?.format
+        }
+      };
+    } catch (error) {
+      console.error('KPI modification error:', error);
+      return kpi;
+    }
+  }
+
   static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});

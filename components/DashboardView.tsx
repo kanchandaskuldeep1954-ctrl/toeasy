@@ -73,6 +73,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     const [dashboardPrompt, setDashboardPrompt] = useState(''); // Global dashboard prompt
     const [isDashboardThinking, setIsDashboardThinking] = useState(false);
+    const [kpiPrompt, setKpiPrompt] = useState('');
+    const [isKpiThinking, setIsKpiThinking] = useState(false);
 
     // PowerBI-style Slicers
     const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
@@ -270,6 +272,25 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         const newConfig = { ...config, kpis: updatedKPIs };
         setConfig(newConfig);
         if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+    };
+
+    const handleAiAddKPI = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!kpiPrompt || !config) return;
+        setIsKpiThinking(true);
+        try {
+            const newKpi = await GroqService.generateKPIFromPrompt(dataset, kpiPrompt);
+            const updatedKPIs = [...(config.kpis || []), newKpi];
+            const newConfig = { ...config, kpis: updatedKPIs };
+            setConfig(newConfig);
+            if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+            setKpiPrompt('');
+        } catch (e) {
+            console.error(e);
+            alert("AI could not generate this metric.");
+        } finally {
+            setIsKpiThinking(false);
+        }
     };
 
     const handleClearFilter = (key: string) => {
@@ -627,21 +648,44 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         <KPICard
                             key={kpi.id}
                             kpi={kpi}
+                            dataset={dataset}
                             columns={dataset.headers}
                             onUpdate={handleUpdateKPI}
                             onDelete={handleRemoveKPI}
                         />
                     ))}
-                    {/* Add New KPI Card */}
-                    <button
-                        onClick={handleAddKPI}
-                        className="group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-8 flex flex-col items-center justify-center gap-3 transition-all hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5 min-h-[160px]"
-                    >
-                        <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-500 transition-all">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-500 transition-all">Add Metric</span>
-                    </button>
+                    {/* Add New KPI Card with AI */}
+                    <div className="flex flex-col gap-2 min-h-[160px]">
+                        <button
+                            onClick={handleAddKPI}
+                            className="flex-1 group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/50 dark:hover:bg-indigo-500/5"
+                        >
+                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-500 transition-all">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                            </div>
+                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-500 transition-all">Manual Metric</span>
+                        </button>
+
+                        <form onSubmit={handleAiAddKPI} className="group relative overflow-hidden rounded-xl border border-indigo-500/30 bg-indigo-500/5 p-4 flex flex-col gap-2 transition-all hover:bg-indigo-500/10 h-[100px]">
+                            <div className="flex items-center gap-2">
+                                <svg className={`w-3 h-3 text-indigo-400 ${isKpiThinking ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                <span className="text-[9px] font-black uppercase tracking-wider text-indigo-400">AI Metric Draft</span>
+                            </div>
+                            <input
+                                value={kpiPrompt}
+                                onChange={e => setKpiPrompt(e.target.value)}
+                                placeholder="Describe metric..."
+                                className="bg-transparent border-b border-indigo-500/20 text-[10px] text-white outline-none py-1 placeholder:text-indigo-300/30 focus:border-indigo-400 transition-all"
+                            />
+                            <button
+                                type="submit"
+                                disabled={isKpiThinking || !kpiPrompt}
+                                className="text-[9px] font-bold text-indigo-400 hover:text-indigo-300 disabled:opacity-50 text-right mt-auto"
+                            >
+                                {isKpiThinking ? 'Thinking...' : 'Generate →'}
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
                 {/* Data Quality Warnings Section */}
