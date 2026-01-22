@@ -378,6 +378,7 @@ export class AnalyticsEngine {
         }
 
         // 9. Fallback: Default Templates if no charts generated
+        const headers = profiles.map(p => p.column);
         if (charts.length < 3 && headers.length >= 2) {
             const h1 = headers[0];
             const h2 = headers[1];
