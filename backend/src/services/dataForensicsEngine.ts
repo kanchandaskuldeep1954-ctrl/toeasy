@@ -59,6 +59,8 @@ export interface ColumnProfile {
     relatedColumns?: string[];        // Dependent columns
     isGarbage: boolean;               // Should be removed
     placeholders: PlaceholderInfo[];  // ERROR, UNKNOWN, etc.
+    metaRole?: string;                // AI suggested role (e.g., "Primary Metric", "Key Breakout")
+    semanticDescription?: string;     // AI generated description of what this column really is
     stats?: {
         skewness: number;
         kurtosis: number;

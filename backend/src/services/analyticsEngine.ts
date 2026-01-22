@@ -1,6 +1,7 @@
 
 import { DataForensicsEngine, ColumnProfile, ColumnRole, ForensicResult } from './dataForensicsEngine.js';
 import { PredictiveAnalytics } from './predictiveAnalytics.js';
+import { AnalysisStrategist, DashboardBlueprint } from './analysisStrategist.js';
 
 export interface DashboardConfig {
     kpis: KPI[];
@@ -51,122 +52,139 @@ export interface FilterSpec {
 export class AnalyticsEngine {
 
     static async analyze(headers: string[], data: any[]): Promise<DashboardConfig> {
-        console.log(`[Analytics] Analyzing ${data.length} rows for dashboard generation...`);
+        console.log(`[Analytics] Analyzing ${data.length} rows for AI-First dashboard generation...`);
 
         // 1. Leverage Forensics Engine for deep profiling
-        // We sample up to 2000 rows for analytics to be more accurate than forensics
         const sampleSize = Math.min(data.length, 2000);
         const sample = data.slice(0, sampleSize);
         const forensics = await DataForensicsEngine.analyze(headers, sample, sampleSize);
 
-        // 2. Generate KPIs
-        const kpis = this.generateKPIs(data, forensics.profiles);
+        // 2. AI-First Strategy: Generate Dashboard Blueprint
+        const blueprint = await AnalysisStrategist.generateBlueprint(headers, forensics.profiles, sample);
 
-        // 3. Generate Charts
-        const charts = this.generateCharts(data, forensics.profiles);
+        // Enrich profiles with semantic context
+        forensics.profiles.forEach(p => {
+            if (blueprint.semanticContext[p.column]) {
+                p.semanticDescription = blueprint.semanticContext[p.column];
+            }
+        });
 
-        // 4. Generate Filters
+        // 3. Generate KPIs (Mix of Blueprint + Statistical base)
+        const kpis = this.generateKPIs(data, forensics.profiles, blueprint);
+
+        // 4. Generate Charts (Blueprint driven + discoveries)
+        const charts = this.generateCharts(data, forensics.profiles, blueprint);
+
+        // 5. Generate Filters
         const filters = this.generateFilters(forensics.profiles, data);
 
-        // 5. Generate Insights
-        const insights = this.generateInsights(kpis, charts);
+        // 6. Generate Insights (AI contextualized)
+        const insights = this.generateInsights(kpis, charts, blueprint);
 
-        // 6. Append Predictive Charts (Forecasts)
+        // 7. Append Predictive Charts (Forecasts)
         const predictiveCharts = this.generatePredictiveCharts(data, forensics.profiles);
         charts.push(...predictiveCharts);
 
         return {
             kpis,
-            charts,
+            charts: this.prioritizeCharts(charts),
             layout: this.generateLayout(charts),
             filters,
             insights
         };
     }
 
-    private static generateKPIs(data: any[], profiles: ColumnProfile[]): KPI[] {
+    private static prioritizeCharts(charts: ChartSpec[]): ChartSpec[] {
+        const pMap: Record<string, number> = { 'high': 0, 'medium': 1, 'low': 2 };
+        return [...charts].sort((a, b) => {
+            if (pMap[a.priority] !== pMap[b.priority]) return pMap[a.priority] - pMap[b.priority];
+            return a.id.localeCompare(b.id);
+        });
+    }
+
+    private static generateKPIs(data: any[], profiles: ColumnProfile[], blueprint?: DashboardBlueprint): KPI[] {
         const kpis: KPI[] = [];
         const totalRows = data.length;
 
-        // --- 1. Volume KPIs ---
-        kpis.push({
-            id: 'total_records',
-            label: 'Total Records',
-            value: totalRows,
-            category: 'volume',
-            trend: 0,
-            trendDirection: 'neutral'
-        });
+        // --- 1. AI Blueprint KPIs (Highest Value) ---
+        if (blueprint && blueprint.recommendedKPIs) {
+            blueprint.recommendedKPIs.forEach(spec => {
+                const col = profiles.find(p => p.column === spec.column);
+                let value: any = '-';
+                let sparkline: number[] = [];
 
-        // --- 2. Financial KPIs ---
+                if (col || spec.operation === 'count') {
+                    const values = data.map(r => spec.column ? parseFloat(r[spec.column]) : 1).filter(n => !isNaN(n));
+                    const total = values.reduce((s, v) => s + v, 0);
+
+                    if (spec.operation === 'avg') value = total / (values.length || 1);
+                    else if (spec.operation === 'unique') value = new Set(data.map(r => r[spec.column!])).size;
+                    else value = total;
+
+                    if (spec.format === 'currency') value = this.formatCurrency(value);
+                    else if (spec.format === 'percentage') value = `${(value * 100).toFixed(1)}%`;
+                    else value = Math.round(value).toLocaleString();
+
+                    sparkline = this.generateSparkline(values.slice(0, 50));
+                }
+
+                kpis.push({
+                    id: spec.id,
+                    label: spec.label,
+                    value,
+                    category: spec.category,
+                    importance: spec.importance as any,
+                    sparklineData: sparkline,
+                    calculation: {
+                        column: spec.column,
+                        operation: spec.operation,
+                        format: spec.format
+                    }
+                } as any);
+            });
+        }
+
+        // --- 2. Volume KPIs ---
+        if (!kpis.find(k => k.id === 'total_records')) {
+            kpis.push({
+                id: 'total_records',
+                label: 'Total Records',
+                value: totalRows,
+                category: 'volume',
+                trend: 0,
+                trendDirection: 'neutral'
+            });
+        }
+
+        // --- 3. Financial Discovery ---
         const currencyCols = profiles.filter(p => p.role === 'currency' || (p.dataType === 'number' && (p.column.toLowerCase().includes('price') || p.column.toLowerCase().includes('amount') || p.column.toLowerCase().includes('total') || p.column.toLowerCase().includes('cost') || p.column.toLowerCase().includes('revenue'))));
 
-        currencyCols.forEach(col => {
+        currencyCols.slice(0, 2).forEach(col => {
+            if (kpis.find(k => k.id.includes(col.column))) return;
             const values = data.map(r => parseFloat(r[col.column])).filter(n => !isNaN(n));
             const total = values.reduce((sum, val) => sum + val, 0);
-            const avg = total / (values.length || 1);
 
             kpis.push({
                 id: `total_${col.column}`,
                 label: `Total ${col.column}`,
                 value: this.formatCurrency(total),
                 category: 'financial',
-                sparklineData: this.generateSparkline(values.slice(0, 50)), // Sample for sparkline
                 calculation: { column: col.column, operation: 'sum', format: 'currency' }
             });
+        });
 
+        // --- 4. Quality Discovery ---
+        const qualityScore = Object.values(profiles).reduce((acc, p) => acc + (1 - p.nullPercent / 100), 0) / profiles.length;
+        if (!kpis.find(k => k.id === 'data_health')) {
             kpis.push({
-                id: `avg_${col.column}`,
-                label: `Avg ${col.column}`,
-                value: this.formatCurrency(avg),
-                category: 'financial',
-                calculation: { column: col.column, operation: 'avg', format: 'currency' }
+                id: 'data_health',
+                label: 'Data Health Score',
+                value: `${(qualityScore * 100).toFixed(1)}%`,
+                category: 'quality',
+                status: qualityScore > 0.9 ? 'on_track' : (qualityScore > 0.7 ? 'at_risk' : 'off_track')
             });
-        });
-
-        // --- 3. Operational/Status KPIs ---
-        const statusCols = Object.values(profiles).filter(p => p.role === 'status' || p.column.toLowerCase().includes('status'));
-        statusCols.forEach(col => {
-            const counts: Record<string, number> = {};
-            data.forEach(r => {
-                const val = r[col.column];
-                if (val) counts[val] = (counts[val] || 0) + 1;
-            });
-
-            // Find success/completed rate
-            const successKeys = Object.keys(counts).filter(k =>
-                ['completed', 'success', 'paid', 'shipped', 'delivered', 'active', 'done'].some(s => k.toLowerCase().includes(s))
-            );
-
-            if (successKeys.length > 0) {
-                const successCount = successKeys.reduce((sum, k) => sum + counts[k], 0);
-                const rate = (successCount / totalRows) * 100;
-
-                kpis.push({
-                    id: `${col.column}_success_rate`,
-                    label: `${col.column} Success Rate`,
-                    value: `${rate.toFixed(1)}%`,
-                    category: 'operational',
-                    status: rate > 80 ? 'on_track' : (rate > 50 ? 'at_risk' : 'off_track')
-                });
-            }
-        });
-
-        // --- 4. Quality KPIs ---
-        const qualityScore = Object.values(profiles).reduce((acc, p) => acc + (1 - p.nullPercent), 0) / Object.keys(profiles).length;
-        kpis.push({
-            id: 'data_health',
-            label: 'Data Health Score',
-            value: `${(qualityScore * 100).toFixed(1)}%`,
-            category: 'quality',
-            status: qualityScore > 0.9 ? 'on_track' : (qualityScore > 0.7 ? 'at_risk' : 'off_track')
-        });
-
-        // --- 5. Advanced Growth & Retention ---
-        const advancedKpis = this.generateAdvancedKPIs(data, profiles);
-        kpis.push(...advancedKpis);
-
-        return kpis;
+        }
+        return kpis.slice(0, 10);
     }
 
     private static generateAdvancedKPIs(data: any[], profiles: ColumnProfile[]): KPI[] {
@@ -241,127 +259,90 @@ export class AnalyticsEngine {
         return kpis;
     }
 
-    private static generateCharts(data: any[], profiles: ColumnProfile[]): ChartSpec[] {
+    private static generateCharts(data: any[], profiles: ColumnProfile[], blueprint?: DashboardBlueprint): ChartSpec[] {
         const charts: ChartSpec[] = [];
         const cols = profiles;
 
-        // Find key columns
+        // --- 1. AI Blueprint Charts (Strategic Choice) ---
+        if (blueprint && blueprint.recommendedCharts) {
+            blueprint.recommendedCharts.forEach(spec => {
+                let chartData: any[] = [];
+                const xCol = profiles.find(p => p.column === spec.xAxis);
+                const yCol = profiles.find(p => p.column === spec.yAxis);
+
+                if (!xCol) return;
+
+                if (spec.type === 'sunburst') {
+                    // AI suggested a hierarchy discovery
+                    chartData = this.aggregateByCategory(data, spec.xAxis, spec.yAxis, spec.aggregation as any);
+                } else if (spec.type === 'scatter') {
+                    chartData = data.slice(0, 500).map(r => ({ x: r[spec.xAxis], y: r[spec.yAxis] }));
+                } else if (spec.type === 'line' && xCol.dataType === 'date') {
+                    chartData = this.aggregateByTime(data, spec.xAxis, spec.yAxis);
+                } else {
+                    chartData = this.aggregateByCategory(data, spec.xAxis, spec.yAxis, spec.aggregation as any);
+                }
+
+                charts.push({
+                    id: spec.id,
+                    title: spec.title,
+                    type: spec.type as any,
+                    priority: spec.priority as any,
+                    size: (spec.type === 'sunburst' || spec.type === 'line') ? 'large' : 'medium',
+                    description: spec.description,
+                    data: chartData,
+                    options: { xAxis: spec.xAxis, yAxis: spec.yAxis }
+                });
+            });
+        }
+
+        // --- 2. Statistical Discoveries (Secondary) ---
         const dateCol = cols.find(p => p.role === 'timestamp' || p.dataType === 'date');
         const catCols = cols.filter(p => p.dataType === 'string' && p.uniqueCount < 50 && p.uniqueCount > 1);
         const numCols = cols.filter(p => p.dataType === 'number' && p.role !== 'identifier');
-        const geoCols = cols.filter(p => ['city', 'country', 'region', 'state', 'zip'].includes(p.role) || ['city', 'country', 'region'].some(t => p.column.toLowerCase().includes(t)));
+        const geoCols = cols.filter(p => ['city', 'country', 'region', 'state', 'zip'].includes(p.role));
 
-        // 1. Time Series Trends (if date column exists)
-        if (dateCol && numCols.length > 0) {
-            numCols.slice(0, 3).forEach(num => {
-                charts.push({
-                    id: `trend_${num.column}`,
-                    title: `${num.column} Over Time`,
-                    type: 'line',
-                    priority: 'high',
-                    size: 'large',
-                    data: this.aggregateByTime(data, dateCol.column, num.column),
-                    options: { xAxis: 'Date', yAxis: num.column }
-                });
+        // Time trends if not in blueprint
+        if (dateCol && numCols.length > 0 && charts.length < 4) {
+            numCols.slice(0, 2).forEach(num => {
+                if (!charts.find(c => c.id.includes(num.column))) {
+                    charts.push({
+                        id: `trend_discovery_${num.column}`,
+                        title: `${num.column} Momentum`,
+                        type: 'line',
+                        priority: 'medium',
+                        size: 'large',
+                        data: this.aggregateByTime(data, dateCol.column, num.column),
+                        options: { xAxis: 'Date', yAxis: num.column }
+                    });
+                }
             });
         }
 
-        // 2. Formatting Distribution (Categorical)
-        catCols.slice(0, 4).forEach(cat => {
+        // Categorical breakdowns
+        catCols.slice(0, 3).forEach(cat => {
+            if (charts.length > 10) return;
             const metric = numCols[0];
-            // Intelligent logic for high-value dimensions
-            const isClinicalAvgNeeded = /age|stay|satisfaction|rating|score/i.test(metric?.column || '');
-            const op = isClinicalAvgNeeded ? 'avg' : 'sum';
+            const op = /avg|rating|score|satisfaction|stay|age/i.test(metric?.column || '') ? 'avg' : 'sum';
 
             charts.push({
-                id: `dist_${cat.column}`,
-                title: `${isClinicalAvgNeeded ? 'Avg ' : ''}${cat.column} Distribution ${isClinicalAvgNeeded ? `(${metric?.column})` : ''}`,
+                id: `dist_auto_${cat.column}`,
+                title: `${cat.column} Analysis`,
                 type: 'bar',
-                priority: 'medium',
+                priority: 'low',
                 size: 'medium',
                 data: this.aggregateByCategory(data, cat.column, metric?.column, op),
-                options: { xAxis: cat.column, yAxis: metric ? metric.column : 'Count' }
+                options: { xAxis: cat.column, yAxis: metric?.column || 'Count' }
             });
-
-            // Pie chart for low cardinality
-            if (cat.uniqueCount < 8) {
-                charts.push({
-                    id: `share_${cat.column}`,
-                    title: `${cat.column} Share`,
-                    type: 'doughnut',
-                    priority: 'medium',
-                    size: 'small',
-                    data: this.aggregateByCategory(data, cat.column, metric?.column),
-                    options: { xAxis: cat.column, yAxis: metric ? metric.column : 'Count' }
-                });
-            }
         });
 
-        // 3. Relationships (Scatter)
-        if (numCols.length >= 2) {
-            charts.push({
-                id: `scatter_${numCols[0].column}_${numCols[1].column}`,
-                title: `${numCols[0].column} vs ${numCols[1].column}`,
-                type: 'scatter',
-                priority: 'medium',
-                size: 'medium',
-                data: data.slice(0, 500).map(r => ({ x: r[numCols[0].column], y: r[numCols[1].column] })),
-                options: { xAxis: numCols[0].column, yAxis: numCols[1].column }
-            });
-        }
-
-        // 4. Funnel/Distribution (Status/Process Tracking)
-        const statusCol = cols.find(p => p.role === 'status');
-        if (statusCol) {
-            if (statusCol.uniqueCount <= 8) {
-                charts.push({
-                    id: 'status_funnel',
-                    title: 'Process Operational Flow',
-                    type: 'funnel',
-                    priority: 'high',
-                    size: 'medium',
-                    data: this.aggregateByCategory(data, statusCol.column),
-                    options: { xAxis: statusCol.column, yAxis: 'Count' }
-                });
-            } else {
-                charts.push({
-                    id: 'status_distribution',
-                    title: `${statusCol.column} Distribution (Volume)`,
-                    type: 'bar',
-                    priority: 'medium',
-                    size: 'medium',
-                    data: this.aggregateByCategory(data, statusCol.column),
-                    options: { xAxis: statusCol.column, yAxis: 'Count' }
-                });
-            }
-        }
-
-        // 5. Ranking (Top N)
-        if (catCols.length > 0 && numCols.length > 0) {
-            const totalCategories = catCols[0].uniqueCount;
-            const topN = Math.min(totalCategories, 10);
-            const isPartial = topN < totalCategories;
-
-            charts.push({
-                id: `top_${topN}_${catCols[0].column}`,
-                title: `${isPartial ? `Top ${topN} ` : ''}${catCols[0].column} by ${numCols[0].column}`,
-                type: 'bar-horizontal',
-                priority: 'high',
-                size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, numCols[0].column)
-                    .sort((a: any, b: any) => b.value - a.value)
-                    .slice(0, topN),
-                options: { xAxis: catCols[0].column, yAxis: numCols[0].column, orientation: 'horizontal' }
-            });
-        }
-
-        // 6. Pro Visuals: Maps
+        // 6. Pro Visuals: Maps (Always High Priority if exists)
         if (geoCols.length > 0 && numCols.length > 0) {
             const geo = geoCols[0];
             const metric = numCols[0];
             charts.push({
                 id: `geo_map_${geo.column}`,
-                title: `${metric.column} by ${geo.column} (Geographic)`,
+                title: `Geographic Distribution: ${metric.column}`,
                 type: geo.role === 'country' ? 'choropleth' : 'scattergeo',
                 priority: 'high',
                 size: 'large',
@@ -370,126 +351,7 @@ export class AnalyticsEngine {
             });
         }
 
-        // 7. Pro Visuals: Statistical Distribution
-        if (numCols.length > 0) {
-            const num = numCols[0];
-            charts.push({
-                id: `dist_box_${num.column}`,
-                title: `${num.column} Distribution (Box Plot)`,
-                type: 'box',
-                priority: 'medium',
-                size: 'medium',
-                data: data.slice(0, 500).map(r => ({ name: 'Distribution', value: parseFloat(r[num.column]) })),
-                options: { yAxis: num.column }
-            });
-        }
-
-        // 8. Pro Visuals: Sunburst (if Hierarchical categories exist)
-        const reasonCol = cols.find(p => p.role === 'reason');
-        if (statusCol && reasonCol) {
-            charts.push({
-                id: 'root_cause_sunburst',
-                title: 'Operational Root Cause Analysis',
-                type: 'sunburst',
-                priority: 'high',
-                size: 'large',
-                data: this.aggregateByCategory(data, reasonCol.column, numCols[0]?.column),
-                options: { labels: reasonCol.column, parents: statusCol.column }
-            });
-        } else if (catCols.length >= 2) {
-            charts.push({
-                id: 'category_sunburst',
-                title: 'Nested Category Discovery',
-                type: 'sunburst',
-                priority: 'medium',
-                size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, numCols[0]?.column),
-                options: { labels: catCols[0].column, parents: catCols[1].column }
-            });
-        }
-
-        // 9. Pro Visuals: Heatmap (Quality Matrix)
-        if (catCols.length > 0 && statusCol) {
-            const isHealthcare = /condition|procedure|patient/i.test(catCols[0].column);
-            charts.push({
-                id: 'quality_heatmap',
-                title: isHealthcare ? 'Clinical Outcome Matrix' : 'Quality Matrix (Product vs Status)',
-                type: 'heatmap',
-                priority: 'medium',
-                size: 'medium',
-                data: [], // Handled by standard heatmapping logic in PlotlyChart
-                options: { xAxis: catCols[0].column, yAxis: statusCol.column, zAxis: numCols[0]?.column || 'Count' }
-            });
-        }
-
-        // 10. Pro Visuals: Correlations (Scatter)
-        const ageCol = numCols.find(p => /age/i.test(p.column));
-        const costCol = numCols.find(p => /cost|amount|price/i.test(p.column));
-        if (ageCol && costCol) {
-            charts.push({
-                id: 'age_cost_correlation',
-                title: 'Healthcare Economic Analysis (Age vs Cost)',
-                type: 'scatter',
-                priority: 'medium',
-                size: 'medium',
-                data: data.slice(0, 500).map(r => ({ x: r[ageCol.column], y: r[costCol.column] })),
-                options: { xAxis: ageCol.column, yAxis: costCol.column }
-            });
-        }
-
-        // --- 11. Domain Insight: Clinical Efficiency (Length of Stay) ---
-        const effCol = cols.find(p => p.role === 'efficiency');
-        if (effCol && catCols.length > 0) {
-            charts.push({
-                id: 'efficiency_by_condition',
-                title: `Clinical Efficiency: Avg ${effCol.column} by ${catCols[0].column}`,
-                type: 'bar',
-                priority: 'high',
-                size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, effCol.column, 'avg'),
-                options: { xAxis: catCols[0].column, yAxis: effCol.column }
-            });
-        }
-
-        // --- 12. Domain Insight: Patient experience (Satisfaction) ---
-        const expCol = cols.find(p => p.role === 'experience');
-        if (expCol && statusCol) {
-            charts.push({
-                id: 'experience_vs_outcome',
-                title: `Mean Patient Sentiment vs ${statusCol.column}`,
-                type: 'bar-horizontal',
-                priority: 'high',
-                size: 'medium',
-                data: this.aggregateByCategory(data, statusCol.column, expCol.column, 'avg'),
-                options: { xAxis: statusCol.column, yAxis: expCol.column, orientation: 'horizontal' }
-            });
-        }
-
-        // --- 13. Domain Insight: Risk Management (Readmission) ---
-        const readmissionCol = cols.find(p => p.column.toLowerCase().includes('readmission'));
-        if (readmissionCol && catCols.length > 0) {
-            charts.push({
-                id: 'risk_ranking',
-                title: `Clinical Risk Matrix: ${catCols[0].column} vs ${readmissionCol.column}`,
-                type: 'bar',
-                priority: 'medium',
-                size: 'medium',
-                data: this.aggregateByCategory(data, catCols[0].column, readmissionCol.column),
-                options: { xAxis: catCols[0].column, yAxis: readmissionCol.column }
-            });
-        }
-
-        // --- FINAL STEP: Intelligent Prioritization ---
-        // Sort by priority (high > medium > low) and then by id
-        const sortedCharts = charts.sort((a, b) => {
-            const pMap: Record<string, number> = { 'high': 0, 'medium': 1, 'low': 2 };
-            if (pMap[a.priority] !== pMap[b.priority]) {
-                return pMap[a.priority] - pMap[b.priority];
-            }
-            return a.id.localeCompare(b.id);
-        });
-
-        return sortedCharts;
+        return charts;
     }
 
     private static generateFilters(profiles: ColumnProfile[], data: any[]): FilterSpec[] {
@@ -537,19 +399,28 @@ export class AnalyticsEngine {
         return filters;
     }
 
-    private static generateInsights(kpis: KPI[], charts: ChartSpec[]): string[] {
+    private static generateInsights(kpis: KPI[], charts: ChartSpec[], blueprint?: DashboardBlueprint): string[] {
         const insights: string[] = [];
+
+        if (blueprint && blueprint.objective) {
+            insights.push(`Analytical Objective: ${blueprint.objective}`);
+        }
 
         // Growth insights
         const records = kpis.find(k => k.id === 'total_records');
-        if (records) insights.push(`Dataset contains ${records.value} records.`);
+        if (records) insights.push(`Dataset comprises ${records.value.toLocaleString()} audited records.`);
 
-        // Financial insights
-        const revenue = kpis.find(k => k.category === 'financial' && k.label.includes('Total'));
-        if (revenue) insights.push(`Total generated value is ${revenue.value}.`);
+        // AI specific insights
+        if (blueprint && blueprint.semanticContext) {
+            const meanings = Object.values(blueprint.semanticContext).slice(0, 3);
+            if (meanings.length > 0) {
+                insights.push(`Data Intelligence: Core metrics focused on ${meanings.join(', ')}.`);
+            }
+        }
 
         return insights;
     }
+
 
     // --- Helpers ---
 
@@ -613,9 +484,12 @@ export class AnalyticsEngine {
         const sample = data.slice(0, sampleSize);
         const forensics = await DataForensicsEngine.analyze(headers, sample, sampleSize);
 
-        // 2. Base Analytics
-        const allKpis = this.generateKPIs(data, forensics.profiles);
-        const allCharts = this.generateCharts(data, forensics.profiles);
+        // 2. AI Strategy
+        const blueprint = await AnalysisStrategist.generateBlueprint(headers, forensics.profiles, sample);
+
+        // 3. Base Analytics
+        const allKpis = this.generateKPIs(data, forensics.profiles, blueprint);
+        const allCharts = this.generateCharts(data, forensics.profiles, blueprint);
 
         // 3. Filter & Enhance based on Report Type
         let filteredKpis = allKpis;
