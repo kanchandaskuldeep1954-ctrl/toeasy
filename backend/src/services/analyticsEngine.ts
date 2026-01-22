@@ -435,37 +435,59 @@ export class AnalyticsEngine {
             });
         }
 
-        // 9. Fallback: Default Templates if no charts generated
-        const headers = profiles.map(p => p.column);
-        if (charts.length < 3 && headers.length >= 2) {
-            const h1 = headers[0];
-            const h2 = headers[1];
-
-            if (!charts.find(c => c.id === 'default_bar')) {
-                charts.push({
-                    id: 'default_bar',
-                    title: 'Overview (Default)',
-                    type: 'bar',
-                    priority: 'low',
-                    size: 'medium',
-                    data: data.slice(0, 10).map(r => ({ label: String(r[h1] || 'Item'), value: Number(r[h2]) || 0 })),
-                    options: { xAxis: h1, yAxis: h2 }
-                });
-            }
-            if (!charts.find(c => c.id === 'default_line')) {
-                charts.push({
-                    id: 'default_line',
-                    title: 'Trend Analysis (Default)',
-                    type: 'line',
-                    priority: 'low',
-                    size: 'medium',
-                    data: data.slice(0, 10).map(r => ({ label: String(r[h1] || 'Time'), value: Number(r[h2]) || 0 })),
-                    options: { xAxis: h1, yAxis: h2 }
-                });
-            }
+        // --- 11. Domain Insight: Clinical Efficiency (Length of Stay) ---
+        const effCol = cols.find(p => p.role === 'efficiency');
+        if (effCol && catCols.length > 0) {
+            charts.push({
+                id: 'efficiency_by_condition',
+                title: `Clinical Efficiency: ${effCol.column} by ${catCols[0].column}`,
+                type: 'bar',
+                priority: 'high',
+                size: 'medium',
+                data: this.aggregateByCategory(data, catCols[0].column, effCol.column),
+                options: { xAxis: catCols[0].column, yAxis: effCol.column }
+            });
         }
 
-        return charts;
+        // --- 12. Domain Insight: Patient experience (Satisfaction) ---
+        const expCol = cols.find(p => p.role === 'experience');
+        if (expCol && statusCol) {
+            charts.push({
+                id: 'experience_vs_outcome',
+                title: `Patient Sentiment vs ${statusCol.column}`,
+                type: 'bar-horizontal',
+                priority: 'high',
+                size: 'medium',
+                data: this.aggregateByCategory(data, statusCol.column, expCol.column),
+                options: { xAxis: statusCol.column, yAxis: expCol.column, orientation: 'horizontal' }
+            });
+        }
+
+        // --- 13. Domain Insight: Risk Management (Readmission) ---
+        const readmissionCol = cols.find(p => p.column.toLowerCase().includes('readmission'));
+        if (readmissionCol && catCols.length > 0) {
+            charts.push({
+                id: 'risk_ranking',
+                title: `Clinical Risk Matrix: ${catCols[0].column} vs ${readmissionCol.column}`,
+                type: 'bar',
+                priority: 'medium',
+                size: 'medium',
+                data: this.aggregateByCategory(data, catCols[0].column, readmissionCol.column),
+                options: { xAxis: catCols[0].column, yAxis: readmissionCol.column }
+            });
+        }
+
+        // --- FINAL STEP: Intelligent Prioritization ---
+        // Sort by priority (high > medium > low) and then by id
+        const sortedCharts = charts.sort((a, b) => {
+            const pMap: Record<string, number> = { 'high': 0, 'medium': 1, 'low': 2 };
+            if (pMap[a.priority] !== pMap[b.priority]) {
+                return pMap[a.priority] - pMap[b.priority];
+            }
+            return a.id.localeCompare(b.id);
+        });
+
+        return sortedCharts;
     }
 
     private static generateFilters(profiles: ColumnProfile[], data: any[]): FilterSpec[] {
@@ -543,10 +565,19 @@ export class AnalyticsEngine {
         const agg: Record<string, number> = {};
         data.forEach(row => {
             const key = row[catCol] || 'Unknown';
-            const val = metricCol ? parseFloat(row[metricCol]) : 1;
-            if (!isNaN(val)) {
-                agg[key] = (agg[key] || 0) + val;
+            let val = 1;
+            if (metricCol) {
+                const rawVal = row[metricCol];
+                if (typeof rawVal === 'string') {
+                    const lowVal = rawVal.toLowerCase();
+                    if (lowVal === 'yes' || lowVal === 'true' || lowVal === 'high' || lowVal === 'recovered') val = 1;
+                    else if (lowVal === 'no' || lowVal === 'false' || lowVal === 'low' || lowVal === 'stable') val = 0;
+                    else val = parseFloat(rawVal) || 0;
+                } else {
+                    val = parseFloat(rawVal) || 0;
+                }
             }
+            agg[key] = (agg[key] || 0) + val;
         });
 
         return Object.entries(agg).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
@@ -611,8 +642,8 @@ export class AnalyticsEngine {
             case 'strategic':
             default:
                 // Mix of high-level KPIs and trends
-                filteredKpis = allKpis.slice(0, 8);
-                filteredCharts = allCharts.slice(0, 6);
+                filteredKpis = allKpis.slice(0, 10); // More KPIs
+                filteredCharts = allCharts.slice(0, 12); // Way more charts for a "Pro" feel
                 break;
         }
 

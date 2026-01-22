@@ -17,6 +17,8 @@ export type ColumnRole =
     | 'dimension'       // Categorical grouping fields
     | 'timestamp'       // Date/time fields
     | 'status'          // Status/state indicators
+    | 'efficiency'      // Duration, stay, turnaround time
+    | 'experience'      // Satisfaction, rating, NPS
     | 'reason'          // Explanation/notes fields
     | 'reference'       // Foreign keys, lookups
     | 'contact'         // Email, phone, address
@@ -166,6 +168,16 @@ export class DataForensicsEngine {
     private static readonly QUANTITY_PATTERNS = [
         /qty$/i, /quantity$/i, /count$/i, /number$/i, /units$/i,
         /items$/i, /pieces$/i, /volume$/i
+    ];
+
+    // Common efficiency/duration patterns
+    private static readonly EFFICIENCY_PATTERNS = [
+        /stay$/i, /duration$/i, /time_in/i, /latency/i, /processing_time/i, /turnaround/i
+    ];
+
+    // Common experience/satisfaction patterns
+    private static readonly EXPERIENCE_PATTERNS = [
+        /satisfaction/i, /rating/i, /score/i, /feedback/i, /nps/i
     ];
 
     /**
@@ -489,6 +501,8 @@ export class DataForensicsEngine {
         if (this.ID_PATTERNS.some(p => p.test(column))) return 'identifier';
         if (this.DATE_PATTERNS.some(p => p.test(column))) return 'timestamp';
         if (this.STATUS_PATTERNS.some(p => p.test(column))) return 'status';
+        if (this.EFFICIENCY_PATTERNS.some(p => p.test(column))) return 'efficiency';
+        if (this.EXPERIENCE_PATTERNS.some(p => p.test(column))) return 'experience';
 
         if (this.AMOUNT_PATTERNS.some(p => p.test(column))) {
             return colLower.includes('percent') ? 'percentage' : 'currency';
