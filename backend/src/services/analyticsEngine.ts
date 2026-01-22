@@ -308,26 +308,41 @@ export class AnalyticsEngine {
             });
         }
 
-        // 4. Funnel (Workflows only - low cardinality)
+        // 4. Funnel/Distribution (Status/Process Tracking)
         const statusCol = cols.find(p => p.role === 'status');
-        if (statusCol && statusCol.uniqueCount <= 8) {
-            charts.push({
-                id: 'status_funnel',
-                title: 'Process Operational Flow',
-                type: 'funnel',
-                priority: 'high',
-                size: 'medium',
-                data: this.aggregateByCategory(data, statusCol.column),
-                options: { xAxis: statusCol.column, yAxis: 'Count' }
-            });
+        if (statusCol) {
+            if (statusCol.uniqueCount <= 8) {
+                charts.push({
+                    id: 'status_funnel',
+                    title: 'Process Operational Flow',
+                    type: 'funnel',
+                    priority: 'high',
+                    size: 'medium',
+                    data: this.aggregateByCategory(data, statusCol.column),
+                    options: { xAxis: statusCol.column, yAxis: 'Count' }
+                });
+            } else {
+                charts.push({
+                    id: 'status_distribution',
+                    title: `${statusCol.column} Distribution (Volume)`,
+                    type: 'bar',
+                    priority: 'medium',
+                    size: 'medium',
+                    data: this.aggregateByCategory(data, statusCol.column),
+                    options: { xAxis: statusCol.column, yAxis: 'Count' }
+                });
+            }
         }
 
         // 5. Ranking (Top N)
         if (catCols.length > 0 && numCols.length > 0) {
-            const topN = Math.min(catCols[0].uniqueCount, 10);
+            const totalCategories = catCols[0].uniqueCount;
+            const topN = Math.min(totalCategories, 10);
+            const isPartial = topN < totalCategories;
+
             charts.push({
                 id: `top_${topN}_${catCols[0].column}`,
-                title: `${topN > 1 ? `Top ${topN} ` : ''}${catCols[0].column} Distribution`,
+                title: `${isPartial ? `Top ${topN} ` : ''}${catCols[0].column} by ${numCols[0].column}`,
                 type: 'bar-horizontal',
                 priority: 'high',
                 size: 'medium',
@@ -393,14 +408,30 @@ export class AnalyticsEngine {
 
         // 9. Pro Visuals: Heatmap (Quality Matrix)
         if (catCols.length > 0 && statusCol) {
+            const isHealthcare = /condition|procedure|patient/i.test(catCols[0].column);
             charts.push({
                 id: 'quality_heatmap',
-                title: 'Quality Matrix (Product vs Status)',
+                title: isHealthcare ? 'Clinical Outcome Matrix' : 'Quality Matrix (Product vs Status)',
                 type: 'heatmap',
                 priority: 'medium',
                 size: 'medium',
                 data: [], // Handled by standard heatmapping logic in PlotlyChart
                 options: { xAxis: catCols[0].column, yAxis: statusCol.column, zAxis: numCols[0]?.column || 'Count' }
+            });
+        }
+
+        // 10. Pro Visuals: Correlations (Scatter)
+        const ageCol = numCols.find(p => /age/i.test(p.column));
+        const costCol = numCols.find(p => /cost|amount|price/i.test(p.column));
+        if (ageCol && costCol) {
+            charts.push({
+                id: 'age_cost_correlation',
+                title: 'Healthcare Economic Analysis (Age vs Cost)',
+                type: 'scatter',
+                priority: 'medium',
+                size: 'medium',
+                data: data.slice(0, 500).map(r => ({ x: r[ageCol.column], y: r[costCol.column] })),
+                options: { xAxis: ageCol.column, yAxis: costCol.column }
             });
         }
 
