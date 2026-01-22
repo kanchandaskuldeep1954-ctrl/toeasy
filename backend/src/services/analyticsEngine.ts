@@ -377,6 +377,35 @@ export class AnalyticsEngine {
             });
         }
 
+        // 9. Fallback: Default Templates if no charts generated
+        if (charts.length < 3 && headers.length >= 2) {
+            const h1 = headers[0];
+            const h2 = headers[1];
+
+            if (!charts.find(c => c.id === 'default_bar')) {
+                charts.push({
+                    id: 'default_bar',
+                    title: 'Overview (Default)',
+                    type: 'bar',
+                    priority: 'low',
+                    size: 'medium',
+                    data: data.slice(0, 10).map(r => ({ label: String(r[h1] || 'Item'), value: Number(r[h2]) || 0 })),
+                    options: { xAxis: h1, yAxis: h2 }
+                });
+            }
+            if (!charts.find(c => c.id === 'default_line')) {
+                charts.push({
+                    id: 'default_line',
+                    title: 'Trend Analysis (Default)',
+                    type: 'line',
+                    priority: 'low',
+                    size: 'medium',
+                    data: data.slice(0, 10).map(r => ({ label: String(r[h1] || 'Time'), value: Number(r[h2]) || 0 })),
+                    options: { xAxis: h1, yAxis: h2 }
+                });
+            }
+        }
+
         return charts;
     }
 

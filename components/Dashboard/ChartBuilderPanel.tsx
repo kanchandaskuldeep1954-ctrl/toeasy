@@ -292,18 +292,22 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Chart Type</label>
                                         <div className="grid grid-cols-3 gap-2">
                                             {[
-                                                { id: 'bar', label: 'Bar' },
-                                                { id: 'line', label: 'Line' },
-                                                { id: 'area', label: 'Area' },
-                                                { id: 'pie', label: 'Pie' },
-                                                { id: 'donut', label: 'Donut' },
-                                                { id: 'scatter', label: 'Scatter' },
-                                                { id: 'bubble', label: 'Bubble' },
-                                                { id: 'heatmap', label: 'Heatmap' },
-                                                { id: 'funnel', label: 'Funnel' },
-                                                { id: 'radar', label: 'Radar' },
-                                                { id: 'gauge', label: 'Gauge' },
-                                                { id: 'treemap', label: 'Treemap' },
+                                                { id: 'bar', label: 'Bar', icon: '📊' },
+                                                { id: 'line', label: 'Line', icon: '📈' },
+                                                { id: 'area', label: 'Area', icon: '📉' },
+                                                { id: 'pie', label: 'Pie', icon: '🍕' },
+                                                { id: 'donut', label: 'Donut', icon: '🍩' },
+                                                { id: 'scatter', label: 'Scatter', icon: '🌌' },
+                                                { id: 'bubble', label: 'Bubble', icon: '🧼' },
+                                                { id: 'heatmap', label: 'Heatmap', icon: '🔥' },
+                                                { id: 'funnel', label: 'Funnel', icon: '🌪️' },
+                                                { id: 'radar', label: 'Radar', icon: '🕸️' },
+                                                { id: 'gauge', label: 'Gauge', icon: '⏲️' },
+                                                { id: 'treemap', label: 'Treemap', icon: '🌳' },
+                                                { id: 'choropleth', label: 'Map', icon: '🗺️' },
+                                                { id: 'sunburst', label: 'Sunburst', icon: '☀️' },
+                                                { id: 'box', label: 'Box Plot', icon: '🍱' },
+                                                { id: 'violin', label: 'Violin', icon: '🎻' },
                                             ].map(t => (
                                                 <button
                                                     key={t.id}
@@ -313,8 +317,7 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                                         : 'bg-slate-50 dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
                                                         }`}
                                                 >
-                                                    {/* Simple Icon Placeholder */}
-                                                    <div className={`w-6 h-6 rounded-md ${chart.type === t.id ? 'bg-white/20' : 'bg-slate-200 dark:bg-slate-700'}`}></div>
+                                                    <span className="text-xl">{t.icon}</span>
                                                     <span className="text-[9px] font-black uppercase tracking-wide">{t.label}</span>
                                                 </button>
                                             ))}

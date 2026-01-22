@@ -74,6 +74,49 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
         })).slice(0, 500); // Limit points for performance
     }
 
+    // --- Box / Violin Logic (Raw Distribution) ---
+    if (chart.type === 'box' || chart.type === 'violin') {
+        const map = new Map<string, number[]>();
+        filteredData.forEach(row => {
+            const key = String(row[xAxis] || 'Total');
+            const val = Number(row[yAxis]) || 0;
+            if (!map.has(key)) map.set(key, []);
+            map.get(key)!.push(val);
+        });
+
+        // Flatten for Plotly or return grouped
+        const results: any[] = [];
+        map.forEach((vals, label) => {
+            vals.forEach(v => results.push({ label, value: v }));
+        });
+        return results.slice(0, 1000); // Limit to 1k points for preview
+    }
+
+    // --- Sunburst Logic (Hierarchical) ---
+    if (chart.type === 'sunburst') {
+        const childCol = xAxis; // Usually the leaf
+        const parentCol = (chart as any).options?.parents || dataset.headers.find(h => h !== childCol && h !== yAxis);
+
+        const map = new Map<string, { value: number, parent: string }>();
+        filteredData.forEach(row => {
+            const label = String(row[childCol] || 'Unknown');
+            const parent = parentCol ? String(row[parentCol] || '') : '';
+            const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[yAxis])) || 0);
+
+            if (map.has(label)) {
+                map.get(label)!.value += val;
+            } else {
+                map.set(label, { value: val, parent });
+            }
+        });
+
+        return Array.from(map.entries()).map(([label, info]) => ({
+            label,
+            value: info.value,
+            parent: info.parent
+        }));
+    }
+
     // --- Treemap Logic ---
     if (chart.type === 'treemap') {
         const map = new Map<string, number>();
