@@ -45,6 +45,8 @@ const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => (
 });
 
 export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, onClick }) => {
+    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+
     // Normalize data from backend to standard format
     const normalizedData = useMemo(() => {
         const sourceData = data || chart.data || [];
@@ -342,11 +344,10 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
         }
-    }, [chart.type, normalizedData]);
+    }, [chart.type, normalizedData, isDark]);
 
     // Build layout based on chart type
     const layout = useMemo((): Partial<Plotly.Layout> => {
-        const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
         const base = getLayout(height, isDark);
 
         // Special layouts for certain chart types
@@ -397,7 +398,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
         }
 
         return base;
-    }, [chart.type, height, normalizedData]);
+    }, [chart.type, height, normalizedData, isDark]);
 
     // Handle empty data
     if (normalizedData.length === 0) {
