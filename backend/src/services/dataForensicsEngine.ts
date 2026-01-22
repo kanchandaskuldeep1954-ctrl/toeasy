@@ -151,7 +151,8 @@ export class DataForensicsEngine {
     // Common status column patterns
     private static readonly STATUS_PATTERNS = [
         /status$/i, /^status/i, /state$/i, /^state/i,
-        /condition$/i, /phase$/i, /stage$/i
+        /condition$/i, /phase$/i, /stage$/i,
+        /outcome$/i, /result$/i, /readmission$/i, /resolution$/i
     ];
 
     // Common amount/money patterns
