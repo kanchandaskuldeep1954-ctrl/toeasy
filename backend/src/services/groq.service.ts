@@ -1544,69 +1544,38 @@ ANALYZE and return ONLY valid JSON (no markdown):
 
     let cleaned = input.trim();
 
-    // 1. Extract JSON from potential Markdown blocks or pre-ambles
+    // 1. Extract JSON Block (Markdown/Junk Buffer)
     try {
       if (cleaned.includes('```json')) {
         cleaned = cleaned.split('```json')[1].split('```')[0].trim();
       } else if (cleaned.includes('```')) {
-        cleaned = cleaned.split('```')[1].split('```')[0].trim();
-      } else {
-        const firstSquare = cleaned.indexOf('[');
-        const firstCurly = cleaned.indexOf('{');
-        let startIndex = -1;
+        const parts = cleaned.split('```');
+        cleaned = (parts[1] || parts[0]).trim();
+      }
 
-        if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
-          startIndex = firstSquare;
-        } else if (firstCurly !== -1) {
-          startIndex = firstCurly;
-        }
-
-        if (startIndex !== -1) {
-          cleaned = cleaned.substring(startIndex);
-        }
+      const firstSquare = cleaned.indexOf('[');
+      const firstCurly = cleaned.indexOf('{');
+      if (firstSquare !== -1 && (firstCurly === -1 || firstSquare < firstCurly)) {
+        cleaned = cleaned.substring(firstSquare);
+      } else if (firstCurly !== -1) {
+        cleaned = cleaned.substring(firstCurly);
       }
     } catch (e) {
-      console.warn('[GroqService] Extraction logic failed, using raw input');
+      console.warn('[GroqService] JSON extraction failed');
     }
 
-    // 2. Handle Truncated JSON (AI cuts off)
-    let openBraces = 0;
-    let openBrackets = 0;
-    let inString = false;
-    let escape = false;
-    let lastSolidIndex = -1;
+    // 2. Handle Truncation (The "Last Valid Object" Strategy)
+    if (cleaned.startsWith('[')) {
+      const lastBrace = cleaned.lastIndexOf('}');
+      const lastBracket = cleaned.lastIndexOf(']');
 
-    for (let i = 0; i < cleaned.length; i++) {
-      const char = cleaned[i];
-      if (escape) { escape = false; continue; }
-      if (char === '\\') { escape = true; continue; }
-      if (char === '"') { inString = !inString; continue; }
-      if (inString) continue;
-
-      if (char === '{') openBraces++;
-      if (char === '}') openBraces--;
-      if (char === '[') openBrackets++;
-      if (char === ']') openBrackets--;
-
-      if (!/\s/.test(char)) lastSolidIndex = i;
+      if (lastBrace !== -1 && (lastBracket === -1 || lastBracket < lastBrace)) {
+        console.log('[GroqService] Truncated array detected, recovering up to last valid object...');
+        cleaned = cleaned.substring(0, lastBrace + 1) + ']';
+      }
     }
 
-    if (lastSolidIndex !== -1 && lastSolidIndex < cleaned.length - 1) {
-      cleaned = cleaned.substring(0, lastSolidIndex + 1);
-    }
-
-    if (inString) cleaned += '"';
-
-    while (openBraces > 0) {
-      cleaned += '}';
-      openBraces--;
-    }
-    while (openBrackets > 0) {
-      cleaned += ']';
-      openBrackets--;
-    }
-
-    // 3. Regularize content
+    // 3. Regularize & Parse
     try {
       cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
       cleaned = cleaned.replace(/:\s*undefined/g, ': null');
@@ -1616,21 +1585,18 @@ ANALYZE and return ONLY valid JSON (no markdown):
 
       return JSON.parse(cleaned);
     } catch (e: any) {
-      console.warn('[GroqService] Heavy parse failed, trying one last extraction...', e.message);
-
       try {
-        const lastBracket = cleaned.lastIndexOf(']');
+        const lastSquare = cleaned.lastIndexOf(']');
         const lastBrace = cleaned.lastIndexOf('}');
-        const end = Math.max(lastBracket, lastBrace);
+        const end = Math.max(lastSquare, lastBrace);
         if (end !== -1) {
-          const clipped = cleaned.substring(0, end + 1);
-          return JSON.parse(clipped);
+          return JSON.parse(cleaned.substring(0, end + 1));
         }
       } catch (e2) { }
 
-      console.error('[GroqService] All parse attempts failed', {
-        snippet: cleaned.substring(0, 100),
-        length: cleaned.length
+      console.error('[GroqService] All JSON parse attempts failed', {
+        error: e.message,
+        preview: cleaned.substring(0, 100)
       });
       return cleaned.startsWith('[') ? [] : {};
     }
