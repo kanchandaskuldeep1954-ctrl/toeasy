@@ -263,7 +263,20 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                         mode: 'lines',
                         type: 'scatter',
                         name: 'OLS Trend',
-                        line: { color: '#f43f5e', width: 2, dash: 'dot' },
+                        line: { color: isDark ? 'rgba(244, 63, 94, 0.4)' : '#f43f5e', width: 2 },
+                        hoverinfo: 'none'
+                    });
+
+                    // Next-Gen: Predictive Ghost Line
+                    const futureX = maxX + (maxX - minX) * 0.4;
+                    traces.push({
+                        x: [maxX, futureX],
+                        y: [slope * maxX + intercept, slope * futureX + intercept],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'AI Forecast',
+                        line: { color: isDark ? '#818cf8' : COLORS[0], width: 3, dash: 'dot' },
+                        opacity: 0.6,
                         hoverinfo: 'none'
                     });
                 }

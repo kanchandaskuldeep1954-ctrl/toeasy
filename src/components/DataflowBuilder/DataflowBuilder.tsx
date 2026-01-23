@@ -230,6 +230,8 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
     const handleRun = async () => {
         setIsRunning(true);
+        setEdges(eds => eds.map(e => ({ ...e, className: '' }))); // Reset pulses
+
         // Simulate execution
         const updateStatus = (id: string, status: string) => {
             setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, status } } : n));
@@ -237,7 +239,10 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
         for (const node of nodes) {
             updateStatus(node.id, 'running');
-            await new Promise(r => setTimeout(r, 800 + Math.random() * 1000));
+            // Animate outgoing edges to show "data traveling"
+            setEdges(eds => eds.map(e => e.source === node.id ? { ...e, className: 'edge-pulse' } : e));
+
+            await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
             updateStatus(node.id, 'completed');
         }
         setIsRunning(false);

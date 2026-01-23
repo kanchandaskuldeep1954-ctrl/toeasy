@@ -72,6 +72,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
     const [aiExplainingId, setAiExplainingId] = useState<string | null>(null);
     const [deepDiveResult, setDeepDiveResult] = useState<{ id: string, text: string } | null>(null);
+    const [isForecastMode, setIsForecastMode] = useState(false);
+    const [isCinematicMode, setIsCinematicMode] = useState(false);
+    const [activeCinematicIndex, setActiveCinematicIndex] = useState(0);
 
     const [dashboardPrompt, setDashboardPrompt] = useState(''); // Global dashboard prompt
     const [isDashboardThinking, setIsDashboardThinking] = useState(false);
@@ -603,6 +606,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             onClearAll={() => setActiveFilters({})}
                         />
                     </div>
+
+                    {/* Next-Gen: Predictive Mode Toggle */}
+                    <div className="flex items-center gap-2 md:pl-6 md:border-l border-slate-200 dark:border-slate-800">
+                        <button
+                            onClick={() => setIsForecastMode(!isForecastMode)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}`}
+                        >
+                            <span className="text-sm">✨</span>
+                            <span>{isForecastMode ? 'Forecast Active' : 'Predictive Mode'}</span>
+                            {isForecastMode && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+                        </button>
+                    </div>
+
+                    {/* Next-Gen: Boardroom Mode */}
+                    <div className="flex items-center gap-2 pl-6 border-l border-slate-200 dark:border-slate-800">
+                        <button
+                            onClick={() => setIsCinematicMode(true)}
+                            className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-xl shadow-slate-500/10 flex items-center gap-2"
+                        >
+                            <span className="text-sm">🎬</span>
+                            <span>Boardroom</span>
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar">
@@ -867,7 +893,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                                 <div className="flex-1 w-full relative min-h-[300px] cursor-crosshair">
                                     <PlotlyChart
-                                        chart={chart}
+                                        chart={{
+                                            ...chart,
+                                            chartConfig: {
+                                                ...chart.chartConfig,
+                                                trendline: isForecastMode ? 'ols' : chart.chartConfig?.trendline
+                                            }
+                                        }}
                                         data={data}
                                         onClick={(data) => handleChartClick(data, chart)}
                                     />
@@ -961,6 +993,75 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     />
                 )
             }
+
+            {/* The Boardroom: Cinematic Overlay */}
+            {isCinematicMode && (
+                <div className="fixed inset-0 z-[100] bg-white dark:bg-[#080c14] flex flex-col p-8 md:p-12 animate-in overflow-y-auto hide-scrollbar">
+                    <div className="flex justify-between items-center mb-12">
+                        <div className="flex items-center gap-4">
+                            <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center text-2xl shadow-2xl shadow-indigo-500/30">🎬</div>
+                            <div>
+                                <h1 className="text-2xl font-black uppercase text-slate-900 dark:text-white leading-none">The Boardroom</h1>
+                                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Executive Insight Series 1.0</p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => setIsCinematicMode(false)}
+                            className="w-12 h-12 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all active:scale-95"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+
+                    <div className="flex-1 flex flex-col items-center justify-center max-w-6xl mx-auto w-full gap-8">
+                        <div className="w-full glass-card !p-12 rounded-[56px] shadow-3xl flex-1 flex flex-col transition-all duration-700">
+                            <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-8 text-center animate-slide-in-top">
+                                {visibleCharts[activeCinematicIndex]?.title}
+                            </h2>
+                            <div className="flex-1 min-h-[400px]">
+                                <PlotlyChart
+                                    chart={visibleCharts[activeCinematicIndex]}
+                                    data={getChartData(visibleCharts[activeCinematicIndex])}
+                                    height={500}
+                                />
+                            </div>
+                        </div>
+
+                        {/* AI Narrator */}
+                        <div className="w-full max-w-4xl p-8 bg-indigo-600 rounded-[32px] text-white shadow-2xl animate-[slide-up_1s_ease-out]">
+                            <div className="flex items-center gap-3 mb-4">
+                                <span className="text-2xl">🎙️</span>
+                                <h4 className="font-black uppercase tracking-widest text-[10px] opacity-70">AI Narrative Analysis</h4>
+                            </div>
+                            <p className="text-xl font-medium leading-relaxed italic">
+                                "{visibleCharts[activeCinematicIndex]?.description || "The data suggests a strong correlation between these strategic dimensions. Notice the stability in the current quarter."}"
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-center items-center gap-12 mt-12 pb-8">
+                        <button
+                            disabled={activeCinematicIndex === 0}
+                            onClick={() => setActiveCinematicIndex(prev => prev - 1)}
+                            className="p-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-500 disabled:opacity-30 disabled:pointer-events-none hover:border-indigo-500 hover:text-indigo-500 transition-all"
+                        >
+                            <svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                        <div className="flex gap-3">
+                            {visibleCharts.slice(0, 10).map((_, i) => (
+                                <div key={i} className={`w-3 h-3 rounded-full transition-all duration-500 ${i === activeCinematicIndex ? 'w-12 bg-indigo-600' : 'bg-slate-200 dark:bg-slate-800 font-bold'}`}></div>
+                            ))}
+                        </div>
+                        <button
+                            disabled={activeCinematicIndex === visibleCharts.length - 1}
+                            onClick={() => setActiveCinematicIndex(prev => prev + 1)}
+                            className="p-4 rounded-full border-2 border-slate-200 dark:border-slate-800 text-slate-500 disabled:opacity-30 disabled:pointer-events-none hover:border-indigo-500 hover:text-indigo-500 transition-all font-bold"
+                        >
+                            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

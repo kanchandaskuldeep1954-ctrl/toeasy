@@ -156,6 +156,47 @@
       transform: translateY(-8px);
     }
   }
+
+  @keyframes flowPulse {
+    0% {
+      stroke-dashoffset: 20;
+      stroke-opacity: 0.3;
+      stroke-width: 2;
+    }
+
+    50% {
+      stroke-opacity: 1;
+      stroke-width: 4;
+    }
+
+    100% {
+      stroke-dashoffset: 0;
+      stroke-opacity: 0.3;
+      stroke-width: 2;
+    }
+  }
+
+  .edge-pulse {
+    stroke-dasharray: 10, 10;
+    animation: flowPulse 1.5s linear infinite;
+    filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.6));
+  }
+
+  @keyframes auraPulse {
+
+    0%,
+    100% {
+      box-shadow: 0 0 15px -5px rgba(99, 102, 241, 0.4);
+    }
+
+    50% {
+      box-shadow: 0 0 30px 2px rgba(99, 102, 241, 0.6);
+    }
+  }
+
+  .node-aura-running {
+    animation: auraPulse 2s ease-in-out infinite;
+  }
 }
 
 /* Print Styles */

@@ -14,11 +14,15 @@ const CustomNode = ({ data, selected }: NodeProps) => {
             className={`
                 relative w-64 rounded-xl border-2 transition-all duration-300 shadow-xl overflow-hidden
                 ${selected ? 'border-indigo-500 shadow-indigo-500/30 scale-105' : 'border-slate-700 bg-slate-900/95'}
-                ${isRunning ? 'ring-2 ring-yellow-400/50' : ''}
+                ${isRunning ? 'ring-2 ring-indigo-400/50 node-aura-running' : ''}
                 ${isFailed ? 'border-red-500/50' : ''}
                 ${isCompleted ? 'border-emerald-500/50' : ''}
             `}
         >
+            {/* Reflective Shine Overlay */}
+            {isRunning && (
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-tr from-white/0 via-white/5 to-white/0 -translate-x-full animate-[shimmer_2s_infinite] skew-x-12" />
+            )}
             {/* Input Handle */}
             {type !== 'upload' && (
                 <Handle
