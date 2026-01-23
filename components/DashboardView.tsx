@@ -70,6 +70,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     // Data Transparency
     const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
+    const [aiExplainingId, setAiExplainingId] = useState<string | null>(null);
+    const [deepDiveResult, setDeepDiveResult] = useState<{ id: string, text: string } | null>(null);
 
     const [dashboardPrompt, setDashboardPrompt] = useState(''); // Global dashboard prompt
     const [isDashboardThinking, setIsDashboardThinking] = useState(false);
@@ -474,6 +476,30 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
       `;
     };
 
+    const handleAiExplain = async (chart: ChartSpec) => {
+        setAiExplainingId(chart.id);
+        try {
+            const context = {
+                title: chart.title,
+                xAxis: chart.xAxis,
+                yAxis: chart.yAxis,
+                type: chart.type,
+                dataSummary: getChartData(chart).slice(0, 10)
+            };
+            const prompt = `Perform a deep dive analysis on this chart: "${chart.title}". 
+            Explain the key patterns, potential correlations, and any anomalies you see in this ${chart.type} visualization 
+            mapping ${chart.xAxis} against ${chart.yAxis}. Provide strategic recommendations.`;
+
+            const result = await GroqService.consultVerifiedAgent(dataset, prompt, context);
+            setDeepDiveResult({ id: chart.id, text: result });
+        } catch (e) {
+            console.error(e);
+            alert("AI could not analyze this chart right now.");
+        } finally {
+            setAiExplainingId(null);
+        }
+    };
+
     const handleExport = (format: ExportFormat) => {
         if (format === 'pdf') {
             window.print();
@@ -803,6 +829,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             <div key={i} className={`glass-card p-6 md:p-8 rounded-[24px] flex flex-col h-[420px] ${isWide ? 'md:col-span-2' : ''} group relative overflow-hidden ${hasWarnings ? 'border-amber-200/50 dark:border-amber-900/30' : ''}`}>
 
                                 <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all duration-500 flex gap-2 translate-y-2 group-hover:translate-y-0 no-print">
+                                    <button
+                                        onClick={() => handleAiExplain(chart)}
+                                        disabled={aiExplainingId === chart.id}
+                                        className="w-8 h-8 rounded-xl bg-indigo-500 text-white flex items-center justify-center hover:bg-indigo-600 shadow-lg shadow-indigo-500/20 transition-all duration-300 disabled:opacity-50"
+                                        title="AI Deep Dive"
+                                    >
+                                        {aiExplainingId === chart.id ? <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <span>✨</span>}
+                                    </button>
                                     <button onClick={() => setViewingDataChart(chart)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all duration-300">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
                                     </button>
@@ -840,7 +874,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 </div>
 
                                 {/* Chart Insights Footer */}
-                                {insights.length > 0 && (
+                                {deepDiveResult?.id === chart.id && (
+                                    <div className="mt-4 p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-500/5 border border-indigo-100 dark:border-indigo-500/20 animate-in slide-in-from-top-2">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest">✨ AI Deep Dive</p>
+                                            <button onClick={() => setDeepDiveResult(null)} className="text-slate-400 hover:text-rose-500 transition-colors">
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                        </div>
+                                        <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium">
+                                            {deepDiveResult.text}
+                                        </p>
+                                    </div>
+                                )}
+
+                                {insights.length > 0 && !deepDiveResult && (
                                     <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
                                         <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Insights:</p>
                                         <p className="text-[9px] text-slate-600 dark:text-slate-400 leading-relaxed">

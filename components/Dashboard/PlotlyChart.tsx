@@ -215,38 +215,65 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 }];
 
             // ===== SCATTER / BUBBLE =====
-            case 'scatter':
-                const isBinaryY = normalizedData.length > 0 && normalizedData.every(d => [0, 1].includes(d.y));
-                return [{
-                    x: normalizedData.map(d => d.x ?? d.value),
-                    y: normalizedData.map(d => {
-                        const val = d.y ?? d.value;
-                        // Add tiny jitter for binary data to avoid perfect overlap
-                        return isBinaryY ? val + (Math.random() - 0.5) * 0.05 : val;
-                    }),
+            case 'scatter': {
+                const xValues = normalizedData.map(d => d.x ?? d.value);
+                const yValues = normalizedData.map(d => d.y ?? d.value);
+                const isBinaryY = yValues.every(v => [0, 1].includes(v));
+
+                const traces: Plotly.Data[] = [{
+                    x: xValues,
+                    y: yValues.map(val => isBinaryY ? val + (Math.random() - 0.5) * 0.05 : val),
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        size: 8,
+                        size: 10,
                         color: COLORS[0],
-                        opacity: isDark ? 0.5 : 0.6,
-                        line: { width: 1, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)' }
+                        opacity: 0.6,
+                        line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }
                     },
                     text: labels,
                     hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>'
                 }];
 
+                // Scientific Overlay: OLS Trendline
+                if (chart.chartConfig?.trendline === 'ols' && xValues.length > 1) {
+                    const n = xValues.length;
+                    const sumX = xValues.reduce((a, b) => a + b, 0);
+                    const sumY = yValues.reduce((a, b) => a + b, 0);
+                    const sumXY = xValues.reduce((a, b, i) => a + b * yValues[i], 0);
+                    const sumXX = xValues.reduce((a, b) => a + b * b, 0);
+                    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+                    const intercept = (sumY - slope * sumX) / n;
+
+                    const minX = Math.min(...xValues);
+                    const maxX = Math.max(...xValues);
+                    traces.push({
+                        x: [minX, maxX],
+                        y: [slope * minX + intercept, slope * maxX + intercept],
+                        mode: 'lines',
+                        type: 'scatter',
+                        name: 'OLS Trend',
+                        line: { color: '#f43f5e', width: 2, dash: 'dot' },
+                        hoverinfo: 'none'
+                    });
+                }
+
+                return traces;
+            }
+
             case 'bubble':
                 return [{
                     x: normalizedData.map(d => d.x ?? d.value),
-                    y: normalizedData.map(d => d.y ?? d.value * 0.5 + Math.random() * 50),
+                    y: normalizedData.map(d => d.y ?? d.value * 0.5),
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        size: normalizedData.map(d => Math.min(Math.max(d.size, 10), 60)),
-                        color: COLORS,
+                        size: normalizedData.map(d => Math.min(Math.max(d.size * 1.5, 12), 80)),
+                        color: normalizedData.map((_, i) => COLORS[i % COLORS.length]),
                         opacity: 0.7,
-                        line: { width: 1, color: 'white' }
+                        line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' },
+                        colorscale: 'Viridis',
+                        showscale: false
                     },
                     text: labels,
                     hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Size: %{marker.size}<extra></extra>'
