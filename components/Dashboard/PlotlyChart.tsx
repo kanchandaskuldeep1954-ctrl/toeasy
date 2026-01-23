@@ -367,17 +367,65 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     }
                 }];
 
-            // ===== HEATMAP =====
-            case 'heatmap':
-                // Create a simple 1D heatmap from the data
+            case 'heatmap': {
+                const zData: number[][] = [];
+                const xLabels: string[] = [];
+                const yLabels: string[] = [];
+
+                const isMatrix = normalizedData.length > 0 &&
+                    'x' in normalizedData[0] &&
+                    'y' in normalizedData[0] &&
+                    'z' in normalizedData[0];
+
+                if (isMatrix) {
+                    // Standard 2D Matrix Rendering
+                    const uniqueX = Array.from(new Set(normalizedData.map(d => String(d.x)))).sort();
+                    const uniqueY = Array.from(new Set(normalizedData.map(d => String(d.y)))).sort();
+
+                    xLabels.push(...uniqueX);
+                    yLabels.push(...uniqueY);
+
+                    // Initialize empty matrix
+                    uniqueY.forEach(() => zData.push(new Array(uniqueX.length).fill(null)));
+
+                    // Fill matrix
+                    normalizedData.forEach(d => {
+                        const xIdx = uniqueX.indexOf(String(d.x));
+                        const yIdx = uniqueY.indexOf(String(d.y));
+                        if (xIdx !== -1 && yIdx !== -1) {
+                            zData[yIdx][xIdx] = d.z ?? d.value;
+                        }
+                    });
+                } else if (normalizedData.length > 25) {
+                    // Auto-grid 1D data into a squared matrix for better visibility
+                    const cols = Math.ceil(Math.sqrt(normalizedData.length));
+                    for (let i = 0; i < normalizedData.length; i += cols) {
+                        const row = normalizedData.slice(i, i + cols);
+                        zData.push(row.map(d => d.value));
+                        if (yLabels.length === 0) {
+                            xLabels.push(...row.map((_, idx) => `P${idx + 1}`));
+                        }
+                        yLabels.push(`G${Math.floor(i / cols) + 1}`);
+                    }
+                } else {
+                    zData.push(values);
+                    xLabels.push(...labels);
+                    yLabels.push('Intensity');
+                }
+
                 return [{
-                    z: [values],
-                    x: labels,
-                    y: ['Value'],
+                    z: zData,
+                    x: xLabels,
+                    y: yLabels,
                     type: 'heatmap',
-                    colorscale: 'Viridis',
-                    hovertemplate: '<b>%{x}</b><br>%{z:,.2f}<extra></extra>'
-                }];
+                    colorscale: isDark ? 'Magma' : 'Viridis',
+                    showscale: true,
+                    hoverongaps: false,
+                    xgap: 1,
+                    ygap: 1,
+                    hovertemplate: '<b>X: %{x}</b><br><b>Y: %{y}</b><br>Value: %{z:,.2f}<extra></extra>'
+                } as any];
+            }
 
             // ===== WATERFALL =====
             case 'waterfall':

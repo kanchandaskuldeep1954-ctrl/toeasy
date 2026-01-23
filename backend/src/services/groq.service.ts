@@ -529,7 +529,8 @@ Rules:
 1. If data contains locations (Country, State, ISO), prefer "choropleth".
 2. If user asks for "distribution" or "spread", prefer "box" or "violin".
 3. If user asks for "composition" or "hierarchy", prefer "sunburst" or "treemap".
-4. If user asks for "map", use "choropleth".`;
+4. If user asks for "map", use "choropleth".
+5. For heatmaps, specify xAxis, yAxis, AND a colorValue column. Heatmaps MUST represent 2D matrices (e.g., Status by Category or Region by Date).`;
 
       const result = await this.callGroq(groqPrompt, 600);
       let jsonStr = result.trim();

@@ -394,6 +394,43 @@ export class GroqService {
   }
 
   /**
+   * Pivot data for 2D Heatmaps and Matrix charts
+   */
+  static matrixPivot(
+    data: DataRow[],
+    xColumn: string,
+    yColumn: string,
+    valueColumn: string
+  ): Array<{ x: string; y: string; z: number }> {
+    try {
+      const pivoted: Array<{ x: string; y: string; z: number }> = [];
+      const xSet = new Set<string>();
+      const ySet = new Set<string>();
+
+      data.forEach(row => {
+        const x = String(row[xColumn] || 'Unknown');
+        const y = String(row[yColumn] || 'Default');
+        const z = Number(row[valueColumn]) || 0;
+        pivoted.push({ x, y, z });
+        xSet.add(x);
+        ySet.add(y);
+      });
+
+      // If cardinality is too high, limit it to preserve performance
+      if (xSet.size > 20 || ySet.size > 20) {
+        const topX = Array.from(xSet).slice(0, 20);
+        const topY = Array.from(ySet).slice(0, 20);
+        return pivoted.filter(p => topX.includes(p.x) && topY.includes(p.y));
+      }
+
+      return pivoted;
+    } catch (e) {
+      console.error('Matrix pivot error:', e);
+      return [];
+    }
+  }
+
+  /**
    * Transform raw data for chart rendering
    * Handles aggregation, sorting, and data quality issues
    */
@@ -414,6 +451,11 @@ export class GroqService {
           [xAxis]: Number(row[xAxis]) || 0,
           [yAxis]: Number(row[yAxis]) || 0
         }));
+      }
+
+      // For heatmaps, use matrix pivot if two axes provided
+      if (chartSpec.type === 'heatmap' && xAxis && yAxis && xAxis !== yAxis) {
+        return GroqService.matrixPivot(data, xAxis, yAxis, yAxis) as any;
       }
 
       // For all other charts, use smart aggregation
