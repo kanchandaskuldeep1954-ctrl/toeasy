@@ -181,7 +181,7 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
       <div className="text-center space-y-4">
         <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">AI Web Scraper</h2>
         <p className="text-slate-500 font-medium max-w-2xl mx-auto">
-          Generate custom datasets on-demand. Our autonomous agent simulates Puppeteer extraction logic to construct realistic, unique data for any topic.
+          Autonomous data acquisition. Provide a URL to extract real-world datasets or a topic to synthesize high-fidelity intelligence instantly.
         </p>
       </div>
 
@@ -255,12 +255,6 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
               )}
             </button>
 
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl flex gap-3 border border-amber-100 dark:border-amber-800/30">
-              <div className="text-lg">⚠️</div>
-              <p className="text-[10px] text-amber-800 dark:text-amber-200 font-medium leading-relaxed">
-                <strong>Note:</strong> Full Puppeteer execution requires a Node.js backend. This demo uses the AI's internal knowledge base to simulate a live scrape and generate realistic, compliant data structures instantly.
-              </p>
-            </div>
           </form>
         </div>
 
