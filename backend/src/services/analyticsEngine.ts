@@ -94,6 +94,31 @@ export class AnalyticsEngine {
         };
     }
 
+    private static findClosestColumn(target: string | undefined, headers: string[]): string | undefined {
+        if (!target) return undefined;
+        // 1. Direct match
+        if (headers.includes(target)) return target;
+
+        // 2. Case-insensitive / Space-insensitive match
+        const normalized = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
+        const targetNorm = normalized(target);
+        const match = headers.find(h => normalized(h) === targetNorm);
+        if (match) return match;
+
+        // 3. Partial match (if target is "revenue" and header is "Total Revenue")
+        const partial = headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
+        return partial;
+    }
+
+    private static parseNumeric(val: any): number {
+        if (val === null || val === undefined) return 0;
+        if (typeof val === 'number') return val;
+
+        const str = String(val).replace(/[^0-9.-]/g, '');
+        const num = parseFloat(str);
+        return isNaN(num) ? 0 : num;
+    }
+
     private static prioritizeCharts(charts: ChartSpec[]): ChartSpec[] {
         const pMap: Record<string, number> = { 'high': 0, 'medium': 1, 'low': 2 };
         return [...charts].sort((a, b) => {
@@ -109,16 +134,18 @@ export class AnalyticsEngine {
         // --- 1. AI Blueprint KPIs (Highest Value) ---
         if (blueprint && blueprint.recommendedKPIs) {
             blueprint.recommendedKPIs.forEach(spec => {
-                const col = profiles.find(p => p.column === spec.column);
+                const actualCol = this.findClosestColumn(spec.column, profiles.map(p => p.column));
+                const col = profiles.find(p => p.column === actualCol);
                 let value: any = '-';
                 let sparkline: number[] = [];
 
                 if (col || spec.operation === 'count') {
-                    const values = data.map(r => spec.column ? parseFloat(r[spec.column]) : 1).filter(n => !isNaN(n));
+                    const columnToUse = actualCol || spec.column;
+                    const values = data.map(r => columnToUse ? this.parseNumeric(r[columnToUse]) : 1);
                     const total = values.reduce((s, v) => s + v, 0);
 
                     if (spec.operation === 'avg') value = total / (values.length || 1);
-                    else if (spec.operation === 'unique') value = new Set(data.map(r => r[spec.column!])).size;
+                    else if (spec.operation === 'unique') value = new Set(data.map(r => r[columnToUse!])).size;
                     else value = total;
 
                     if (spec.format === 'currency') value = this.formatCurrency(value);
@@ -136,7 +163,7 @@ export class AnalyticsEngine {
                     importance: spec.importance as any,
                     sparklineData: sparkline,
                     calculation: {
-                        column: spec.column,
+                        column: actualCol || spec.column,
                         operation: spec.operation,
                         format: spec.format
                     }
@@ -267,20 +294,25 @@ export class AnalyticsEngine {
         if (blueprint && blueprint.recommendedCharts) {
             blueprint.recommendedCharts.forEach(spec => {
                 let chartData: any[] = [];
-                const xCol = profiles.find(p => p.column === spec.xAxis);
-                const yCol = profiles.find(p => p.column === spec.yAxis);
+                const actualX = this.findClosestColumn(spec.xAxis, profiles.map(p => p.column));
+                const actualY = this.findClosestColumn(spec.yAxis, profiles.map(p => p.column));
 
-                if (!xCol) return;
+                const xCol = profiles.find(p => p.column === actualX);
+
+                if (!actualX) return;
 
                 if (spec.type === 'sunburst') {
-                    // AI suggested a hierarchy discovery
-                    chartData = this.aggregateByCategory(data, spec.xAxis, spec.yAxis, spec.aggregation as any);
+                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
                 } else if (spec.type === 'scatter') {
-                    chartData = data.slice(0, 500).map(r => ({ x: r[spec.xAxis], y: r[spec.yAxis] }));
-                } else if (spec.type === 'line' && xCol.dataType === 'date') {
-                    chartData = this.aggregateByTime(data, spec.xAxis, spec.yAxis);
+                    chartData = data.slice(0, 500).map(r => ({
+                        x: actualX ? this.parseNumeric(r[actualX]) : 0,
+                        y: actualY ? this.parseNumeric(r[actualY]) : 0,
+                        name: r[profiles[0]?.column || '']
+                    }));
+                } else if (spec.type === 'line' && xCol?.dataType === 'date') {
+                    chartData = this.aggregateByTime(data, actualX, actualY || '');
                 } else {
-                    chartData = this.aggregateByCategory(data, spec.xAxis, spec.yAxis, spec.aggregation as any);
+                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
                 }
 
                 charts.push({
@@ -291,7 +323,7 @@ export class AnalyticsEngine {
                     size: (spec.type === 'sunburst' || spec.type === 'line') ? 'large' : 'medium',
                     description: spec.description,
                     data: chartData,
-                    options: { xAxis: spec.xAxis, yAxis: spec.yAxis }
+                    options: { xAxis: actualX, yAxis: actualY }
                 });
             });
         }

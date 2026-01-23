@@ -604,37 +604,37 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                 </div>
             </div>
 
-            {/* Filter Area (Breadcrumbs) */}
+            {/* Filter Area (Breadcrumbs) - Enhanced with Glassmorphism */}
             {Object.keys(activeFilters).length > 0 && (
-                <div className="px-8 pt-6 pb-2 flex flex-wrap gap-3 items-center animate-in slide-in-from-top-4 duration-500 no-print">
-                    <div className="flex items-center gap-2 mr-2">
-                        <div className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-500">
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
+                <div className="px-8 pt-6 pb-2 flex flex-wrap gap-3 items-center animate-in slide-in-from-top-4 duration-700 ease-out no-print">
+                    <div className="flex items-center gap-2.5 mr-3">
+                        <div className="w-8 h-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center shadow-inner">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" /></svg>
                         </div>
-                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-[0.2em]">Active Filter Stack</span>
+                        <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-[0.25em]">Filter Stack</span>
                     </div>
                     {Object.entries(activeFilters).map(([key, val]) => (
-                        <div key={key} className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 pl-3 pr-1 py-1 rounded-full shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-900/50 transition-all group scale-100 hover:scale-105 active:scale-95">
+                        <div key={key} className="flex items-center gap-2.5 bg-white/70 dark:bg-slate-900/40 backdrop-blur-md border border-slate-200 dark:border-slate-800/80 pl-3.5 pr-1.5 py-1.5 rounded-2xl shadow-sm hover:shadow-indigo-500/10 hover:border-indigo-500/30 transition-all group animate-in zoom-in-95 duration-300">
                             <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{key}</span>
-                            <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-700" />
-                            <span className="text-[11px] font-black text-slate-900 dark:text-white uppercase">{String(val)}</span>
+                            <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                            <span className="text-[11px] font-black text-slate-900 dark:text-white uppercase tracking-tight">{String(val)}</span>
                             <button
                                 onClick={() => handleClearFilter(key)}
-                                className="ml-1 w-6 h-6 flex items-center justify-center rounded-full text-slate-400 hover:text-white hover:bg-rose-500 transition-all"
+                                className="ml-1 w-6 h-6 flex items-center justify-center rounded-lg text-slate-400 hover:text-white hover:bg-rose-500 transition-all duration-300 active:scale-90"
                             >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
                             </button>
                         </div>
                     ))}
                     <button
                         onClick={() => setActiveFilters({})}
-                        className="ml-2 px-4 py-1.5 rounded-full text-[9px] font-black uppercase text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 tracking-[0.2em] transition-all flex items-center gap-2"
+                        className="ml-2 px-5 py-2 rounded-2xl text-[9px] font-black uppercase text-slate-500 hover:text-rose-500 hover:bg-rose-500/5 tracking-[0.2em] transition-all duration-300 flex items-center gap-2 hover:translate-x-1"
                     >
                         Reset All
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
-                    <div className="h-4 w-px bg-slate-100 dark:bg-slate-800 mx-2" />
-                    <div className="text-[9px] font-bold text-slate-400 dark:text-slate-500 italic">
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-800/50 mx-3" />
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 italic opacity-80">
                         {filteredData.length.toLocaleString()} matching records
                     </div>
                 </div>
@@ -688,18 +688,30 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     </div>
                 </div>
 
-                {/* Data Quality Warnings Section */}
+                {/* Data Quality Report - Compact & Pro */}
                 {dataQuality && (dataQuality.warnings.length > 0 || dataQuality.overallScore < 80) && (
-                    <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-[32px] p-8">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
-                                <span className="text-lg">⚠️</span>
+                    <div className="bg-white/50 dark:bg-slate-900/30 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-[32px] p-8 shadow-sm">
+                        <div className="flex items-center justify-between gap-3 mb-6">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 flex items-center justify-center text-xl shadow-inner">
+                                    <svg className="w-6 h-6 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                </div>
+                                <div>
+                                    <h3 className="font-black uppercase tracking-[0.2em] text-slate-800 dark:text-slate-100 text-sm">Forensic Quality Scan</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                        <p className="text-[10px] font-black text-amber-600 dark:text-amber-500 uppercase tracking-widest">
+                                            {dataQuality.overallScore}% integrity rating
+                                        </p>
+                                    </div>
+                                </div>
                             </div>
-                            <div>
-                                <h3 className="font-black uppercase tracking-widest text-yellow-900 dark:text-yellow-200">Data Quality Report</h3>
-                                <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide">
-                                    {dataQuality.overallScore}% Quality Score
-                                </p>
+
+                            <div className="hidden md:flex flex-col items-end">
+                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Status</span>
+                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${dataQuality.overallScore > 90 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                                    {dataQuality.overallScore > 90 ? 'Verified' : 'Review Required'}
+                                </span>
                             </div>
                         </div>
 
@@ -793,41 +805,37 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             : [];
 
                         return (
-                            <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border transition-all ${hasWarnings
-                                ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md'
+                            <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[40px] border transition-all duration-500 ${hasWarnings
+                                ? 'border-amber-200 dark:border-amber-900/30'
                                 : 'border-slate-200 dark:border-slate-800'
-                                } shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
+                                } shadow-sm hover:shadow-2xl hover:shadow-indigo-500/5 flex flex-col h-[420px] ${isWide ? 'md:col-span-2' : ''} group relative overflow-hidden`}>
+
+                                <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all duration-500 flex gap-2 translate-y-2 group-hover:translate-y-0 no-print">
+                                    <button onClick={() => setViewingDataChart(chart)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all duration-300">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                                    </button>
+                                    <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all duration-300">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                                    </button>
+                                </div>
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white underline decoration-indigo-500/30 decoration-2 underline-offset-4">{chart.title}</h3>
-                                            {hasWarnings && (
-                                                <div className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded text-[8px] font-bold uppercase tracking-wide">
-                                                    ⚠️ {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">{chart.title}</h3>
+                                            {chart.priority === 'high' && (
+                                                <div className="px-2 py-0.5 bg-indigo-500/10 text-indigo-500 rounded-lg text-[8px] font-black uppercase tracking-widest animate-pulse shadow-sm shadow-indigo-500/10">
+                                                    AI Discovery
                                                 </div>
                                             )}
-                                            {/* Show if this chart is a filter source */}
-                                            {activeFilters[chart.xAxis || chart.groupBy || ''] && (
-                                                <div className="animate-pulse w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]" title="Active Filter Source" />
+                                            {hasWarnings && (
+                                                <div className="px-2 py-0.5 bg-amber-500/10 text-amber-600 rounded-lg text-[8px] font-black uppercase tracking-widest">
+                                                    Integrity Check
+                                                </div>
                                             )}
                                         </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">{chart.description}</p>
-                                    </div>
-                                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity no-print">
-                                        <button
-                                            onClick={() => setViewingDataChart(chart)}
-                                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-slate-500 hover:text-indigo-600 hover:bg-white dark:hover:bg-slate-700 transition-all flex items-center gap-1"
-                                            title="View Source Data"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                                        </button>
-                                        <button
-                                            onClick={() => setEditingChartId(chart.id)}
-                                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 transition-all flex items-center gap-1"
-                                        >
-                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                            Edit
-                                        </button>
+                                        <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 leading-relaxed uppercase tracking-wider line-clamp-1 max-w-[280px]">
+                                            {chart.description || `Analyzing patterns across ${chart.xAxis} ${chart.yAxis ? '& ' + chart.yAxis : ''}`}
+                                        </p>
                                     </div>
                                 </div>
 
@@ -852,64 +860,70 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         );
                     })}
                 </div>
-
-                {/* Patterns/Insights Section */}
-                {perspective === 'Patterns' && config.patterns?.length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-10">
-                        {config.patterns.map((pat, i) => (
-                            <InsightCard
-                                key={i}
-                                title={`${pat.type} Detected`}
-                                content={pat.description}
-                                type={pat.type === 'anomaly' ? 'anomaly' : 'info'}
-                                recommendation={pat.recommendation}
-                            />
-                        ))}
-                    </div>
-                )}
             </div>
+        )}
 
-            {/* Global Dashboard AI Copilot (Bottom Bar) */}
-            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print">
-                <div className="glass p-2 rounded-full shadow-2xl border border-indigo-500/20 flex gap-2 items-center relative">
-                    <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
-                        {isDashboardThinking ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="text-lg">✨</span>}
-                    </div>
-                    <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
-                        <input
-                            value={dashboardPrompt}
-                            onChange={(e) => setDashboardPrompt(e.target.value)}
-                            placeholder="Ask Copilot: 'Add a chart showing Sales by City' or 'Change layout'..."
-                            className="w-full bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 h-10"
+            {/* Patterns/Insights Section */}
+            {perspective === 'Patterns' && config.patterns?.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-10">
+                    {config.patterns.map((pat, i) => (
+                        <InsightCard
+                            key={i}
+                            title={`${pat.type} Detected`}
+                            content={pat.description}
+                            type={pat.type === 'anomaly' ? 'anomaly' : 'info'}
+                            recommendation={pat.recommendation}
                         />
-                    </form>
-                    <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity">
-                        Go
-                    </button>
+                    ))}
                 </div>
-            </div>
-
-            {/* Visual Studio (Chart Editor Modal) */}
-            {/* Visual Studio (Chart Editor Modal) - REPLACED WITH ChartBuilderPanel */}
-            {(editingChartId || isCreatingNew) && (
-                <ChartBuilderPanel
-                    dataset={dataset}
-                    initialChart={isCreatingNew ? undefined : config.charts.find(c => c.id === editingChartId)}
-                    onSave={handleSaveChart}
-                    onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }}
-                    onAIAction={onAIAction}
-                />
-            )}
-
-            {/* Data Peek Modal */}
-            {viewingDataChart && (
-                <DataPeekModal
-                    chart={viewingDataChart}
-                    data={getChartData(viewingDataChart)}
-                    onClose={() => setViewingDataChart(null)}
-                />
             )}
         </div>
+
+    {/* Global Dashboard AI Copilot (Bottom Bar) */ }
+    < div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print" >
+        <div className="glass p-2 rounded-full shadow-2xl border border-indigo-500/20 flex gap-2 items-center relative">
+            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                {isDashboardThinking ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="text-lg">✨</span>}
+            </div>
+            <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
+                <input
+                    value={dashboardPrompt}
+                    onChange={(e) => setDashboardPrompt(e.target.value)}
+                    placeholder="Ask Copilot: 'Add a chart showing Sales by City' or 'Change layout'..."
+                    className="w-full bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 h-10"
+                />
+            </form>
+            <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity">
+                Go
+            </button>
+        </div>
+    </div >
+
+    {/* Visual Studio (Chart Editor Modal) */ }
+    {/* Visual Studio (Chart Editor Modal) - REPLACED WITH ChartBuilderPanel */ }
+    {
+        (editingChartId || isCreatingNew) && (
+            <ChartBuilderPanel
+                dataset={dataset}
+                initialChart={isCreatingNew ? undefined : config.charts.find(c => c.id === editingChartId)}
+                onSave={handleSaveChart}
+                onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }}
+                onAIAction={onAIAction}
+            />
+        )
+    }
+
+    {/* Data Peek Modal */ }
+    {
+        viewingDataChart && (
+            <DataPeekModal
+                chart={viewingDataChart}
+                data={getChartData(viewingDataChart)}
+                onClose={() => setViewingDataChart(null)}
+            />
+        )
+    }
+        </div >
     );
 };
 

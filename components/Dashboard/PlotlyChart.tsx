@@ -406,14 +406,21 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
     // Handle empty data
     if (normalizedData.length === 0) {
         return (
-            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-900/30 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-6 text-center animate-in fade-in duration-500">
-                <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4">
-                    <svg className="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <div className="w-full h-full flex flex-col items-center justify-center bg-slate-50/50 dark:bg-slate-900/20 rounded-[32px] border-2 border-dashed border-slate-200 dark:border-slate-800/50 p-8 text-center animate-in fade-in zoom-in-95 duration-700">
+                <div className="w-14 h-14 rounded-2xl bg-white dark:bg-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-500">
+                    <svg className="w-6 h-6 text-slate-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                 </div>
-                <h4 className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-1">Diagnostic: No Data</h4>
-                <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-relaxed max-w-[200px]">
-                    The dataset has no matching entries for " {chart.title} " with the current filter stack.
+                <h4 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 dark:text-slate-500 mb-2">Discovery Bound</h4>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500/80 leading-relaxed max-w-[220px] font-medium">
+                    No matching patterns found for <span className="text-indigo-500 dark:text-indigo-400">"{chart.title}"</span> with the current active filters.
                 </p>
+                <div className="mt-4 flex gap-1">
+                    <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                    <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                    <div className="w-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800"></div>
+                </div>
             </div>
         );
     }

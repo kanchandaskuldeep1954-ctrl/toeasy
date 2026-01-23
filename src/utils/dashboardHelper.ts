@@ -2,11 +2,32 @@
 import { Dataset, ChartSpec } from '../../types';
 import { GroqService } from '../../services/groqService';
 
+const findClosestColumn = (target: string | undefined, headers: string[]): string | undefined => {
+    if (!target) return undefined;
+    if (headers.includes(target)) return target;
+    const normalized = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
+    const targetNorm = normalized(target);
+    const match = headers.find(h => normalized(h) === targetNorm);
+    if (match) return match;
+    return headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
+};
+
+const parseNumericValue = (val: any): number => {
+    if (val === null || val === undefined) return 0;
+    if (typeof val === 'number') return val;
+    const str = String(val).replace(/[^0-9.-]/g, '');
+    const num = parseFloat(str);
+    return isNaN(num) ? 0 : num;
+};
+
 export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: any[]): any[] => {
+    const headers = dataset.headers;
+    const xAxis = findClosestColumn(chart.xAxis, headers) || chart.xAxis;
+    const yAxis = findClosestColumn(chart.yAxis, headers) || chart.yAxis;
+    const zAxis = findClosestColumn(chart.zAxis, headers) || chart.zAxis;
+
     // PRIORITY 1: Use pre-aggregated data from backend if available
-    // This is the data pre-computed by AnalyticsEngine
     if (chart.data && Array.isArray(chart.data) && chart.data.length > 0) {
-        // Normalize data to ensure it has the right format
         return chart.data.map((d: any) => ({
             name: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
             value: Number(d.value ?? d.y ?? d.count ?? 0),
@@ -18,13 +39,9 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
     // PRIORITY 2: Manual aggregation from raw data (for user-edited charts)
     if (!filteredData || filteredData.length === 0) return [];
 
-    const xAxis = chart.xAxis;
-    const yAxis = chart.yAxis;
-    const zAxis = chart.zAxis;
-
     // --- Histogram Logic ---
     if (chart.type === 'histogram') {
-        const values = filteredData.map(d => Number(d[xAxis])).filter(n => !isNaN(n));
+        const values = filteredData.map(d => parseNumericValue(d[xAxis])).filter(n => !isNaN(n));
         if (values.length === 0) return [];
         const min = Math.min(...values);
         const max = Math.max(...values);
@@ -54,7 +71,7 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
                 const xVal = String(row[xAxis] || 'Unknown');
                 const yVal = String(row[yAxis] || 'Unknown');
                 const key = `${xVal}::${yVal}`;
-                const zVal = zAxis ? (Number(row[zAxis]) || 1) : 1; // Count or Sum Z
+                const zVal = zAxis ? parseNumericValue(row[zAxis]) : 1;
 
                 if (map.has(key)) {
                     map.get(key)!.z += zVal;
@@ -67,11 +84,11 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
 
         // Scatter / Bubble
         return filteredData.map(row => ({
-            x: Number(row[xAxis]) || 0,
-            y: Number(row[yAxis]) || 0,
-            z: zAxis ? (Number(row[zAxis]) || 100) : 100, // Z determines bubble size
+            x: parseNumericValue(row[xAxis]),
+            y: parseNumericValue(row[yAxis]),
+            z: zAxis ? parseNumericValue(row[zAxis]) : 100,
             name: row[dataset.headers[0]]
-        })).slice(0, 500); // Limit points for performance
+        })).slice(0, 500);
     }
 
     // --- Box / Violin Logic (Raw Distribution) ---
@@ -149,7 +166,7 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
     // Handle truncation of labels for readability
     let result = smartData.map(item => ({
         label: item.label.length > 20 ? item.label.substring(0, 18) + '...' : item.label,
-        value: Number(item.value.toFixed(2))
+        value: parseNumericValue(item.value)
     }));
 
     // Sorting typically helps standard charts (already done by smartAggregateData)
