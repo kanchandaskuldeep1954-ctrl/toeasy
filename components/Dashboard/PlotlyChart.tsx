@@ -30,19 +30,21 @@ const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => (
         color: isDark ? '#f1f5f9' : '#1e293b',
         size: 11
     },
-    margin: { l: 50, r: 20, t: 30, b: 50 },
+    autosize: true,
+    margin: { l: 80, r: 30, t: 40, b: 100 }, // Increased margins for long labels
     showlegend: false,
     height,
     xaxis: {
-        gridcolor: isDark ? 'rgba(241, 245, 249, 0.05)' : 'rgba(30, 41, 59, 0.05)',
-        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.1)' : 'rgba(30, 41, 59, 0.1)',
-        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' },
-        automargin: true
+        gridcolor: isDark ? 'rgba(241, 245, 249, 0.03)' : 'rgba(30, 41, 59, 0.03)',
+        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.08)' : 'rgba(30, 41, 59, 0.08)',
+        tickfont: { size: 9, color: isDark ? '#94a3b8' : '#64748b' },
+        automargin: true,
+        tickangle: -45 // Angle labels for better fit
     },
     yaxis: {
-        gridcolor: isDark ? 'rgba(241, 245, 249, 0.05)' : 'rgba(30, 41, 59, 0.05)',
-        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.1)' : 'rgba(30, 41, 59, 0.1)',
-        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' },
+        gridcolor: isDark ? 'rgba(241, 245, 249, 0.03)' : 'rgba(30, 41, 59, 0.03)',
+        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.08)' : 'rgba(30, 41, 59, 0.08)',
+        tickfont: { size: 9, color: isDark ? '#94a3b8' : '#64748b' },
         automargin: true
     },
     hoverlabel: {

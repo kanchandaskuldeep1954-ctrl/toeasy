@@ -644,9 +644,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             )}
 
             <div className="p-4 md:p-8 space-y-6 md:space-y-12">
-                {/* KPI Grid */}
-                {/* KPI Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                {/* KPI Grid - Adaptive & Robust */}
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4 px-1">
                     {dynamicKPIs.map((kpi) => (
                         <KPICard
                             key={kpi.id}
@@ -657,36 +656,29 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             onDelete={handleRemoveKPI}
                         />
                     ))}
-                    {/* Add New KPI Card with AI */}
-                    <div className="flex flex-col gap-2 min-h-[160px]">
+                    {/* AI Discovery Pivot */}
+                    <div className="flex flex-col gap-2 min-h-[140px]">
                         <button
                             onClick={handleAddKPI}
-                            className="flex-1 group relative overflow-hidden rounded-xl border border-dashed border-slate-300 dark:border-slate-800 p-4 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-slate-100 dark:hover:bg-indigo-500/5"
+                            className="flex-1 group relative overflow-hidden rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-4 flex flex-col items-center justify-center gap-1.5 transition-all hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-indigo-500/5"
                         >
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/30 group-hover:text-indigo-500 transition-all">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
+                            <div className="w-7 h-7 rounded-full bg-slate-50 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 group-hover:text-indigo-500 transition-all">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 4v16m8-8H4" /></svg>
                             </div>
-                            <span className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-all">Manual Metric</span>
+                            <span className="text-[8px] font-bold uppercase tracking-[0.2em] text-slate-400 group-hover:text-indigo-500 transition-all">New Metric</span>
                         </button>
 
-                        <form onSubmit={handleAiAddKPI} className="group relative overflow-hidden rounded-xl border border-indigo-500/30 bg-indigo-50/50 dark:bg-indigo-500/5 p-4 flex flex-col gap-2 transition-all hover:bg-indigo-100/50 dark:hover:bg-indigo-500/10 h-[100px]">
+                        <form onSubmit={handleAiAddKPI} className="group relative overflow-hidden rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-3 flex flex-col gap-2 transition-all hover:bg-indigo-500/10 min-h-[80px]">
                             <div className="flex items-center gap-2">
-                                <svg className={`w-3 h-3 text-indigo-500 dark:text-indigo-400 ${isKpiThinking ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                <span className="text-[9px] font-black uppercase tracking-wider text-indigo-500 dark:text-indigo-400">AI Metric Draft</span>
+                                <div className={`w-1.5 h-1.5 rounded-full bg-indigo-500 ${isKpiThinking ? 'animate-ping' : ''}`} />
+                                <span className="text-[8px] font-bold uppercase tracking-wider text-indigo-500/80">AI Draft</span>
                             </div>
                             <input
                                 value={kpiPrompt}
                                 onChange={e => setKpiPrompt(e.target.value)}
-                                placeholder="Describe metric..."
-                                className="bg-transparent border-b border-indigo-500/20 text-[10px] text-slate-900 dark:text-white outline-none py-1 placeholder:text-indigo-400/50 focus:border-indigo-400 transition-all"
+                                placeholder="Describe..."
+                                className="bg-transparent border-none text-[10px] text-slate-900 dark:text-white outline-none py-1 placeholder:text-slate-400 font-medium"
                             />
-                            <button
-                                type="submit"
-                                disabled={isKpiThinking || !kpiPrompt}
-                                className="text-[9px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 disabled:opacity-50 text-right mt-auto"
-                            >
-                                {isKpiThinking ? 'Thinking...' : 'Generate →'}
-                            </button>
                         </form>
                     </div>
                 </div>
