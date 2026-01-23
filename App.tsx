@@ -23,7 +23,7 @@ import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
 import { QueryHistory } from './src/components/QueryHistory';
 import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
-import ReportViewIntegrated from './src/components/ReportViewIntegrated';
+import TheWarRoom from './src/components/TheWarRoom';
 const CleanViewIntegrated = React.lazy(() => import('./src/components/CleanViewIntegrated'));
 const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
 import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
@@ -66,6 +66,7 @@ const AppLayout: React.FC = () => {
           <Route path="dashboard" element={<DashboardViewIntegrated />} />
           <Route path="dashboards" element={<DashboardLibrary />} />
           <Route path="report" element={<ReportViewIntegrated />} />
+          <Route path="war-room" element={<TheWarRoom />} />
           <Route path="queries" element={<QueryHistory />} />
           <Route path="preview" element={<DataPreview />} />
           <Route path="rules" element={<ValidationRulesManager />} />
