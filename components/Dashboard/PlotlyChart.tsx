@@ -56,7 +56,12 @@ const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => (
 });
 
 export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, onClick }) => {
-    const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+    const isDark = useMemo(() => {
+        if (typeof document === 'undefined') return false;
+        return document.documentElement.classList.contains('dark') ||
+            document.body.classList.contains('dark') ||
+            window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }, []);
 
     // Normalize data from backend to standard format
     const normalizedData = useMemo(() => {
@@ -121,7 +126,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     leaf: { opacity: 0.8 },
                     marker: { line: { width: 1, color: 'white' }, colorscale: 'Viridis' },
                     hovertemplate: '<b>%{label}</b><br>Value: %{value:,.2f}<extra></extra>'
-                }];
+                } as any];
 
             // ===== STATISTICAL =====
             case 'box':
@@ -166,13 +171,18 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
 
             // ===== LINE / AREA =====
             case 'line':
+                const lineColor = isDark ? '#a5b4fc' : '#2563eb'; // Brighter Indigo in dark mode
                 return [{
                     x: labels,
                     y: values,
                     type: 'scatter',
                     mode: 'lines+markers',
-                    line: { color: isDark ? '#818cf8' : COLORS[0], width: 3, shape: 'spline' },
-                    marker: { size: 8, color: isDark ? '#818cf8' : COLORS[0], line: { width: 2, color: isDark ? '#0f172a' : 'white' } },
+                    line: { color: lineColor, width: 3.5, shape: 'spline' },
+                    marker: {
+                        size: 9,
+                        color: lineColor,
+                        line: { width: 2, color: isDark ? '#0f172a' : 'white' }
+                    },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
@@ -199,7 +209,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     textinfo: 'percent+label',
                     textposition: 'inside',
                     hovertemplate: '<b>%{label}</b><br>%{value:,.2f} (%{percent})<extra></extra>'
-                }];
+                } as any];
 
             case 'donut':
             case 'doughnut':
@@ -288,7 +298,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     marker: { color: COLORS },
                     textinfo: 'value+percent total',
                     hovertemplate: '<b>%{y}</b><br>%{x:,.2f}<extra></extra>'
-                }];
+                } as any];
 
             // ===== GAUGE =====
             case 'gauge':
@@ -367,7 +377,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     decreasing: { marker: { color: '#f43f5e' } },
                     totals: { marker: { color: COLORS[0] } },
                     hovertemplate: '<b>%{x}</b><br>%{y:,.2f}<extra></extra>'
-                }];
+                } as any];
 
             // ===== HISTOGRAM =====
             case 'histogram':
@@ -376,7 +386,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'histogram',
                     marker: { color: COLORS[0], opacity: 0.8 },
                     nbinsx: 15
-                }];
+                } as any];
 
             // DEFAULT: Bar chart
             default:

@@ -826,7 +826,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             : [];
 
                         return (
-                            <div key={i} className={`glass-card p-6 md:p-8 rounded-[24px] flex flex-col h-[420px] ${isWide ? 'md:col-span-2' : ''} group relative overflow-hidden ${hasWarnings ? 'border-amber-200/50 dark:border-amber-900/30' : ''}`}>
+                            <div key={i} className={`glass-card p-6 md:p-8 rounded-[24px] flex flex-col min-h-[420px] h-fit ${isWide ? 'md:col-span-2' : ''} group relative transition-all duration-500 ${hasWarnings ? 'border-amber-200/50 dark:border-amber-900/30' : ''} ${deepDiveResult?.id === chart.id ? 'ring-2 ring-indigo-500/30 shadow-2xl shadow-indigo-500/10' : 'overflow-hidden'}`}>
 
                                 <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all duration-500 flex gap-2 translate-y-2 group-hover:translate-y-0 no-print">
                                     <button
