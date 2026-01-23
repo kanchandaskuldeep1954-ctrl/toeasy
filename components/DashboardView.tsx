@@ -853,7 +853,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     })}
                 </div>
             </div>
-        )}
 
             {/* Patterns/Insights Section */}
             {perspective === 'Patterns' && config.patterns?.length > 0 && (
@@ -869,53 +868,52 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     ))}
                 </div>
             )}
-        </div>
 
-    {/* Global Dashboard AI Copilot (Bottom Bar) */ }
-    < div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print" >
-        <div className="glass-card !bg-white/80 dark:!bg-slate-900/80 p-2 rounded-full shadow-2xl border border-slate-200 dark:border-white/10 flex gap-2 items-center relative backdrop-blur-2xl">
-            <div className="w-10 h-10 rounded-full bg-slate-900 dark:bg-white flex items-center justify-center shrink-0 shadow-lg">
-                {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-400 border-t-indigo-500 rounded-full animate-spin"></div> : <span className="text-lg text-white dark:text-slate-900">✨</span>}
+            {/* Global Dashboard AI Copilot (Bottom Bar) */}
+            <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print">
+                <div className="glass-card !bg-white/80 dark:!bg-slate-900/80 p-2 rounded-full shadow-2xl border border-slate-200 dark:border-white/10 flex gap-2 items-center relative backdrop-blur-2xl">
+                    <div className="w-10 h-10 rounded-full bg-slate-900 dark:bg-white flex items-center justify-center shrink-0 shadow-lg">
+                        {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-400 border-t-indigo-500 rounded-full animate-spin"></div> : <span className="text-lg text-white dark:text-slate-900">✨</span>}
+                    </div>
+                    <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
+                        <input
+                            value={dashboardPrompt}
+                            onChange={(e) => setDashboardPrompt(e.target.value)}
+                            placeholder="Ask ToEasy: 'Add a revenue trend' or 'Show outliers'..."
+                            className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 h-10 px-2"
+                        />
+                    </form>
+                    <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50">
+                        Execute
+                    </button>
+                </div>
             </div>
-            <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
-                <input
-                    value={dashboardPrompt}
-                    onChange={(e) => setDashboardPrompt(e.target.value)}
-                    placeholder="Ask ToEasy: 'Add a revenue trend' or 'Show outliers'..."
-                    className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 h-10 px-2"
-                />
-            </form>
-            <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50">
-                Execute
-            </button>
+
+            {/* Visual Studio (Chart Editor Modal) */}
+            {/* Visual Studio (Chart Editor Modal) - REPLACED WITH ChartBuilderPanel */}
+            {
+                (editingChartId || isCreatingNew) && (
+                    <ChartBuilderPanel
+                        dataset={dataset}
+                        initialChart={isCreatingNew ? undefined : config.charts.find(c => c.id === editingChartId)}
+                        onSave={handleSaveChart}
+                        onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }}
+                        onAIAction={onAIAction}
+                    />
+                )
+            }
+
+            {/* Data Peek Modal */}
+            {
+                viewingDataChart && (
+                    <DataPeekModal
+                        chart={viewingDataChart}
+                        data={getChartData(viewingDataChart)}
+                        onClose={() => setViewingDataChart(null)}
+                    />
+                )
+            }
         </div>
-    </div >
-
-    {/* Visual Studio (Chart Editor Modal) */ }
-    {/* Visual Studio (Chart Editor Modal) - REPLACED WITH ChartBuilderPanel */ }
-    {
-        (editingChartId || isCreatingNew) && (
-            <ChartBuilderPanel
-                dataset={dataset}
-                initialChart={isCreatingNew ? undefined : config.charts.find(c => c.id === editingChartId)}
-                onSave={handleSaveChart}
-                onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }}
-                onAIAction={onAIAction}
-            />
-        )
-    }
-
-    {/* Data Peek Modal */ }
-    {
-        viewingDataChart && (
-            <DataPeekModal
-                chart={viewingDataChart}
-                data={getChartData(viewingDataChart)}
-                onClose={() => setViewingDataChart(null)}
-            />
-        )
-    }
-        </div >
     );
 };
 
