@@ -1608,7 +1608,7 @@ ANALYZE and return ONLY valid JSON (no markdown):
 
     // 3. Regularize content
     try {
-      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\// | ([^\\: ] |^) \/\/.*$/gm, '$1');
+      cleaned = cleaned.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
       cleaned = cleaned.replace(/:\s*undefined/g, ': null');
       cleaned = cleaned.replace(/:\s*NaN/g, ': null');
       cleaned = cleaned.replace(/,\s*([}\]])/g, '$1');
