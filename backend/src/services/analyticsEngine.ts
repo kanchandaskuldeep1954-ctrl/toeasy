@@ -114,6 +114,11 @@ export class AnalyticsEngine {
         if (val === null || val === undefined) return 0;
         if (typeof val === 'number') return val;
 
+        const lower = String(val).toLowerCase().trim();
+        // Semantic Booleans & Statuses
+        if (['yes', 'true', 'y', '1', 'recovered', 'success', 'high'].includes(lower)) return 1;
+        if (['no', 'false', 'n', '0', 'died', 'failure', 'low', 'stable'].includes(lower)) return 0;
+
         const str = String(val).replace(/[^0-9.-]/g, '');
         const num = parseFloat(str);
         return isNaN(num) ? 0 : num;
@@ -475,15 +480,7 @@ export class AnalyticsEngine {
             let val = 1;
 
             if (metricCol) {
-                const rawVal = row[metricCol];
-                if (typeof rawVal === 'string') {
-                    const lowVal = rawVal.toLowerCase();
-                    if (lowVal === 'yes' || lowVal === 'true' || lowVal === 'high' || lowVal === 'recovered') val = 1;
-                    else if (lowVal === 'no' || lowVal === 'false' || lowVal === 'low' || lowVal === 'stable') val = 0;
-                    else val = parseFloat(rawVal) || 0;
-                } else {
-                    val = parseFloat(rawVal) || 0;
-                }
+                val = this.parseNumeric(row[metricCol]);
             }
 
             sums[key] = (sums[key] || 0) + val;

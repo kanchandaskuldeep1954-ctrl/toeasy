@@ -15,6 +15,12 @@ const findClosestColumn = (target: string | undefined, headers: string[]): strin
 const parseNumericValue = (val: any): number => {
     if (val === null || val === undefined) return 0;
     if (typeof val === 'number') return val;
+
+    const lower = String(val).toLowerCase().trim();
+    // Semantic Booleans & Statuses
+    if (['yes', 'true', 'y', '1', 'recovered', 'success', 'high'].includes(lower)) return 1;
+    if (['no', 'false', 'n', '0', 'died', 'failure', 'low', 'stable'].includes(lower)) return 0;
+
     const str = String(val).replace(/[^0-9.-]/g, '');
     const num = parseFloat(str);
     return isNaN(num) ? 0 : num;
