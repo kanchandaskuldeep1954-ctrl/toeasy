@@ -44,7 +44,15 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [retryCount, setRetryCount] = useState(0);
     const [activeSection, setActiveSection] = useState<string>('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    const [showCopilot, setShowCopilot] = useState(true);
     const contentRef = useRef<HTMLDivElement>(null);
+
+    const copilotSuggestions = [
+        { title: 'Add Competitor Benchmark', icon: '🏆', prompt: 'Include a section comparing our revenue growth against the S&P 500 average for 2025.' },
+        { title: 'Summarize for Board', icon: '🤵', prompt: 'Convert the executive summary into 3 bullet points that fit on a single slide.' },
+        { title: 'Deep Dive on Anomaly', icon: '🔬', prompt: 'Analyze the sharp drop in record count between Oct 12 and Oct 15.' },
+        { title: 'Forecasting v2.0', icon: '🔮', prompt: 'Extend the trendlines to Q4 2026 using a 15% optimistic growth variable.' }
+    ];
 
     // Generate report with timeout
     const generateReportWithTimeout = async (type: ReportType, timeoutMs: number = 45000): Promise<StrategicReport> => {
@@ -169,6 +177,89 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             </div>
         );
     };
+
+    const renderSWOT = (swot: NonNullable<ReportSection['swot']>) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-10 break-inside-avoid">
+            <div className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl">
+                <h6 className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-3">Strengths</h6>
+                <ul className="space-y-2">
+                    {swot.strengths.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>💪</span> {s}</li>)}
+                </ul>
+            </div>
+            <div className="p-6 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-3xl">
+                <h6 className="text-[10px] font-black uppercase text-rose-600 tracking-widest mb-3">Weaknesses</h6>
+                <ul className="space-y-2">
+                    {swot.weaknesses.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>⚠️</span> {s}</li>)}
+                </ul>
+            </div>
+            <div className="p-6 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-3xl">
+                <h6 className="text-[10px] font-black uppercase text-blue-600 tracking-widest mb-3">Opportunities</h6>
+                <ul className="space-y-2">
+                    {swot.opportunities.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🚀</span> {s}</li>)}
+                </ul>
+            </div>
+            <div className="p-6 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-3xl">
+                <h6 className="text-[10px] font-black uppercase text-amber-600 tracking-widest mb-3">Threats</h6>
+                <ul className="space-y-2">
+                    {swot.threats.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🛡️</span> {s}</li>)}
+                </ul>
+            </div>
+        </div>
+    );
+
+    const renderRecommendations = (recs: NonNullable<ReportSection['recommendations']>) => (
+        <div className="my-10 space-y-4">
+            <h4 className="text-sm font-black uppercase text-slate-400 tracking-widest">Actionable Intelligence</h4>
+            <div className="grid gap-4">
+                {recs.map((rec, i) => (
+                    <div key={i} className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex justify-between items-start mb-3">
+                            <h5 className="font-bold text-slate-900 dark:text-white">{rec.action}</h5>
+                            <span className={`px-2 py-1 rounded-md text-[9px] font-black uppercase tracking-tighter ${rec.impact === 'high' ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                Impact: {rec.impact}
+                            </span>
+                        </div>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-3">{rec.rationale}</p>
+                        <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400">
+                            <span>Effort: {rec.effort}</span>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+
+    const renderRisks = (risks: NonNullable<ReportSection['risks']>) => (
+        <div className="my-10 space-y-4">
+            <h4 className="text-sm font-black uppercase text-slate-400 tracking-widest">Risk Exposure & Mitigation</h4>
+            <div className="overflow-hidden border border-slate-200 dark:border-slate-800 rounded-3xl">
+                <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-50 dark:bg-slate-800/50">
+                        <tr>
+                            <th className="px-6 py-4 font-black uppercase tracking-wider text-slate-500">Risk Category</th>
+                            <th className="px-6 py-4 font-black uppercase tracking-wider text-slate-500 w-1/3">Description</th>
+                            <th className="px-6 py-4 font-black uppercase tracking-wider text-slate-500">Level</th>
+                            <th className="px-6 py-4 font-black uppercase tracking-wider text-slate-500">Mitigation Strategy</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {risks.map((risk, i) => (
+                            <tr key={i} className="bg-white dark:bg-slate-900 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                                <td className="px-6 py-4 font-bold text-slate-900 dark:text-white uppercase tracking-tighter">{risk.category}</td>
+                                <td className="px-6 py-4 text-slate-600 dark:text-slate-400 leading-relaxed">{risk.description}</td>
+                                <td className="px-6 py-4">
+                                    <span className={`px-2 py-1 rounded-full text-[9px] font-black uppercase ${risk.level === 'critical' ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : risk.level === 'high' ? 'bg-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                                        {risk.level}
+                                    </span>
+                                </td>
+                                <td className="px-6 py-4 text-emerald-600 dark:text-emerald-400 font-medium italic">{risk.mitigation}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 
     const [showExportModal, setShowExportModal] = useState(false);
 
@@ -520,6 +611,11 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                     <ReactMarkdown>{section.content}</ReactMarkdown>
                                 </div>
 
+                                {/* Strategic Modules */}
+                                {section.swot && renderSWOT(section.swot)}
+                                {section.recommendations && renderRecommendations(section.recommendations)}
+                                {section.risks && renderRisks(section.risks)}
+
                                 {/* Embedded Visuals */}
                                 {section.charts && section.charts.length > 0 && (
                                     <div className="mt-10 grid grid-cols-1 gap-8">
@@ -541,6 +637,57 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     </footer>
                 </div>
             </main>
+
+            {/* Report Co-pilot: Insight Optimizer */}
+            <aside className={`fixed top-0 right-0 bottom-0 w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-8 pt-12 transform transition-all duration-500 shadow-2xl z-30 print:hidden ${showCopilot ? 'translate-x-0' : 'translate-x-full'}`}>
+                <button
+                    onClick={() => setShowCopilot(!showCopilot)}
+                    className="absolute -left-10 top-1/2 -translate-y-1/2 bg-indigo-600 text-white p-2 rounded-l-xl shadow-xl"
+                >
+                    {showCopilot ? '👉' : '✨'}
+                </button>
+
+                <div className="flex flex-col h-full">
+                    <div className="flex items-center gap-3 mb-8">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/30">✨</div>
+                        <div>
+                            <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-none">Report Co-pilot</h3>
+                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Insight Optimizer</p>
+                        </div>
+                    </div>
+
+                    <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        <p className="text-[11px] font-medium text-slate-500 leading-relaxed italic">
+                            "I've analyzed your data and detected several high-impact narrative opportunities. How would you like to refine this report?"
+                        </p>
+
+                        <div className="grid gap-3">
+                            {copilotSuggestions.map((s, i) => (
+                                <button key={i} className="group p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-600 rounded-2xl border border-slate-100 dark:border-slate-800 text-left transition-all">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <span className="text-lg">{s.icon}</span>
+                                        <span className="text-[11px] font-black uppercase text-slate-900 dark:text-white group-hover:text-white">{s.title}</span>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 group-hover:text-indigo-100 font-medium line-clamp-2">
+                                        {s.prompt}
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Manual Refinement</h4>
+                            <textarea
+                                placeholder="E.g., 'Make it more technical' or 'Add a table for...'"
+                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
+                            />
+                            <button className="w-full mt-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all">
+                                Update Report
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
 
             <style>{`
         @media print {

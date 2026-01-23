@@ -279,6 +279,24 @@ export interface ReportSection {
   charts: ChartSpec[];
   kpis: KPI[];
   keyTakeaways: string[];
+  swot?: {
+    strengths: string[];
+    weaknesses: string[];
+    opportunities: string[];
+    threats: string[];
+  };
+  recommendations?: {
+    action: string;
+    impact: 'high' | 'medium' | 'low';
+    effort: 'high' | 'medium' | 'low';
+    rationale: string;
+  }[];
+  risks?: {
+    category: string;
+    description: string;
+    level: 'critical' | 'high' | 'medium' | 'low';
+    mitigation: string;
+  }[];
 }
 
 export interface StrategicReport {

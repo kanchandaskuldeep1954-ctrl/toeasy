@@ -700,13 +700,15 @@ Return ONLY valid JSON (no markdown, no explanation):
             "title": "Strategic Overview",
             "content": "Deep dive narrative...",
             "keyTakeaways": ["insight 1", "insight 2"],
-            "chartIds": ["id_of_relevant_chart_1", "id_of_relevant_chart_2"],
-            "kpiIds": ["total_records", "total_revenue"]
+            "swot": { "strengths": [], "weaknesses": [], "opportunities": [], "threats": [] },
+            "recommendations": [{ "action": "...", "impact": "high", "effort": "low", "rationale": "..." }],
+            "risks": [{ "category": "Compliance", "description": "...", "level": "medium", "mitigation": "..." }],
+            "chartIds": ["id_of_relevant_chart_1"],
+            "kpiIds": ["total_records"]
           }
-          // Add 3-4 more specific sections based on report type
         ],
         "generatedAt": "${new Date().toISOString()}",
-        "version": "2.0"
+        "version": "3.0"
       }`;
 
       const result = await this.callGroq(groqPrompt, 2500);
