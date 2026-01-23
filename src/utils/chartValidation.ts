@@ -70,10 +70,18 @@ export function validateChartSpec(
   // Pie charts should have moderate cardinality
   if (spec.type === 'pie' && xValues.size > 20) {
     result.warnings.push(
-      `Pie chart has ${xValues.size} categories, which may be hard to read. Consider using a bar chart or aggregating categories.`
+      `Pie chart has ${xValues.size} categories, which may be hard to read. Consider using a bar chart or sunburst.`
     );
     result.recommendations.push('Use aggregation with "Top N + Other" grouping for high-cardinality pie charts');
     result.score -= 20;
+  }
+
+  // Sunburst can handle more, but warn if extreme
+  if (spec.type === 'sunburst' && xValues.size > 50) {
+    result.warnings.push(
+      `Sunburst has ${xValues.size} categories. Visualization might be cluttered.`
+    );
+    result.score -= 10;
   }
 
   // Scatter plots should have numeric data

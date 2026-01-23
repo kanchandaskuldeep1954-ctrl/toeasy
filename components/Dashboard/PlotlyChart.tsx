@@ -205,15 +205,20 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
 
             // ===== SCATTER / BUBBLE =====
             case 'scatter':
+                const isBinaryY = normalizedData.length > 0 && normalizedData.every(d => [0, 1].includes(d.y));
                 return [{
                     x: normalizedData.map(d => d.x ?? d.value),
-                    y: normalizedData.map(d => d.y ?? d.value * 0.8 + Math.random() * 100),
+                    y: normalizedData.map(d => {
+                        const val = d.y ?? d.value;
+                        // Add tiny jitter for binary data to avoid perfect overlap
+                        return isBinaryY ? val + (Math.random() - 0.5) * 0.05 : val;
+                    }),
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
                         size: 10,
                         color: COLORS[4],
-                        opacity: 0.7,
+                        opacity: 0.6,
                         line: { width: 1, color: 'white' }
                     },
                     text: labels,
