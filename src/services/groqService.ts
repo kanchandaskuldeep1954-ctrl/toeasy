@@ -38,6 +38,12 @@ export class GroqService {
     return result.data;
   }
 
+  // Real Web Scraper
+  static async scrapeRealWeb(url: string, topic: string, fields: string[], count: number): Promise<DataRow[]> {
+    const result = await this.callApi<{ data: DataRow[] }>('scrape', 'POST', { url, topic, fields, count });
+    return result.data;
+  }
+
   // Generate validation logic from description
   static async generateLogicFromDescription(
     dataset: Dataset,

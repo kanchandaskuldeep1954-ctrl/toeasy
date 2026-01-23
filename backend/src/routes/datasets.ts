@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription, checkTierLimit } from '../middleware/subscription.js';
 import { GroqService } from '../services/groq.service.js';
+import { ScraperService } from '../services/scraper.service.js';
 import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
@@ -70,6 +71,15 @@ router.post('/:workspaceId/datasets', checkTierLimit('maxDatasets'), async (req:
     }
 
     const rowCount = data.length;
+    const maxRows = (req as any).tierLimit || 500; // Default to basic
+
+    if (rowCount > maxRows) {
+      return res.status(403).json({
+        error: 'Tier limit exceeded',
+        message: `Your current plan allows up to ${maxRows} rows per dataset. You provided ${rowCount}.`
+      });
+    }
+
     const columnCount = headers ? headers.length : Object.keys(data[0] || {}).length;
     const fileSize = JSON.stringify(data).length;
 
@@ -293,6 +303,32 @@ router.post('/:workspaceId/datasets/:datasetId/analyze', async (req: AuthRequest
   } catch (err) {
     console.error('Analyze dataset error:', err);
     res.status(500).json({ error: 'Failed to analyze dataset' });
+  }
+});
+
+// Scrape real web data
+router.post('/:workspaceId/datasets/scrape', checkTierLimit('maxRowsPerDataset'), async (req: AuthRequest, res) => {
+  try {
+    const { url, topic, fields, count } = req.body;
+    const maxRows = (req as any).tierLimit || 500;
+
+    if (!url || !topic || !count) {
+      return res.status(400).json({ error: 'Missing required parameters (url, topic, count)' });
+    }
+
+    const targetCount = Math.min(count, maxRows);
+    console.log(`Real scrape requested for: ${url}, target count: ${targetCount}`);
+
+    const scrapedData = await ScraperService.scrapeUrl(url, topic, fields || [], targetCount);
+
+    res.json({
+      data: scrapedData,
+      count: scrapedData.length,
+      limitApplied: targetCount < count
+    });
+  } catch (err) {
+    console.error('Real scrape error:', err);
+    res.status(500).json({ error: 'Failed to scrape web data' });
   }
 });
 

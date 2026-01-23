@@ -8,6 +8,7 @@ import { cacheMiddleware, invalidateCacheMiddleware } from './middleware/cacheMi
 import { authenticateToken, AuthRequest } from './middleware/auth.js';
 import { GroqService } from './services/groq.service.js';
 import { query } from './db.js';
+import { ScraperService } from './services/scraper.service.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -372,6 +373,59 @@ app.post('/api/generate-logic', authenticateToken, async (req: AuthRequest, res)
   } catch (err) {
     console.error('Generate logic error:', err);
     res.status(500).json({ error: 'Failed to generate logic' });
+  }
+});
+
+// Real Web Scraper endpoint
+app.post('/api/scrape', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { url, topic, fields, count } = req.body;
+
+    if (!url || !topic || !count) {
+      return res.status(400).json({ error: 'URL, topic, and count required' });
+    }
+
+    // Check subscription tier for max rows
+    const userResult = await query(
+      'SELECT tier FROM subscriptions WHERE user_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1',
+      [req.user!.id, 'active']
+    );
+
+    const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
+    const tierLimits: Record<string, number> = {
+      'basic': 500,
+      'pro': 50000,
+      'enterprise': 1000000
+    };
+
+    const maxRows = tierLimits[tier] || 500;
+
+    if (count > maxRows) {
+      return res.status(400).json({
+        error: `Your ${tier} plan allows maximum ${maxRows} rows per dataset. Upgrade to scrape more.`,
+        maxAllowed: maxRows,
+        tier
+      });
+    }
+
+    console.log(`Real scrape requested for: ${url}, target count: ${count}`);
+
+    const scrapedData = await ScraperService.scrapeUrl(
+      url,
+      topic,
+      fields || [],
+      Math.min(count, maxRows)
+    );
+
+    res.json({
+      data: scrapedData,
+      count: scrapedData.length,
+      limitApplied: count > maxRows,
+      tier
+    });
+  } catch (err) {
+    console.error('Scrape error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: 'Failed to scrape web data' });
   }
 });
 

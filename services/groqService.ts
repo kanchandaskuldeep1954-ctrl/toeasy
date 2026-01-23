@@ -8,7 +8,7 @@ import { Dataset, AnalysisInsight, ChartSpec, CleaningAction, ValidationRule, Da
  */
 export class GroqService {
   private static getBaseUrl(): string {
-    const backendUrl = import.meta.env.VITE_BACKEND_URL;
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL;
     console.log('GroqService.getBaseUrl() - VITE_BACKEND_URL:', backendUrl);
     if (backendUrl) {
       // Remove trailing /api if present
@@ -67,6 +67,12 @@ export class GroqService {
     const result = await this.callApi<{ data: DataRow[]; count: number; tier: string; maxAllowed: number; generatedAt: string }>('generate-synthetic', 'POST', { topic, fields, count });
     // Return the full response object including metadata
     return result;
+  }
+
+  // Real Web Scraper
+  static async scrapeRealWeb(url: string, topic: string, fields: string[], count: number): Promise<any> {
+    const result = await this.callApi<{ data: DataRow[] }>('scrape', 'POST', { url, topic, fields, count });
+    return result.data;
   }
 
   // Generate validation logic from description

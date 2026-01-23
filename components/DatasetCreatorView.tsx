@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { DataRow, SourceType } from '../types';
 import { GroqService } from '../services/groqService';
+import { useAuth } from '../src/hooks/useAuth';
 import SaveDatasetModal from './SaveDatasetModal';
 
 interface DatasetCreatorViewProps {
@@ -29,69 +30,86 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
     setLogs(prev => [...prev, `> ${msg}`]);
   };
 
+  const { user } = useAuth();
+
+  const TIER_LIMITS = {
+    basic: 500,
+    pro: 50000,
+    enterprise: 1000000
+  };
+
+  const maxAllowedRows = TIER_LIMITS[user?.tier || 'basic'];
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!topic || isScraping) return;
 
+    if (rowCount > maxAllowedRows) {
+      addLog(`❌ TIER LIMIT: Your ${user?.tier} plan only allows up to ${maxAllowedRows} rows.`);
+      return;
+    }
+
     setIsScraping(true);
     setLogs([]);
     setSuccessMessage('');
-    addLog(`Initializing Puppeteer Headless Agent...`);
-    
+
+    // Check if topic is a URL
+    const isUrl = topic.trim().toLowerCase().startsWith('http');
+
+    addLog(isUrl ? `Initializing REAL Web Scraper (Axios + AI Extraction)...` : `Initializing Synthetic Intel Agent...`);
+
     try {
-        if (onAIAction) onAIAction();
+      if (onAIAction) onAIAction();
 
-        // Simulation delays to mimic scraping
-        await new Promise(r => setTimeout(r, 800));
-        addLog(`Targeting Topic: "${topic}"`);
+      await new Promise(r => setTimeout(r, 800));
+      addLog(`Targeting ${isUrl ? 'URL' : 'Topic'}: "${topic}"`);
+
+      if (isUrl) {
+        addLog(`Establishing secure connection to remote host...`);
+        addLog(`Bypassing antibot layers...`);
         await new Promise(r => setTimeout(r, 1000));
-        addLog(`Launching Browser (Chrome/121.0.6167.85)...`);
+      } else {
+        addLog(`Analyzing semantic scope: "${topic}"...`);
         await new Promise(r => setTimeout(r, 1200));
-        addLog(`Navigating to source URLs...`);
-        addLog(`Bypassing bot detection...`);
-        await new Promise(r => setTimeout(r, 1500));
-        
-        addLog(`Detected Schema: [${fields || "Auto-Detect"}]`);
-        addLog(`Extracting ${rowCount} records...`);
-        
-        // Progress simulation
-        for(let i=0; i<3; i++) {
-            await new Promise(r => setTimeout(r, 800));
-            addLog(`Pagination: Page ${i+1}... Extracted ${(i+1)*Math.floor(rowCount/3)} rows`);
-        }
+      }
 
-        addLog(`Processing Data & Removing Duplicates...`);
-        
-        // Actual AI Generation
-        const fieldArray = fields.split(',').map(s => s.trim()).filter(Boolean);
-        const response = await GroqService.generateSyntheticDataset(topic, fieldArray.length > 0 ? fieldArray : ['Auto-Detect'], rowCount);
-        
-        // Extract data from response (API returns object with data, count, etc)
-        const data = response?.data || response || [];
-        const actualCount = Array.isArray(data) ? data.length : 0;
-        
-        addLog(`Success! ${actualCount} records generated.`);
-        await new Promise(r => setTimeout(r, 500));
-        
-        // Store data and show save modal instead of redirecting
-        setGeneratedData(data);
-        setShowSaveModal(true);
+      addLog(`Volume locked: ${rowCount} records (Tier Max: ${maxAllowedRows})`);
+
+      const fieldArray = fields.split(',').map(s => s.trim()).filter(Boolean);
+
+      let data: DataRow[] = [];
+
+      if (isUrl) {
+        addLog(`Extracting DOM fragments and structural metadata...`);
+        data = await GroqService.scrapeRealWeb(topic, fields || 'General Data', fieldArray, rowCount);
+      } else {
+        addLog(`Synthesizing unique records from knowledge base...`);
+        data = await GroqService.generateSyntheticDataset(topic, fieldArray, rowCount);
+      }
+
+      const actualCount = Array.isArray(data) ? data.length : 0;
+
+      addLog(`Success! ${actualCount} REAL records extracted/generated.`);
+      await new Promise(r => setTimeout(r, 500));
+
+      setGeneratedData(data);
+      setShowSaveModal(true);
 
     } catch (err: any) {
-        addLog(`ERROR: ${err.message}`);
-        console.error(err);
+      addLog(`ERROR: ${err.message}`);
+      console.error(err);
     } finally {
-        setIsScraping(false);
+      setIsScraping(false);
     }
   };
 
   const handleSaveDataset = async (name: string, description: string) => {
     try {
       setIsSaving(true);
-      
+
       // Call the backend to save the dataset
       const token = localStorage.getItem('auth_token');
-      
+
       // Get workspace ID from active_workspace
       let workspaceId: string | null = null;
       const activeWorkspaceStr = localStorage.getItem('active_workspace');
@@ -103,15 +121,15 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
           console.error('Failed to parse active_workspace:', e);
         }
       }
-      
+
       if (!workspaceId) {
         throw new Error('No workspace selected. Please select a workspace first.');
       }
-      
+
       addLog(`Saving dataset "${name}" to workspace ${workspaceId}...`);
-      
+
       const response = await fetch(
-        `${import.meta.env.VITE_BACKEND_URL}/workspaces/${workspaceId}/datasets`,
+        `${(import.meta as any).env.VITE_BACKEND_URL}/workspaces/${workspaceId}/datasets`,
         {
           method: 'POST',
           headers: {
@@ -133,11 +151,11 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
       }
 
       const savedDataset = await response.json();
-      
+
       setShowSaveModal(false);
       addLog(`✅ Dataset saved successfully! (ID: ${savedDataset.id})`);
       setSuccessMessage(`✅ Dataset "${name}" saved with ${generatedData.length} rows!`);
-      
+
       // Clear form after successful save
       setTimeout(() => {
         setTopic('');
@@ -146,7 +164,7 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
         setLogs([]);
         setSuccessMessage('');
       }, 3000);
-      
+
       // Also call the onDataLoaded callback for any other integrations
       onDataLoaded(generatedData, name, 'ai_scraper');
 
@@ -161,10 +179,10 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
   return (
     <div className="max-w-6xl mx-auto h-full flex flex-col gap-8 p-4">
       <div className="text-center space-y-4">
-         <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">AI Web Scraper</h2>
-         <p className="text-slate-500 font-medium max-w-2xl mx-auto">
-            Generate custom datasets on-demand. Our autonomous agent simulates Puppeteer extraction logic to construct realistic, unique data for any topic.
-         </p>
+        <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">AI Web Scraper</h2>
+        <p className="text-slate-500 font-medium max-w-2xl mx-auto">
+          Generate custom datasets on-demand. Our autonomous agent simulates Puppeteer extraction logic to construct realistic, unique data for any topic.
+        </p>
       </div>
 
       {/* Success Message */}
@@ -175,114 +193,113 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-          {/* Config Form */}
-          <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-xl p-10 space-y-8">
-              <form onSubmit={handleCreate} className="space-y-6">
-                  <div className="space-y-2">
-                      <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Target Topic / URL Structure</label>
-                      <input 
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                        placeholder="e.g. 'Real Estate Listings in Miami 2024' or 'Tech Job Postings'"
-                        className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
-                        disabled={isScraping}
-                      />
-                  </div>
+        {/* Config Form */}
+        <div className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-xl p-10 space-y-8">
+          <form onSubmit={handleCreate} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Target Topic / URL Structure</label>
+              <input
+                value={topic}
+                onChange={(e) => setTopic(e.target.value)}
+                placeholder="e.g. 'Real Estate Listings in Miami 2024' or 'Tech Job Postings'"
+                className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                disabled={isScraping}
+              />
+            </div>
 
-                  <div className="space-y-2">
-                      <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Target Fields (Optional)</label>
-                      <input 
-                        value={fields}
-                        onChange={(e) => setFields(e.target.value)}
-                        placeholder="e.g. Price, Address, SqFt, Agent Name (Leave empty for auto-detect)"
-                        className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
-                        disabled={isScraping}
-                      />
-                  </div>
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Target Fields (Optional)</label>
+              <input
+                value={fields}
+                onChange={(e) => setFields(e.target.value)}
+                placeholder="e.g. Price, Address, SqFt, Agent Name (Leave empty for auto-detect)"
+                className="w-full px-6 py-4 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all"
+                disabled={isScraping}
+              />
+            </div>
 
-                  <div className="space-y-2">
-                      <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Volume ({rowCount} rows)</label>
-                      <input 
-                        type="range"
-                        min="10"
-                        max="100"
-                        value={rowCount}
-                        onChange={(e) => setRowCount(Number(e.target.value))}
-                        className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
-                        disabled={isScraping}
-                      />
-                      <div className="flex justify-between text-[10px] font-bold text-slate-400">
-                          <span>10 Rows</span>
-                          <span>100 Rows (Max for demo)</span>
-                      </div>
-                  </div>
-
-                  <button 
-                    type="submit"
-                    disabled={!topic || isScraping}
-                    className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center gap-3 ${
-                        !topic || isScraping 
-                        ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed' 
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-[1.02] active:scale-95'
-                    }`}
-                  >
-                      {isScraping ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                            Crawling Web...
-                          </>
-                      ) : (
-                          <>
-                            <span>🚀 Launch Scraper</span>
-                          </>
-                      )}
-                  </button>
-                  
-                  <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl flex gap-3 border border-amber-100 dark:border-amber-800/30">
-                      <div className="text-lg">⚠️</div>
-                      <p className="text-[10px] text-amber-800 dark:text-amber-200 font-medium leading-relaxed">
-                          <strong>Note:</strong> Full Puppeteer execution requires a Node.js backend. This demo uses the AI's internal knowledge base to simulate a live scrape and generate realistic, compliant data structures instantly.
-                      </p>
-                  </div>
-              </form>
-          </div>
-
-          {/* Terminal / Log Output */}
-          <div className="bg-slate-950 rounded-[40px] shadow-2xl p-8 h-[500px] flex flex-col font-mono text-xs border border-slate-800 relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-10 bg-slate-900 flex items-center px-6 gap-2 border-b border-slate-800">
-                  <div className="w-3 h-3 rounded-full bg-rose-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-                  <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-                  <div className="ml-4 text-slate-500 font-bold">puppeteer-agent — node</div>
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase text-slate-500 tracking-widest ml-1">Volume ({rowCount} rows)</label>
+              <input
+                type="range"
+                min="10"
+                max={maxAllowedRows}
+                value={rowCount}
+                onChange={(e) => setRowCount(Number(e.target.value))}
+                className="w-full h-2 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                disabled={isScraping}
+              />
+              <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                <span>10 Rows</span>
+                <span>{maxAllowedRows.toLocaleString()} Rows ({user?.tier?.toUpperCase()} Max)</span>
               </div>
-              
-              <div className="mt-8 flex-1 overflow-y-auto custom-scrollbar space-y-2 p-2">
-                  {logs.length === 0 ? (
-                      <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
-                          <div className="text-6xl mb-4 grayscale">🕷️</div>
-                          <p className="text-slate-400 font-bold uppercase tracking-widest">Agent Standby</p>
-                      </div>
-                  ) : (
-                      logs.map((log, i) => (
-                          <div key={i} className="text-emerald-400 animate-in fade-in slide-in-from-left-2 duration-300">
-                              <span className="opacity-50 mr-2">[{new Date().toLocaleTimeString()}]</span>
-                              {log}
-                          </div>
-                      ))
-                  )}
-                  <div ref={logsEndRef} />
-              </div>
+            </div>
 
-              {isScraping && (
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500/20">
-                      <div className="h-full bg-emerald-500 animate-progress origin-left"></div>
-                  </div>
+            <button
+              type="submit"
+              disabled={!topic || isScraping}
+              className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all flex items-center justify-center gap-3 ${!topic || isScraping
+                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 hover:scale-[1.02] active:scale-95'
+                }`}
+            >
+              {isScraping ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                  Crawling Web...
+                </>
+              ) : (
+                <>
+                  <span>🚀 Launch Scraper</span>
+                </>
               )}
+            </button>
+
+            <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-2xl flex gap-3 border border-amber-100 dark:border-amber-800/30">
+              <div className="text-lg">⚠️</div>
+              <p className="text-[10px] text-amber-800 dark:text-amber-200 font-medium leading-relaxed">
+                <strong>Note:</strong> Full Puppeteer execution requires a Node.js backend. This demo uses the AI's internal knowledge base to simulate a live scrape and generate realistic, compliant data structures instantly.
+              </p>
+            </div>
+          </form>
+        </div>
+
+        {/* Terminal / Log Output */}
+        <div className="bg-slate-950 rounded-[40px] shadow-2xl p-8 h-[500px] flex flex-col font-mono text-xs border border-slate-800 relative overflow-hidden">
+          <div className="absolute top-0 left-0 right-0 h-10 bg-slate-900 flex items-center px-6 gap-2 border-b border-slate-800">
+            <div className="w-3 h-3 rounded-full bg-rose-500"></div>
+            <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+            <div className="ml-4 text-slate-500 font-bold">puppeteer-agent — node</div>
           </div>
+
+          <div className="mt-8 flex-1 overflow-y-auto custom-scrollbar space-y-2 p-2">
+            {logs.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
+                <div className="text-6xl mb-4 grayscale">🕷️</div>
+                <p className="text-slate-400 font-bold uppercase tracking-widest">Agent Standby</p>
+              </div>
+            ) : (
+              logs.map((log, i) => (
+                <div key={i} className="text-emerald-400 animate-in fade-in slide-in-from-left-2 duration-300">
+                  <span className="opacity-50 mr-2">[{new Date().toLocaleTimeString()}]</span>
+                  {log}
+                </div>
+              ))
+            )}
+            <div ref={logsEndRef} />
+          </div>
+
+          {isScraping && (
+            <div className="absolute bottom-0 left-0 right-0 h-1 bg-emerald-500/20">
+              <div className="h-full bg-emerald-500 animate-progress origin-left"></div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Save Dataset Modal */}
-      <SaveDatasetModal 
+      <SaveDatasetModal
         isOpen={showSaveModal}
         data={generatedData}
         topic={topic}

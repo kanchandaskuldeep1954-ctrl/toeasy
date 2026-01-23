@@ -53,11 +53,37 @@ export function checkTierLimit(limitKey: string) {
     }
 
     const limit = limits[limitKey as keyof typeof limits];
-    if (!limit) {
+    if (limit === undefined) {
       return next(); // Limit not applicable
     }
 
-    // Store limit in request for controller use
+    // Explicitly check for limits that can be verified immediately
+    if (limitKey === 'maxWorkspaces') {
+      const result = await query('SELECT COUNT(*) as count FROM workspaces WHERE user_id = $1', [req.user.id]);
+      if (parseInt(result.rows[0].count) >= limit) {
+        return res.status(403).json({
+          error: 'Tier limit reached',
+          message: `Your current tier allows up to ${limit} workspaces. Please upgrade for more.`,
+          limit
+        });
+      }
+    }
+
+    if (limitKey === 'maxDatasets') {
+      const workspaceId = req.params.workspaceId;
+      if (workspaceId) {
+        const result = await query('SELECT COUNT(*) as count FROM datasets WHERE workspace_id = $1', [workspaceId]);
+        if (parseInt(result.rows[0].count) >= limit) {
+          return res.status(403).json({
+            error: 'Tier limit reached',
+            message: `This workspace allows up to ${limit} datasets on your current plan.`,
+            limit
+          });
+        }
+      }
+    }
+
+    // Store limit in request for controller use (for limits like maxRowsPerDataset)
     (req as any).tierLimit = limit;
     next();
   };
