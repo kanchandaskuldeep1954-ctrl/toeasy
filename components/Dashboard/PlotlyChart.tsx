@@ -171,8 +171,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     y: values,
                     type: 'scatter',
                     mode: 'lines+markers',
-                    line: { color: COLORS[2], width: 2, shape: 'spline' },
-                    marker: { size: 6, color: COLORS[2] },
+                    line: { color: isDark ? '#818cf8' : COLORS[0], width: 3, shape: 'spline' },
+                    marker: { size: 8, color: isDark ? '#818cf8' : COLORS[0], line: { width: 2, color: isDark ? '#0f172a' : 'white' } },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
