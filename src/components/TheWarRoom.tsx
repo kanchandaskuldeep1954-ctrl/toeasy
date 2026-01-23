@@ -14,7 +14,7 @@ const TheWarRoom: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'all' | 'strategic' | 'forensic' | 'clean'>('all');
     const [isGenerating, setIsGenerating] = useState(false);
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
     useEffect(() => {
         if (activeWorkspace?.id && token) {
