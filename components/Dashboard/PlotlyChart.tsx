@@ -9,38 +9,47 @@ interface PlotlyChartProps {
     onClick?: (data: any) => void;
 }
 
-// Professional color palette - slightly more vibrant for light mode
+// Professional BI color palette - Inspired by PowerBI/Tableau
 const COLORS = [
-    '#4f46e5', '#7c3aed', '#db2777', '#e11d48', '#ea580c',
-    '#ca8a04', '#16a34a', '#0d9488', '#0891b2', '#2563eb'
+    '#2563eb', // Steel Blue
+    '#64748b', // Slate
+    '#0f172a', // Deep Navy
+    '#3b82f6', // Bright Blue
+    '#6366f1', // Indigo
+    '#94a3b8', // Light Slate
+    '#1e293b', // Subdued Navy
+    '#475569'  // Mid Slate
 ];
 
-// Modern theme-responsive layout
+// Modern theme-responsive professional layout
 const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => ({
     paper_bgcolor: 'transparent',
     plot_bgcolor: 'transparent',
     font: {
-        family: 'Inter, system-ui, sans-serif',
-        color: isDark ? '#94a3b8' : '#475569',
+        family: "'Inter', system-ui, sans-serif",
+        color: isDark ? '#f1f5f9' : '#1e293b',
         size: 11
     },
-    margin: { l: 60, r: 30, t: 30, b: 60 },
+    margin: { l: 50, r: 20, t: 30, b: 50 },
     showlegend: false,
     height,
     xaxis: {
-        gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
-        zerolinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
-        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }
+        gridcolor: isDark ? 'rgba(241, 245, 249, 0.05)' : 'rgba(30, 41, 59, 0.05)',
+        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.1)' : 'rgba(30, 41, 59, 0.1)',
+        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' },
+        automargin: true
     },
     yaxis: {
-        gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
-        zerolinecolor: isDark ? 'rgba(148, 163, 184, 0.2)' : 'rgba(203, 213, 225, 0.6)',
-        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' }
+        gridcolor: isDark ? 'rgba(241, 245, 249, 0.05)' : 'rgba(30, 41, 59, 0.05)',
+        zerolinecolor: isDark ? 'rgba(241, 245, 249, 0.1)' : 'rgba(30, 41, 59, 0.1)',
+        tickfont: { size: 10, color: isDark ? '#94a3b8' : '#64748b' },
+        automargin: true
     },
     hoverlabel: {
-        bgcolor: isDark ? '#1e293b' : '#ffffff',
-        bordercolor: isDark ? '#475569' : '#e2e8f0',
-        font: { color: isDark ? '#f8fafc' : '#0f172a', size: 12 }
+        bgcolor: isDark ? '#0f172a' : '#ffffff',
+        bordercolor: isDark ? '#1e293b' : '#e2e8f0',
+        font: { color: isDark ? '#f8fafc' : '#0f172a', size: 12 },
+        align: 'left'
     }
 });
 
@@ -172,8 +181,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'scatter',
                     mode: 'lines',
                     fill: 'tozeroy',
-                    fillcolor: 'rgba(99, 102, 241, 0.3)',
-                    line: { color: COLORS[0], width: 2 },
+                    fillcolor: isDark ? 'rgba(37, 99, 235, 0.15)' : 'rgba(37, 99, 235, 0.1)',
+                    line: { color: COLORS[0], width: 2, shape: 'spline' },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
@@ -216,10 +225,10 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        size: 10,
-                        color: COLORS[4],
-                        opacity: 0.6,
-                        line: { width: 1, color: 'white' }
+                        size: 8,
+                        color: COLORS[0],
+                        opacity: isDark ? 0.5 : 0.6,
+                        line: { width: 1, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)' }
                     },
                     text: labels,
                     hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>'

@@ -514,11 +514,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     };
 
     if (loading || !config) return (
-        <div className="h-full flex flex-col items-center justify-center space-y-12 animate-pulse bg-slate-50 dark:bg-slate-950">
-            <div className="w-24 h-24 border-[8px] border-indigo-500/10 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="h-full flex flex-col items-center justify-center space-y-12 bg-slate-50 dark:bg-[#0b1120]">
+            <div className="relative">
+                <div className="w-24 h-24 border-[3px] border-slate-200 dark:border-slate-800 rounded-full animate-pulse" />
+                <div className="absolute inset-0 border-[3px] border-t-indigo-500 rounded-full animate-spin" />
+            </div>
             <div className="space-y-4 text-center">
-                <h3 className="text-xl font-black uppercase tracking-[0.5em] text-indigo-500">Constructing BI Matrix</h3>
-                <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Processing {dataset.data.length.toLocaleString()} entities...</p>
+                <h3 className="text-sm font-bold uppercase tracking-[0.3em] text-slate-500 dark:text-slate-400">Initializing Intelligence</h3>
+                <p className="text-slate-400 font-medium text-[10px] uppercase tracking-widest">Scaling {dataset.data.length.toLocaleString()} data points...</p>
             </div>
         </div>
     );
@@ -805,10 +808,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             : [];
 
                         return (
-                            <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[40px] border transition-all duration-500 ${hasWarnings
-                                ? 'border-amber-200 dark:border-amber-900/30'
-                                : 'border-slate-200 dark:border-slate-800'
-                                } shadow-sm hover:shadow-2xl hover:shadow-indigo-500/5 flex flex-col h-[420px] ${isWide ? 'md:col-span-2' : ''} group relative overflow-hidden`}>
+                            <div key={i} className={`glass-card p-6 md:p-8 rounded-[24px] flex flex-col h-[420px] ${isWide ? 'md:col-span-2' : ''} group relative overflow-hidden ${hasWarnings ? 'border-amber-200/50 dark:border-amber-900/30' : ''}`}>
 
                                 <div className="absolute top-0 right-0 p-8 opacity-0 group-hover:opacity-100 transition-all duration-500 flex gap-2 translate-y-2 group-hover:translate-y-0 no-print">
                                     <button onClick={() => setViewingDataChart(chart)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-white dark:hover:bg-slate-700 shadow-sm transition-all duration-300">
@@ -881,20 +881,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     {/* Global Dashboard AI Copilot (Bottom Bar) */ }
     < div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print" >
-        <div className="glass p-2 rounded-full shadow-2xl border border-indigo-500/20 flex gap-2 items-center relative">
-            <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
-                {isDashboardThinking ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="text-lg">✨</span>}
+        <div className="glass-card !bg-white/80 dark:!bg-slate-900/80 p-2 rounded-full shadow-2xl border border-slate-200 dark:border-white/10 flex gap-2 items-center relative backdrop-blur-2xl">
+            <div className="w-10 h-10 rounded-full bg-slate-900 dark:bg-white flex items-center justify-center shrink-0 shadow-lg">
+                {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-400 border-t-indigo-500 rounded-full animate-spin"></div> : <span className="text-lg text-white dark:text-slate-900">✨</span>}
             </div>
             <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
                 <input
                     value={dashboardPrompt}
                     onChange={(e) => setDashboardPrompt(e.target.value)}
-                    placeholder="Ask Copilot: 'Add a chart showing Sales by City' or 'Change layout'..."
-                    className="w-full bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 h-10"
+                    placeholder="Ask ToEasy: 'Add a revenue trend' or 'Show outliers'..."
+                    className="w-full bg-transparent border-none outline-none text-sm font-medium text-slate-900 dark:text-white placeholder-slate-400 h-10 px-2"
                 />
             </form>
-            <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity">
-                Go
+            <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-indigo-600 text-white rounded-full text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 transition-all shadow-md active:scale-95 disabled:opacity-50">
+                Execute
             </button>
         </div>
     </div >
