@@ -156,17 +156,10 @@ app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, 
       [req.user!.id, 'active']
     );
 
-    // Default to basic tier if no active subscription found
+    // Use centralized tier limits
     const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
-
-    // Define max rows per tier
-    const tierLimits: Record<string, number> = {
-      'basic': 100,
-      'pro': 10000,
-      'enterprise': 1000000
-    };
-
-    const maxRows = tierLimits[tier] || 100;
+    const limits = config.tierLimits[tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
+    const maxRows = limits.maxGenerateRows;
 
     if (count > maxRows) {
       return res.status(400).json({
@@ -392,13 +385,8 @@ app.post('/api/scrape', authenticateToken, async (req: AuthRequest, res) => {
     );
 
     const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
-    const tierLimits: Record<string, number> = {
-      'basic': 500,
-      'pro': 50000,
-      'enterprise': 1000000
-    };
-
-    const maxRows = tierLimits[tier] || 500;
+    const limits = config.tierLimits[tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
+    const maxRows = limits.maxRowsPerDataset;
 
     if (count > maxRows) {
       return res.status(400).json({
