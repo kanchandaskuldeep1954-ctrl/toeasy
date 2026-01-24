@@ -77,6 +77,43 @@ const CONNECTOR_CONFIGS: Record<string, { name: string, fields: FormField[] }> =
             { key: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
         ]
     },
+    redshift: {
+        name: 'AWS Redshift',
+        fields: [
+            { key: 'host', label: 'Cluster Endpoint', type: 'text', placeholder: 'cluster.abc.redshift.amazonaws.com' },
+            { key: 'port', label: 'Port', type: 'number', placeholder: '5439' },
+            { key: 'database', label: 'DB Name', type: 'text', placeholder: 'dev' },
+            { key: 'user', label: 'User', type: 'text', placeholder: 'awsuser' },
+            { key: 'pass', label: 'Password', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    pinecone: {
+        name: 'Pinecone',
+        fields: [
+            { key: 'apiKey', label: 'Pinecone API Key', type: 'password', placeholder: '••••••••' },
+            { key: 'environment', label: 'Environment', type: 'text', placeholder: 'us-east1-gcp' },
+        ]
+    },
+    slack: {
+        name: 'Slack',
+        fields: [
+            { key: 'token', label: 'User/Bot OAuth Token', type: 'password', placeholder: 'xoxb-...' },
+        ]
+    },
+    ga4: {
+        name: 'Google Analytics 4',
+        fields: [
+            { key: 'propertyId', label: 'Property ID', type: 'text', placeholder: '123456789' },
+            { key: 'credentials', label: 'Service Account JSON', type: 'password', placeholder: '{ "type": "service_account", ... }' },
+        ]
+    },
+    'tiktok-ads': {
+        name: 'TikTok Ads',
+        fields: [
+            { key: 'accessToken', label: 'Marketing API Access Token', type: 'password', placeholder: '••••••••' },
+            { key: 'advertiserId', label: 'Advertiser ID', type: 'text', placeholder: '6789...' },
+        ]
+    },
     webhook: {
         name: 'Incoming Webhook',
         fields: [

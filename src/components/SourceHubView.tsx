@@ -43,18 +43,43 @@ const SourceHubView: React.FC = () => {
         { id: 'excel', name: 'Excel', category: 'files', icon: <FileText size={24} />, description: 'Microsoft Excel spreadsheets (.xlsx)', status: 'beta', color: 'bg-green-600' },
         { id: 'parquet', name: 'Apache Parquet', category: 'files', icon: <FileText size={24} />, description: 'Optimized columnar data format', status: 'coming_soon', color: 'bg-blue-400' },
 
-        // Databases
+        // Databases & Warehouses
         { id: 'postgres', name: 'PostgreSQL', category: 'databases', icon: <Database size={24} />, description: 'Connect to live Postgres instances', status: 'active', color: 'bg-indigo-500' },
         { id: 'mysql', name: 'MySQL', category: 'databases', icon: <Database size={24} />, description: 'Amazon RDS, DigitalOcean or local MySQL', status: 'active', color: 'bg-blue-500' },
-        { id: 'mongodb', name: 'MongoDB', category: 'databases', icon: <Database size={24} />, description: 'NoSQL collections from Atlas or local', status: 'beta', color: 'bg-green-500' },
-        { id: 'snowflake', name: 'Snowflake', category: 'databases', icon: <Cloud size={24} />, description: 'Enterprise Data Warehouse', status: 'coming_soon', color: 'bg-cyan-400' },
-        { id: 'bigquery', name: 'Google BigQuery', category: 'databases', icon: <Database size={24} />, description: 'Google Cloud multi-cloud warehouse', status: 'coming_soon', color: 'bg-blue-600' },
+        { id: 'mongodb', name: 'MongoDB', category: 'databases', icon: <Database size={24} />, description: 'NoSQL collections from Atlas or local', status: 'active', color: 'bg-green-500' },
+        { id: 'snowflake', name: 'Snowflake', category: 'databases', icon: <Cloud size={24} />, description: 'Enterprise Data Warehouse', status: 'active', color: 'bg-cyan-400' },
+        { id: 'bigquery', name: 'Google BigQuery', category: 'databases', icon: <Database size={24} />, description: 'Google Cloud multi-cloud warehouse', status: 'active', color: 'bg-blue-600' },
+        { id: 'redshift', name: 'AWS Redshift', category: 'databases', icon: <Database size={24} />, description: 'Amazon cloud-native data warehouse', status: 'active', color: 'bg-orange-500' },
+        { id: 'databricks', name: 'Databricks', category: 'databases', icon: <Database size={24} />, description: 'Lakehouse platform for data & AI', status: 'active', color: 'bg-red-400' },
 
-        // SaaS
-        { id: 'salesforce', name: 'Salesforce', category: 'saas', icon: <Briefcase size={24} />, description: 'CRM leads, accounts and opportunities', status: 'beta', color: 'bg-sky-500' },
+        // Vector Databases (For AI OS)
+        { id: 'pinecone', name: 'Pinecone', category: 'databases', icon: <Zap size={24} />, description: 'Managed vector DB for AI embeddings', status: 'active', color: 'bg-blue-300' },
+        { id: 'weaviate', name: 'Weaviate', category: 'databases', icon: <Zap size={24} />, description: 'Open-source vector search engine', status: 'active', color: 'bg-green-400' },
+
+        // SaaS & Business
+        { id: 'salesforce', name: 'Salesforce', category: 'saas', icon: <Briefcase size={24} />, description: 'CRM leads, accounts and opportunities', status: 'active', color: 'bg-sky-500' },
         { id: 'hubspot', name: 'HubSpot', category: 'saas', icon: <Briefcase size={24} />, description: 'Marketing and sales funnel data', status: 'active', color: 'bg-orange-500' },
-        { id: 'jira', name: 'Jira', category: 'saas', icon: <Layout size={24} />, description: 'Issue tracking and project velocity', status: 'beta', color: 'bg-blue-700' },
-        { id: 'notion', name: 'Notion', category: 'saas', icon: <FileText size={24} />, description: 'Pages and database tables', status: 'coming_soon', color: 'bg-slate-900' },
+        { id: 'jira', name: 'Jira', category: 'saas', icon: <Layout size={24} />, description: 'Issue tracking and project velocity', status: 'active', color: 'bg-blue-700' },
+        { id: 'airtable', name: 'Airtable', category: 'saas', icon: <FileText size={24} />, description: 'Low-code relational database service', status: 'active', color: 'bg-pink-500' },
+        { id: 'slack', name: 'Slack', category: 'saas', icon: <MessageSquare size={24} />, description: 'Channels, messages and user activity', status: 'active', color: 'bg-purple-600' },
+        { id: 'zendesk', name: 'Zendesk', category: 'saas', icon: <MessageSquare size={24} />, description: 'Customer support tickets and insights', status: 'active', color: 'bg-green-800' },
+
+        // Marketing/Ads
+        { id: 'meta-ads', name: 'Meta Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Facebook and Instagram ad performance', status: 'active', color: 'bg-blue-600' },
+        { id: 'google-ads', name: 'Google Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Search and display campaign metrics', status: 'active', color: 'bg-red-500' },
+        { id: 'ga4', name: 'Google Analytics 4', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Web and app behavioral analytics', status: 'active', color: 'bg-yellow-500' },
+        { id: 'tiktok-ads', name: 'TikTok Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Short-form video marketing spend', status: 'active', color: 'bg-black' },
+
+        // Finance
+        { id: 'stripe', name: 'Stripe', category: 'finance', icon: <CreditCard size={24} />, description: 'Subscription revenue and transactions', status: 'active', color: 'bg-indigo-600' },
+        { id: 'shopify', name: 'Shopify', category: 'finance', icon: <ShoppingCart size={24} />, description: 'Store orders, inventory and customers', status: 'active', color: 'bg-green-600' },
+        { id: 'quickbooks', name: 'QuickBooks', category: 'finance', icon: <CreditCard size={24} />, description: 'Accounting and financial statements', status: 'active', color: 'bg-emerald-600' },
+
+        // Cloud Storage
+        { id: 'aws-s3', name: 'Amazon S3', category: 'storage', icon: <Cloud size={24} />, description: 'Scaleable object storage for datasets', status: 'active', color: 'bg-orange-400' },
+        { id: 'gcs', name: 'Google Storage', category: 'storage', icon: <Cloud size={24} />, description: 'GCP Cloud Storage buckets', status: 'active', color: 'bg-blue-500' },
+
+        // Universal
         { id: 'webhook', name: 'Webhook', category: 'storage', icon: <Globe size={24} />, description: 'Push data directly via HTTP POST', status: 'active', color: 'bg-orange-600' },
         { id: 'rest-api', name: 'Generic API', category: 'storage', icon: <Zap size={24} />, description: 'Connect to any JSON REST endpoint', status: 'active', color: 'bg-violet-500' },
 
