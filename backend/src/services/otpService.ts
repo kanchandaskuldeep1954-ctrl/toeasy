@@ -54,6 +54,12 @@ class OTPService {
             console.error('Failed to send OTP email via Resend:', error);
             // CRITICAL FALLBACK: Log to terminal so owner can still verify users manually
             console.log(`[CRITICAL FALLBACK] Email failed for ${email}. OTP is: ${otp}`);
+
+            if (error.message && error.message.includes('own email address')) {
+                console.log(`[ACTION REQUIRED] Your Resend account is in Sandbox mode. Either verify a domain at resend.com or test with your own email: kanchandaskuldeep1954@gmail.com`);
+                throw new Error('Email sandbox restriction: Please check backend logs for your OTP.');
+            }
+
             throw new Error(`Email delivery failed: ${error.message}`);
         }
     }
