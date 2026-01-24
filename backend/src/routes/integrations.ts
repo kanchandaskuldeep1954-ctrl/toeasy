@@ -1,10 +1,8 @@
 import { Router } from 'express';
 import { integrationService } from '../services/integrationService.js';
 import { integrationHealthService } from '../services/integrationHealthService.js';
-import knex from 'knex';
-import knexConfig from '../../knexfile.js';
+import db from '../knex.js';
 
-const db = knex(knexConfig.production || knexConfig.development);
 const router = Router();
 
 import { integrationAnalyticsService } from '../services/integrationAnalyticsService.js';

@@ -59,7 +59,7 @@ class IntegrationHealthService {
 
     async getSystemHealthSummary(workspaceId: string, db: any) {
         const integrations = await integrationService.listIntegrations(workspaceId, db);
-        const results = await Promise.all(integrations.map(i => this.checkHealth(i.id, db)));
+        const results = await Promise.all(integrations.map((i: any) => this.checkHealth(i.id, db)));
 
         return {
             total: results.length,
