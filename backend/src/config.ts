@@ -37,6 +37,7 @@ export interface Config {
   jwtExpiry: string;
   refreshTokenExpiry: string;
   groqApiKey: string | undefined;
+  resendApiKey: string | undefined;
   razorpay: {
     keyId: string | undefined;
     keySecret: string | undefined;
@@ -62,6 +63,7 @@ export const config: Config = {
   jwtExpiry: process.env.JWT_EXPIRY || '7d',
   refreshTokenExpiry: process.env.REFRESH_TOKEN_EXPIRY || '30d',
   groqApiKey: process.env.GROQ_API_KEY,
+  resendApiKey: process.env.RESEND_API_KEY,
   razorpay: {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,

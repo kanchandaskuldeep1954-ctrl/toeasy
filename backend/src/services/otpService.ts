@@ -1,52 +1,33 @@
-import nodemailer from 'nodemailer';
 import { config } from '../config.js';
 
 class OTPService {
-    private transporter;
-
-    constructor() {
-        const isGmail = config.email.host.includes('gmail.com');
-
-        const transportConfig: any = {
-            host: config.email.host,
-            port: config.email.port,
-            secure: config.email.port === 465,
-            auth: config.email.user ? {
-                user: config.email.user,
-                pass: config.email.pass,
-            } : undefined,
-            connectionTimeout: 15000,
-            greetingTimeout: 10000,
-            socketTimeout: 15000,
-            pool: true, // Use pooled connections for better stability
-        };
-
-        // Use built-in gmail service helper if detected
-        if (isGmail) {
-            delete transportConfig.host;
-            delete transportConfig.port;
-            delete transportConfig.secure;
-            transportConfig.service = 'gmail';
-        }
-
-        this.transporter = nodemailer.createTransport(transportConfig);
-    }
+    constructor() { }
 
     generateOTP(): string {
         return Math.floor(100000 + Math.random() * 900000).toString();
     }
 
     async sendOTP(email: string, otp: string) {
-        if (!config.email.user || !config.email.pass) {
+        // If API key is missing, default to logging for local development
+        if (!config.resendApiKey) {
             console.log(`[DEV MODE] OTP for ${email}: ${otp}`);
             return true;
         }
 
-        const mailOptions = {
-            from: `"Toeasy AI" <${config.email.user}>`,
-            to: email,
-            subject: 'Verify your Toeasy AI Account',
-            html: `
+        try {
+            // Using native fetch to avoid SDK dependency issues on production
+            // Resend API: https://resend.com/docs/api-reference/emails/send-email
+            const response = await fetch('https://api.resend.com/emails', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${config.resendApiKey}`
+                },
+                body: JSON.stringify({
+                    from: 'onboarding@resend.dev', // Default sender until domain is verified
+                    to: [email],
+                    subject: 'Verify your Toeasy AI Account',
+                    html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
           <h2 style="color: #4f46e5; text-align: center;">Welcome to Toeasy AI</h2>
           <p>Hi there,</p>
@@ -59,23 +40,20 @@ class OTPService {
           <p style="font-size: 12px; color: #6b7280; text-align: center;">&copy; 2026 Toeasy AI. All rights reserved.</p>
         </div>
       `,
-        };
+                })
+            });
 
-        try {
-            await this.transporter.sendMail(mailOptions);
+            if (!response.ok) {
+                const errorData: any = await response.json();
+                console.error('Resend API Error:', errorData);
+                throw new Error(errorData.message || 'Failed to send email via Resend');
+            }
+
             return true;
         } catch (error: any) {
-            console.error('Failed to send OTP email:', error);
-
-            // PRODUCTION FALLBACK:
-            // If the email server is timing out (likely blocked by Railway firewall), 
-            // we log the OTP to the console so the owner can still see it in Railway logs
-            // and proceed with testing while fixing the SMTP issue.
+            console.error('Failed to send OTP email via Resend:', error);
+            // CRITICAL FALLBACK: Log to terminal so owner can still verify users manually
             console.log(`[CRITICAL FALLBACK] Email failed for ${email}. OTP is: ${otp}`);
-
-            if (error.code === 'ETIMEDOUT') {
-                throw new Error('Email gateway timeout. Please check backend logs for OTP or try a different port.');
-            }
             throw new Error(`Email delivery failed: ${error.message}`);
         }
     }
