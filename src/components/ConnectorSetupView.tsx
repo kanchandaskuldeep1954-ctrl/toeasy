@@ -143,7 +143,7 @@ const CONNECTOR_CONFIGS: Record<string, { name: string, fields: FormField[] }> =
         ]
     },
     scraper: {
-        name: 'AI Web Scraper',
+        name: 'AI Connect',
         fields: [
             { key: 'url', label: 'Target Website URL', type: 'text', placeholder: 'https://example.com/products' },
             { key: 'topic', label: 'Data to Extract', type: 'text', placeholder: 'Product names, prices, and descriptions' },

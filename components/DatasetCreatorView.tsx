@@ -179,7 +179,7 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
   return (
     <div className="max-w-6xl mx-auto h-full flex flex-col gap-8 p-4">
       <div className="text-center space-y-4">
-        <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">AI Web Scraper</h2>
+        <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Connect Source</h2>
         <p className="text-slate-500 font-medium max-w-2xl mx-auto">
           Autonomous data acquisition. Provide a URL to extract real-world datasets or a topic to synthesize high-fidelity intelligence instantly.
         </p>
@@ -250,7 +250,7 @@ const DatasetCreatorView: React.FC<DatasetCreatorViewProps> = ({ onDataLoaded, o
                 </>
               ) : (
                 <>
-                  <span>🚀 Launch Scraper</span>
+                  <span>🚀 Connect & Acquire</span>
                 </>
               )}
             </button>
