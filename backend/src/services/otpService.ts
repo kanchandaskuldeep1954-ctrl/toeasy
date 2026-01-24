@@ -5,7 +5,9 @@ class OTPService {
     private transporter;
 
     constructor() {
-        this.transporter = nodemailer.createTransport({
+        const isGmail = config.email.host.includes('gmail.com');
+
+        const transportConfig: any = {
             host: config.email.host,
             port: config.email.port,
             secure: config.email.port === 465,
@@ -13,13 +15,21 @@ class OTPService {
                 user: config.email.user,
                 pass: config.email.pass,
             } : undefined,
-            // Production readiness: shorter timeouts to prevent blocking API
-            connectionTimeout: 15000, // 15s
-            greetingTimeout: 10000,   // 10s
-            socketTimeout: 15000,     // 15s
-            debug: process.env.NODE_ENV !== 'production',
-            logger: process.env.NODE_ENV !== 'production'
-        });
+            connectionTimeout: 15000,
+            greetingTimeout: 10000,
+            socketTimeout: 15000,
+            pool: true, // Use pooled connections for better stability
+        };
+
+        // Use built-in gmail service helper if detected
+        if (isGmail) {
+            delete transportConfig.host;
+            delete transportConfig.port;
+            delete transportConfig.secure;
+            transportConfig.service = 'gmail';
+        }
+
+        this.transporter = nodemailer.createTransport(transportConfig);
     }
 
     generateOTP(): string {
@@ -56,8 +66,15 @@ class OTPService {
             return true;
         } catch (error: any) {
             console.error('Failed to send OTP email:', error);
+
+            // PRODUCTION FALLBACK:
+            // If the email server is timing out (likely blocked by Railway firewall), 
+            // we log the OTP to the console so the owner can still see it in Railway logs
+            // and proceed with testing while fixing the SMTP issue.
+            console.log(`[CRITICAL FALLBACK] Email failed for ${email}. OTP is: ${otp}`);
+
             if (error.code === 'ETIMEDOUT') {
-                throw new Error('Connection to email server timed out. Check your SMTP settings and port.');
+                throw new Error('Email gateway timeout. Please check backend logs for OTP or try a different port.');
             }
             throw new Error(`Email delivery failed: ${error.message}`);
         }
