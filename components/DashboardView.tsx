@@ -63,6 +63,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     const [dashboardName, setDashboardName] = useState(cleanName + ' Dashboard');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
+    const [isEditingFilters, setIsEditingFilters] = useState(false);
+    const [isFilterStudioOpen, setIsFilterStudioOpen] = useState(false);
 
     // Chart Validation & Quality Warnings
     const [chartValidations, setChartValidations] = useState<{ [id: string]: any }>({});
@@ -342,6 +344,32 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         });
     };
 
+    const handleAddFilter = (column: string) => {
+        if (!config) return;
+        const newFilter = {
+            id: 'filter-' + Date.now(),
+            label: column,
+            column: column,
+            type: 'select' as const,
+            options: Array.from(new Set(dataset.data.map(r => String(r[column] || ''))))
+                .filter(v => v !== '')
+                .slice(0, 50)
+        };
+        const updatedFilters = [...(config.filters || []), newFilter];
+        const newConfig = { ...config, filters: updatedFilters };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+        setIsFilterStudioOpen(false);
+    };
+
+    const handleRemoveFilter = (filterId: string) => {
+        if (!config || !config.filters) return;
+        const updatedFilters = config.filters.filter(f => f.id !== filterId);
+        const newConfig = { ...config, filters: updatedFilters };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+    };
+
     const handleGlobalDashboardPrompt = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!dashboardPrompt || !config) return;
@@ -600,40 +628,51 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     return (
         <div className={`h-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 pb-40 relative ${isCinematicMode ? 'overflow-hidden' : ''}`}>
-            {/* Note: Original Cinematic UI at bottom is used instead of fixed inset here to maintain consistent transition logic */}
 
-            {/* Top Bar: Slicers & Context */}
-            <div className={`sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-4 flex flex-col xl:flex-row justify-between gap-4 shadow-sm no-print ${isCinematicMode ? 'hidden' : ''}`}>
-                <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto">
-                    {isEditingTitle ? (
-                        <div className="flex items-center gap-2 group">
+            {/* COMPACT FLOATING HEADER: Drastically reduced vertical footprint */}
+            <div className={`sticky top-0 z-[100] px-4 md:px-8 py-3 bg-white/40 dark:bg-slate-900/40 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 no-print transition-all duration-500 overflow-visible ${isCinematicMode ? 'hidden' : ''}`}>
+                <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+
+                    {/* Left: Branding & Perspectives */}
+                    <div className="flex items-center gap-6">
+                        {isEditingTitle ? (
                             <input
                                 autoFocus
                                 value={dashboardName}
                                 onChange={(e) => setDashboardName(e.target.value)}
                                 onBlur={() => setIsEditingTitle(false)}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') setIsEditingTitle(false);
-                                    if (e.key === 'Escape') setIsEditingTitle(false);
-                                }}
-                                className="text-2xl font-black uppercase tracking-tighter bg-slate-100 dark:bg-slate-800 border-b-2 border-indigo-500 rounded-t-lg px-2 py-1 outline-none ring-0 w-[400px]"
+                                className="text-lg font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded-t-lg px-2 py-0.5 outline-none w-[280px]"
                             />
-                            <button onClick={() => setIsEditingTitle(false)} className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20">Save</button>
-                        </div>
-                    ) : (
-                        <h2
-                            onClick={() => setIsEditingTitle(true)}
-                            className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white cursor-pointer hover:text-indigo-600 transition-all flex items-center gap-3 group px-2 py-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/50"
-                        >
-                            {dashboardName}
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100">
-                                <svg className="w-4 h-4 text-slate-400 group-hover:text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                        ) : (
+                            <div className="flex items-center gap-3">
+                                <h2
+                                    onClick={() => setIsEditingTitle(true)}
+                                    className="text-lg font-black uppercase tracking-tight text-slate-900 dark:text-white cursor-pointer hover:text-indigo-500 transition-all flex items-center gap-2 group"
+                                >
+                                    {dashboardName}
+                                    <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </h2>
+                                <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-2 hidden md:block" />
+                                <div className="flex gap-0.5 bg-slate-900/5 dark:bg-white/5 p-0.5 rounded-lg border border-slate-200/20">
+                                    {(['Overview', 'Financials', 'Operational', 'Forensic'] as DashboardPerspective[]).map(p => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setPerspective(p)}
+                                            className={`px-3 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${perspective === p
+                                                ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm'
+                                                : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                                                }`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        </h2>
-                    )}
+                        )}
+                    </div>
 
-                    {/* Dynamic Filter Panel */}
-                    <div className="w-full md:w-auto md:pl-6 md:border-l border-slate-200 dark:border-slate-800">
+                    {/* Middle: Functional Filters (Customizable) */}
+                    <div className="flex items-center gap-3 flex-1 xl:justify-center overflow-x-auto no-scrollbar">
                         <FilterPanel
                             filters={config?.filters || []}
                             activeFilters={activeFilters}
@@ -642,58 +681,41 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 return { ...prev, [col]: val };
                             })}
                             onClearAll={() => setActiveFilters({})}
+                            onAddFilter={() => setIsFilterStudioOpen(true)}
+                            onRemoveFilter={handleRemoveFilter}
+                            isEditMode={isEditingFilters}
                         />
+                        <button
+                            onClick={() => setIsEditingFilters(!isEditingFilters)}
+                            className={`p-1.5 rounded-lg transition-all ${isEditingFilters ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                            title="Customize Filters"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" /></svg>
+                        </button>
                     </div>
 
-                    {/* Next-Gen: Predictive Mode Toggle */}
-                    <div className="flex items-center gap-2 md:pl-6 md:border-l border-slate-200 dark:border-slate-800">
+                    {/* Right: Advanced Controls */}
+                    <div className="flex items-center gap-2">
                         <button
                             onClick={() => setIsForecastMode(!isForecastMode)}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all flex items-center gap-2 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 font-bold'}`}
+                            className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'}`}
                         >
-                            <span className="text-sm">✨</span>
-                            <span>{isForecastMode ? 'Forecast Active' : 'Predictive Mode'}</span>
-                            {isForecastMode && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+                            <span>✨ PREDICTIVE</span>
+                            {isForecastMode && <span className="w-1 h-1 rounded-full bg-white animate-ping"></span>}
                         </button>
-                    </div>
-
-                    {/* Next-Gen: Boardroom Mode */}
-                    <div className="flex items-center gap-2 pl-6 border-l border-slate-200 dark:border-slate-800">
                         <button
                             onClick={() => setIsCinematicMode(true)}
-                            className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-xl shadow-slate-500/10 flex items-center gap-2"
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 text-[9px] font-black uppercase tracking-widest transition-all hover:scale-105 active:scale-95 shadow-lg flex items-center gap-1.5"
                         >
-                            <span className="text-sm">🎬</span>
-                            <span>Boardroom</span>
+                            <span>🎬 BOARDROOM</span>
+                        </button>
+                        <button
+                            onClick={() => setShowExportModal(true)}
+                            className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                         </button>
                     </div>
-                </div>
-
-                <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-hidden">
-                    {/* Perspective Tabs */}
-                    <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto shadow-inner">
-                        {(['Overview', 'Financials', 'Operational', 'Forensic', 'Patterns'] as DashboardPerspective[]).map(p => (
-                            <button
-                                key={p}
-                                onClick={() => setPerspective(p)}
-                                className={`flex-1 md:flex-none px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${perspective === p
-                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 dark:text-indigo-400 shadow-sm scale-100'
-                                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-                                    }`}
-                            >
-                                {p}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Export Button */}
-                    <button
-                        onClick={() => setShowExportModal(true)}
-                        className="hidden md:flex px-4 py-2.5 bg-slate-900 dark:bg-slate-50 text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg items-center gap-2 shrink-0 transition-colors"
-                    >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
-                        Export
-                    </button>
                 </div>
             </div>
 
@@ -1091,6 +1113,47 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         >
                             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                         </button>
+                    </div>
+                </div>
+            )}
+            {/* Filter Studio: Add new functional slicers */}
+            {isFilterStudioOpen && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-300">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-10 w-full max-w-lg shadow-3xl border border-slate-200 dark:border-white/5 animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-8">
+                            <div>
+                                <h3 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Filter Studio</h3>
+                                <p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Add a real-time data slicer</p>
+                            </div>
+                            <button onClick={() => setIsFilterStudioOpen(false)} className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-500 hover:text-slate-900 dark:hover:text-white transition-all">✕</button>
+                        </div>
+
+                        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                            {dataset.headers.map(col => {
+                                const isAlreadyFilter = config?.filters?.some(f => f.column === col);
+                                return (
+                                    <button
+                                        key={col}
+                                        disabled={isAlreadyFilter}
+                                        onClick={() => handleAddFilter(col)}
+                                        className={`flex items-center justify-between p-4 rounded-2xl border transition-all text-left group ${isAlreadyFilter
+                                            ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
+                                            : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 hover:bg-slate-50 dark:hover:bg-indigo-500/5'}`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[10px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">{col.substring(0, 2).toUpperCase()}</div>
+                                            <span className="text-xs font-black uppercase tracking-wide text-slate-700 dark:text-slate-300">{col}</span>
+                                        </div>
+                                        {!isAlreadyFilter && <span className="text-[10px] font-black text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity">ADD +</span>}
+                                        {isAlreadyFilter && <span className="text-[9px] font-black text-slate-400">ACTIVE</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800 text-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Select a column to generate an interactive dropdown</p>
+                        </div>
                     </div>
                 </div>
             )}
