@@ -61,100 +61,60 @@ const SourceHubView: React.FC = () => {
         fetchIntegrations();
     }, [workspaceId, token, backendUrl]);
 
-    // ... sources array remains same ...
-
     const sources: ConnectorSource[] = [
         // Files
-        { id: 'csv', name: 'CSV File', category: 'files', icon: <FileText size={24} />, description: 'Upload standard comma-separated files', status: 'active', color: 'bg-emerald-500' },
-        { id: 'json', name: 'JSON Data', category: 'files', icon: <FileText size={24} />, description: 'Import structured JSON documents', status: 'active', color: 'bg-amber-500' },
-        { id: 'excel', name: 'Excel', category: 'files', icon: <FileText size={24} />, description: 'Microsoft Excel spreadsheets (.xlsx)', status: 'beta', color: 'bg-green-600' },
-        { id: 'parquet', name: 'Apache Parquet', category: 'files', icon: <FileText size={24} />, description: 'Optimized columnar data format', status: 'coming_soon', color: 'bg-blue-400' },
+        { id: 'csv', name: 'CSV File', category: 'files', icon: <FileText size={24} />, description: 'Upload standard comma-separated files', status: 'active', color: 'bg-emerald-500', tags: ['upload', 'local', 'sheet'] },
+        { id: 'json', name: 'JSON Data', category: 'files', icon: <FileText size={24} />, description: 'Import structured JSON documents', status: 'active', color: 'bg-amber-500', tags: ['api', 'no-sql', 'document'] },
+        { id: 'excel', name: 'Excel', category: 'files', icon: <FileText size={24} />, description: 'Microsoft Excel spreadsheets (.xlsx)', status: 'beta', color: 'bg-green-600', tags: ['spreadsheet', 'microsoft', 'office'] },
+        { id: 'parquet', name: 'Apache Parquet', category: 'files', icon: <FileText size={24} />, description: 'Optimized columnar data format', status: 'coming_soon', color: 'bg-blue-400', tags: ['big-data', 'hadoop', 'performance'] },
 
         // Databases & Warehouses
-        { id: 'postgres', name: 'PostgreSQL', category: 'databases', icon: <Database size={24} />, description: 'Connect to live Postgres instances', status: 'active', color: 'bg-indigo-500', tags: ['sql', 'relational', 'db', 'production', 'developer'] },
-        { id: 'mysql', name: 'MySQL', category: 'databases', icon: <Database size={24} />, description: 'Amazon RDS, DigitalOcean or local MySQL', status: 'active', color: 'bg-blue-500', tags: ['sql', 'relational', 'db', 'cluster'] },
-        { id: 'mariadb', name: 'MariaDB', category: 'databases', icon: <Database size={24} />, description: 'Open source relational database', status: 'active', color: 'bg-slate-500', tags: ['sql', 'mysql clone', 'db'] },
-        { id: 'mongodb', name: 'MongoDB', category: 'databases', icon: <Database size={24} />, description: 'NoSQL collections from Atlas or local', status: 'active', color: 'bg-green-500', tags: ['nosql', 'json', 'document', 'collections'] },
-        { id: 'sqlite', name: 'SQLite', category: 'databases', icon: <Database size={24} />, description: 'Lightweight local database files', status: 'active', color: 'bg-sky-400', tags: ['file-based', 'local', 'sql'] },
-        { id: 'snowflake', name: 'Snowflake', category: 'databases', icon: <Cloud size={24} />, description: 'Enterprise Data Warehouse', status: 'active', color: 'bg-cyan-400', tags: ['warehouse', 'big data', 'cloud', 'analytics'] },
-        { id: 'bigquery', name: 'Google BigQuery', category: 'databases', icon: <Database size={24} />, description: 'Google Cloud multi-cloud warehouse', status: 'active', color: 'bg-blue-600', tags: ['warehouse', 'big data', 'gcp', 'google'] },
-        { id: 'redshift', name: 'AWS Redshift', category: 'databases', icon: <Database size={24} />, description: 'Amazon cloud-native data warehouse', status: 'active', color: 'bg-orange-500', tags: ['warehouse', 'big data', 'aws', 'amazon'] },
-        { id: 'databricks', name: 'Databricks', category: 'databases', icon: <Database size={24} />, description: 'Lakehouse platform for data & AI', status: 'active', color: 'bg-red-400', tags: ['spark', 'lakehouse', 'ml', 'ai'] },
-        { id: 'db2', name: 'IBM Db2', category: 'databases', icon: <Database size={24} />, description: 'Enterprise relational database', status: 'active', color: 'bg-blue-800', tags: ['ibm', 'enterprise', 'sql', 'legacy'] },
+        { id: 'postgres', name: 'PostgreSQL', category: 'databases', icon: <Database size={24} />, description: 'Connect to live Postgres instances', status: 'active', color: 'bg-indigo-500', tags: ['sql', 'relational', 'db', 'production'] },
+        { id: 'mysql', name: 'MySQL', category: 'databases', icon: <Database size={24} />, description: 'Amazon RDS, DigitalOcean or local MySQL', status: 'active', color: 'bg-blue-500', tags: ['sql', 'relational', 'db', 'web'] },
+        { id: 'snowflake', name: 'Snowflake', category: 'databases', icon: <Cloud size={24} />, description: 'Enterprise Data Warehouse', status: 'active', color: 'bg-cyan-400', tags: ['warehouse', 'cloud', 'analytics'] },
+        { id: 'mongodb', name: 'MongoDB', category: 'databases', icon: <Database size={24} />, description: 'NoSQL collections from Atlas', status: 'active', color: 'bg-green-500', tags: ['nosql', 'json', 'document'] },
+        { id: 'bigquery', name: 'Google BigQuery', category: 'databases', icon: <Database size={24} />, description: 'Google Cloud multi-cloud warehouse', status: 'active', color: 'bg-blue-600', tags: ['warehouse', 'gcp', 'google'] },
+        { id: 'redshift', name: 'AWS Redshift', category: 'databases', icon: <Database size={24} />, description: 'Amazon cloud-native data warehouse', status: 'active', color: 'bg-orange-500', tags: ['warehouse', 'aws', 'amazon'] },
 
-        // Vector Databases (For AI OS)
-        { id: 'pinecone', name: 'Pinecone', category: 'databases', icon: <Zap size={24} />, description: 'Managed vector DB for AI embeddings', status: 'active', color: 'bg-blue-300', tags: ['vector', 'ai', 'embeddings', 'rag'] },
-        { id: 'weaviate', name: 'Weaviate', category: 'databases', icon: <Zap size={24} />, description: 'Open-source vector search engine', status: 'active', color: 'bg-green-400', tags: ['vector', 'ai', 'search', 'rag'] },
+        // Vector Databases (AI)
+        { id: 'pinecone', name: 'Pinecone', category: 'databases', icon: <Zap size={24} />, description: 'Managed vector DB for AI embeddings', status: 'active', color: 'bg-blue-300', tags: ['vector', 'ai', 'rag'] },
+        { id: 'weaviate', name: 'Weaviate', category: 'databases', icon: <Zap size={24} />, description: 'Open-source vector search engine', status: 'active', color: 'bg-green-400', tags: ['vector', 'ai', 'search'] },
 
         // SaaS & CRM
-        { id: 'salesforce', name: 'Salesforce', category: 'saas', icon: <Briefcase size={24} />, description: 'CRM leads, accounts and opportunities', status: 'active', color: 'bg-sky-500', tags: ['crm', 'leads', 'sales', 'deals', 'marketing'] },
-        { id: 'hubspot', name: 'HubSpot', category: 'saas', icon: <Briefcase size={24} />, description: 'Marketing and sales funnel data', status: 'active', color: 'bg-orange-500', tags: ['crm', 'marketing', 'sales', 'funnel'] },
-        { id: 'zoho', name: 'Zoho CRM', category: 'saas', icon: <Briefcase size={24} />, description: 'Unified customer lifecycle data', status: 'active', color: 'bg-red-600', tags: ['crm', 'customer', 'business'] },
-        { id: 'pipedrive', name: 'Pipedrive', category: 'saas', icon: <Briefcase size={24} />, description: 'Sales pipeline and deal tracking', status: 'active', color: 'bg-green-600', tags: ['crm', 'sales', 'pipeline'] },
+        { id: 'salesforce', name: 'Salesforce', category: 'saas', icon: <Briefcase size={24} />, description: 'CRM leads, accounts and opportunities', status: 'active', color: 'bg-sky-500', tags: ['crm', 'sales', 'deals'] },
+        { id: 'hubspot', name: 'HubSpot', category: 'saas', icon: <Briefcase size={24} />, description: 'Marketing and sales funnel data', status: 'active', color: 'bg-orange-500', tags: ['crm', 'marketing', 'funnel'] },
+        { id: 'zoho', name: 'Zoho CRM', category: 'saas', icon: <Briefcase size={24} />, description: 'Unified customer lifecycle data', status: 'active', color: 'bg-red-600', tags: ['crm', 'customer'] },
+        { id: 'notion', name: 'Notion', category: 'saas', icon: <FileText size={24} />, description: 'Connect to Notion pages and tables', status: 'active', color: 'bg-slate-900', tags: ['doc', 'wiki', 'pm'] },
+        { id: 'jira', name: 'Jira', category: 'saas', icon: <Layout size={24} />, description: 'Issue tracking and project velocity', status: 'active', color: 'bg-blue-700', tags: ['pm', 'agile', 'engineering'] },
 
-        // ERP & Finance
-        { id: 'netsuite', name: 'NetSuite', category: 'saas', icon: <Briefcase size={24} />, description: 'Enterprise resource planning & Oracle ERP', status: 'active', color: 'bg-indigo-900', tags: ['erp', 'financials', 'oracle', 'inventory'] },
-        { id: 'sap', name: 'SAP S/4HANA', category: 'saas', icon: <Briefcase size={24} />, description: 'World-class enterprise business suite', status: 'active', color: 'bg-blue-400', tags: ['erp', 'enterprise', 'supply chain'] },
-        { id: 'dynamics', name: 'MS Dynamics', category: 'saas', icon: <Briefcase size={24} />, description: 'Microsoft business applications suite', status: 'active', color: 'bg-blue-500', tags: ['crm', 'erp', 'microsoft', 'enterprise'] },
+        // ERP & Business
+        { id: 'netsuite', name: 'NetSuite', category: 'saas', icon: <Briefcase size={24} />, description: 'Enterprise resource planning (ERP)', status: 'active', color: 'bg-indigo-900', tags: ['erp', 'financials', 'oracle'] },
+        { id: 'sap', name: 'SAP S/4HANA', category: 'saas', icon: <Briefcase size={24} />, description: 'Enterprise business suite', status: 'active', color: 'bg-blue-400', tags: ['erp', 'enterprise'] },
+        { id: 'workday', name: 'Workday', category: 'saas', icon: <Briefcase size={24} />, description: 'Human capital management (HCM)', status: 'active', color: 'bg-orange-600', tags: ['hr', 'payroll', 'people'] },
 
-        // Productivity & Dev
-        { id: 'jira', name: 'Jira', category: 'saas', icon: <Layout size={24} />, description: 'Issue tracking and project velocity', status: 'active', color: 'bg-blue-700', tags: ['pm', 'scrum', 'agile', 'engineering', 'atlassian'] },
-        { id: 'monday', name: 'Monday.com', category: 'saas', icon: <Layout size={24} />, description: 'Work OS and project workflows', status: 'active', color: 'bg-pink-400', tags: ['pm', 'tasks', 'workflow'] },
-        { id: 'asana', name: 'Asana', category: 'saas', icon: <Layout size={24} />, description: 'Team task and project management', status: 'active', color: 'bg-rose-500', tags: ['pm', 'tasks', 'collaboration'] },
-        { id: 'clickup', name: 'ClickUp', category: 'saas', icon: <Layout size={24} />, description: 'The everything app for work', status: 'active', color: 'bg-violet-700', tags: ['pm', 'tasks', 'docs'] },
-        { id: 'notion', name: 'Notion', category: 'saas', icon: <FileText size={24} />, description: 'Pages and database tables', status: 'active', color: 'bg-slate-900', tags: ['pm', 'docs', 'wiki', 'database'] },
-        { id: 'airtable', name: 'Airtable', category: 'saas', icon: <FileText size={24} />, description: 'Low-code relational database service', status: 'active', color: 'bg-pink-500', tags: ['pm', 'database', 'low-code'] },
-        { id: 'github', name: 'GitHub', category: 'saas', icon: <Zap size={24} />, description: 'Repositories, issues and commits', status: 'active', color: 'bg-slate-800', tags: ['code', 'git', 'devops', 'issues'] },
-
-        // Communications
-        { id: 'slack', name: 'Slack', category: 'saas', icon: <MessageSquare size={24} />, description: 'Channels, messages and user activity', status: 'active', color: 'bg-purple-600', tags: ['chat', 'team', 'comm', 'messaging'] },
-        { id: 'zendesk', name: 'Zendesk', category: 'saas', icon: <MessageSquare size={24} />, description: 'Customer support tickets and insights', status: 'active', color: 'bg-green-800', tags: ['support', 'tickets', 'helpline'] },
-        { id: 'intercom', name: 'Intercom', category: 'saas', icon: <MessageSquare size={24} />, description: 'Customer messaging and engagement', status: 'active', color: 'bg-sky-400', tags: ['chat', 'marketing', 'support'] },
-
-        // Marketing/Ads
-        { id: 'meta-ads', name: 'Meta Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Facebook and Instagram ad performance', status: 'active', color: 'bg-blue-600', tags: ['facebook', 'instagram', 'social', 'ads', 'marketing'] },
-        { id: 'google-ads', name: 'Google Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Search and display campaign metrics', status: 'active', color: 'bg-red-500', tags: ['search', 'ppc', 'keywords', 'ads', 'google'] },
-        { id: 'ga4', name: 'Google Analytics 4', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Web and app behavioral analytics', status: 'active', color: 'bg-yellow-500', tags: ['traffic', 'events', 'behavior', 'google'] },
-        { id: 'linkedin-ads', name: 'LinkedIn Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional network marketing data', status: 'active', color: 'bg-blue-800', tags: ['b2b', 'ads', 'professional'] },
-        { id: 'tiktok-ads', name: 'TikTok Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Short-form video marketing spend', status: 'active', color: 'bg-black', tags: ['video', 'gen-z', 'social', 'ads'] },
-        { id: 'mailchimp', name: 'Mailchimp', category: 'marketing', icon: <Zap size={24} />, description: 'Email marketing and list performance', status: 'active', color: 'bg-yellow-400', tags: ['email', 'newsletters', 'marketing'] },
-        { id: 'twitter-ads', name: 'X / Twitter Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Real-time social marketing analytics', status: 'active', color: 'bg-slate-900', tags: ['social', 'twitter', 'real-time', 'ads'] },
-        { id: 'instagram', name: 'Instagram Biz', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional account reach and growth', status: 'active', color: 'bg-pink-600', tags: ['social', 'visual', 'engagement'] },
-        { id: 'youtube', name: 'YouTube Analytics', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Video performance and audience depth', status: 'active', color: 'bg-red-700', tags: ['video', 'viewership', 'google'] },
+        // Marketing & Ads
+        { id: 'meta-ads', name: 'Meta Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Facebook and Instagram performance', status: 'active', color: 'bg-blue-600', tags: ['facebook', 'instagram', 'ads'] },
+        { id: 'google-ads', name: 'Google Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Search and display campaign metrics', status: 'active', color: 'bg-red-500', tags: ['google', 'search', 'ppc'] },
+        { id: 'ga4', name: 'Google Analytics 4', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Web and app behavioral analytics', status: 'active', color: 'bg-yellow-500', tags: ['web', 'traffic', 'google'] },
+        { id: 'linkedin-ads', name: 'LinkedIn Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional network marketing', status: 'active', color: 'bg-blue-800', tags: ['b2b', 'ads', 'pro'] },
+        { id: 'tiktok-ads', name: 'TikTok Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Short-form video marketing spend', status: 'active', color: 'bg-black', tags: ['video', 'social'] },
+        { id: 'mailchimp', name: 'Mailchimp', category: 'marketing', icon: <Zap size={24} />, description: 'Email marketing and list stats', status: 'active', color: 'bg-yellow-400', tags: ['email', 'newsletters'] },
 
         // Finance
-        { id: 'stripe', name: 'Stripe', category: 'finance', icon: <CreditCard size={24} />, description: 'Subscription revenue and transactions', status: 'active', color: 'bg-indigo-600', tags: ['payments', 'revenue', 'subscriptions', 'saas'] },
-        { id: 'paypal', name: 'PayPal', category: 'finance', icon: <CreditCard size={24} />, description: 'Global payment processing data', status: 'active', color: 'bg-blue-900', tags: ['payments', 'checkout', 'finance'] },
-        { id: 'shopify', name: 'Shopify', category: 'finance', icon: <ShoppingCart size={24} />, description: 'Store orders, inventory and customers', status: 'active', color: 'bg-green-600', tags: ['ecommerce', 'shop', 'orders'] },
-        { id: 'quickbooks', name: 'QuickBooks', category: 'finance', icon: <CreditCard size={24} />, description: 'Accounting and financial statements', status: 'active', color: 'bg-emerald-600', tags: ['accounting', 'tax', 'audit', 'banking'] },
-        { id: 'xero', name: 'Xero', category: 'finance', icon: <CreditCard size={24} />, description: 'Cloud accounting for small business', status: 'active', color: 'bg-sky-400', tags: ['accounting', 'small-biz', 'finance'] },
+        { id: 'stripe', name: 'Stripe', category: 'finance', icon: <CreditCard size={24} />, description: 'Revenue and payment transactions', status: 'active', color: 'bg-indigo-600', tags: ['payments', 'revenue', 'saas'] },
+        { id: 'paypal', name: 'PayPal', category: 'finance', icon: <CreditCard size={24} />, description: 'Global payment processing data', status: 'active', color: 'bg-blue-900', tags: ['payments', 'checkout'] },
+        { id: 'shopify', name: 'Shopify', category: 'finance', icon: <ShoppingCart size={24} />, description: 'Store orders and inventory', status: 'active', color: 'bg-green-600', tags: ['ecommerce', 'shop'] },
+        { id: 'plaid', name: 'Plaid', category: 'finance', icon: <CreditCard size={24} />, description: 'Connect to 12,000+ banks', status: 'active', color: 'bg-black', tags: ['banking', 'open-finance'] },
+        { id: 'quickbooks', name: 'QuickBooks', category: 'finance', icon: <CreditCard size={24} />, description: 'Cloud accounting and auditing', status: 'active', color: 'bg-emerald-600', tags: ['accounting', 'tax'] },
 
         // Cloud Storage
-        { id: 'aws-s3', name: 'Amazon S3', category: 'storage', icon: <Cloud size={24} />, description: 'Scaleable object storage for datasets', status: 'active', color: 'bg-orange-400', tags: ['cloud', 's3', 'aws', 'buckets', 'objects'] },
-        { id: 'gcs', name: 'Google Storage', category: 'storage', icon: <Cloud size={24} />, description: 'GCP Cloud Storage buckets', status: 'active', color: 'bg-blue-500', tags: ['cloud', 'google', 'gcp', 'buckets'] },
-        { id: 'dropbox', name: 'Dropbox', category: 'storage', icon: <Cloud size={24} />, description: 'Shared cloud drives and folders', status: 'active', color: 'bg-blue-600', tags: ['files', 'sharing', 'cloud'] },
-        { id: 'ftp', name: 'FTP/SFTP', category: 'storage', icon: <Globe size={24} />, description: 'Legacy file transfer servers', status: 'active', color: 'bg-slate-700', tags: ['server', 'secure', 'file-transfer'] },
+        { id: 'aws-s3', name: 'Amazon S3', category: 'storage', icon: <Cloud size={24} />, description: 'Object storage for datasets', status: 'active', color: 'bg-orange-400', tags: ['aws', 's3', 'buckets'] },
+        { id: 'gcs', name: 'Google Storage', category: 'storage', icon: <Cloud size={24} />, description: 'GCP Cloud Storage buckets', status: 'active', color: 'bg-blue-500', tags: ['gcp', 'google'] },
+        { id: 'dropbox', name: 'Dropbox', category: 'storage', icon: <Cloud size={24} />, description: 'Shared cloud drives', status: 'active', color: 'bg-blue-600', tags: ['files', 'sharing'] },
 
-        // Banking & FinTech (Specialized)
-        { id: 'plaid', name: 'Plaid', category: 'finance', icon: <CreditCard size={24} />, description: 'Connect to 12,000+ financial institutions', status: 'active', color: 'bg-black', tags: ['banking', 'bank', 'transactions', 'open-finance'] },
-        { id: 'stripe-issuing', name: 'Stripe Issuing', category: 'finance', icon: <CreditCard size={24} />, description: 'Commercial card program data', status: 'active', color: 'bg-indigo-400', tags: ['cards', 'banking', 'fintech'] },
-
-        // HR & People
-        { id: 'workday', name: 'Workday', category: 'saas', icon: <Briefcase size={24} />, description: 'Enterprise human capital management', status: 'active', color: 'bg-orange-600', tags: ['hr', 'hcm', 'enterprise', 'people'] },
-        { id: 'bamboohr', name: 'BambooHR', category: 'saas', icon: <Plus size={24} />, description: 'HR software for growing businesses', status: 'active', color: 'bg-green-600', tags: ['hr', 'people', 'team'] },
-
-        // Healthcare (Industry Specific)
-        { id: 'hl7-epic', name: 'Epic / HL7', category: 'saas', icon: <Shield size={24} />, description: 'Electronic health record data (FHIR/HL7)', status: 'active', color: 'bg-red-600', tags: ['health', 'ehr', 'fhir', 'hl7', 'patient'] },
-        { id: 'fitbit', name: 'Fitbit Care', category: 'saas', icon: <Zap size={24} />, description: 'Health and wellness telemetry data', status: 'active', color: 'bg-cyan-500', tags: ['health', 'biometric', 'iot'] },
-
-        // Logistics & Supply Chain
-        { id: 'fedex', name: 'FedEx Data', category: 'saas', icon: <Globe size={24} />, description: 'Shipping tracking and logistics spend', status: 'active', color: 'bg-purple-900', tags: ['logistics', 'shipping', 'delivery', 'supply-chain'] },
-        { id: 'ups', name: 'UPS Quantum', category: 'saas', icon: <Globe size={24} />, description: 'Global logistics and package intelligence', status: 'active', color: 'bg-amber-900', tags: ['logistics', 'shipping', 'delivery', 'ups'] },
-
-        // Universal & Special
-        { id: 'scraper', name: 'Web Scraper', category: 'storage', icon: <Globe size={24} />, description: 'AI-powered data extraction from URLs', status: 'active', color: 'bg-indigo-400', tags: ['scrape', 'spider', 'web', 'data-extraction'] },
-        { id: 'webhook', name: 'Webhook', category: 'storage', icon: <Globe size={24} />, description: 'Push data directly via HTTP POST', status: 'active', color: 'bg-orange-600', tags: ['api', 'push', 'real-time', 'automation'] },
-        { id: 'rest-api', name: 'Generic API', category: 'storage', icon: <Zap size={24} />, description: 'Connect to any JSON REST endpoint', status: 'active', color: 'bg-violet-500', tags: ['api', 'rest', 'json', 'pull'] },
+        // Universal
+        { id: 'scraper', name: 'Web Scraper', category: 'storage', icon: <Globe size={24} />, description: 'AI data extraction from URLs', status: 'active', color: 'bg-indigo-400', tags: ['scrape', 'web'] },
+        { id: 'rest-api', name: 'Generic API', category: 'storage', icon: <Zap size={24} />, description: 'Connect to any JSON endpoint', status: 'active', color: 'bg-violet-500', tags: ['api', 'rest', 'json'] },
     ];
 
     const categories = [
@@ -187,7 +147,7 @@ const SourceHubView: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-200">
+        <div className="min-h-screen bg-slate-950 text-slate-200 uppercase">
             {/* Header Area */}
             <div className="border-b border-white/5 bg-white/[0.02] backdrop-blur-md sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-6 py-8">
@@ -197,7 +157,7 @@ const SourceHubView: React.FC = () => {
                                 <Zap className="text-indigo-500" fill="currentColor" />
                                 Data Catalyst Hub
                             </h1>
-                            <p className="text-slate-500 font-medium tracking-wide">Connect any data source to the ToEasy OS</p>
+                            <p className="text-slate-500 font-medium tracking-wide normal-case italic">Connect any data source to the ToEasy OS</p>
                         </div>
 
                         <div className="relative w-full md:w-96 group">
@@ -206,7 +166,7 @@ const SourceHubView: React.FC = () => {
                             </div>
                             <input
                                 type="text"
-                                placeholder="Search 50+ connectors..."
+                                placeholder="Search connectors..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                                 className="w-full bg-slate-900/50 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600"
@@ -278,7 +238,7 @@ const SourceHubView: React.FC = () => {
                             <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/20 rounded-2xl p-6">
                                 <Shield className="text-indigo-400 mb-3" size={24} />
                                 <h4 className="text-white font-bold text-sm mb-2">Secure Ingestion</h4>
-                                <p className="text-[11px] text-slate-400 leading-relaxed">
+                                <p className="text-[11px] text-slate-400 leading-relaxed normal-case">
                                     All credentials are encrypted with AES-256 at rest. We never store your raw source passwords.
                                 </p>
                             </div>
@@ -307,11 +267,8 @@ const SourceHubView: React.FC = () => {
                                             {source.status === 'beta' && (
                                                 <span className="text-[9px] font-black bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-widest">Beta</span>
                                             )}
-                                            {source.status === 'coming_soon' && (
-                                                <span className="text-[9px] font-black bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded border border-slate-700/50 uppercase tracking-widest">Soon</span>
-                                            )}
                                         </div>
-                                        <p className="text-sm text-slate-500 font-medium leading-relaxed">{source.description}</p>
+                                        <p className="text-sm text-slate-500 font-medium leading-relaxed normal-case line-clamp-2">{source.description}</p>
                                     </div>
 
                                     {/* Action Foot */}
@@ -330,7 +287,7 @@ const SourceHubView: React.FC = () => {
 
                         {filteredSources.length === 0 && (
                             <div className="text-center py-20 bg-white/[0.02] border border-dashed border-white/10 rounded-3xl">
-                                <p className="text-slate-500 font-bold mb-4 italic text-lg">"We couldn't find a connector for that... yet!"</p>
+                                <p className="text-slate-500 font-bold mb-4 italic text-lg opacity-50">"WE COULDN'T FIND A CONNECTOR FOR THAT... YET!"</p>
                                 <button className="px-6 py-3 bg-indigo-600/10 border border-indigo-500/20 text-indigo-400 rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-600/20 transition-all">
                                     Request custom connector
                                 </button>
