@@ -4,12 +4,12 @@ dotenv.config();
 // Subscription tier limits
 export const tierLimits = {
   basic: {
-    maxDatasets: 3,
-    maxRowsPerDataset: 500,
-    maxGenerateRows: 100,
-    aiQueriesPerDay: 10,
-    maxWorkspaces: 1,
-    maxConnectors: 1,
+    maxDatasets: 100,
+    maxRowsPerDataset: 10000,
+    maxGenerateRows: 1000,
+    aiQueriesPerDay: 100,
+    maxWorkspaces: 10,
+    maxConnectors: 10,
   },
   pro: {
     maxDatasets: 100,
