@@ -27,39 +27,43 @@ export const LoginPage: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
-          <h1 className="text-3xl font-bold text-white text-center mb-2">ToEasy</h1>
-          <p className="text-white/60 text-center mb-8">AI Data Governance Platform</p>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background Orbs */}
+      <div className="absolute top-0 -left-4 w-72 h-72 bg-indigo-500/10 rounded-full blur-[120px]" />
+      <div className="absolute bottom-0 -right-4 w-72 h-72 bg-purple-500/10 rounded-full blur-[120px]" />
+
+      <div className="w-full max-w-md relative z-10">
+        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-white/10">
+          <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tight">ToEasy AI</h1>
+          <p className="text-slate-400 text-center mb-8 text-sm uppercase tracking-widest font-medium">Data Operating System</p>
 
           {(formError || error) && (
-            <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-6">
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl mb-6 text-sm">
               {formError || error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">Email</label>
+              <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Work Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                placeholder="your@email.com"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                placeholder="email@example.com"
               />
             </div>
 
             <div>
-              <label className="block text-white text-sm font-medium mb-2">Password</label>
+              <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Password</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
                 placeholder="••••••••"
               />
             </div>
@@ -67,23 +71,25 @@ export const LoginPage: React.FC = () => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition duration-200"
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-indigo-500/20 active:scale-[0.98]"
             >
-              {isLoading ? 'Logging in...' : 'Login'}
+              {isLoading ? 'Decrypting...' : 'Access Dashboard'}
             </button>
           </form>
 
-          <p className="text-white/60 text-center mt-6">
-            Don't have an account?{' '}
-            <Link to="/signup" className="text-purple-400 hover:text-purple-300 font-medium">
-              Sign up
+          <p className="text-slate-500 text-center mt-8 text-xs font-medium">
+            New to the OS?{' '}
+            <Link to="/signup" className="text-indigo-400 hover:text-white font-bold transition-colors">
+              CREATE ACCOUNT
             </Link>
           </p>
 
           {/* Demo credentials */}
-          <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-white/60 text-xs text-center mb-2">Demo Credentials:</p>
-            <p className="text-white/50 text-xs text-center">test@example.com / Test@123456</p>
+          <div className="mt-8 pt-6 border-t border-white/5">
+            <div className="bg-slate-900/40 rounded-xl p-3 border border-indigo-500/10">
+              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter text-center mb-1">Sandboxed Access:</p>
+              <p className="text-indigo-300 text-[11px] font-mono text-center">test@example.com / Test@123456</p>
+            </div>
           </div>
         </div>
       </div>
