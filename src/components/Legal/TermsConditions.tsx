@@ -12,13 +12,13 @@ const TermsConditions: React.FC = () => {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">1. Acceptance of Terms</h2>
                     <p>
-                        By accessing or using the Toeasy.AI platform ("Service"), you agree to be bound by these Terms and Conditions. If you do not agree to all of these terms, do not use our Service. These Terms apply to all visitors, users, and others who access or use the Service.
+                        By accessing or using the Toeasy platform ("Service"), you agree to be bound by these Terms and Conditions. If you do not agree to all of these terms, do not use our Service. These Terms apply to all visitors, users, and others who access or use the Service.
                     </p>
                 </section>
 
                 <section className="space-y-4">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">2. Use of Service</h2>
-                    <p>Toeasy.AI provides an AI-powered data governance and cleaning platform. You are responsible for:</p>
+                    <p>Toeasy provides an AI-powered data governance and cleaning platform. You are responsible for:</p>
                     <ul className="list-disc pl-6 space-y-2">
                         <li>Maintaining the confidentiality of your account credentials.</li>
                         <li>Ensuring all data uploaded complies with applicable laws and regulations.</li>

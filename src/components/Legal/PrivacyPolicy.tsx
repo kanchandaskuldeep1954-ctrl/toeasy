@@ -63,7 +63,7 @@ const PrivacyPolicy: React.FC = () => {
                 </section>
 
                 <div className="pt-12 border-t border-slate-200 dark:border-slate-800 text-center">
-                    <p className="text-sm text-slate-500">For any privacy-related concerns, please contact our Data Protection Officer at <a href="mailto:privacy@toeasy.ai" className="text-indigo-600 font-bold hover:underline">privacy@toeasy.ai</a>.</p>
+                    <p className="text-sm text-slate-500">For any privacy-related concerns, please contact our Data Protection Officer at <a href="mailto:privacy@Toeasy" className="text-indigo-600 font-bold hover:underline">privacy@Toeasy</a>.</p>
                 </div>
             </div>
         </div>

@@ -72,7 +72,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       key: config.razorpay.keyId,
       amount: order.amount,
       currency: order.currency,
-      name: "Toeasy.AI",
+      name: "Toeasy",
       description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Plan (${interval})`,
       order_id: order.id,
       prefill: {

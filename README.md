@@ -298,9 +298,9 @@ This project is proprietary software. All rights reserved.
 
 ## 📞 Support
 
-- **Email**: support@toeasy.ai
+- **Email**: support@Toeasy
 - **Issues**: GitHub Issues
-- **Documentation**: https://docs.toeasy.ai
+- **Documentation**: https://docs.Toeasy
 
 ---
 

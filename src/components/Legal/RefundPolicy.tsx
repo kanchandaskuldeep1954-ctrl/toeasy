@@ -22,7 +22,7 @@ const RefundPolicy: React.FC = () => {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">2. Refund Eligibility</h2>
                     <p>
-                        At Toeasy.AI, we want you to be completely satisfied with our Service. We offer a <strong>14-day money-back guarantee</strong> for new subscriptions if you are not satisfied with the platform.
+                        At Toeasy, we want you to be completely satisfied with our Service. We offer a <strong>14-day money-back guarantee</strong> for new subscriptions if you are not satisfied with the platform.
                     </p>
                     <p>Refunds are generally NOT provided for:</p>
                     <ul className="list-disc pl-6 space-y-2">
@@ -35,7 +35,7 @@ const RefundPolicy: React.FC = () => {
                 <section className="space-y-4">
                     <h2 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tight">3. How to Request a Refund</h2>
                     <p>
-                        To request a refund, please email <a href="mailto:billing@toeasy.ai" className="text-indigo-600 font-bold hover:underline">billing@toeasy.ai</a> within 14 days of your initial purchase. Please include your account email and the reason for your request.
+                        To request a refund, please email <a href="mailto:billing@Toeasy" className="text-indigo-600 font-bold hover:underline">billing@Toeasy</a> within 14 days of your initial purchase. Please include your account email and the reason for your request.
                     </p>
                 </section>
 
@@ -54,7 +54,7 @@ const RefundPolicy: React.FC = () => {
                 </section>
 
                 <div className="pt-12 border-t border-slate-200 dark:border-slate-800 text-center">
-                    <p className="text-sm text-slate-500">Questions about your bill? We're here to help. Reach out to <a href="mailto:support@toeasy.ai" className="text-indigo-600 font-bold hover:underline">support@toeasy.ai</a>.</p>
+                    <p className="text-sm text-slate-500">Questions about your bill? We're here to help. Reach out to <a href="mailto:support@Toeasy" className="text-indigo-600 font-bold hover:underline">support@Toeasy</a>.</p>
                 </div>
             </div>
         </div>
