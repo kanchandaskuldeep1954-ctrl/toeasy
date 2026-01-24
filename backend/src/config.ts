@@ -41,6 +41,12 @@ export interface Config {
     keyId: string | undefined;
     keySecret: string | undefined;
   };
+  email: {
+    host: string;
+    port: number;
+    user: string | undefined;
+    pass: string | undefined;
+  };
   redisUrl: string | undefined;
   frontendUrl: string;
   backendUrl: string;
@@ -60,6 +66,12 @@ export const config: Config = {
     keyId: process.env.RAZORPAY_KEY_ID,
     keySecret: process.env.RAZORPAY_KEY_SECRET,
   },
+  email: {
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
+  },
   redisUrl: process.env.REDIS_URL,
   frontendUrl: process.env.FRONTEND_URL || 'https://toeasy.vercel.app',
   backendUrl: process.env.BACKEND_URL || 'http://localhost:3000',
@@ -70,7 +82,16 @@ export const config: Config = {
 // Pricing
 // Pricing
 export const pricing = {
-  basic: { monthly: 0, yearly: 0 },
-  pro: { monthly: 29, yearly: 288 }, // $24/mo * 12 = 288
-  enterprise: { monthly: 99, yearly: 984 }, // $82/mo * 12 = 984
+  basic: {
+    usd: { monthly: 0, yearly: 0 },
+    inr: { monthly: 0, yearly: 0 }
+  },
+  pro: {
+    usd: { monthly: 25, yearly: 240 }, // $20/mo * 12
+    inr: { monthly: 599, yearly: 5990 } // ₹499/mo * 12
+  },
+  enterprise: {
+    usd: { monthly: 89, yearly: 890 },
+    inr: { monthly: 2599, yearly: 25990 }
+  },
 };

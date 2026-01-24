@@ -32,6 +32,7 @@ interface PaymentFlowState {
   planId?: 'pro' | 'enterprise';
   amount?: number;
   interval?: 'month' | 'year';
+  currency?: 'USD' | 'INR';
 }
 
 const BillingViewIntegrated: React.FC = () => {
@@ -50,12 +51,13 @@ const BillingViewIntegrated: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<'month' | 'year'>('month');
+  const [currency, setCurrency] = useState<'USD' | 'INR'>('USD');
   const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [paymentFlow, setPaymentFlow] = useState<PaymentFlowState>({
     isOpen: false,
   });
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
     if (token) {
@@ -148,7 +150,8 @@ const BillingViewIntegrated: React.FC = () => {
       isOpen: true,
       planId: planId as 'pro' | 'enterprise',
       amount,
-      interval: billingCycle
+      interval: billingCycle,
+      currency
     });
   };
 
@@ -182,8 +185,9 @@ const BillingViewIntegrated: React.FC = () => {
     {
       id: 'pro',
       name: 'Professional',
-      monthlyPrice: 29,
-      yearlyPrice: 24,
+      monthlyPrice: currency === 'INR' ? 599 : 25,
+      yearlyPrice: currency === 'INR' ? 499 : 20, // yearly billed monthly equivalent usually display
+      // Actual yearly charge: 499 * 12 = 5990 INR, 20 * 12 = 240 USD
       description: 'For active data teams',
       features: ['Up to 100 datasets', 'Unlimited API calls', '100GB storage', 'Priority support', 'Advanced validation'],
       isCurrent: subscription?.tier === 'pro',
@@ -192,17 +196,14 @@ const BillingViewIntegrated: React.FC = () => {
     {
       id: 'enterprise',
       name: 'Enterprise',
-      monthlyPrice: 99,
-      yearlyPrice: 82,
+      monthlyPrice: currency === 'INR' ? 2599 : 89,
+      yearlyPrice: currency === 'INR' ? 2165 : 74, // 2165 * 12 ~= 25990 INR, 74 * 12 ~= 890 USD
       description: 'For large organizations',
       features: ['Unlimited datasets', 'Unlimited API calls', 'Unlimited storage', '24/7 support', 'SSO & Security', 'Custom integrations'],
       isCurrent: subscription?.tier === 'enterprise',
       isPopular: false
     }
   ];
-
-  const currentPlan = plans.find(p => p.isCurrent);
-  const currentPrice = billingCycle === 'month' ? currentPlan?.monthlyPrice : currentPlan?.yearlyPrice;
 
   return (
     <div className="max-w-7xl mx-auto py-12 px-4">
@@ -300,8 +301,9 @@ const BillingViewIntegrated: React.FC = () => {
         </div>
       )}
 
-      {/* Billing Cycle Toggle */}
-      <div className="mb-12 flex justify-center">
+      {/* Controls: Billing Cycle & Currency */}
+      <div className="mb-12 flex flex-col md:flex-row justify-center items-center gap-6">
+        {/* Cycle */}
         <div className="inline-flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
           <button
             onClick={() => setBillingCycle('month')}
@@ -325,11 +327,33 @@ const BillingViewIntegrated: React.FC = () => {
             </span>
           </button>
         </div>
+
+        {/* Currency Toggle */}
+        <div className="inline-flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+          <button
+            onClick={() => setCurrency('USD')}
+            className={`px-4 py-2 rounded-lg font-bold text-[10px] uppercase transition-all ${currency === 'USD'
+              ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+          >
+            🇺🇸 USD
+          </button>
+          <button
+            onClick={() => setCurrency('INR')}
+            className={`px-4 py-2 rounded-lg font-bold text-[10px] uppercase transition-all ${currency === 'INR'
+              ? 'bg-white dark:bg-slate-700 text-emerald-600 shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+          >
+            🇮🇳 INR
+          </button>
+        </div>
       </div>
 
       {/* Plans */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        {plans && Array.isArray(plans) && plans.map(plan => {
+        {plans.map(plan => {
           const price = billingCycle === 'month' ? plan.monthlyPrice : plan.yearlyPrice;
           return (
             <div
@@ -351,18 +375,20 @@ const BillingViewIntegrated: React.FC = () => {
 
                 <div className="mb-8">
                   <div className="flex items-baseline gap-1">
-                    <span className="text-4xl font-black text-slate-900 dark:text-white">${price}</span>
+                    <span className="text-4xl font-black text-slate-900 dark:text-white">
+                      {currency === 'INR' ? '₹' : '$'}{price}
+                    </span>
                     <span className="text-sm text-slate-600 dark:text-slate-400">/{billingCycle === 'month' ? 'mo' : 'mo'}</span>
                   </div>
                   {billingCycle === 'year' && price > 0 && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-2">
-                      ${Math.round(price * 12)} billed yearly
+                      {currency === 'INR' ? '₹' : '$'}{Math.round(price * 12)} billed yearly
                     </p>
                   )}
                 </div>
 
                 <ul className="space-y-3 mb-8">
-                  {plan.features && Array.isArray(plan.features) && plan.features.map((feature, i) => (
+                  {plan.features.map((feature, i) => (
                     <li key={i} className="flex items-start gap-3 text-sm text-slate-700 dark:text-slate-300">
                       <svg className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -434,10 +460,11 @@ const BillingViewIntegrated: React.FC = () => {
       {/* Payment Flow Modal */}
       <PaymentFlow
         isOpen={paymentFlow.isOpen}
-        onClose={() => setPaymentFlow({ isOpen: false })}
+        onClose={() => setPaymentFlow({ ...paymentFlow, isOpen: false })}
         planId={paymentFlow.planId || 'pro'}
         amount={paymentFlow.amount || 0}
         interval={paymentFlow.interval || 'month'}
+        currency={paymentFlow.currency || 'USD'}
         onPaymentSuccess={handlePaymentSuccess}
       />
     </div>

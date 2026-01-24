@@ -65,8 +65,7 @@ export class GroqService {
   // Synthetic data generation
   static async generateSyntheticDataset(topic: string, fields: string[], count: number): Promise<any> {
     const result = await this.callApi<{ data: DataRow[]; count: number; tier: string; maxAllowed: number; generatedAt: string }>('generate-synthetic', 'POST', { topic, fields, count });
-    // Return the full response object including metadata
-    return result;
+    return result.data;
   }
 
   // Real Web Scraper

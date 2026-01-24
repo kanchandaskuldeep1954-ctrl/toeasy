@@ -16,7 +16,7 @@ const razorpay = new Razorpay({
 // Create payment order
 router.post('/create-order', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { planId, interval } = req.body;
+    const { planId, interval, currency = 'usd' } = req.body;
 
     if (!planId || !['pro', 'enterprise'].includes(planId)) {
       return res.status(400).json({ error: 'Invalid plan' });
@@ -26,6 +26,8 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       return res.status(400).json({ error: 'Invalid billing interval' });
     }
 
+    const validCurrency = currency.toLowerCase() === 'inr' ? 'inr' : 'usd';
+
     // Get user
     const userResult = await query('SELECT email, full_name FROM users WHERE id = $1', [req.user!.id]);
     if (userResult.rows.length === 0) {
@@ -34,38 +36,36 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 
     const user = userResult.rows[0];
 
-    // Calculate amount based on plan and interval
+    // Calculate amount based on plan, interval and currency
     let amount = 0;
-    if (planId === 'pro') {
-      amount = interval === 'month' ? pricing.pro.monthly : pricing.pro.yearly;
-    } else if (planId === 'enterprise') {
-      amount = interval === 'month' ? pricing.enterprise.monthly : pricing.enterprise.yearly;
-    }
+    // @ts-ignore
+    const planPricing = pricing[planId][validCurrency];
+    amount = interval === 'month' ? planPricing.monthly : planPricing.yearly;
 
-    // Razorpay amount is in paise (smallest currency unit), but for USD it is cents
-    // Razorpay supports international currency. Amount must be in smallest unit of currency.
-    // For USD, it is cents. 29.00 USD -> 2900 cents.
+    // Razorpay amount is in smallest currency unit
+    // INR: Paise (1 INR = 100 paise)
+    // USD: Cents (1 USD = 100 cents)
     const amountSmallestUnit = Math.round(amount * 100);
 
     const options = {
       amount: amountSmallestUnit,
-      currency: "USD",
+      currency: validCurrency.toUpperCase(),
       receipt: `receipt_${req.user!.id}_${Date.now()}`,
       notes: {
         planId,
         interval,
-        userId: req.user!.id
+        userId: req.user!.id,
+        currency: validCurrency
       }
     };
 
     const order = await razorpay.orders.create(options);
 
     // Save payment order to database
-    // Mapping Razorpay order_id to cashfree_order_id column to avoid schema change for now
     await query(
       `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, cashfree_order_id, status) 
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.user!.id, planId, amount, 'USD', order.id, order.id, 'pending']
+      [req.user!.id, planId, amount, validCurrency.toUpperCase(), order.id, order.id, 'pending']
     );
 
     res.json({
@@ -78,7 +78,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       prefill: {
         name: user.full_name || 'User',
         email: user.email,
-        contact: '9999999999' // Placeholder or fetch from user profile if available
+        contact: '9999999999' // Placeholder
       }
     });
 

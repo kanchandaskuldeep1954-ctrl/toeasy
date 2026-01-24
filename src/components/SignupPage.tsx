@@ -4,14 +4,20 @@ import { useAuth } from '../hooks/useAuth';
 
 export const SignupPage: React.FC = () => {
   const navigate = useNavigate();
-  const { signup, isLoading, error } = useAuth();
+  const { register, verifyOTP, resendOTP, isLoading, error } = useAuth();
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // OTP State
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -31,92 +37,170 @@ export const SignupPage: React.FC = () => {
     }
 
     try {
-      await signup(email, password, name);
-      navigate('/app/workspaces');
-    } catch (err) {
-      setFormError(error || 'Signup failed. Please try again.');
+      await register(email, password, name);
+      setOtpSent(true);
+    } catch (err: any) {
+      if (err.message && err.message.includes('User already exists')) {
+        setFormError('User already exists. Please login.');
+      } else {
+        setFormError(error || 'Signup failed. Please try again.');
+      }
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/20">
-          <h1 className="text-3xl font-bold text-white text-center mb-2">Create Account</h1>
-          <p className="text-white/60 text-center mb-8">Join ToEasy AI Data Governance Platform</p>
+  const handleVerifyOTP = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError(null);
+
+    if (!otp || otp.length !== 6) {
+      setFormError('Please enter a valid 6-digit OTP');
+      return;
+    }
+
+    try {
+      await verifyOTP(email, otp);
+      navigate('/app/workspaces');
+    } catch (err) {
+      setFormError(error || 'Verification failed. Please check the OTP.');
+    }
+  };
+
+  const handleResendOTP = async () => {
+    try {
+      await resendOTP(email);
+      alert('OTP resent successfully!');
+    } catch (err) {
+      setFormError('Failed to resend OTP');
+    }
+  };
+
+  if (otpSent) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white/5 backdrop-blur-xl rounded-2xl p-8 shadow-2xl border border-white/10">
+          <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tight">Verify Email</h1>
+          <p className="text-slate-400 text-center mb-8 text-sm">
+            We sent a 6-digit code to <span className="text-indigo-400 font-bold">{email}</span>
+          </p>
 
           {(formError || error) && (
-            <div className="bg-red-500/20 border border-red-500 text-red-200 px-4 py-3 rounded-lg mb-6">
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-lg mb-6 text-sm">
               {formError || error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleVerifyOTP} className="space-y-6">
             <div>
-              <label className="block text-white text-sm font-medium mb-2">Full Name</label>
+              <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">One-Time Password</label>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                 disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                placeholder="John Doe"
-              />
-            </div>
-
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                placeholder="your@email.com"
-              />
-            </div>
-
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                placeholder="••••••••"
-              />
-              <p className="text-white/50 text-xs mt-1">Must be at least 8 characters</p>
-            </div>
-
-            <div>
-              <label className="block text-white text-sm font-medium mb-2">Confirm Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                disabled={isLoading}
-                className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-white/50 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-50"
-                placeholder="••••••••"
+                className="w-full text-center text-3xl tracking-[0.5em] px-4 py-4 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 font-mono"
+                placeholder="000000"
               />
             </div>
 
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 text-white font-semibold py-2 rounded-lg transition duration-200"
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-indigo-500/20"
             >
-              {isLoading ? 'Creating Account...' : 'Sign Up'}
+              {isLoading ? 'Verifying...' : 'Verify & Launch'}
             </button>
           </form>
 
-          <p className="text-white/60 text-center mt-6">
-            Already have an account?{' '}
-            <Link to="/login" className="text-purple-400 hover:text-purple-300 font-medium">
-              Login
-            </Link>
-          </p>
+          <div className="mt-6 text-center">
+            <button
+              onClick={handleResendOTP}
+              className="text-xs text-slate-500 hover:text-white transition-colors"
+            >
+              Didn't receive code? <span className="underline">Resend</span>
+            </button>
+          </div>
         </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white/5 backdrop-blur-xl rounded-3xl p-8 shadow-2xl border border-white/10">
+        <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tight">Create Account</h1>
+        <p className="text-slate-400 text-center mb-8 text-sm">Join the AI Data Operating System</p>
+
+        {(formError || error) && (
+          <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-lg mb-6 text-sm">
+            {formError || error}
+          </div>
+        )}
+
+        <form onSubmit={handleRegister} className="space-y-5">
+          <div>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Full Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+              placeholder="Elon Musk"
+            />
+          </div>
+
+          <div>
+            <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Work Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isLoading}
+              className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+              placeholder="elon@spacex.com"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                placeholder="••••••••"
+              />
+            </div>
+            <div>
+              <label className="block text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Confirm</label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                disabled={isLoading}
+                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
+                placeholder="••••••••"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full py-4 mt-4 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold uppercase tracking-widest rounded-xl transition-all shadow-lg hover:shadow-indigo-500/20"
+          >
+            {isLoading ? 'Processing...' : 'Start Free Trial'}
+          </button>
+        </form>
+
+        <p className="text-slate-500 text-center mt-6 text-xs">
+          Already have an account?{' '}
+          <Link to="/login" className="text-indigo-400 hover:text-white font-bold transition-colors">
+            LOGIN
+          </Link>
+        </p>
       </div>
     </div>
   );

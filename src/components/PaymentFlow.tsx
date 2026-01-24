@@ -18,6 +18,7 @@ interface PaymentFlowProps {
   planId: 'pro' | 'enterprise';
   amount: number;
   interval: 'month' | 'year';
+  currency: 'USD' | 'INR';
   onPaymentSuccess: () => void;
 }
 
@@ -40,6 +41,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
   planId,
   amount,
   interval,
+  currency,
   onPaymentSuccess,
 }) => {
   const [paymentState, setPaymentState] = useState<PaymentState>({
@@ -52,7 +54,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
     try {
       setPaymentState(prev => ({ ...prev, status: 'creating_order' }));
 
-      const response = await paymentAPI.createOrder(planId, amount, interval);
+      const response = await paymentAPI.createOrder(planId, amount, interval, currency);
       const data = response.data; // { key, amount, currency, name, description, order_id, prefill }
 
       if (window.Razorpay) {
@@ -168,7 +170,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
             <div className="rounded-lg bg-indigo-50 p-4 dark:bg-indigo-900/20">
               <p className="text-sm text-indigo-600 dark:text-indigo-400">Amount</p>
               <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
-                ${amount.toFixed(2)}
+                {currency === 'INR' ? '₹' : '$'}{amount.toLocaleString()}
               </p>
             </div>
 

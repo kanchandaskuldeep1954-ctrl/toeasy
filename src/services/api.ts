@@ -265,8 +265,8 @@ export const subscriptionAPI = {
 
 export const paymentAPI = {
   // Create payment order
-  createOrder: (planId: string, amount: number, interval: 'month' | 'year') =>
-    getClient().post('/payments/create-order', { planId, amount, interval }),
+  createOrder: (planId: string, amount: number, interval: 'month' | 'year', currency: 'USD' | 'INR' = 'USD') =>
+    getClient().post('/payments/create-order', { planId, amount, interval, currency }),
 
   // Get payment status
   getStatus: (orderId: string) =>
