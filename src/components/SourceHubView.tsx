@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import axios from 'axios';
+import { useAuth } from '../hooks/useAuth';
 import {
     Database,
     FileText,
@@ -31,10 +33,34 @@ interface ConnectorSource {
 
 const SourceHubView: React.FC = () => {
     const navigate = useNavigate();
+    const { token } = useAuth();
     const [searchParams] = useSearchParams();
     const workspaceId = searchParams.get('workspace') || '';
     const [searchQuery, setSearchQuery] = useState('');
     const [activeCategory, setActiveCategory] = useState<string>('all');
+    const [existingIntegrations, setExistingIntegrations] = useState<any[]>([]);
+    const [isLoadingIntegrations, setIsLoadingIntegrations] = useState(true);
+
+    const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
+
+    React.useEffect(() => {
+        const fetchIntegrations = async () => {
+            if (!workspaceId || !token) return;
+            try {
+                const response = await axios.get(`${backendUrl}/integrations?workspaceId=${workspaceId}`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+                setExistingIntegrations(response.data);
+            } catch (err) {
+                console.error('Failed to fetch integrations');
+            } finally {
+                setIsLoadingIntegrations(false);
+            }
+        };
+        fetchIntegrations();
+    }, [workspaceId, token, backendUrl]);
+
+    // ... sources array remains same ...
 
     const sources: ConnectorSource[] = [
         // Files
@@ -91,6 +117,9 @@ const SourceHubView: React.FC = () => {
         { id: 'linkedin-ads', name: 'LinkedIn Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional network marketing data', status: 'active', color: 'bg-blue-800' },
         { id: 'tiktok-ads', name: 'TikTok Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Short-form video marketing spend', status: 'active', color: 'bg-black' },
         { id: 'mailchimp', name: 'Mailchimp', category: 'marketing', icon: <Zap size={24} />, description: 'Email marketing and list performance', status: 'active', color: 'bg-yellow-400' },
+        { id: 'twitter-ads', name: 'X / Twitter Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Real-time social marketing analytics', status: 'active', color: 'bg-slate-900' },
+        { id: 'instagram', name: 'Instagram Biz', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional account reach and growth', status: 'active', color: 'bg-pink-600' },
+        { id: 'youtube', name: 'YouTube Analytics', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Video performance and audience depth', status: 'active', color: 'bg-red-700' },
 
         // Finance
         { id: 'stripe', name: 'Stripe', category: 'finance', icon: <CreditCard size={24} />, description: 'Subscription revenue and transactions', status: 'active', color: 'bg-indigo-600' },
@@ -195,6 +224,40 @@ const SourceHubView: React.FC = () => {
             </div>
 
             <div className="max-w-7xl mx-auto px-6 py-12">
+
+                {/* Active Pipelines Section */}
+                {existingIntegrations.length > 0 && (
+                    <div className="mb-16">
+                        <div className="flex items-center justify-between mb-6">
+                            <h2 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Live Data Pipelines</h2>
+                            <span className="bg-indigo-500/10 text-indigo-400 px-3 py-1 rounded-full text-[10px] font-bold border border-indigo-500/20">
+                                {existingIntegrations.length} Active Connections
+                            </span>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            {existingIntegrations.map((ext: any) => (
+                                <div
+                                    key={ext.id}
+                                    onClick={() => navigate(`/app/explore-connection/${ext.id}?workspace=${workspaceId}`)}
+                                    className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 flex items-center gap-4 hover:bg-white/[0.06] transition-all cursor-pointer group"
+                                >
+                                    <div className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-indigo-400">
+                                        <Database size={20} />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <h4 className="text-sm font-bold text-white truncate uppercase tracking-tight">{ext.name}</h4>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Sync Active</p>
+                                        </div>
+                                    </div>
+                                    <ArrowRight size={14} className="text-slate-600 group-hover:text-white transition-colors" />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex flex-col lg:flex-row gap-12">
 
                     {/* Sidebar Filters */}

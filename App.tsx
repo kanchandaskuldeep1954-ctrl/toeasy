@@ -22,6 +22,7 @@ import { DatasetLibrary } from './src/components/DatasetLibrary';
 import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
 import SourceHubView from './src/components/SourceHubView';
 import ConnectorSetupView from './src/components/ConnectorSetupView';
+import ConnectorExplorerView from './src/components/ConnectorExplorerView';
 import { QueryHistory } from './src/components/QueryHistory';
 import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
@@ -63,6 +64,7 @@ const AppLayout: React.FC = () => {
           <Route path="upload" element={<SourceHubView />} />
           <Route path="upload-file" element={<UploadViewPhase3 />} />
           <Route path="connect/:providerId" element={<ConnectorSetupView />} />
+          <Route path="explore-connection/:integrationId" element={<ConnectorExplorerView />} />
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
           <Route path="clean" element={<UniverCleanView />} />
           <Route path="clean-legacy" element={<CleanViewIntegrated />} />
