@@ -115,10 +115,8 @@ export const datasetAPI = {
   get: (workspaceId: string, datasetId: string) =>
     getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}`),
 
-  create: (workspaceId: string, data: FormData) =>
-    getClient().post(`/workspaces/${workspaceId}/datasets`, data, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }),
+  create: (workspaceId: string, data: { name: string; data: any[]; headers?: string[]; description?: string }) =>
+    getClient().post(`/workspaces/${workspaceId}/datasets`, data),
 
   update: (workspaceId: string, datasetId: string, data: any) =>
     getClient().put(`/workspaces/${workspaceId}/datasets/${datasetId}`, data),

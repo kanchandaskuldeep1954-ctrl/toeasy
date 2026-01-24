@@ -26,7 +26,11 @@ export async function checkSubscription(req: AuthRequest, res: Response, next: N
 
     // Check if subscription expired
     if (new Date(sub.renewal_date) < new Date()) {
-      return res.status(403).json({ error: 'Subscription expired' });
+      return res.status(403).json({
+        error: 'Subscription expired',
+        message: 'Your current subscription trial period has ended. Please upgrade your plan to continue using this service.',
+        code: 'SUBSCRIPTION_EXPIRED'
+      });
     }
 
     req.user.tier = sub.tier;

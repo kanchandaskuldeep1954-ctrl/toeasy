@@ -38,8 +38,12 @@ export const verifyWorkspaceOwnership = async (req: AuthRequest, res: any, next:
         const currentUserId = req.user?.id;
 
         if (ownerId.toString() !== currentUserId?.toString()) {
-            console.warn(`Unauthorized access attempt: User ${currentUserId} tried to access Workspace ${workspaceId} (owned by ${ownerId})`);
-            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+            console.warn(`Unauthorized access attempt: User ${currentUserId} (type: ${typeof currentUserId}) tried to access Workspace ${workspaceId} (owned by ${ownerId}, type: ${typeof ownerId})`);
+            return res.status(403).json({
+                error: 'Unauthorized access to workspace',
+                message: 'You do not have permission to access this workspace.',
+                details: { requested: workspaceId, owner: ownerId, current: currentUserId }
+            });
         }
 
         next();

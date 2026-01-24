@@ -126,27 +126,18 @@ export const UploadViewPhase3: React.FC = () => {
       }
 
       // Send parsed data as JSON
-      const response = await axios.post(
-        `${backendUrl}/workspaces/${workspaceId}/datasets`,
-        {
-          name: datasetName,
-          data: data,
-          headers: headers
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
+      const response = await datasetAPI.create(workspaceId, {
+        name: datasetName,
+        data: data,
+        headers: headers
+      });
 
       // Success - redirect to explore view
       setFile(null);
       setDatasetName('');
       navigate(`/app/clean?workspace=${workspaceId}&dataset=${response.data.id}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to upload dataset';
+    } catch (err: any) {
+      const message = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to upload dataset';
       setError(message);
     } finally {
       setUploading(false);
