@@ -155,10 +155,6 @@ const SourceHubView: React.FC = () => {
         { id: 'scraper', name: 'Web Scraper', category: 'storage', icon: <Globe size={24} />, description: 'AI-powered data extraction from URLs', status: 'active', color: 'bg-indigo-400', tags: ['scrape', 'spider', 'web', 'data-extraction'] },
         { id: 'webhook', name: 'Webhook', category: 'storage', icon: <Globe size={24} />, description: 'Push data directly via HTTP POST', status: 'active', color: 'bg-orange-600', tags: ['api', 'push', 'real-time', 'automation'] },
         { id: 'rest-api', name: 'Generic API', category: 'storage', icon: <Zap size={24} />, description: 'Connect to any JSON REST endpoint', status: 'active', color: 'bg-violet-500', tags: ['api', 'rest', 'json', 'pull'] },
-
-        { id: 'google-ads', name: 'Google Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Search and display campaign metrics', status: 'active', color: 'bg-red-500', tags: ['search', 'ppc', 'keywords', 'ads', 'google'] },
-        { id: 'ga4', name: 'Google Analytics 4', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Web and app behavioral analytics', status: 'active', color: 'bg-yellow-500', tags: ['traffic', 'events', 'behavior', 'google'] },
-        { id: 'linkedin-ads', name: 'LinkedIn Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Professional network marketing data', status: 'active', color: 'bg-blue-800', tags: ['b2b', 'ads', 'professional'] },
     ];
 
     const categories = [
