@@ -53,7 +53,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     const [config, setConfig] = useState<DashboardConfig | null>(null);
     const [loading, setLoading] = useState(true);
     const [showExportModal, setShowExportModal] = useState(false);
-    const [dashboardName, setDashboardName] = useState(dataset.name + ' Dashboard');
+    const cleanName = useMemo(() => {
+        return dataset.name
+            .replace(/[-_.]mock[-_.]data/gi, '')
+            .replace(/[._]sheet\d+/gi, '')
+            .replace(/[_-]+/g, ' ')
+            .trim();
+    }, [dataset.name]);
+
+    const [dashboardName, setDashboardName] = useState(cleanName + ' Dashboard');
     const [isEditingTitle, setIsEditingTitle] = useState(false);
 
     // Chart Validation & Quality Warnings
@@ -162,6 +170,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             if (onAIAction) onAIAction();
             const generatedConfig = await GroqService.suggestDashboard(dataset);
 
+            // AUTO-POPULATE FILTER OPTIONS: Convert "mock" filters into functional tools
+            if (generatedConfig.filters) {
+                generatedConfig.filters = generatedConfig.filters.map(f => {
+                    if (f.type === 'select' && (!f.options || f.options.length === 0)) {
+                        const uniqueVals = Array.from(new Set(dataset.data.map(r => String(r[f.column] || ''))))
+                            .filter(v => v !== '')
+                            .slice(0, 50); // Limit to 50 options for performance
+                        return { ...f, options: uniqueVals };
+                    }
+                    return f;
+                });
+            }
+
             if (!isMounted.current) return;
 
             setConfig(generatedConfig);
@@ -173,7 +194,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         finally { if (isMounted.current) setLoading(false); }
     };
 
-    useEffect(() => { initAnalysis(); }, [dataset.name]);
+    useEffect(() => {
+        setDashboardName(cleanName + ' Dashboard');
+        initAnalysis();
+    }, [dataset.name, cleanName]);
 
     // Validate charts and assess data quality
     useEffect(() => {
@@ -200,6 +224,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     const getChartData = useCallback((chart: ChartSpec) => {
         return aggregateData(chart, dataset, filteredData);
     }, [filteredData, dataset]);
+
+    const injectChartConfig = useCallback((chart: ChartSpec): ChartSpec => {
+        if (!isForecastMode) return chart;
+
+        // Add trendline only for quantitative charts
+        return {
+            ...chart,
+            chartConfig: {
+                ...chart.chartConfig,
+                trendline: 'ols'
+            }
+        };
+    }, [isForecastMode]);
 
     // --- Interaction Logic ---
     const handleChartClick = (data: any, chart: ChartSpec) => {
@@ -562,10 +599,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     });
 
     return (
-        <div className="h-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 pb-40 relative">
+        <div className={`h-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 pb-40 relative ${isCinematicMode ? 'overflow-hidden' : ''}`}>
+            {/* Note: Original Cinematic UI at bottom is used instead of fixed inset here to maintain consistent transition logic */}
 
             {/* Top Bar: Slicers & Context */}
-            <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-4 flex flex-col xl:flex-row justify-between gap-4 shadow-sm no-print">
+            <div className={`sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-4 md:px-8 py-4 flex flex-col xl:flex-row justify-between gap-4 shadow-sm no-print ${isCinematicMode ? 'hidden' : ''}`}>
                 <div className="flex flex-col md:flex-row items-start md:items-center gap-4 w-full xl:w-auto">
                     {isEditingTitle ? (
                         <div className="flex items-center gap-2 group">
@@ -631,7 +669,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     </div>
                 </div>
 
-                <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-x-auto no-scrollbar">
+                <div className="flex flex-col md:flex-row items-center gap-4 w-full xl:w-auto overflow-hidden">
                     {/* Perspective Tabs */}
                     <div className="flex gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl w-full md:w-auto shadow-inner">
                         {(['Overview', 'Financials', 'Operational', 'Forensic', 'Patterns'] as DashboardPerspective[]).map(p => (
@@ -756,8 +794,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                             <div className="hidden md:flex flex-col items-end">
                                 <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Status</span>
-                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${dataQuality.overallScore > 90 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
-                                    {dataQuality.overallScore > 90 ? 'Verified' : 'Review Required'}
+                                <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${dataQuality.overallScore >= 80 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500'}`}>
+                                    {dataQuality.overallScore >= 80 ? 'Verified' : 'Review Required'}
                                 </span>
                             </div>
                         </div>
@@ -893,13 +931,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                                 <div className="flex-1 w-full relative min-h-[300px] cursor-crosshair">
                                     <PlotlyChart
-                                        chart={{
-                                            ...chart,
-                                            chartConfig: {
-                                                ...chart.chartConfig,
-                                                trendline: isForecastMode ? 'ols' : chart.chartConfig?.trendline
-                                            }
-                                        }}
+                                        chart={injectChartConfig(chart)}
                                         data={data}
                                         onClick={(data) => handleChartClick(data, chart)}
                                     />
@@ -1020,7 +1052,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             </h2>
                             <div className="flex-1 min-h-[400px]">
                                 <PlotlyChart
-                                    chart={visibleCharts[activeCinematicIndex]}
+                                    chart={injectChartConfig(visibleCharts[activeCinematicIndex])}
                                     data={getChartData(visibleCharts[activeCinematicIndex])}
                                     height={500}
                                 />

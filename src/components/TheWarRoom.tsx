@@ -50,11 +50,20 @@ const TheWarRoom: React.FC = () => {
         }
     };
 
-    const automationFeed = [
-        { id: 1, type: 'alert', title: 'Data Drift Detected', desc: 'Revenue data in "Sales_v2" shifted +12% from forecast.', time: '2m ago' },
-        { id: 2, type: 'pulse', title: 'Zero-Touch Report', desc: 'Auto-generated Quarterly Risk Matrix for "HR_Main".', time: '1h ago' },
-        { id: 3, type: 'check', title: 'Integrity Pass', desc: 'Dataset "Inventory" passed deep semantic audit.', time: '3h ago' }
-    ];
+    const [feed, setFeed] = useState<any[]>([]);
+
+    useEffect(() => {
+        if (reports.length > 0) {
+            setFeed([
+                { id: 1, type: 'check', title: 'System Healthy', desc: `Proactive monitoring active for ${activeWorkspace?.name || 'Workspace'}.`, time: 'Now' },
+                { id: 2, type: 'pulse', title: 'Intelligence Ready', desc: `${reports.length} strategic reports available for review.`, time: 'Updated' }
+            ]);
+        } else {
+            setFeed([
+                { id: 1, type: 'pulse', title: 'Awaiting Initiation', desc: 'No active reports detected. Commission an audit to begin monitoring.', time: 'Idle' }
+            ]);
+        }
+    }, [reports, activeWorkspace]);
 
     return (
         <div className="min-h-full bg-slate-50 dark:bg-[#080c14] p-8 md:p-12 animate-in fade-in duration-700">
@@ -144,7 +153,7 @@ const TheWarRoom: React.FC = () => {
                     <div className="glass-card !p-8 rounded-[48px] border border-slate-200 dark:border-white/10 bg-white/50 dark:bg-slate-950/50">
                         <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 px-1">Tactical Pulse Feed</h3>
                         <div className="space-y-6">
-                            {automationFeed.map(item => (
+                            {feed.map(item => (
                                 <div key={item.id} className="relative pl-6 border-l border-slate-200 dark:border-slate-800 group">
                                     <div className={`absolute -left-1.5 top-0 w-3 h-3 rounded-full border-2 border-white dark:border-slate-950 ${item.type === 'alert' ? 'bg-rose-500' : item.type === 'pulse' ? 'bg-indigo-500' : 'bg-emerald-500'}`} />
                                     <div className="flex justify-between items-start mb-1">
