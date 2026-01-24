@@ -55,6 +55,8 @@ const SourceHubView: React.FC = () => {
         { id: 'hubspot', name: 'HubSpot', category: 'saas', icon: <Briefcase size={24} />, description: 'Marketing and sales funnel data', status: 'active', color: 'bg-orange-500' },
         { id: 'jira', name: 'Jira', category: 'saas', icon: <Layout size={24} />, description: 'Issue tracking and project velocity', status: 'beta', color: 'bg-blue-700' },
         { id: 'notion', name: 'Notion', category: 'saas', icon: <FileText size={24} />, description: 'Pages and database tables', status: 'coming_soon', color: 'bg-slate-900' },
+        { id: 'webhook', name: 'Webhook', category: 'storage', icon: <Globe size={24} />, description: 'Push data directly via HTTP POST', status: 'active', color: 'bg-orange-600' },
+        { id: 'rest-api', name: 'Generic API', category: 'storage', icon: <Zap size={24} />, description: 'Connect to any JSON REST endpoint', status: 'active', color: 'bg-violet-500' },
 
         // Marketing/Ads
         { id: 'meta-ads', name: 'Meta Ads', category: 'marketing', icon: <BarChart3 size={24} />, description: 'Facebook and Instagram ad performance', status: 'beta', color: 'bg-blue-600' },
@@ -138,8 +140,8 @@ const SourceHubView: React.FC = () => {
                                             key={cat.id}
                                             onClick={() => setActiveCategory(cat.id)}
                                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeCategory === cat.id
-                                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                                                    : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
                                                 }`}
                                         >
                                             {cat.icon}

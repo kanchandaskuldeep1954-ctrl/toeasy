@@ -76,6 +76,22 @@ const CONNECTOR_CONFIGS: Record<string, { name: string, fields: FormField[] }> =
             { key: 'username', label: 'Username', type: 'text', placeholder: 'service_user' },
             { key: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
         ]
+    },
+    webhook: {
+        name: 'Incoming Webhook',
+        fields: [
+            { key: 'name', label: 'Receiver Name', type: 'text', placeholder: 'e.g. Sales Pipeline' },
+            { key: 'secret', label: 'Auth Secret (Optional)', type: 'password', placeholder: 'Custom Token' },
+        ]
+    },
+    'rest-api': {
+        name: 'REST API',
+        fields: [
+            { key: 'url', label: 'Endpoint URL', type: 'text', placeholder: 'https://api.service.com/v1/data' },
+            { key: 'method', label: 'HTTP Method', type: 'text', placeholder: 'GET or POST' },
+            { key: 'headerName', label: 'Auth Header', type: 'text', placeholder: 'Authorization or X-API-Key' },
+            { key: 'headerValue', label: 'Auth Value', type: 'password', placeholder: 'Bearer ...' },
+        ]
     }
 };
 
