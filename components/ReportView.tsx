@@ -34,12 +34,13 @@ const createFallbackReport = (dataset: Dataset): StrategicReport => ({
     version: '1.0'
 });
 
-type ReportType = 'strategic' | 'operational' | 'financial' | 'quality' | 'risk';
+// unified report structure
+// type ReportType = 'strategic' | 'operational' | 'financial' | 'quality' | 'risk';
 
 const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }) => {
     const [report, setReport] = useState<StrategicReport | null>(null);
     const [loading, setLoading] = useState(true);
-    const [reportType, setReportType] = useState<ReportType>('strategic');
+    // const [reportType, setReportType] = useState<ReportType>('strategic');
     const [error, setError] = useState<string | null>(null);
     const [retryCount, setRetryCount] = useState(0);
     const [activeSection, setActiveSection] = useState<string>('');
@@ -55,13 +56,13 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     ];
 
     // Generate report with timeout
-    const generateReportWithTimeout = async (type: ReportType, timeoutMs: number = 45000): Promise<StrategicReport> => {
+    const generateReportWithTimeout = async (timeoutMs: number = 45000): Promise<StrategicReport> => {
         return new Promise((resolve, reject) => {
             const timeoutId = setTimeout(() => {
                 reject(new Error(`Report generation timed out after ${timeoutMs / 1000} seconds`));
             }, timeoutMs);
 
-            GroqService.generateReport(dataset, type)
+            GroqService.generateReport(dataset)
                 .then(result => {
                     clearTimeout(timeoutId);
                     resolve(result);
@@ -80,13 +81,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         setRetryCount(prev => prev + 1);
     };
 
-    const handleReportTypeChange = (type: ReportType) => {
-        setReportType(type);
-        setLoading(true);
-        setReport(null);
-        setError(null);
-        setRetryCount(0);
-    };
+    /* Redundant: report types removed */
 
     // Use fallback report
     const useFallback = () => {
@@ -107,7 +102,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         if (!dataset) return;
 
         // Skip if report already exists for this type
-        if (report && dataset.strategicReport && (dataset as any).lastReportType === reportType) {
+        if (report && dataset.strategicReport) {
             return;
         }
 
@@ -120,7 +115,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 if (onAIAction) onAIAction();
 
                 // Try with 45 second timeout
-                const content = await generateReportWithTimeout(reportType, 45000);
+                const content = await generateReportWithTimeout(45000);
 
                 if (!isMounted.current) return;
 
@@ -132,7 +127,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 setReport(content);
                 setActiveSection(content.sections?.[0]?.id || '');
                 setError(null);
-                if (onUpdate) onUpdate({ ...dataset, strategicReport: content, lastReportType: reportType } as any);
+                if (onUpdate) onUpdate({ ...dataset, strategicReport: content } as any);
 
             } catch (e: any) {
                 if (!isMounted.current) return;
@@ -159,7 +154,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         };
 
         generate();
-    }, [dataset?.name, retryCount, reportType]);
+    }, [dataset?.name, retryCount]);
 
     const renderChart = (chart: ChartSpec) => {
         return (
@@ -303,7 +298,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in bg-slate-100 dark:bg-slate-950">
             <div className="w-20 h-20 border-[6px] border-indigo-100 dark:border-indigo-900/30 border-t-indigo-600 rounded-full animate-spin" />
             <div className="text-center space-y-2">
-                <h3 className="text-lg font-black uppercase tracking-widest text-indigo-600">Generating {reportType} Report</h3>
+                <h3 className="text-lg font-black uppercase tracking-widest text-indigo-600">Generating Intelligence Report</h3>
                 <p className="text-xs font-medium text-slate-400">Analyzing {(dataset?.data?.length || 0).toLocaleString()} records • Calculating KPIs • Building Visuals</p>
                 <p className="text-[10px] text-slate-300 mt-2">This may take up to 45 seconds...</p>
             </div>
@@ -350,24 +345,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             {/* Sticky Table of Contents (Desktop) */}
             <aside className="hidden xl:flex w-72 flex-col gap-6 p-8 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-y-auto shrink-0 z-10 print:hidden">
                 <div className="space-y-1">
-                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Report Structure</h2>
+                    <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em]">Table of Contents</h2>
                     <p className="text-sm font-bold text-slate-900 dark:text-white truncate" title={report?.title}>{dataset?.name || 'Untitled'}</p>
-                </div>
-
-                {/* Report Type Selector */}
-                <div className="flex flex-col gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
-                    {(['strategic', 'operational', 'financial', 'quality', 'risk'] as ReportType[]).map(type => (
-                        <button
-                            key={type}
-                            onClick={() => handleReportTypeChange(type)}
-                            className={`px-3 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg text-left transition-all ${reportType === type
-                                ? 'bg-indigo-600 text-white shadow-md'
-                                : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
-                                }`}
-                        >
-                            {type} Report
-                        </button>
-                    ))}
                 </div>
 
                 <nav className="space-y-1">
@@ -442,31 +421,6 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
                         <div className="space-y-8">
                             {/* 1. Report Type Selector (Mobile) */}
-                            <div>
-                                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Report Type</h4>
-                                <div className="flex flex-col gap-2">
-                                    {(['strategic', 'operational', 'financial', 'quality', 'risk'] as ReportType[]).map(type => (
-                                        <button
-                                            key={type}
-                                            onClick={() => {
-                                                handleReportTypeChange(type);
-                                                setIsMobileMenuOpen(false);
-                                            }}
-                                            className={`px-4 py-3 text-xs font-bold uppercase tracking-wider rounded-xl text-left transition-all ${reportType === type
-                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30'
-                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                                }`}
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <span>{type} Report</span>
-                                                {reportType === type && <span>✓</span>}
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* 2. TOC (Mobile) */}
                             <div>
                                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-3">Sections</h4>
                                 <nav className="space-y-1">
@@ -551,7 +505,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     {/* Cover Page */}
                     <div className="min-h-[60vh] flex flex-col justify-center border-b border-slate-200 dark:border-slate-800 pb-12 print:min-h-0 print:pb-4 print:border-none">
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest w-fit mb-6 print:hidden">
-                            {reportType} Intelligence v{report.version}
+                            Intelligence Report v{report.version}
                         </div>
                         <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.9] mb-8">
                             {report.title}
