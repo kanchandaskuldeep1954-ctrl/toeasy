@@ -114,6 +114,42 @@ const CONNECTOR_CONFIGS: Record<string, { name: string, fields: FormField[] }> =
             { key: 'advertiserId', label: 'Advertiser ID', type: 'text', placeholder: '6789...' },
         ]
     },
+    netsuite: {
+        name: 'Oracle NetSuite',
+        fields: [
+            { key: 'accountId', label: 'Account ID', type: 'text', placeholder: '1234567_SB1' },
+            { key: 'consumerKey', label: 'Consumer Key', type: 'password', placeholder: '••••••••' },
+            { key: 'consumerSecret', label: 'Consumer Secret', type: 'password', placeholder: '••••••••' },
+            { key: 'tokenId', label: 'Token ID', type: 'password', placeholder: '••••••••' },
+            { key: 'tokenSecret', label: 'Token Secret', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    sap: {
+        name: 'SAP S/4HANA',
+        fields: [
+            { key: 'host', label: 'Application Server', type: 'text', placeholder: 'sap.company.com' },
+            { key: 'client', label: 'Client Number', type: 'number', placeholder: '100' },
+            { key: 'username', label: 'User', type: 'text', placeholder: 'BASIS_USER' },
+            { key: 'password', label: 'Password', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    'aws-s3': {
+        name: 'Amazon S3',
+        fields: [
+            { key: 'bucket', label: 'Bucket Name', type: 'text', placeholder: 'my-datasets' },
+            { key: 'region', label: 'Region', type: 'text', placeholder: 'us-east-1' },
+            { key: 'accessKey', label: 'Access Key ID', type: 'text', placeholder: 'AKIA...' },
+            { key: 'secretKey', label: 'Secret Access Key', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    scraper: {
+        name: 'AI Web Scraper',
+        fields: [
+            { key: 'url', label: 'Target Website URL', type: 'text', placeholder: 'https://example.com/products' },
+            { key: 'topic', label: 'Data to Extract', type: 'text', placeholder: 'Product names, prices, and descriptions' },
+            { key: 'rows', label: 'Target Row Count', type: 'number', placeholder: '100' },
+        ]
+    },
     webhook: {
         name: 'Incoming Webhook',
         fields: [
