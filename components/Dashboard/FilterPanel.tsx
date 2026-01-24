@@ -16,9 +16,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
     filters, activeFilters, onFilterChange, onClearAll, onAddFilter, onRemoveFilter, isEditMode
 }) => {
     return (
-        <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 tracking-widest mr-2">Filters:</span>
-
+        <div className="flex flex-wrap gap-1.5 items-center">
+            {/* Unified Inline Control Stack */}
             {filters.map(filter => {
                 const value = activeFilters[filter.column] || '';
 
