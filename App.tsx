@@ -20,6 +20,7 @@ import { UrlSync } from './src/components/UrlSync';
 import { WorkspacesView } from './src/components/WorkspacesView';
 import { DatasetLibrary } from './src/components/DatasetLibrary';
 import { UploadViewPhase3 } from './src/components/UploadViewPhase3';
+import SourceHubView from './src/components/SourceHubView';
 import { QueryHistory } from './src/components/QueryHistory';
 import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
@@ -58,7 +59,8 @@ const AppLayout: React.FC = () => {
           <Route path="profile" element={<ProfilePage />} />
 
           {/* Data Operations */}
-          <Route path="upload" element={<UploadViewPhase3 />} />
+          <Route path="upload" element={<SourceHubView />} />
+          <Route path="upload-file" element={<UploadViewPhase3 />} />
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
           <Route path="clean" element={<UniverCleanView />} />
           <Route path="clean-legacy" element={<CleanViewIntegrated />} />
