@@ -105,6 +105,22 @@ const SourceHubView: React.FC = () => {
         { id: 'dropbox', name: 'Dropbox', category: 'storage', icon: <Cloud size={24} />, description: 'Shared cloud drives and folders', status: 'active', color: 'bg-blue-600' },
         { id: 'ftp', name: 'FTP/SFTP', category: 'storage', icon: <Globe size={24} />, description: 'Legacy file transfer servers', status: 'active', color: 'bg-slate-700' },
 
+        // Banking & FinTech (Specialized)
+        { id: 'plaid', name: 'Plaid', category: 'finance', icon: <CreditCard size={24} />, description: 'Connect to 12,000+ financial institutions', status: 'active', color: 'bg-black' },
+        { id: 'stripe-issuing', name: 'Stripe Issuing', category: 'finance', icon: <CreditCard size={24} />, description: 'Commercial card program data', status: 'active', color: 'bg-indigo-400' },
+
+        // HR & People
+        { id: 'workday', name: 'Workday', category: 'saas', icon: <Briefcase size={24} />, description: 'Enterprise human capital management', status: 'active', color: 'bg-orange-600' },
+        { id: 'bamboohr', name: 'BambooHR', category: 'saas', icon: <Plus size={24} />, description: 'HR software for growing businesses', status: 'active', color: 'bg-green-600' },
+
+        // Healthcare (Industry Specific)
+        { id: 'hl7-epic', name: 'Epic / HL7', category: 'saas', icon: <Shield size={24} />, description: 'Electronic health record data (FHIR/HL7)', status: 'active', color: 'bg-red-600' },
+        { id: 'fitbit', name: 'Fitbit Care', category: 'saas', icon: <Zap size={24} />, description: 'Health and wellness telemetry data', status: 'active', color: 'bg-cyan-500' },
+
+        // Logistics & Supply Chain
+        { id: 'fedex', name: 'FedEx Data', category: 'saas', icon: <Globe size={24} />, description: 'Shipping tracking and logistics spend', status: 'active', color: 'bg-purple-900' },
+        { id: 'ups', name: 'UPS Quantum', category: 'saas', icon: <Globe size={24} />, description: 'Global logistics and package intelligence', status: 'active', color: 'bg-amber-900' },
+
         // Universal & Special
         { id: 'scraper', name: 'Web Scraper', category: 'storage', icon: <Globe size={24} />, description: 'AI-powered data extraction from URLs', status: 'active', color: 'bg-indigo-400' },
         { id: 'webhook', name: 'Webhook', category: 'storage', icon: <Globe size={24} />, description: 'Push data directly via HTTP POST', status: 'active', color: 'bg-orange-600' },

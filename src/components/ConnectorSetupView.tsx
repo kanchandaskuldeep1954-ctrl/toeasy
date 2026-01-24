@@ -165,6 +165,36 @@ const CONNECTOR_CONFIGS: Record<string, { name: string, fields: FormField[] }> =
             { key: 'headerName', label: 'Auth Header', type: 'text', placeholder: 'Authorization or X-API-Key' },
             { key: 'headerValue', label: 'Auth Value', type: 'password', placeholder: 'Bearer ...' },
         ]
+    },
+    plaid: {
+        name: 'Plaid Business',
+        fields: [
+            { key: 'clientId', label: 'Client ID', type: 'text', placeholder: '••••••••' },
+            { key: 'secret', label: 'Secret Key', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    workday: {
+        name: 'Workday HR',
+        fields: [
+            { key: 'tenant', label: 'Workday Tenant Name', type: 'text', placeholder: 'company_tenant' },
+            { key: 'clientId', label: 'OAuth Client ID', type: 'text', placeholder: '••••••••' },
+            { key: 'secret', label: 'OAuth Client Secret', type: 'password', placeholder: '••••••••' },
+        ]
+    },
+    'hl7-epic': {
+        name: 'Epic FHIR / HL7',
+        fields: [
+            { key: 'baseUrl', label: 'FHIR Base URL', type: 'text', placeholder: 'https://fhir.epic.com/interconnect...' },
+            { key: 'clientId', label: 'App Client ID', type: 'text', placeholder: '••••••••' },
+        ]
+    },
+    fedex: {
+        name: 'FedEx Tracking API',
+        fields: [
+            { key: 'apiKey', label: 'API Key', type: 'text', placeholder: '••••••••' },
+            { key: 'secretKey', label: 'Secret Key', type: 'password', placeholder: '••••••••' },
+            { key: 'accountNumber', label: 'Account Number', type: 'number', placeholder: '123456' },
+        ]
     }
 };
 
@@ -182,7 +212,8 @@ const ConnectorSetupView: React.FC = () => {
     const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [errorMessage, setErrorMessage] = useState('');
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+    // @ts-ignore
+    const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
     useEffect(() => {
         if (!config && providerId) {
