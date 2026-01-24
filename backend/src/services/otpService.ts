@@ -13,6 +13,12 @@ class OTPService {
                 user: config.email.user,
                 pass: config.email.pass,
             } : undefined,
+            // Production readiness: shorter timeouts to prevent blocking API
+            connectionTimeout: 15000, // 15s
+            greetingTimeout: 10000,   // 10s
+            socketTimeout: 15000,     // 15s
+            debug: process.env.NODE_ENV !== 'production',
+            logger: process.env.NODE_ENV !== 'production'
         });
     }
 
@@ -48,9 +54,12 @@ class OTPService {
         try {
             await this.transporter.sendMail(mailOptions);
             return true;
-        } catch (error) {
+        } catch (error: any) {
             console.error('Failed to send OTP email:', error);
-            throw new Error('Failed to send verification email');
+            if (error.code === 'ETIMEDOUT') {
+                throw new Error('Connection to email server timed out. Check your SMTP settings and port.');
+            }
+            throw new Error(`Email delivery failed: ${error.message}`);
         }
     }
 }
