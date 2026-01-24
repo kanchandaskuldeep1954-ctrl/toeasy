@@ -1,10 +1,25 @@
 import { Router } from 'express';
 import { integrationService } from '../services/integrationService.js';
+import { integrationHealthService } from '../services/integrationHealthService.js';
 import knex from 'knex';
 import knexConfig from '../../knexfile.js';
 
 const db = knex(knexConfig.production || knexConfig.development);
 const router = Router();
+
+import { integrationAnalyticsService } from '../services/integrationAnalyticsService.js';
+
+// Get sync throughput analytics
+router.get('/analytics/throughput', async (req: any, res) => {
+    try {
+        const { workspaceId } = req.query;
+        if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
+        const throughput = await integrationAnalyticsService.getWorkspaceThroughput(workspaceId.toString(), db);
+        res.json(throughput);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+});
 
 // Create new integration
 router.post('/', async (req: any, res) => {
@@ -39,6 +54,28 @@ router.get('/', async (req: any, res) => {
         res.json(list);
     } catch (error: any) {
         res.status(500).json({ message: error.message || 'Failed to list integrations' });
+    }
+});
+
+// Health check for specific integration
+router.get('/:id/health', async (req: any, res) => {
+    try {
+        const status = await integrationHealthService.checkHealth(req.params.id, db);
+        res.json(status);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+// Health summary for all integrations in workspace
+router.get('/health-summary', async (req: any, res) => {
+    try {
+        const { workspaceId } = req.query;
+        if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
+        const summary = await integrationHealthService.getSystemHealthSummary(workspaceId.toString(), db);
+        res.json(summary);
+    } catch (error: any) {
+        res.status(500).json({ message: error.message });
     }
 });
 
