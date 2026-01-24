@@ -145,17 +145,24 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
     const dataset = result.rows[0];
 
     // Parse raw_data safely - it might already be an object or a JSON string
+    // Robust parsing for raw_data
     let parsedRawData = [];
     try {
       if (typeof dataset.raw_data === 'string') {
-        parsedRawData = JSON.parse(dataset.raw_data || '[]');
+        const firstPass = JSON.parse(dataset.raw_data || '[]');
+        // Handle double-stringification
+        parsedRawData = typeof firstPass === 'string' ? JSON.parse(firstPass) : firstPass;
       } else if (Array.isArray(dataset.raw_data)) {
         parsedRawData = dataset.raw_data;
       } else if (dataset.raw_data && typeof dataset.raw_data === 'object') {
         parsedRawData = [dataset.raw_data];
       }
-    } catch (parseErr) {
-      console.warn('Failed to parse raw_data, using empty array:', parseErr);
+
+      if (!Array.isArray(parsedRawData)) {
+        parsedRawData = [];
+      }
+    } catch (e) {
+      console.error('Raw data parsing error for dataset', req.params.datasetId, e);
       parsedRawData = [];
     }
 
@@ -442,7 +449,8 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
            health_score = COALESCE($3, health_score),
            cleaning_confirmed = COALESCE($4, cleaning_confirmed),
            raw_data = COALESCE($5, raw_data),
-           headers = COALESCE($6, headers),
+        cleaned_data = CASE WHEN $5 IS NOT NULL THEN NULL ELSE cleaned_data END,
+        headers = COALESCE($6, headers),
            quarantined_data = COALESCE($7, quarantined_data),
            updated_at = NOW()
        WHERE id = $8 AND workspace_id = $9
@@ -452,7 +460,7 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
         description !== undefined ? description : null,
         health_score !== undefined ? health_score : null,
         cleaning_confirmed !== undefined ? cleaning_confirmed : null,
-        raw_data !== undefined ? (typeof raw_data === 'string' ? raw_data : JSON.stringify(raw_data)) : null,
+        raw_data !== undefined ? (typeof raw_data === 'string' ? JSON.parse(raw_data) : raw_data) : null,
         headers !== undefined ? (typeof headers === 'string' ? headers : JSON.stringify(headers)) : null,
         quarantined_data !== undefined ? (typeof quarantined_data === 'string' ? quarantined_data : JSON.stringify(quarantined_data)) : null,
         req.params.datasetId,

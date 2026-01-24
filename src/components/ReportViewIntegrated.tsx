@@ -32,15 +32,28 @@ const ReportViewIntegrated: React.FC = () => {
             );
 
             const data = response.data;
-            const rawData = data.raw_data || data.data || [];
-            const headers = data.headers || Object.keys(rawData?.[0] || {});
+
+            const safeParse = (val: any) => {
+                if (!val) return [];
+                if (typeof val === 'string') {
+                    try {
+                        const first = JSON.parse(val);
+                        return typeof first === 'string' ? JSON.parse(first) : first;
+                    } catch (e) { return []; }
+                }
+                return val;
+            };
+
+            const rawData = safeParse(data.raw_data || data.data);
+            const headers = safeParse(data.headers);
+            const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
             // Transform backend response to Dataset format
             const transformedDataset: Dataset = {
                 id: data.id || datasetId,
                 name: data.name || 'Dataset',
                 sourceType: data.source_type || 'csv',
-                headers: headers,
+                headers: finalHeaders,
                 data: rawData,
                 stats: data.stats || [],
                 createdAt: data.created_at || new Date().toISOString(),
