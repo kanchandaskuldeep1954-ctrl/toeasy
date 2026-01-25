@@ -272,8 +272,8 @@ export const ProfilePage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
-                  { label: 'Workspaces Created', value: usage?.stats.workspaces || 0, color: 'indigo', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', target: usage?.limits.maxWorkspaces || 1 },
-                  { label: 'AI Queries (Last 24h)', value: usage?.stats.queriesExecuted || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', target: usage?.limits.aiQueriesPerDay || 10 }
+                  { label: 'Workspaces Created', value: usage?.stats.workspaces || 0, color: 'indigo', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', target: usage?.limits?.maxWorkspaces || 1 },
+                  { label: 'AI Queries (Last 24h)', value: usage?.stats.queriesExecuted || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', target: usage?.limits?.aiQueriesPerDay || 10 }
                 ].map((stat, idx) => (
                   <div key={idx} className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800/50 group hover:border-indigo-500/30 transition-all">
                     <div className="flex justify-between items-start mb-4">
