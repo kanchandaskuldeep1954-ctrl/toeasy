@@ -76,33 +76,33 @@ export const SignupPage: React.FC = () => {
 
   if (otpSent) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
         {/* Background Orbs */}
-        <div className="absolute top-0 -right-4 w-72 h-72 bg-indigo-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-0 -left-4 w-72 h-72 bg-emerald-500/10 rounded-full blur-[120px]" />
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[120px]" />
+        <div className="absolute bottom-0 -left-4 w-72 h-72 bg-emerald-500/10 dark:bg-emerald-500/20 rounded-full blur-[120px]" />
 
         <div className="w-full max-w-md relative z-10">
-          <div className="bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-white/10">
-            <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tight">Verify Email</h1>
-            <p className="text-slate-400 text-center mb-8 text-sm font-medium">
-              Code sent to <span className="text-indigo-400 font-bold">{email}</span>
+          <div className="bg-white dark:bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-white/10 transition-all">
+            <h1 className="text-3xl font-black text-slate-900 dark:text-white text-center mb-2 uppercase tracking-tight">Verify Email</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-center mb-8 text-sm font-medium">
+              Code sent to <span className="text-indigo-600 dark:text-indigo-400 font-bold">{email}</span>
             </p>
 
             {(formError || error) && (
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl mb-6 text-sm">
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 px-4 py-3 rounded-xl mb-6 text-sm">
                 {formError || error}
               </div>
             )}
 
             <form onSubmit={handleVerifyOTP} className="space-y-6">
               <div>
-                <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">One-Time Password</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">One-Time Password</label>
                 <input
                   type="text"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   disabled={isLoading}
-                  className="w-full text-center text-3xl tracking-[0.5em] px-4 py-5 bg-slate-900/50 border border-slate-800 rounded-2xl text-white placeholder-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 font-mono transition-all"
+                  className="w-full text-center text-3xl tracking-[0.5em] px-4 py-5 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-2xl text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-800 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 font-mono transition-all"
                   placeholder="000000"
                 />
               </div>
@@ -119,9 +119,9 @@ export const SignupPage: React.FC = () => {
             <div className="mt-8 text-center">
               <button
                 onClick={handleResendOTP}
-                className="text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-white transition-colors"
+                className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-white transition-colors"
               >
-                Didn't receive code? <span className="text-indigo-400 underline underline-offset-4">Resend</span>
+                Didn't receive code? <span className="text-indigo-600 dark:text-indigo-400 underline underline-offset-4">Resend</span>
               </button>
             </div>
           </div>
@@ -131,67 +131,67 @@ export const SignupPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center p-4 relative overflow-hidden transition-colors duration-500">
       {/* Background Orbs */}
-      <div className="absolute top-0 -left-4 w-72 h-72 bg-indigo-500/10 rounded-full blur-[120px]" />
-      <div className="absolute bottom-0 -right-4 w-72 h-72 bg-purple-500/10 rounded-full blur-[120px]" />
+      <div className="absolute top-0 -left-4 w-72 h-72 bg-indigo-500/10 dark:bg-indigo-500/20 rounded-full blur-[120px]" />
+      <div className="absolute bottom-0 -right-4 w-72 h-72 bg-purple-500/10 dark:bg-purple-500/20 rounded-full blur-[120px]" />
 
       <div className="w-full max-w-md relative z-10">
-        <div className="bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-white/10">
-          <h1 className="text-3xl font-black text-white text-center mb-2 uppercase tracking-tight">Create Account</h1>
-          <p className="text-slate-400 text-center mb-8 text-sm uppercase tracking-widest font-medium">Join the Data OS</p>
+        <div className="bg-white dark:bg-white/5 backdrop-blur-2xl rounded-3xl p-8 shadow-2xl border border-slate-200 dark:border-white/10 transition-all">
+          <h1 className="text-3xl font-black text-slate-900 dark:text-white text-center mb-2 uppercase tracking-tight">Create Account</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-center mb-8 text-sm uppercase tracking-widest font-medium">Join the Data OS</p>
 
           {(formError || error) && (
-            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 px-4 py-3 rounded-xl mb-6 text-sm">
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 px-4 py-3 rounded-xl mb-6 text-sm">
               {formError || error}
             </div>
           )}
 
           <form onSubmit={handleRegister} className="space-y-5">
             <div>
-              <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Full Name</label>
+              <label className="block text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Full Name</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isLoading}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
                 placeholder="Elon Musk"
               />
             </div>
 
             <div>
-              <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Work Email</label>
+              <label className="block text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Work Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
-                className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
                 placeholder="elon@spacex.com"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Password</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Password</label>
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   disabled={isLoading}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
                   placeholder="••••••••"
                 />
               </div>
               <div>
-                <label className="block text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Confirm</label>
+                <label className="block text-slate-500 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-2">Confirm</label>
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
                   disabled={isLoading}
-                  className="w-full px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                  className="w-full px-4 py-3 bg-slate-100 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
                   placeholder="••••••••"
                 />
               </div>
@@ -206,9 +206,9 @@ export const SignupPage: React.FC = () => {
             </button>
           </form>
 
-          <p className="text-slate-500 text-center mt-8 text-xs font-medium">
+          <p className="text-slate-500 dark:text-slate-600 text-center mt-8 text-xs font-medium">
             Already have an account?{' '}
-            <Link to="/login" className="text-indigo-400 hover:text-white font-bold transition-colors">
+            <Link to="/login" className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-white font-bold transition-colors">
               LOGIN
             </Link>
           </p>
