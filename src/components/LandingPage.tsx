@@ -69,11 +69,11 @@ const LandingPage: React.FC = () => {
             </section>
 
             {/* Features Section */}
-            <section className="py-24 px-4 bg-white dark:bg-slate-900">
+            <section id="features" className="py-24 px-4 bg-white dark:bg-slate-900">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16 space-y-4">
-                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white">Built for modern data teams</h2>
-                        <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto">Everything you need to manage, clean, and analyze your data at scale.</p>
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Everything you need</h2>
+                        <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto font-medium">Toeasy AI provides a complete suite of tools to automate your data governance.</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -82,27 +82,53 @@ const LandingPage: React.FC = () => {
                                 title: 'AI Cleaning',
                                 desc: 'Automatically detect and fix anomalies, missing values, and inconsistent formatting with our advanced LLM engine.',
                                 icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
-                                color: 'blue'
+                                color: 'indigo'
                             },
                             {
                                 title: 'Smart Visuals',
                                 desc: 'Generate beautiful, interactive D3.js and Plotly charts that respond to your data insights automatically.',
-                                icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z',
+                                icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 v14a2 2 0 002 2h2a2 2 0 002-2z',
                                 color: 'purple'
                             },
                             {
-                                title: 'Data Workflows',
-                                desc: 'Build automated pipelines to process data from multiple sources and export them to your favorite tools.',
+                                title: 'Enterprise Logic',
+                                desc: 'Build automated pipelines to process data from multiple sources with bank-grade security protocols.',
                                 icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15',
-                                color: 'orange'
+                                color: 'blue'
                             }
                         ].map((feature, idx) => (
                             <div key={idx} className="p-8 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 group">
-                                <div className={`w-12 h-12 rounded-2xl bg-${feature.color}-500/10 flex items-center justify-center text-${feature.color}-600 mb-6 group-hover:scale-110 transition-transform`}>
+                                <div className={`w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 mb-6 group-hover:scale-110 transition-transform`}>
                                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feature.icon} /></svg>
                                 </div>
-                                <h3 className="text-xl font-black mb-3 text-slate-900 dark:text-white">{feature.title}</h3>
+                                <h3 className="text-xl font-black mb-3 text-slate-900 dark:text-white uppercase tracking-tight">{feature.title}</h3>
                                 <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">{feature.desc}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </section>
+
+            {/* How it Works Section */}
+            <section id="how-it-works" className="py-24 px-4 bg-slate-50 dark:bg-slate-950">
+                <div className="max-w-7xl mx-auto text-center">
+                    <div className="space-y-4 mb-16">
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">The Toeasy Engine</h2>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">How we turn raw numbers into business strategy in three simple steps.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12">
+                        {[
+                            { step: '01', title: 'Connect Data', desc: 'Securely upload CSVs or connect your cloud databases like Postgres, Snowflake, or BigQuery.' },
+                            { step: '02', title: 'AI Orchestration', desc: 'Our AI engine scans for errors, enriches fields, and builds a relational map of your datasets automatically.' },
+                            { step: '03', title: 'Instant Insights', desc: 'Ask natural language questions like "What is our churn?" and get instant SQL-backed charts and reports.' }
+                        ].map((item, idx) => (
+                            <div key={idx} className="relative group p-4">
+                                <div className="text-7xl font-black text-indigo-600/10 absolute -top-8 left-1/2 -translate-x-1/2 group-hover:text-indigo-600/20 transition-colors">
+                                    {item.step}
+                                </div>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-4 relative">{item.title}</h3>
+                                <p className="text-slate-500 dark:text-slate-400 leading-relaxed font-medium">{item.desc}</p>
                             </div>
                         ))}
                     </div>

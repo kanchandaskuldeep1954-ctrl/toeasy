@@ -25,8 +25,8 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                         </div>
 
                         <div className="hidden md:flex items-center gap-8">
-                            <Link to="/" className="text-sm font-semibold hover:text-indigo-600 transition-colors">Features</Link>
-                            <Link to="/" className="text-sm font-semibold hover:text-indigo-600 transition-colors">How it Works</Link>
+                            <a href="#features" className="text-sm font-semibold hover:text-indigo-600 transition-colors">Features</a>
+                            <a href="#how-it-works" className="text-sm font-semibold hover:text-indigo-600 transition-colors">How it Works</a>
                             <Link to="/contact" className="text-sm font-semibold hover:text-indigo-600 transition-colors">Contact Us</Link>
                         </div>
 
@@ -63,8 +63,8 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                     <div className="absolute top-16 left-0 w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-xl md:hidden animate-in">
                         <div className="p-4 space-y-4">
                             <div className="flex flex-col space-y-3">
-                                <Link to="/" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Features</Link>
-                                <Link to="/" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>How it Works</Link>
+                                <a href="#features" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Features</a>
+                                <a href="#how-it-works" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>How it Works</a>
                                 <Link to="/contact" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Contact Us</Link>
                             </div>
                             <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-col gap-3">
