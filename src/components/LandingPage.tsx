@@ -142,13 +142,29 @@ const LandingPage: React.FC = () => {
                         >
                             {[...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
-                                    {['PostgreSQL', 'Snowflake', 'BigQuery', 'MySQL', 'MongoDB', 'Redis', 'AWS S3', 'Stripe', 'Salesforce'].map((name) => (
-                                        <div key={name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
-                                            <div className="w-10 h-10 rounded-xl bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-black text-sm group-hover/item:bg-indigo-600 group-hover/item:text-white transition-all shadow-sm group-hover/item:scale-110">
-                                                {name[0]}
+                                    {[
+                                        { name: 'PostgreSQL', slug: 'postgresql' },
+                                        { name: 'Snowflake', slug: 'snowflake' },
+                                        { name: 'BigQuery', slug: 'googlebigquery' },
+                                        { name: 'MySQL', slug: 'mysql' },
+                                        { name: 'MongoDB', slug: 'mongodb' },
+                                        { name: 'Redis', slug: 'redis' },
+                                        { name: 'AWS', slug: 'amazonwebservices' },
+                                        { name: 'Stripe', slug: 'stripe' },
+                                        { name: 'Salesforce', slug: 'salesforce' },
+                                        { name: 'Tableau', slug: 'tableau' },
+                                        { name: 'PowerBI', slug: 'powerbi' },
+                                    ].map((brand) => (
+                                        <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
+                                            <div className="w-10 h-10 flex items-center justify-center p-1.5 transition-all group-hover/item:scale-125">
+                                                <img
+                                                    src={`https://cdn.simpleicons.org/${brand.slug}/6366f1`}
+                                                    alt={brand.name}
+                                                    className="w-full h-full object-contain filter group-hover/item:filter-none transition-all duration-300"
+                                                />
                                             </div>
                                             <span className="font-black text-base text-slate-600 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white tracking-tight">
-                                                {name}
+                                                {brand.name}
                                             </span>
                                         </div>
                                     ))}
