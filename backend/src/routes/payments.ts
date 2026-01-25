@@ -50,17 +50,45 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     if (interval === 'year') {
       // RECURRING SUBSCRIPTION LOGIC (Autopay)
       const planMap: any = {
-        'pro': { id: 'plan_pro_year_v1', name: 'Toeasy Pro Annual', amount: 599000 },
-        'enterprise': { id: 'plan_ent_year_v1', name: 'Toeasy Enterprise Annual', amount: 2599000 }
+        'pro': { name: 'Toeasy Pro Annual', amount: 599000 },
+        'enterprise': { name: 'Toeasy Enterprise Annual', amount: 2599000 }
       };
 
-      const targetPlan = planMap[planId];
+      const targetPlanData = planMap[planId];
+      let razorpayPlanId = '';
 
       try {
-        // Try to create subscription directly
+        // 1. Fetch available plans to find a match
+        // Razorpay listing is paginated, fetching last 100 should cover active plans usually
+        // Ideally we should cache this mapping in DB
+        const plans = await razorpay.plans.all({ count: 100 });
+        const existingPlan = plans.items.find((p: any) =>
+          p.item.name === targetPlanData.name &&
+          p.item.amount === targetPlanData.amount &&
+          p.period === 'yearly'
+        );
+
+        if (existingPlan) {
+          razorpayPlanId = existingPlan.id;
+        } else {
+          // 2. Create Plan if not found
+          const newPlan = await razorpay.plans.create({
+            period: 'yearly',
+            interval: 1,
+            item: {
+              name: targetPlanData.name,
+              amount: targetPlanData.amount,
+              currency: 'INR', // Currently enforcing INR
+              description: 'Annual Autopay Membership'
+            }
+          });
+          razorpayPlanId = newPlan.id;
+        }
+
+        // 3. Create Subscription
         const subscription = await razorpay.subscriptions.create({
-          plan_id: targetPlan.id,
-          total_count: 100, // Indefinite recurrence
+          plan_id: razorpayPlanId,
+          total_count: 100, // Indefinite
           quantity: 1,
           customer_notify: 1,
           notes: { planId, interval, userId: req.user!.id }
@@ -71,52 +99,16 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
           amount: amountSmallestUnit,
           currency: validCurrency.toUpperCase()
         };
+
       } catch (e: any) {
-        console.error("Subscription creation failed, checking if plan needs creation...", e);
-
-        // If plan doesn't exist, create it dynamically
-        if (e.error && e.error.description === 'The plan_id provided is invalid') {
-          try {
-            console.log(`Creating missing plan: ${targetPlan.id}`);
-            await razorpay.plans.create({
-              id: targetPlan.id,
-              period: 'yearly',
-              interval: 1,
-              item: {
-                name: targetPlan.name,
-                amount: targetPlan.amount,
-                currency: 'INR', // Currently enforcing INR for India context based on user feedback
-                description: 'Annual Autopay Membership'
-              }
-            });
-
-            // Retry subscription creation
-            const subscription = await razorpay.subscriptions.create({
-              plan_id: targetPlan.id,
-              total_count: 100,
-              quantity: 1,
-              customer_notify: 1,
-              notes: { planId, interval, userId: req.user!.id }
-            });
-
-            razorpayData = {
-              subscription_id: subscription.id,
-              amount: amountSmallestUnit,
-              currency: validCurrency.toUpperCase()
-            };
-          } catch (creationError) {
-            console.error("Critical: Failed to create plan and subscription", creationError);
-            throw new Error("Billing system initialization failed. Please contact support.");
-          }
-        } else {
-          // Fallback to Order if it's a different error
-          const order = await razorpay.orders.create({
-            amount: amountSmallestUnit,
-            currency: validCurrency.toUpperCase(),
-            receipt: `receipt_${req.user!.id}_${Date.now()}`
-          });
-          razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
-        }
+        console.error("Subscription setup failed, falling back to Order", e);
+        // Fallback to one-time charge
+        const order = await razorpay.orders.create({
+          amount: amountSmallestUnit,
+          currency: validCurrency.toUpperCase(),
+          receipt: `receipt_${req.user!.id}_${Date.now()}`
+        });
+        razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
       }
     } else {
       // ONE-TIME PASS LOGIC
