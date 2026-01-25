@@ -19,7 +19,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                                 T
                             </div>
                             <span className="font-black text-xl tracking-tight text-slate-900 dark:text-white">
-                                Toeasy<span className="text-indigo-600">.AI</span>
+                                Toeasy
                             </span>
                         </div>
 
@@ -96,7 +96,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                                 T
                             </div>
                             <span className="font-black text-lg tracking-tight text-slate-900 dark:text-white">
-                                Toeasy<span className="text-indigo-600">.AI</span>
+                                Toeasy
                             </span>
                         </div>
                         <p className="text-slate-500 dark:text-slate-400 text-sm max-w-xs leading-relaxed">
@@ -123,7 +123,7 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                     </div>
                 </div>
                 <div className="max-w-7xl mx-auto mt-12 pt-8 border-t border-slate-100 dark:border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4">
-                    <p className="text-xs text-slate-400">© 2026 Toeasy AI. All rights reserved.</p>
+                    <p className="text-xs text-slate-400">© 2026 Toeasy. All rights reserved.</p>
                     <div className="flex gap-6">
                         <a href="#" className="text-slate-400 hover:text-indigo-600 transition-colors"><span className="sr-only">Twitter</span><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23.953 4.57a10 10 0 01-2.825.775 4.958 4.958 0 002.163-2.723c-.951.555-2.005.959-3.127 1.184a4.92 4.92 0 00-8.384 4.482C7.69 8.095 4.067 6.13 1.64 3.162a4.822 4.822 0 00-.666 2.475c0 1.71.87 3.213 2.188 4.096a4.904 4.904 0 01-2.228-.616v.06a4.923 4.923 0 003.946 4.84 4.996 4.996 0 01-2.212.085 4.936 4.936 0 004.604 3.417 9.867 9.867 0 01-6.102 2.105c-.39 0-.779-.023-1.17-.067a13.995 13.995 0 007.557 2.209c9.053 0 13.998-7.496 13.998-13.985 0-.21 0-.42-.015-.63A9.935 9.935 0 0024 4.59z" /></svg></a>
                         <a href="#" className="text-slate-400 hover:text-indigo-600 transition-colors"><span className="sr-only">LinkedIn</span><svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554V14.89c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" /></svg></a>
