@@ -27,6 +27,18 @@ interface UsageData {
   queries_executed: number;
 }
 
+interface BackendPlan {
+  id: 'basic' | 'pro' | 'enterprise';
+  name: string;
+  price: number;
+  pricing: {
+    usd: { monthly: number; yearly: number };
+    inr: { monthly: number; yearly: number };
+  };
+  features: string[];
+  limits: any;
+}
+
 interface PaymentFlowState {
   isOpen: boolean;
   planId?: 'pro' | 'enterprise';
@@ -48,6 +60,7 @@ const BillingViewIntegrated: React.FC = () => {
     rows_processed: 0,
     queries_executed: 0
   });
+  const [backendPlans, setBackendPlans] = useState<BackendPlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<'month' | 'year'>('year');
@@ -82,16 +95,18 @@ const BillingViewIntegrated: React.FC = () => {
   const loadSubscriptionAndUsage = async () => {
     try {
       setLoading(true);
-      const [subRes, usageRes] = await Promise.all([
+      const [subRes, usageRes, plansRes] = await Promise.all([
         axios.get(`${backendUrl}/subscriptions/current`, {
           headers: { Authorization: `Bearer ${token}` }
         }),
         axios.get(`${backendUrl}/users/me/usage`, {
           headers: { Authorization: `Bearer ${token}` }
-        })
+        }),
+        axios.get(`${backendUrl}/subscriptions/plans`)
       ]);
 
       setSubscription(subRes.data);
+      setBackendPlans(plansRes.data);
       // NOTE: We do NOT override billingCycle from subscription.interval
       // The toggle should default to 'year' (best value) for marketing purposes
 
@@ -188,38 +203,16 @@ const BillingViewIntegrated: React.FC = () => {
     );
   }
 
-  const plans = [
-    {
-      id: 'basic',
-      name: 'Starter',
-      monthlyPrice: 0,
-      yearlyTotal: 0,
-      description: 'Perfect for getting started',
-      features: ['Up to 10 datasets', '100 API calls/day', '1GB storage', 'Basic support'],
-      isCurrent: subscription?.tier === 'basic',
-      isPopular: false
-    },
-    {
-      id: 'pro',
-      name: 'Professional',
-      monthlyPrice: currency === 'INR' ? 499 : 25,
-      yearlyTotal: currency === 'INR' ? 4990 : 250,
-      description: billingCycle === 'month' ? 'Monthly Membership (Autopay)' : 'Annual Commitment (Save ~17%)',
-      features: ['Up to 100 datasets', 'Unlimited API calls', '100GB storage', 'Priority support', 'Advanced validation'],
-      isCurrent: subscription?.tier === 'pro',
-      isPopular: true
-    },
-    {
-      id: 'enterprise',
-      name: 'Enterprise',
-      monthlyPrice: currency === 'INR' ? 2499 : 89,
-      yearlyTotal: currency === 'INR' ? 24990 : 890,
-      description: billingCycle === 'month' ? 'Monthly Pro Agency (Autopay)' : 'Enterprise Intelligence (Autopay)',
-      features: ['Unlimited datasets', 'Unlimited API calls', 'Unlimited storage', '24/7 support', 'SSO & Security', 'Custom integrations'],
-      isCurrent: subscription?.tier === 'enterprise',
-      isPopular: false
-    }
-  ];
+  const plans = backendPlans.map(plan => ({
+    id: plan.id,
+    name: plan.name,
+    monthlyPrice: currency === 'INR' ? plan.pricing.inr.monthly : plan.pricing.usd.monthly,
+    yearlyTotal: currency === 'INR' ? plan.pricing.inr.yearly : plan.pricing.usd.yearly,
+    description: plan.id === 'basic' ? 'Perfect for getting started' : (billingCycle === 'month' ? 'Monthly Membership (Autopay)' : 'Annual Commitment (Save ~20%)'),
+    features: plan.features,
+    isCurrent: subscription?.tier === plan.id,
+    isPopular: plan.id === 'pro'
+  }));
 
   return (
     <div className="max-w-7xl mx-auto py-12 px-4">

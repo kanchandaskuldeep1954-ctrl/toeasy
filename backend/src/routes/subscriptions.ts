@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
-import { config } from '../config.js';
+import { config, pricing } from '../config.js';
 
 const router = Router();
 
@@ -12,7 +12,8 @@ router.get('/plans', async (req, res) => {
       {
         id: 'basic',
         name: 'Starter',
-        price: 0,
+        price: pricing.basic.usd.monthly,
+        pricing: pricing.basic,
         billingCycle: 'monthly',
         features: [
           '3 Datasets',
@@ -26,7 +27,8 @@ router.get('/plans', async (req, res) => {
       {
         id: 'pro',
         name: 'Professional',
-        price: 29,
+        price: pricing.pro.usd.monthly,
+        pricing: pricing.pro,
         billingCycle: 'monthly',
         features: [
           '50 Datasets',
@@ -41,7 +43,8 @@ router.get('/plans', async (req, res) => {
       {
         id: 'enterprise',
         name: 'Enterprise',
-        price: null,
+        price: pricing.enterprise.usd.monthly,
+        pricing: pricing.enterprise,
         billingCycle: 'custom',
         features: [
           'Unlimited Datasets',

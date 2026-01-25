@@ -84,13 +84,6 @@ export const LoginPage: React.FC = () => {
             </Link>
           </p>
 
-          {/* Demo credentials */}
-          <div className="mt-8 pt-6 border-t border-white/5">
-            <div className="bg-slate-900/40 rounded-xl p-3 border border-indigo-500/10">
-              <p className="text-slate-500 text-[10px] font-bold uppercase tracking-tighter text-center mb-1">Sandboxed Access:</p>
-              <p className="text-indigo-300 text-[11px] font-mono text-center">test@example.com / Test@123456</p>
-            </div>
-          </div>
         </div>
       </div>
     </div>

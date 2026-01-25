@@ -162,7 +162,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       prefill: {
         name: user.full_name || 'User',
         email: user.email,
-        contact: '9999999999'
+        contact: ''
       }
     });
 
