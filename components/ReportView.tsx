@@ -48,6 +48,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [showCopilot, setShowCopilot] = useState(true);
     const [copilotInput, setCopilotInput] = useState('');
     const [copilotLoading, setCopilotLoading] = useState(false);
+    const [selectionOverlay, setSelectionOverlay] = useState<{ text: string, top: number, left: number } | null>(null);
     const contentRef = useRef<HTMLDivElement>(null);
 
     const copilotSuggestions = [
@@ -519,11 +520,36 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             )}
 
             {/* Main Document View */}
-            <main className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth pt-16 xl:pt-0" ref={contentRef}>
+            <main
+                className="flex-1 overflow-y-auto custom-scrollbar scroll-smooth pt-16 xl:pt-0 relative"
+                ref={contentRef}
+                onMouseUp={() => {
+                    const selection = window.getSelection();
+                    if (!selection || selection.isCollapsed) {
+                        setSelectionOverlay(null);
+                        return;
+                    }
+                    const text = selection.toString().trim();
+                    if (text.length < 5) return;
+
+                    const range = selection.getRangeAt(0);
+                    const rect = range.getBoundingClientRect();
+
+                    // Simple relative positioning check
+                    setSelectionOverlay({
+                        text,
+                        top: rect.top, // relative to viewport, fixed pos handles it
+                        left: rect.left + (rect.width / 2)
+                    });
+                }}
+            >
                 <div className="max-w-[900px] mx-auto py-8 md:py-12 px-4 md:px-12 space-y-12 md:space-y-16 print:max-w-none print:p-0">
 
                     {/* Cover Page */}
-                    <div className="min-h-[60vh] flex flex-col justify-center border-b border-slate-200 dark:border-slate-800 pb-12 print:min-h-0 print:pb-4 print:border-none">
+                    <div
+                        className="min-h-[60vh] flex flex-col justify-center border-b border-slate-200 dark:border-slate-800 pb-12 print:min-h-0 print:pb-4 print:border-none"
+                        onClick={() => setSelectionOverlay(null)} // Click outside to close
+                    >
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest w-fit mb-6 print:hidden">
                             Intelligence Report v{report.version}
                         </div>
@@ -611,6 +637,43 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     </footer>
                 </div>
             </main>
+
+            {/* Contextual AI Overlay */}
+            {selectionOverlay && (
+                <div
+                    className="fixed z-50 animate-in zoom-in-95 pointer-events-auto"
+                    style={{
+                        top: Math.max(10, selectionOverlay.top - 60),
+                        left: selectionOverlay.left,
+                        transform: 'translateX(-50%)'
+                    }}
+                >
+                    <div className="bg-slate-900 text-white p-2 rounded-xl shadow-2xl flex items-center gap-2 border border-slate-700">
+                        <div className="flex items-center gap-2 px-2 border-r border-slate-700 pr-2">
+                            <span className="text-lg">✨</span>
+                            <span className="text-xs font-bold">Ask AI</span>
+                        </div>
+                        <input
+                            autoFocus
+                            placeholder="Edit this selection..."
+                            className="bg-transparent border-none outline-none text-xs w-48 text-white placeholder:text-slate-500"
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleCopilotUpdate(`Regarding this text: "${selectionOverlay.text}" - ${e.currentTarget.value}`);
+                                    setSelectionOverlay(null);
+                                    window.getSelection()?.removeAllRanges();
+                                }
+                            }}
+                        />
+                        <button
+                            onClick={() => setSelectionOverlay(null)}
+                            className="p-1 hover:bg-slate-800 rounded-lg text-slate-400"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {/* Report Co-pilot: Insight Optimizer */}
             <aside className={`fixed top-0 right-0 bottom-0 w-80 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-8 pt-12 transform transition-all duration-500 shadow-2xl z-30 print:hidden ${showCopilot ? 'translate-x-0' : 'translate-x-full'}`}>
