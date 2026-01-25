@@ -99,21 +99,16 @@ const LandingPage: React.FC = () => {
                     >
                         <div className="rounded-[40px] border border-white/20 dark:border-white/5 shadow-[0_50px_100px_-20px_rgba(79,70,229,0.3)] overflow-hidden glass-card p-2 md:p-5 rotate-x-6 transform-gpu hover:rotate-0 transition-transform duration-1000 ease-out cursor-default group">
                             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-900 aspect-video relative">
-                                <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/20 via-transparent to-purple-500/20 pointer-events-none group-hover:opacity-50 transition-opacity"></div>
-                                <div className="p-12 flex flex-col items-center justify-center h-full text-center">
-                                    <div className="space-y-8 max-w-2xl">
-                                        <motion.div
-                                            animate={{ y: [0, -10, 0] }}
-                                            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                                            className="inline-flex px-5 py-2 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-xs font-black uppercase tracking-[0.3em] backdrop-blur-sm"
-                                        >
-                                            Dynamic Engine v2.4
-                                        </motion.div>
-                                        <h3 className="text-4xl md:text-6xl font-black text-white leading-tight">
-                                            Visualizing Complexity at <span className="text-indigo-500 italic">Speed.</span>
-                                        </h3>
-                                    </div>
-                                </div>
+                                <iframe
+                                    className="absolute inset-0 w-full h-full"
+                                    src="https://www.youtube.com/embed/z_g0p5Z-H8s?autoplay=1&mute=1&loop=1&playlist=z_g0p5Z-H8s&controls=0&modestbranding=1&rel=0"
+                                    title="Toeasy AI Demo"
+                                    frameBorder="0"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    allowFullScreen
+                                ></iframe>
+                                {/* Optional Overlay if video is still loading or for extra branding */}
+                                <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none"></div>
                             </div>
                         </div>
                     </motion.div>
