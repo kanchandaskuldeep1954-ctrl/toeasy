@@ -1603,39 +1603,41 @@ ANALYZE and return ONLY valid JSON (no markdown):
   }
 
 
+
+
   static async modifyReportWithAI(dataset: any, report: any, instruction: string): Promise<any> {
     try {
       const headers = dataset.headers || [];
-      // Minimize context to save tokens
       const kpiSummary = (report.sections || [])
         .flatMap((s: any) => s.kpis || [])
         .map((k: any) => `${k.label}: ${k.value}`)
         .slice(0, 20)
         .join(', ');
 
-      const groqPrompt = `You are a Senior Data Scientist. Modify this report based on user instructions.
-      
-      INSTRUCTION: "${instruction}"
-      
-      DATASET: ${dataset.data?.length || 0} rows, Columns: ${headers.slice(0, 15).join(', ')}
-      KNOWN METRICS: ${kpiSummary}
-      
-      STRICT RULES:
-      1. REAL DATA ONLY. Do not make up numbers. If a metric is not in KNOWN METRICS, do not invent it. Say "requires further analysis".
-      2. RISK/PREDICTIVE SECTIONS: If asked for these, add them as NEW sections. Use general logic based on the domain (e.g., "Market volatility", "Seasonal trends") if you don't have predictive data models.
-      3. OUTPUT FORMAT: Return ONLY the 'sections' array JSON. Do not return the whole report wrapper.
-      4. DO NOT TRUNCATE. If the report is too long, summarize the UNCHANGED sections briefly but keep the NEW content detailed.
-      
-      INPUT SECTIONS:
-      ${JSON.stringify(report.sections)}
-      
-      RETURN ONLY JSON ARRAY (Sections):
-      [
-        { "id": "...", "title": "...", "content": "..." },
-        ...
-      ]`;
+      const originalSections = report.sections || [];
 
-      // Use max available tokens
+      const groqPrompt = `You are a Senior Data Scientist. Modify this report based on user instructions.
+    
+    INSTRUCTION: "${instruction}"
+    
+    DATASET: ${dataset.data?.length || 0} rows, Columns: ${headers.slice(0, 15).join(', ')}
+    KNOWN METRICS: ${kpiSummary}
+    
+    RULES:
+    1. REAL DATA ONLY. Do not invent numbers.
+    2. If asked for NEW sections (Risk, Predictive), add them.
+    3. CRITICAL OPTIMIZATION: To save space, for ANY section that does NOT need changes, return EXACTLY: { "id": "section_id", "unchanged": true }
+    4. Only return full content for NEW or MODIFIED sections.
+    
+    INPUT SECTIONS:
+    ${JSON.stringify(originalSections.map((s: any) => ({ id: s.id, title: s.title, contentPreview: s.content.substring(0, 100) + "..." })))}
+    
+    RETURN ONLY JSON ARRAY (Sections):
+    [
+      { "id": "intro", "unchanged": true },
+      { "id": "new_risk_section", "title": "Risk Analysis", "content": "..." }
+    ]`;
+
       const result = await this.callGroq(groqPrompt, 7000);
 
       const modifiedSections = this.cleanAndParseJSON(result);
@@ -1645,11 +1647,24 @@ ANALYZE and return ONLY valid JSON (no markdown):
         return report;
       }
 
-      // Merge back into full report object
+      // Merge Logic: Rehydrate "unchanged" sections
+      const mergedSections = modifiedSections.map((s: any) => {
+        if (s.unchanged && s.id) {
+          const original = originalSections.find((os: any) => os.id === s.id);
+          return original || s;
+        }
+        return {
+          ...s,
+          id: s.id || `section-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          charts: s.charts || [],
+          kpis: s.kpis || []
+        };
+      });
+
       return {
         ...report,
-        sections: modifiedSections,
-        version: String(Number(report.version || "1.0") + 0.1) // Increment version
+        sections: mergedSections,
+        version: String(Number(report.version || "1.0") + 0.1)
       };
 
     } catch (error) {
@@ -1658,5 +1673,7 @@ ANALYZE and return ONLY valid JSON (no markdown):
     }
   }
 
+
 }
+
 
