@@ -167,7 +167,7 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
         {paymentState.status === 'idle' && (
           <div className="space-y-4">
             <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
-              <p className="text-sm text-slate-600 dark:text-slate-400">Toeasy One Membership</p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">Toeasy Membership</p>
               <p className="text-lg font-semibold text-slate-900 dark:text-white capitalize">
                 {planId} - {interval === 'month' ? 'Monthly Autopay' : 'Annual Commitment'}
               </p>

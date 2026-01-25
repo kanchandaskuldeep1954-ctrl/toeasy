@@ -157,7 +157,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     res.json({
       key: config.razorpay.keyId,
       ...razorpayData,
-      name: "Toeasy One",
+      name: "Toeasy",
       description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Membership (${interval}ly autopay)`,
       prefill: {
         name: user.full_name || 'User',
