@@ -181,7 +181,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                         {!collapsed && (
                             <div className="text-left overflow-hidden">
                                 <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">{user?.email?.split('@')[0]}</p>
-                                <p className="text-[10px] text-slate-400 truncate">Pro Plan</p>
+                                <p className="text-[10px] text-slate-400 truncate capitalize">{user?.tier === 'basic' ? 'Starter' : user?.tier} Plan</p>
                             </div>
                         )}
                     </button>
