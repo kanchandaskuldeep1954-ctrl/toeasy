@@ -24,7 +24,7 @@ class OTPService {
                     'Authorization': `Bearer ${config.resendApiKey}`
                 },
                 body: JSON.stringify({
-                    from: 'onboarding@resend.dev', // Default sender until domain is verified
+                    from: config.email.from, // Dynamic from address
                     to: [email],
                     subject: 'Verify your Toeasy AI Account',
                     html: `
