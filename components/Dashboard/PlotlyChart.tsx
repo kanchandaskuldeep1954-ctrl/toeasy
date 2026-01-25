@@ -64,8 +64,25 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
     }, []);
 
     // Normalize data from backend to standard format
+    // Handles both array format [{name, value}] and AI-generated {labels, values} format
     const normalizedData = useMemo(() => {
         const sourceData = data || chart.data || [];
+
+        // Handle AI-generated format: { labels: [...], values: [...] }
+        if (sourceData && typeof sourceData === 'object' && !Array.isArray(sourceData)) {
+            const labelsArr = sourceData.labels || sourceData.label || [];
+            const valuesArr = sourceData.values || sourceData.value || [];
+            if (Array.isArray(labelsArr) && Array.isArray(valuesArr)) {
+                return labelsArr.map((label: any, idx: number) => ({
+                    name: String(label ?? `Item ${idx + 1}`),
+                    value: Number(valuesArr[idx] ?? 0),
+                    x: label,
+                    y: valuesArr[idx]
+                })).filter(d => d.name !== 'Unknown' && d.name !== 'undefined' && !isNaN(d.value));
+            }
+        }
+
+        // Handle standard array format
         if (!Array.isArray(sourceData) || sourceData.length === 0) return [];
 
         return sourceData.map((d: any) => ({
