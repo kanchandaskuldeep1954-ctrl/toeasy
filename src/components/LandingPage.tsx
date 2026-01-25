@@ -143,24 +143,28 @@ const LandingPage: React.FC = () => {
                             {[...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
                                     {[
-                                        { name: 'PostgreSQL', slug: 'postgresql' },
-                                        { name: 'Snowflake', slug: 'snowflake' },
-                                        { name: 'BigQuery', slug: 'googlebigquery' },
-                                        { name: 'MySQL', slug: 'mysql' },
-                                        { name: 'MongoDB', slug: 'mongodb' },
-                                        { name: 'Redis', slug: 'redis' },
-                                        { name: 'AWS', slug: 'amazonaws' },
-                                        { name: 'Stripe', slug: 'stripe' },
-                                        { name: 'Salesforce', slug: 'salesforce' },
-                                        { name: 'Tableau', slug: 'tableau' },
-                                        { name: 'PowerBI', slug: 'powerbi' },
+                                        { name: 'PostgreSQL', domain: 'postgresql.org' },
+                                        { name: 'Snowflake', domain: 'snowflake.com' },
+                                        { name: 'BigQuery', domain: 'cloud.google.com' },
+                                        { name: 'MySQL', domain: 'mysql.com' },
+                                        { name: 'MongoDB', domain: 'mongodb.com' },
+                                        { name: 'Redis', domain: 'redis.io' },
+                                        { name: 'AWS', domain: 'aws.amazon.com' },
+                                        { name: 'Stripe', domain: 'stripe.com' },
+                                        { name: 'Salesforce', domain: 'salesforce.com' },
+                                        { name: 'Tableau', domain: 'tableau.com' },
+                                        { name: 'PowerBI', domain: 'powerbi.microsoft.com' },
                                     ].map((brand) => (
                                         <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
                                             <div className="w-10 h-10 flex items-center justify-center p-1.5 transition-all group-hover/item:scale-125">
                                                 <img
-                                                    src={`https://cdn.simpleicons.org/${brand.slug}/6366f1`}
+                                                    src={`https://logo.clearbit.com/${brand.domain}`}
                                                     alt={brand.name}
-                                                    className="w-full h-full object-contain filter group-hover/item:filter-none transition-all duration-300"
+                                                    className="w-full h-full object-contain filter grayscale group-hover/item:grayscale-0 transition-all duration-300"
+                                                    onError={(e) => {
+                                                        // Fallback to a letter badge if logo service fails
+                                                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${brand.name}&background=6366f1&color=fff`;
+                                                    }}
                                                 />
                                             </div>
                                             <span className="font-black text-base text-slate-600 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white tracking-tight">
