@@ -49,6 +49,9 @@ export interface Config {
     pass: string | undefined;
     from: string;
     support: string;
+    billing: string;
+    privacy: string;
+    phone: string;
   };
   redisUrl: string | undefined;
   frontendUrl: string;
@@ -75,8 +78,11 @@ export const config: Config = {
     port: parseInt((process.env.SMTP_PORT || '587').replace(/"/g, '')),
     user: process.env.SMTP_USER?.replace(/"/g, ''),
     pass: process.env.SMTP_PASS?.replace(/"/g, ''),
-    from: process.env.EMAIL_FROM || 'onboarding@resend.dev',
-    support: process.env.EMAIL_SUPPORT || 'support@toeasy.com',
+    from: process.env.EMAIL_FROM || 'Toeasy AI <auth@toeasy.online>',
+    support: process.env.EMAIL_SUPPORT || 'support@toeasy.online',
+    billing: process.env.EMAIL_BILLING || 'billing@toeasy.online',
+    privacy: process.env.EMAIL_PRIVACY || 'privacy@toeasy.online',
+    phone: process.env.SUPPORT_PHONE || '+1 (888) TOEASY-AI',
   },
   redisUrl: process.env.REDIS_URL,
   frontendUrl: process.env.FRONTEND_URL || 'https://toeasy.vercel.app',

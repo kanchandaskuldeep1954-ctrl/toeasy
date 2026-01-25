@@ -260,7 +260,7 @@ const BillingViewIntegrated: React.FC = () => {
                         loadSubscriptionAndUsage();
                         alert("Subscription cancelled successfully. You will have access until the end of the current period.");
                       } catch (e) {
-                        alert("Failed to cancel subscription. Please contact support.");
+                        alert("Failed to cancel subscription. Please contact billing@toeasy.online.");
                       }
                     }
                   }}

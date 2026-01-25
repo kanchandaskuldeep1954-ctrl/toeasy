@@ -48,6 +48,7 @@ import TermsConditions from './src/components/Legal/TermsConditions';
 import PrivacyPolicy from './src/components/Legal/PrivacyPolicy';
 import RefundPolicy from './src/components/Legal/RefundPolicy';
 import PublicShareView from './src/components/PublicShareView';
+import FAQ from './src/components/FAQ';
 
 const AppLayout: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -135,6 +136,22 @@ function App() {
                 element={
                   <PublicLayout>
                     <RefundPolicy />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/faq"
+                element={
+                  <PublicLayout>
+                    <FAQ />
+                  </PublicLayout>
+                }
+              />
+              <Route
+                path="/help"
+                element={
+                  <PublicLayout>
+                    <FAQ />
                   </PublicLayout>
                 }
               />
