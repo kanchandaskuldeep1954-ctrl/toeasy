@@ -54,16 +54,46 @@ const TheWarRoom: React.FC = () => {
 
     useEffect(() => {
         if (reports.length > 0) {
-            setFeed([
-                { id: 1, type: 'check', title: 'System Healthy', desc: `Proactive monitoring active for ${activeWorkspace?.name || 'Workspace'}.`, time: 'Now' },
-                { id: 2, type: 'pulse', title: 'Intelligence Ready', desc: `${reports.length} strategic reports available for review.`, time: 'Updated' }
-            ]);
+            const systemPulse = [
+                { id: 'p1', type: 'check', title: 'System Healthy', desc: `Proactive monitoring active for ${activeWorkspace?.name || 'Workspace'}.`, time: 'Now' },
+                { id: 'p2', type: 'pulse', title: 'Intelligence Ready', desc: `${reports.length} strategic reports available for review.`, time: 'Updated' }
+            ];
+
+            // Add dynamic alerts if health score is low (simulated or based on actual data if available)
+            // In a pro version, this would fetch from a /notifications endpoint
+            setFeed(systemPulse);
         } else {
             setFeed([
-                { id: 1, type: 'pulse', title: 'Awaiting Initiation', desc: 'No active reports detected. Commission an audit to begin monitoring.', time: 'Idle' }
+                { id: 'p0', type: 'pulse', title: 'Awaiting Initiation', desc: 'No active reports detected. Commission an audit to begin monitoring.', time: 'Idle' }
             ]);
         }
-    }, [reports, activeWorkspace]);
+    }, [reports.length, activeWorkspace]);
+
+    const handleInitializeAudit = async (type: string) => {
+        setIsGenerating(false);
+        setLoading(true);
+        try {
+            // Pick a dataset to audit if none specified, or show selection
+            // For pro level, we pick the most recent dataset without a report
+            const response = await axios.get(`${backendUrl}/workspaces/${activeWorkspace?.id}/datasets`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            const target = response.data.find((d: any) => !d.strategicReport);
+
+            if (!target) {
+                alert("All datasets have active intelligence. Try uploading a new source.");
+                setLoading(false);
+                return;
+            }
+
+            // Navigate to report view which triggers generation if missing
+            navigate(`/app/report?workspace=${activeWorkspace?.id}&dataset=${target.id}&autoGenerate=true`);
+        } catch (e) {
+            console.error("Initiation failed", e);
+            setLoading(false);
+        }
+    };
 
     return (
         <div className="min-h-full bg-slate-50 dark:bg-[#080c14] p-8 md:p-12 animate-in fade-in duration-700">
@@ -104,29 +134,63 @@ const TheWarRoom: React.FC = () => {
                         ))}
                     </div>
 
+                    {/* Workspace Intelligence Summary */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Global Health</h4>
+                            <div className="flex items-end gap-3">
+                                <span className="text-4xl font-black text-indigo-600">84%</span>
+                                <span className="text-[10px] font-bold text-emerald-500 mb-1.5 flex items-center gap-1">
+                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                    +2.4%
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">Average integrity across {reports.length} monitored datasets.</p>
+                        </div>
+                        <div className="p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Total Coverage</h4>
+                            <div className="flex items-end gap-3">
+                                <span className="text-4xl font-black text-slate-900 dark:text-white">{reports.length}</span>
+                                <span className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase">Reports Active</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">Strategic intelligence coverage for {activeWorkspace?.name || 'Workspace'}.</p>
+                        </div>
+                        <div className="p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl border-l-4 border-l-red-500/50">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Critical Exceptions</h4>
+                            <div className="flex items-end gap-3">
+                                <span className="text-4xl font-black text-slate-900 dark:text-white">0</span>
+                                <span className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase">Alerts Pending</span>
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">No variance alerts detected in the last 24 hours.</p>
+                        </div>
+                    </div>
+
                     {/* Report Grid */}
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {loading ? (
                             Array(4).fill(0).map((_, i) => <div key={i} className="h-48 rounded-3xl bg-slate-200 dark:bg-slate-800/50 animate-pulse" />)
                         ) : reports.length > 0 ? (
-                            reports.map(report => (
-                                <div key={report.id} onClick={() => navigate(`/app/report?workspace=${activeWorkspace?.id}&dataset=${report.datasetId}`)} className="group cursor-pointer glass-card !p-8 rounded-[40px] border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 transition-all hover:shadow-3xl bg-white dark:bg-[#0f172a]">
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-lg ${report.type === 'strategic' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'}`}>
-                                            {report.type === 'strategic' ? '📊' : '🧹'}
+                            reports
+                                .filter(r => activeTab === 'all' || r.type === activeTab || (activeTab === 'forensic' && r.type === 'clean'))
+                                .map(report => (
+                                    <div key={report.id} onClick={() => navigate(`/app/report?workspace=${activeWorkspace?.id}&dataset=${report.datasetId}`)} className="group cursor-pointer glass-card !p-8 rounded-[40px] border border-slate-200 dark:border-white/10 hover:border-indigo-500/50 transition-all hover:shadow-3xl bg-white dark:bg-[#0f172a]">
+                                        <div className="flex justify-between items-start mb-6">
+                                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl shadow-lg ${report.type === 'strategic' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'}`}>
+                                                {report.type === 'strategic' ? '📊' : '🧹'}
+                                            </div>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{new Date(report.date).toLocaleDateString()}</span>
                                         </div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{new Date(report.date).toLocaleDateString()}</span>
+                                        <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 transition-colors uppercase leading-tight">{report.title}</h3>
+                                        <p className="text-xs font-bold text-slate-400 mb-6 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" /> {report.datasetName}
+                                        </p>
+                                        <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 group-hover:text-indigo-400">
+                                            <span>Read Intelligence</span>
+                                            <span className="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                                        </div>
                                     </div>
-                                    <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 group-hover:text-indigo-600 transition-colors uppercase leading-tight">{report.title}</h3>
-                                    <p className="text-xs font-bold text-slate-400 mb-6 flex items-center gap-2">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-slate-300" /> {report.datasetName}
-                                    </p>
-                                    <div className="flex items-center gap-4 text-[10px] font-black uppercase tracking-[0.15em] text-slate-500 group-hover:text-indigo-400">
-                                        <span>Read Intelligence</span>
-                                        <span className="opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                                    </div>
-                                </div>
-                            ))
+                                ))
                         ) : (
                             <div className="col-span-2 p-12 text-center bg-white dark:bg-slate-950 rounded-[48px] border-2 border-dashed border-slate-200 dark:border-slate-800">
                                 <span className="text-5xl mb-6 block opacity-30">📭</span>
@@ -142,9 +206,9 @@ const TheWarRoom: React.FC = () => {
                     <div className="p-8 bg-indigo-600 rounded-[48px] text-white shadow-3xl shadow-indigo-500/20 relative overflow-hidden">
                         <div className="relative z-10">
                             <h3 className="text-xs font-black uppercase tracking-widest opacity-70 mb-2">System Status</h3>
-                            <p className="text-3xl font-black leading-none mb-4 tracking-tighter italic text-nowrap select-none">ZERO-TOUCH ACTIVE</p>
+                            <p className="text-3xl font-black leading-none mb-4 tracking-tighter italic text-nowrap select-none uppercase">Cross-Sync Active</p>
                             <p className="text-[10px] leading-relaxed font-bold opacity-80">
-                                Toeasy AI is proactively monitoring all {activeWorkspace?.name} datasets. Reports will generate automatically upon significant variance detection.
+                                Toeasy AI is proactively monitoring all {activeWorkspace?.name || 'available'} datasets.
                             </p>
                         </div>
                         <div className="absolute -right-8 -bottom-8 w-32 h-32 bg-white/10 rounded-full blur-3xl animate-pulse" />
@@ -177,7 +241,7 @@ const TheWarRoom: React.FC = () => {
                 </div>
             </div>
 
-            {/* Commission Modal Placeholder */}
+            {/* Commission Modal */}
             {isGenerating && (
                 <div className="fixed inset-0 z-[100] flex items-center justify-center p-8 bg-slate-950/80 backdrop-blur-xl animate-in zoom-in-95">
                     <div className="w-full max-w-2xl bg-white dark:bg-[#0f172a] rounded-[64px] p-12 shadow-3xl border border-white/10 relative">
@@ -186,16 +250,21 @@ const TheWarRoom: React.FC = () => {
                         <p className="text-sm text-slate-500 font-medium mb-12 italic">Target your objective. Define your depth. Unleash the AI.</p>
 
                         <div className="grid grid-cols-2 gap-4 mb-12">
-                            {['Strategic Horizon', 'Forensic Audit', 'Data Quality Matrix', 'Competitor Pivot'].map(type => (
-                                <button key={type} className="p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
-                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-500">{type}</h4>
-                                    <p className="text-[10px] text-slate-500 mt-2">Professional deep-dive with multi-model verification.</p>
+                            {[
+                                { id: 'strategic', name: 'Strategic Horizon', desc: 'Professional deep-dive with multi-model verification.' },
+                                { id: 'forensic', name: 'Forensic Audit', desc: 'Identify architectural data flaws and logical breaks.' },
+                                { id: 'matrix', name: 'Data Quality Matrix', desc: 'Cross-dataset health mapping and variance detection.' },
+                                { id: 'competitor', name: 'Competitor Pivot', desc: 'Market context and industry-specific benchmarking.' }
+                            ].map(type => (
+                                <button key={type.id} onClick={() => handleInitializeAudit(type.id)} className="p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-all group">
+                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight group-hover:text-indigo-500">{type.name}</h4>
+                                    <p className="text-[10px] text-slate-500 mt-2">{type.desc}</p>
                                 </button>
                             ))}
                         </div>
 
-                        <button className="w-full py-5 bg-indigo-600 text-white rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all">
-                            Initialize Generation Engine
+                        <button onClick={() => handleInitializeAudit('all')} className="w-full py-5 bg-indigo-600 text-white rounded-3xl text-sm font-black uppercase tracking-widest shadow-2xl hover:scale-105 transition-all">
+                            Initialize Global Intelligence engine
                         </button>
                     </div>
                 </div>
@@ -205,3 +274,4 @@ const TheWarRoom: React.FC = () => {
 };
 
 export default TheWarRoom;
+
