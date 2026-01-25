@@ -152,7 +152,7 @@ const LandingPage: React.FC = () => {
                                         { name: 'AWS', url: 'https://www.vectorlogo.zone/logos/amazon_aws/amazon_aws-icon.svg' },
                                         { name: 'Stripe', url: 'https://www.vectorlogo.zone/logos/stripe/stripe-icon.svg' },
                                         { name: 'Salesforce', url: 'https://www.vectorlogo.zone/logos/salesforce/salesforce-icon.svg' },
-                                        { name: 'Tableau', url: 'https://www.vectorlogo.zone/logos/tableau/tableau-icon.svg' },
+                                        { name: 'Tableau', url: 'https://github.com/gilbarbara/logos/blob/main/logos/tableau-icon.svg' },
                                         { name: 'PowerBI', url: 'https://www.vectorlogo.zone/logos/microsoft_powerbi/microsoft_powerbi-icon.svg' },
                                     ].map((brand) => (
                                         <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
