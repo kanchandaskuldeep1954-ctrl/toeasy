@@ -50,7 +50,7 @@ const BillingViewIntegrated: React.FC = () => {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [billingCycle, setBillingCycle] = useState<'month' | 'year'>('month');
+  const [billingCycle, setBillingCycle] = useState<'month' | 'year'>('year');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('USD');
   const [processingTier, setProcessingTier] = useState<string | null>(null);
   const [paymentFlow, setPaymentFlow] = useState<PaymentFlowState>({
@@ -367,7 +367,7 @@ const BillingViewIntegrated: React.FC = () => {
       {/* Plans */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         {plans.map(plan => {
-          const price = billingCycle === 'month' ? plan.monthlyPrice : plan.yearlyPrice;
+          const price = billingCycle === 'month' ? plan.monthlyPrice : plan.yearlyTotal;
           return (
             <div
               key={plan.id}
@@ -389,13 +389,13 @@ const BillingViewIntegrated: React.FC = () => {
                 <div className="mb-8">
                   <div className="flex items-baseline gap-1">
                     <span className="text-4xl font-black text-slate-900 dark:text-white">
-                      {currency === 'INR' ? '₹' : '$'}{price}
+                      {currency === 'INR' ? '₹' : '$'}{price.toLocaleString()}
                     </span>
-                    <span className="text-sm text-slate-600 dark:text-slate-400">/{billingCycle === 'month' ? 'mo' : 'mo'}</span>
+                    <span className="text-sm text-slate-600 dark:text-slate-400">/{billingCycle === 'month' ? 'mo' : 'yr'}</span>
                   </div>
                   {billingCycle === 'year' && price > 0 && (
                     <p className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-2">
-                      {currency === 'INR' ? '₹' : '$'}{Math.round(price * 12)} billed yearly
+                      ~{currency === 'INR' ? '₹' : '$'}{Math.round(price / 12)}/mo equivalent
                     </p>
                   )}
                 </div>
@@ -412,7 +412,7 @@ const BillingViewIntegrated: React.FC = () => {
                 </ul>
 
                 <button
-                  onClick={() => handleUpgrade(plan.id, price)}
+                  onClick={() => handleUpgrade(plan.id, plan.monthlyPrice, plan.yearlyTotal)}
                   disabled={plan.isCurrent || processingTier !== null}
                   className={`w-full py-3 rounded-xl font-bold text-[10px] uppercase transition-all ${plan.isCurrent
                     ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 cursor-default'
