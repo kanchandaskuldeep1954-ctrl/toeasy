@@ -143,24 +143,27 @@ const LandingPage: React.FC = () => {
                             {[...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
                                     {[
-                                        { name: 'PostgreSQL', slug: 'postgresql', color: '336791' },
-                                        { name: 'Snowflake', slug: 'snowflake', color: '29B5E8' },
-                                        { name: 'BigQuery', slug: 'googlebigquery', color: '4285F4' },
-                                        { name: 'MySQL', slug: 'mysql', color: '4479A1' },
-                                        { name: 'MongoDB', slug: 'mongodb', color: '47A248' },
-                                        { name: 'Redis', slug: 'redis', color: 'DC382D' },
-                                        { name: 'AWS', slug: 'amazonaws', color: '232F3E' },
-                                        { name: 'Stripe', slug: 'stripe', color: '008CDD' },
-                                        { name: 'Salesforce', slug: 'salesforce', color: '00A1E0' },
-                                        { name: 'Tableau', slug: 'tableau', color: 'E97627' },
-                                        { name: 'PowerBI', slug: 'powerbi', color: 'F2C811' },
+                                        { name: 'PostgreSQL', url: 'https://api.svgl.app/svg/postgresql.svg' },
+                                        { name: 'Snowflake', url: 'https://api.svgl.app/svg/snowflake.svg' },
+                                        { name: 'BigQuery', url: 'https://api.svgl.app/svg/google-cloud.svg' },
+                                        { name: 'MySQL', url: 'https://api.svgl.app/svg/mysql.svg' },
+                                        { name: 'MongoDB', url: 'https://api.svgl.app/svg/mongodb.svg' },
+                                        { name: 'Redis', url: 'https://api.svgl.app/svg/redis.svg' },
+                                        { name: 'AWS', url: 'https://skillicons.dev/icons?i=aws' },
+                                        { name: 'Stripe', url: 'https://api.svgl.app/svg/stripe.svg' },
+                                        { name: 'Salesforce', url: 'https://api.svgl.app/svg/salesforce.svg' },
+                                        { name: 'Tableau', url: 'https://api.svgl.app/svg/tableau.svg' },
+                                        { name: 'PowerBI', url: 'https://api.svgl.app/svg/power-bi.svg' },
                                     ].map((brand) => (
                                         <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
-                                            <div className="w-10 h-10 flex items-center justify-center p-1.5 transition-all group-hover/item:scale-125">
+                                            <div className="w-10 h-10 flex items-center justify-center p-1 transition-all group-hover/item:scale-125">
                                                 <img
-                                                    src={`https://cdn.simpleicons.org/${brand.slug}/${brand.color}`}
+                                                    src={brand.url}
                                                     alt={brand.name}
-                                                    className="w-full h-full object-contain transition-all duration-300"
+                                                    className="w-full h-full object-contain filter grayscale group-hover/item:filter-none transition-all duration-300"
+                                                    onError={(e) => {
+                                                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${brand.name}&background=6366f1&color=fff&bold=true&rounded=true`;
+                                                    }}
                                                 />
                                             </div>
                                             <span className="font-black text-base text-slate-600 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white tracking-tight">
