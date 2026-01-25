@@ -243,21 +243,37 @@ const BillingViewIntegrated: React.FC = () => {
               <p className="text-2xl font-black text-slate-900 dark:text-white capitalize">{subscription.tier}</p>
             </div>
             <div>
-              <p className="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400 mb-2">Membership Type</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white capitalize">{subscription.interval === 'month' ? 'Short-term Pass' : 'Annual (Recurring)'}</p>
-            </div>
-            <div>
               <p className="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400 mb-2">Status</p>
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
                 <span className="text-lg font-bold text-slate-900 dark:text-white capitalize">{subscription.status}</span>
               </div>
               <p className="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-400 mb-2 mt-4">
-                {subscription.interval === 'month' ? 'Access End Date' : 'Renews On'}
+                {subscription.interval === 'month' ? 'Access Valid Until' : 'Next Billing Date'}
               </p>
-              <p className="text-lg font-bold text-slate-900 dark:text-white">
+              <p className="text-lg font-bold text-slate-900 dark:text-white pb-4 border-b border-slate-100 dark:border-slate-800 mb-4">
                 {new Date(subscription.current_period_end).toLocaleDateString()}
               </p>
+
+              {subscription.tier !== 'basic' && subscription.status === 'active' && (
+                <button
+                  onClick={async () => {
+                    if (window.confirm("Are you sure? Your premium features will stop working at the end of the current period.")) {
+                      try {
+                        await axios.post(`${backendUrl}/subscriptions/cancel`, {}, { headers: { Authorization: `Bearer ${token}` } });
+                        loadSubscriptionAndUsage();
+                        alert("Subscription cancelled successfully. You will have access until the end of the current period.");
+                      } catch (e) {
+                        alert("Failed to cancel subscription. Please contact support.");
+                      }
+                    }
+                  }}
+                  className="text-[10px] font-black uppercase text-rose-500 hover:text-rose-600 tracking-[0.2em] transition-all flex items-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                  Terminate Membership
+                </button>
+              )}
             </div>
           </div>
         </div>

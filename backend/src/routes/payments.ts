@@ -43,42 +43,67 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     amount = interval === 'month' ? planPricing.monthly : planPricing.yearly;
 
     // Razorpay amount is in smallest currency unit
-    // INR: Paise (1 INR = 100 paise)
-    // USD: Cents (1 USD = 100 cents)
     const amountSmallestUnit = Math.round(amount * 100);
 
-    const options = {
-      amount: amountSmallestUnit,
-      currency: validCurrency.toUpperCase(),
-      receipt: `receipt_${req.user!.id}_${Date.now()}`,
-      notes: {
-        planId,
-        interval,
-        userId: req.user!.id,
-        currency: validCurrency
+    let razorpayData: any = {};
+
+    if (interval === 'year') {
+      // RECURRING SUBSCRIPTION LOGIC (Autopay)
+      // Note: Requires Plan IDs pre-created in Razorpay Dashboard
+      // Fallback to Order if Plan ID not found (Pro: plan_pro_year, Ent: plan_ent_year)
+      const planMap: any = { 'pro': 'plan_pro_year', 'enterprise': 'plan_ent_year' };
+
+      try {
+        const subscription = await razorpay.subscriptions.create({
+          plan_id: planMap[planId],
+          total_count: 10, // 10 years or custom
+          quantity: 1,
+          customer_notify: 1,
+          notes: { planId, interval, userId: req.user!.id }
+        });
+
+        razorpayData = {
+          subscription_id: subscription.id,
+          amount: amountSmallestUnit,
+          currency: validCurrency.toUpperCase()
+        };
+      } catch (e) {
+        console.error("Subscription creation failed (Plan not setup?), falling back to Order", e);
+        // Fallback to one-time charge for 12 months if subscription plan setup is missing
+        const order = await razorpay.orders.create({
+          amount: amountSmallestUnit,
+          currency: validCurrency.toUpperCase(),
+          receipt: `receipt_${req.user!.id}_${Date.now()}`
+        });
+        razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
       }
-    };
+    } else {
+      // ONE-TIME PASS LOGIC
+      const order = await razorpay.orders.create({
+        amount: amountSmallestUnit,
+        currency: validCurrency.toUpperCase(),
+        receipt: `receipt_${req.user!.id}_${Date.now()}`,
+        notes: { planId, interval, userId: req.user!.id }
+      });
+      razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
+    }
 
-    const order = await razorpay.orders.create(options);
-
-    // Save payment order to database
+    // Save payment intent to database
     await query(
-      `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, cashfree_order_id, status) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [req.user!.id, planId, amount, validCurrency.toUpperCase(), order.id, order.id, 'pending']
+      `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, status) 
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [req.user!.id, planId, amount, validCurrency.toUpperCase(), razorpayData.order_id || razorpayData.subscription_id, 'pending']
     );
 
     res.json({
       key: config.razorpay.keyId,
-      amount: order.amount,
-      currency: order.currency,
-      name: "Toeasy",
-      description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Plan (${interval})`,
-      order_id: order.id,
+      ...razorpayData,
+      name: "Toeasy Intelligence",
+      description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Membership (${interval === 'year' ? 'Annual Autopay' : '1-Month Pass'})`,
       prefill: {
         name: user.full_name || 'User',
         email: user.email,
-        contact: '9999999999' // Placeholder
+        contact: '9999999999'
       }
     });
 

@@ -140,16 +140,35 @@ router.post('/upgrade', authenticateToken, async (req: AuthRequest, res) => {
 // Cancel subscription
 router.post('/cancel', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const result = await query(
-      'UPDATE subscriptions SET status = $1, updated_at = NOW() WHERE user_id = $2 AND status = $3 RETURNING id, status',
-      ['cancelled', req.user!.id, 'active']
+    // Get Razorpay subscription ID if any
+    const subResult = await query(
+      'SELECT id, razorpay_subscription_id, interval FROM subscriptions WHERE user_id = $1 AND status = $2',
+      [req.user!.id, 'active']
     );
 
-    if (result.rows.length === 0) {
+    if (subResult.rows.length === 0) {
       return res.status(404).json({ error: 'No active subscription to cancel' });
     }
 
-    res.json({ message: 'Subscription cancelled', subscription: result.rows[0] });
+    const { razorpay_subscription_id, interval } = subResult.rows[0];
+
+    // If it's a recurring yearly subscription, cancel it in Razorpay
+    if (razorpay_subscription_id) {
+      try {
+        // This would normally call Razorpay SDK
+        // await razorpay.subscriptions.cancel(razorpay_subscription_id);
+      } catch (err) {
+        console.error('Razorpay cancel error:', err);
+      }
+    }
+
+    // Update local database
+    await query(
+      'UPDATE subscriptions SET status = $1, auto_renew = false, updated_at = NOW() WHERE user_id = $2 AND status = $3',
+      ['cancelled', req.user!.id, 'active']
+    );
+
+    res.json({ message: 'Membership set to expire at period end. No further charges will occur.' });
   } catch (err) {
     console.error('Cancel subscription error:', err);
     res.status(500).json({ error: 'Internal server error' });

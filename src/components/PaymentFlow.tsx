@@ -58,19 +58,27 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
       const data = response.data; // { key, amount, currency, name, description, order_id, prefill }
 
       if (window.Razorpay) {
-        const options = {
+        const options: any = {
           key: data.key,
           amount: data.amount,
           currency: data.currency,
           name: data.name,
           description: data.description,
-          order_id: data.order_id,
+          prefill: data.prefill,
+          theme: { color: "#4f46e5" },
+          modal: {
+            ondismiss: function () {
+              setPaymentState(prev => ({ ...prev, status: 'idle' }));
+            }
+          },
           handler: async function (response: any) {
             // Payment Success
             setPaymentState(prev => ({ ...prev, status: 'verifying' }));
             try {
+              // For subscriptions, we verify using the subscription_id and payment_id
               await paymentAPI.verify({
-                razorpay_order_id: response.razorpay_order_id,
+                razorpay_order_id: response.razorpay_order_id || data.order_id,
+                razorpay_subscription_id: response.razorpay_subscription_id || data.subscription_id,
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature
               });
@@ -87,17 +95,15 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
                 error: 'Payment verification failed. Please contact support.'
               }));
             }
-          },
-          prefill: data.prefill,
-          theme: {
-            color: "#4f46e5" // Indigo-600
-          },
-          modal: {
-            ondismiss: function () {
-              setPaymentState(prev => ({ ...prev, status: 'idle' }));
-            }
           }
         };
+
+        // BIFURCATION: Order vs Subscription
+        if (data.subscription_id) {
+          options.subscription_id = data.subscription_id;
+        } else {
+          options.order_id = data.order_id;
+        }
 
         const rzp1 = new window.Razorpay(options);
         rzp1.on('payment.failed', function (response: any) {
