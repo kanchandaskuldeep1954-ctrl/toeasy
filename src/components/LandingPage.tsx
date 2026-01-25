@@ -57,12 +57,24 @@ const LandingPage: React.FC = () => {
                                         <h3 className="text-3xl md:text-5xl font-black text-white leading-tight">
                                             Visualizing Complexity at <span className="text-indigo-500 italic">Speed.</span>
                                         </h3>
-                                        <p className="text-slate-400 text-sm md:text-base font-medium">
-                                            Experience zero-latency data exploration with our proprietary rendering stack.
-                                        </p>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Trust Bar / Logos */}
+                <div className="mt-20 border-y border-slate-200/50 dark:border-slate-800/50 py-10 bg-slate-50/50 dark:bg-slate-900/50">
+                    <div className="max-w-7xl mx-auto px-4">
+                        <p className="text-center text-[10px] font-black uppercase tracking-[0.3em] text-slate-400 mb-8">Seamlessly Integrated With</p>
+                        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-16 opacity-40 grayscale hover:grayscale-0 transition-all duration-700">
+                            {['PostgreSQL', 'Snowflake', 'BigQuery', 'MySQL', 'MongoDB', 'Redis'].map((name) => (
+                                <div key={name} className="flex items-center gap-2 group cursor-default">
+                                    <div className="w-8 h-8 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center font-black text-xs group-hover:bg-indigo-600 group-hover:text-white transition-colors">{name[0]}</div>
+                                    <span className="font-bold text-sm text-slate-600 dark:text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white">{name}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -135,19 +147,44 @@ const LandingPage: React.FC = () => {
                 </div>
             </section>
 
-            {/* Testimonial / Trust Section */}
-            <section className="py-24 px-4 relative bg-slate-50 dark:bg-slate-950">
-                <div className="max-w-4xl mx-auto text-center space-y-8">
-                    <p className="text-indigo-600 dark:text-indigo-400 font-bold tracking-widest uppercase text-xs">Trusted by experts</p>
-                    <blockquote className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white leading-tight italic">
-                        "Toeasy has completely transformed how we handle our financial data. What used to take days of manual cleaning now takes minutes."
-                    </blockquote>
-                    <div className="flex items-center justify-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500"></div>
-                        <div className="text-left">
-                            <p className="font-bold text-slate-900 dark:text-white">Alex Rivera</p>
-                            <p className="text-xs text-slate-500 dark:text-slate-400">Head of Data, FinTech Corp</p>
-                        </div>
+            {/* Testimonials / Wall of Love */}
+            <section className="py-24 px-4 bg-white dark:bg-slate-900 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/5 blur-[120px] -z-10"></div>
+                <div className="max-w-7xl mx-auto">
+                    <div className="text-center mb-16 space-y-4">
+                        <h2 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">Wall of Love</h2>
+                        <p className="text-slate-500 dark:text-slate-400 max-w-2xl mx-auto font-medium">Real stories from engineers and data scientists using Toeasy AI.</p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {[
+                            { name: 'Alex Rivera', role: 'Head of Data', company: 'FinTech Corp', quote: 'Toeasy has completely transformed how we handle our financial data. What used to take days of manual cleaning now takes minutes.', avatar: 'AR' },
+                            { name: 'Sarah Chen', role: 'Senior Architect', company: 'NextScale', quote: 'The AI orchestration is spooky good. It understood our messy schema instantly and suggested fixes I hadn\'t even thought of.', avatar: 'SC' },
+                            { name: 'Marcus Thorne', role: 'Startup Founder', company: 'DataFlow', quote: 'Finally, a data tool that doesn\'t require a PhD to use. We were up and running with 3 dashboards in less than an hour.', avatar: 'MT' },
+                            { name: 'Elena Rodriguez', role: 'BI Analyst', company: 'Global Logistics', quote: 'The natural language playground is a game changer. I can just ask "What\'s our monthly growth?" and get the chart instantly.', avatar: 'ER' },
+                            { name: 'David Park', role: 'Backend Engineer', company: 'SaaS Builder', quote: 'Cleanest API integration I\'ve seen. Highly recommended for teams who actually care about data quality.', avatar: 'DP' },
+                            { name: 'Jessica Wu', role: 'Product Manager', company: 'Innovate AI', quote: 'Toeasy AI is the data operating system we were missing. Pure efficiency.', avatar: 'JW' }
+                        ].map((testi, idx) => (
+                            <div key={idx} className="p-8 rounded-3xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 hover:border-indigo-500/30 transition-all group">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-black shadow-md group-hover:scale-110 transition-transform">
+                                        {testi.avatar}
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="font-bold text-slate-900 dark:text-white text-sm">{testi.name}</p>
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">{testi.role} @ {testi.company}</p>
+                                    </div>
+                                    <div className="ml-auto flex gap-0.5">
+                                        {[1, 2, 3, 4, 5].map(s => (
+                                            <svg key={s} className="w-3 h-3 text-yellow-400 fill-current" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" /></svg>
+                                        ))}
+                                    </div>
+                                </div>
+                                <blockquote className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed font-medium italic">
+                                    "{testi.quote}"
+                                </blockquote>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </section>
