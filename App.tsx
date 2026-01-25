@@ -47,6 +47,7 @@ import ContactUs from './src/components/Legal/ContactUs';
 import TermsConditions from './src/components/Legal/TermsConditions';
 import PrivacyPolicy from './src/components/Legal/PrivacyPolicy';
 import RefundPolicy from './src/components/Legal/RefundPolicy';
+import PublicShareView from './src/components/PublicShareView';
 
 const AppLayout: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -138,6 +139,9 @@ function App() {
                 }
               />
 
+              {/* Public Share Route (NO AUTH) */}
+              <Route path="/public/share/:token" element={<PublicShareView />} />
+
               <Route
                 path="/login"
                 element={
@@ -171,7 +175,7 @@ function App() {
           </Router>
         </DatasetProvider>
       </WorkspaceProvider>
-    </AuthProvider>
+    </AuthProvider >
   );
 }
 

@@ -5,6 +5,8 @@ import { GroqService } from '../services/groqService';
 import { ExportService } from '../services/exportService';
 import ReactMarkdown from 'react-markdown';
 import PlotlyChart from './Dashboard/PlotlyChart';
+import { sharingAPI } from '../src/services/api';
+import { useSearchParams } from 'react-router-dom';
 
 interface ReportViewProps {
     dataset: Dataset;
@@ -51,6 +53,11 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [selectionOverlay, setSelectionOverlay] = useState<{ text: string, top: number, left: number } | null>(null);
     const contentRef = useRef<HTMLDivElement>(null);
 
+    const [searchParams] = useSearchParams();
+    const workspaceId = searchParams.get('workspace') || '';
+    const [shareUrl, setShareUrl] = useState<string | null>(null);
+    const [isSharing, setIsSharing] = useState(false);
+
     const copilotSuggestions = [
         { title: 'Add Competitor Benchmark', icon: '🏆', prompt: 'Include a section comparing our revenue growth against the S&P 500 average for 2025.' },
         { title: 'Summarize for Board', icon: '🤵', prompt: 'Convert the executive summary into 3 bullet points that fit on a single slide.' },
@@ -93,6 +100,42 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         setError(null);
         setLoading(false);
         if (onUpdate) onUpdate({ ...dataset, strategicReport: fallback });
+    };
+
+    const handleShare = async () => {
+        if (!report || isSharing) return;
+        setIsSharing(true);
+        try {
+            // Capture frozen snapshot of the report
+            const snapshot = {
+                summary: report.executiveSummary,
+                sections: report.sections.map(s => ({
+                    title: s.title,
+                    content: s.content,
+                    charts: s.charts?.map(c => ({
+                        type: c.type,
+                        title: c.title,
+                        data: dataset.data, // Simplified for snapshots or use specific data if filtered
+                        spec: c
+                    }))
+                }))
+            };
+
+            const response = await sharingAPI.create({
+                resourceType: 'report',
+                resourceId: dataset.id,
+                workspaceId,
+                title: report.title,
+                snapshot
+            });
+
+            setShareUrl(response.data.publicUrl);
+        } catch (err) {
+            console.error('Sharing failed:', err);
+            alert('Failed to generate share link');
+        } finally {
+            setIsSharing(false);
+        }
     };
 
     const isMounted = useRef(true);
@@ -408,6 +451,17 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
 
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={handleShare} // Added share button
+                        disabled={isSharing}
+                        className={`p-2 rounded-full transition-all ${isSharing ? 'animate-pulse bg-indigo-100 dark:bg-indigo-900/30' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 group'}`}
+                        title="Share Report Link"
+                    >
+                        <svg className={`w-5 h-5 transition-transform group-hover:scale-110 ${isSharing ? 'text-indigo-500' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                    </button>
+
                     <button
                         onClick={() => setShowExportModal(true)}
                         className="p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full"

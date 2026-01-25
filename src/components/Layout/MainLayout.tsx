@@ -1,5 +1,6 @@
 import React from 'react';
 import Sidebar from './Sidebar';
+import WorkspaceTabs from '../WorkspaceTabs';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -22,9 +23,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
                     </button>
                     <span className="font-black text-lg tracking-tight text-slate-900 dark:text-white">
-                        Toeasy<span className="text-indigo-600">.AI</span>
+                        Toeasy
                     </span>
                 </div>
+
+                {/* Perspective Tabs Bar */}
+                <WorkspaceTabs />
 
                 <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                     {children}

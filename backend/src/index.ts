@@ -24,6 +24,8 @@ import analyticsRoutes from './routes/analytics.js';
 import cleaningRoutes from './routes/cleaning.js';
 import dataflowRoutes from './routes/dataflows.js';
 import integrationRoutes from './routes/integrations.js';
+import sharingRoutes from './routes/sharing.js';
+import tabsRoutes from './routes/tabs.js';
 
 const app = express();
 
@@ -110,6 +112,8 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/workspaces', cleaningRoutes);
 app.use('/api/workspaces', dataflowRoutes);
 app.use('/api/integrations', authenticateToken, integrationRoutes);
+app.use('/api/sharing', sharingRoutes); // Public share links (some routes require auth, some don't)
+app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, async (req: AuthRequest, res) => {

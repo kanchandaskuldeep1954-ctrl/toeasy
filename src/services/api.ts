@@ -328,6 +328,39 @@ export const cleaningAPI = {
     getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/chat`, { message, context })
 };
 
+// ============================================
+// Sharing Endpoints
+// ============================================
+
+export const sharingAPI = {
+  create: (data: { resourceType: 'dashboard' | 'report', resourceId: string, title: string, snapshot: any, workspaceId: string }) =>
+    getClient().post('/sharing/create', data),
+
+  list: () =>
+    getClient().get('/sharing/list'),
+
+  revoke: (token: string) =>
+    getClient().delete(`/sharing/${token}`)
+};
+
+// ============================================
+// Tabs Endpoints
+// ============================================
+
+export const tabsAPI = {
+  list: (workspaceId: string) =>
+    getClient().get('/tabs', { params: { workspaceId } }),
+
+  add: (data: { workspaceId: string, tabType: 'dashboard' | 'report' | 'dataset', resourceId: string, tabName: string }) =>
+    getClient().post('/tabs', data),
+
+  delete: (id: string) =>
+    getClient().delete(`/tabs/${id}`),
+
+  reorder: (workspaceId: string, tabIds: string[]) =>
+    getClient().put('/tabs/reorder', { workspaceId, tabIds })
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -343,5 +376,7 @@ export default {
   payment: paymentAPI,
   analytics: analyticsAPI,
   cleaning: cleaningAPI,
+  sharing: sharingAPI,
+  tabs: tabsAPI,
   initializeAPIClient
 };

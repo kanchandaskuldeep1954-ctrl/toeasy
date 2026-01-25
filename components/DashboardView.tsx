@@ -10,6 +10,8 @@ import { InsightCard } from './Dashboard/InsightCard';
 import { ChartBuilderPanel } from './Dashboard/ChartBuilderPanel';
 import { DataPeekModal } from './Dashboard/DataPeekModal';
 import { aggregateData } from '../src/utils/dashboardHelper';
+import { sharingAPI } from '../src/services/api';
+import { useSearchParams } from 'react-router-dom';
 
 interface DashboardViewProps {
     dataset: Dataset;
@@ -79,6 +81,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     const [isKpiThinking, setIsKpiThinking] = useState(false);
 
     const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+
+    const [searchParams] = useSearchParams();
+    const workspaceId = searchParams.get('workspace') || '';
+
+    const [shareUrl, setShareUrl] = useState<string | null>(null);
+    const [isSharing, setIsSharing] = useState(false);
 
     const filteredData = useMemo(() => {
         let data = dataset.data;
@@ -295,6 +303,38 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         }
     };
 
+    const handleShare = async () => {
+        if (!config || isSharing) return;
+        setIsSharing(true);
+        try {
+            // Capture frozen snapshot
+            const snapshot = {
+                kpis: dynamicKPIs.map(k => ({ label: k.label, value: k.value, change: (k as any).change })),
+                charts: config.charts.map(c => ({
+                    type: c.type,
+                    title: c.title,
+                    data: getChartData(c),
+                    spec: c
+                }))
+            };
+
+            const response = await sharingAPI.create({
+                resourceType: 'dashboard',
+                resourceId: dataset.id, // Or dashboard ID if exists
+                workspaceId,
+                title: dashboardName,
+                snapshot
+            });
+
+            setShareUrl(response.data.publicUrl);
+        } catch (err) {
+            console.error('Sharing failed:', err);
+            alert('Failed to generate share link');
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
     if (loading || !config) return <div className="h-full flex items-center justify-center bg-slate-950 text-white/50 animate-pulse">Establishing Neural Link...</div>;
 
     const visibleCharts = config.charts || [];
@@ -340,7 +380,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             <span>{isForecastMode ? 'FORECAST ACTIVE' : 'PREDICTIVE'}</span>
                         </button>
                         <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-[9px] font-black uppercase tracking-wider shadow-lg">BOARDROOM</button>
-                        <button onClick={() => setShowExportModal(true)} className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg></button>
+                        <button
+                            onClick={handleShare}
+                            disabled={isSharing}
+                            className={`p-1.5 rounded-lg transition-colors ${isSharing ? 'animate-pulse bg-indigo-100 dark:bg-indigo-900/30' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                            title="Share Dashboard Link"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                            </svg>
+                        </button>
+                        <button onClick={() => setShowExportModal(true)} className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </div>
