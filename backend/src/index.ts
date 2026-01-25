@@ -189,7 +189,7 @@ app.post('/api/generate-synthetic', authenticateToken, checkSubscription, checkT
       count: syntheticData.length,
       topic,
       fields,
-      tier,
+      tier: req.user!.tier,
       maxAllowed: maxRows,
       generatedAt: new Date().toISOString()
     });
