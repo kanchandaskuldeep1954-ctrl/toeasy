@@ -149,7 +149,7 @@ const LandingPage: React.FC = () => {
                                         { name: 'MySQL', slug: 'mysql' },
                                         { name: 'MongoDB', slug: 'mongodb' },
                                         { name: 'Redis', slug: 'redis' },
-                                        { name: 'AWS', slug: 'amazonwebservices' },
+                                        { name: 'AWS', slug: 'amazonaws' },
                                         { name: 'Stripe', slug: 'stripe' },
                                         { name: 'Salesforce', slug: 'salesforce' },
                                         { name: 'Tableau', slug: 'tableau' },
