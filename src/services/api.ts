@@ -53,6 +53,19 @@ export function initializeAPIClient(token?: string | null) {
 }
 
 /**
+ * Helper to extract user-friendly error message from Axios error
+ */
+export function getErrorMessage(error: any): string {
+  if (axios.isAxiosError(error)) {
+    return error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      'An unexpected error occurred';
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
  * Get or create API client
  */
 function getClient(): AxiosInstance {

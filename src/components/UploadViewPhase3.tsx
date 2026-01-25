@@ -137,8 +137,8 @@ export const UploadViewPhase3: React.FC = () => {
       setDatasetName('');
       navigate(`/app/clean?workspace=${workspaceId}&dataset=${response.data.id}`);
     } catch (err: any) {
-      const message = err.response?.data?.error || err.response?.data?.message || err.message || 'Failed to upload dataset';
-      setError(message);
+      const { getErrorMessage } = await import('../services/api');
+      setError(getErrorMessage(err));
     } finally {
       setUploading(false);
       setUploadProgress(0);

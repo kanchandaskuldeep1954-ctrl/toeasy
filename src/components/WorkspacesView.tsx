@@ -48,7 +48,8 @@ export const WorkspacesView: React.FC = () => {
       setFormData({ name: '', description: '' });
       setShowNewForm(false);
     } catch (err: any) {
-      setLocalError(err.message || 'Failed to create workspace');
+      const { getErrorMessage } = await import('../services/api');
+      setLocalError(getErrorMessage(err));
     } finally {
       setSubmitting(false);
     }

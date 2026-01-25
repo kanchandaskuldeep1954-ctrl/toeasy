@@ -200,8 +200,9 @@ const PlaygroundViewIntegrated: React.FC = () => {
       // If results are available and small enough, auto-switch to chart if numbers present? 
       // For now, keep as table.
 
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Query execution failed');
+    } catch (err: any) {
+      const { getErrorMessage } = await import('../services/api');
+      setError(getErrorMessage(err));
       setActiveTab('messages'); // Show error tab
     } finally {
       setLoading(false);

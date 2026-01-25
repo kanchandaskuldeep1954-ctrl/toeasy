@@ -108,7 +108,8 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setWorkspaces((prev) => [newWs, ...prev]);
       setError(null);
     } catch (err: any) {
-      setError(err.message || 'Failed to create workspace');
+      const { getErrorMessage } = await import('../services/api');
+      setError(getErrorMessage(err));
       throw err;
     } finally {
       setLoading(false);
