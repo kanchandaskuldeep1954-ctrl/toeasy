@@ -49,14 +49,18 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 
     if (interval === 'year') {
       // RECURRING SUBSCRIPTION LOGIC (Autopay)
-      // Note: Requires Plan IDs pre-created in Razorpay Dashboard
-      // Fallback to Order if Plan ID not found (Pro: plan_pro_year, Ent: plan_ent_year)
-      const planMap: any = { 'pro': 'plan_pro_year', 'enterprise': 'plan_ent_year' };
+      const planMap: any = {
+        'pro': { id: 'plan_pro_year_v1', name: 'Toeasy Pro Annual', amount: 599000 },
+        'enterprise': { id: 'plan_ent_year_v1', name: 'Toeasy Enterprise Annual', amount: 2599000 }
+      };
+
+      const targetPlan = planMap[planId];
 
       try {
+        // Try to create subscription directly
         const subscription = await razorpay.subscriptions.create({
-          plan_id: planMap[planId],
-          total_count: 10, // 10 years or custom
+          plan_id: targetPlan.id,
+          total_count: 100, // Indefinite recurrence
           quantity: 1,
           customer_notify: 1,
           notes: { planId, interval, userId: req.user!.id }
@@ -67,15 +71,52 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
           amount: amountSmallestUnit,
           currency: validCurrency.toUpperCase()
         };
-      } catch (e) {
-        console.error("Subscription creation failed (Plan not setup?), falling back to Order", e);
-        // Fallback to one-time charge for 12 months if subscription plan setup is missing
-        const order = await razorpay.orders.create({
-          amount: amountSmallestUnit,
-          currency: validCurrency.toUpperCase(),
-          receipt: `receipt_${req.user!.id}_${Date.now()}`
-        });
-        razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
+      } catch (e: any) {
+        console.error("Subscription creation failed, checking if plan needs creation...", e);
+
+        // If plan doesn't exist, create it dynamically
+        if (e.error && e.error.description === 'The plan_id provided is invalid') {
+          try {
+            console.log(`Creating missing plan: ${targetPlan.id}`);
+            await razorpay.plans.create({
+              id: targetPlan.id,
+              period: 'yearly',
+              interval: 1,
+              item: {
+                name: targetPlan.name,
+                amount: targetPlan.amount,
+                currency: 'INR', // Currently enforcing INR for India context based on user feedback
+                description: 'Annual Autopay Membership'
+              }
+            });
+
+            // Retry subscription creation
+            const subscription = await razorpay.subscriptions.create({
+              plan_id: targetPlan.id,
+              total_count: 100,
+              quantity: 1,
+              customer_notify: 1,
+              notes: { planId, interval, userId: req.user!.id }
+            });
+
+            razorpayData = {
+              subscription_id: subscription.id,
+              amount: amountSmallestUnit,
+              currency: validCurrency.toUpperCase()
+            };
+          } catch (creationError) {
+            console.error("Critical: Failed to create plan and subscription", creationError);
+            throw new Error("Billing system initialization failed. Please contact support.");
+          }
+        } else {
+          // Fallback to Order if it's a different error
+          const order = await razorpay.orders.create({
+            amount: amountSmallestUnit,
+            currency: validCurrency.toUpperCase(),
+            receipt: `receipt_${req.user!.id}_${Date.now()}`
+          });
+          razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
+        }
       }
     } else {
       // ONE-TIME PASS LOGIC
@@ -90,7 +131,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 
     // Save payment intent to database
     await query(
-      `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, status) 
+      `INSERT INTO payment_orders (user_id, plan_id, amount, currency, order_id, status)
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [req.user!.id, planId, amount, validCurrency.toUpperCase(), razorpayData.order_id || razorpayData.subscription_id, 'pending']
     );
