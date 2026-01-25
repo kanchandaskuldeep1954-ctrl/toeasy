@@ -9,13 +9,13 @@ exports.up = async function (knex) {
     // Create shared_links table
     await knex.raw(`
         CREATE TABLE IF NOT EXISTS shared_links (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
             
             -- What is being shared
             resource_type VARCHAR(20) NOT NULL CHECK (resource_type IN ('dashboard', 'report')),
-            resource_id UUID NOT NULL,
+            resource_id INTEGER NOT NULL,
             
             -- The frozen snapshot (JSON blob of the rendered content)
             snapshot JSONB NOT NULL,
@@ -40,13 +40,13 @@ exports.up = async function (knex) {
     // Create workspace_tabs table
     await knex.raw(`
         CREATE TABLE IF NOT EXISTS workspace_tabs (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-            workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+            id SERIAL PRIMARY KEY,
+            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
             
             -- Tab content
             tab_type VARCHAR(20) NOT NULL CHECK (tab_type IN ('dashboard', 'report', 'dataset')),
-            resource_id UUID NOT NULL,
+            resource_id INTEGER NOT NULL,
             tab_name VARCHAR(100) NOT NULL,
             tab_order INTEGER DEFAULT 0,
             
