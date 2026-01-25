@@ -1626,8 +1626,11 @@ ANALYZE and return ONLY valid JSON (no markdown):
     RULES:
     1. REAL DATA ONLY. Do not invent numbers.
     2. If asked for NEW sections (Risk, Predictive), add them.
-    3. CRITICAL OPTIMIZATION: To save space, for ANY section that does NOT need changes, return EXACTLY: { "id": "section_id", "unchanged": true }
-    4. Only return full content for NEW or MODIFIED sections.
+    3. CHARTS & VISUALS: If user asks for "charts", "visuals", or "detailed report", add up to 2 charts per NEW/MODIFIED section using this format:
+       "charts": [{ "type": "bar", "title": "Sales by Product", "data": { "labels": ["Product A", "Product B"], "values": [100, 200] } }]
+       Available chart types: "bar", "line", "pie", "scatter"
+    4. CRITICAL OPTIMIZATION: For ANY section that does NOT need changes, return EXACTLY: { "id": "section_id", "unchanged": true }
+    5. Only return full content for NEW or MODIFIED sections.
     
     INPUT SECTIONS:
     ${JSON.stringify(originalSections.map((s: any) => ({ id: s.id, title: s.title, contentPreview: s.content.substring(0, 100) + "..." })))}
@@ -1635,10 +1638,15 @@ ANALYZE and return ONLY valid JSON (no markdown):
     RETURN ONLY JSON ARRAY (Sections):
     [
       { "id": "intro", "unchanged": true },
-      { "id": "new_risk_section", "title": "Risk Analysis", "content": "..." }
+      { 
+        "id": "new_section", 
+        "title": "...", 
+        "content": "...",
+        "charts": [{ "type": "bar", "title": "...", "data": { "labels": [...], "values": [...] } }]
+      }
     ]`;
 
-      const result = await this.callGroq(groqPrompt, 7000);
+      const result = await this.callGroq(groqPrompt, 8000);
 
       const modifiedSections = this.cleanAndParseJSON(result);
 
