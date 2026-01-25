@@ -199,9 +199,9 @@ const BillingViewIntegrated: React.FC = () => {
     {
       id: 'pro',
       name: 'Professional',
-      monthlyPrice: currency === 'INR' ? 599 : 25,
+      monthlyPrice: currency === 'INR' ? 499 : 25,
       yearlyPrice: currency === 'INR' ? 499 : 20,
-      description: billingCycle === 'month' ? '1-Month Priority Pass (No Commitment)' : 'Annual Growth Membership (Autopay)',
+      description: billingCycle === 'month' ? 'Monthly Membership (Autopay)' : 'Annual Commitment (Save 20%)',
       features: ['Up to 100 datasets', 'Unlimited API calls', '100GB storage', 'Priority support', 'Advanced validation'],
       isCurrent: subscription?.tier === 'pro',
       isPopular: true
@@ -209,9 +209,9 @@ const BillingViewIntegrated: React.FC = () => {
     {
       id: 'enterprise',
       name: 'Enterprise',
-      monthlyPrice: currency === 'INR' ? 2599 : 89,
+      monthlyPrice: currency === 'INR' ? 2499 : 89,
       yearlyPrice: currency === 'INR' ? 2165 : 74,
-      description: billingCycle === 'month' ? '1-Month Pro Agency Pass' : 'Enterprise Intelligence (Autopay)',
+      description: billingCycle === 'month' ? 'Monthly Pro Agency (Autopay)' : 'Enterprise Intelligence (Autopay)',
       features: ['Unlimited datasets', 'Unlimited API calls', 'Unlimited storage', '24/7 support', 'SSO & Security', 'Custom integrations'],
       isCurrent: subscription?.tier === 'enterprise',
       isPopular: false
@@ -342,7 +342,7 @@ const BillingViewIntegrated: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
           >
-            1-Month Pass
+            Monthly (PAYG)
           </button>
           <button
             onClick={() => setBillingCycle('year')}
@@ -351,9 +351,9 @@ const BillingViewIntegrated: React.FC = () => {
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
           >
-            Annual (Save 20%)
+            Annual (Best Value)
             <span className="absolute -top-3 -right-2 bg-emerald-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-full">
-              AUTOPAY
+              SAVE 20%
             </span>
           </button>
         </div>

@@ -47,39 +47,47 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 
     let razorpayData: any = {};
 
-    if (interval === 'year') {
-      // RECURRING SUBSCRIPTION LOGIC (Autopay)
-      const planMap: any = {
-        'pro': { name: 'Toeasy Pro Annual', amount: 599000 },
-        'enterprise': { name: 'Toeasy Enterprise Annual', amount: 2599000 }
-      };
+    // UNIFIED SUBSCRIPTION LOGIC (Monthly & Yearly are both Autopay now)
+    // We treat both intervals as subscriptions.
 
-      const targetPlanData = planMap[planId];
+    const planConfig: any = {
+      'pro': {
+        'month': { name: 'Toeasy Pro Monthly', amount: 49900, period: 'monthly' }, // ₹499
+        'year': { name: 'Toeasy Pro Annual', amount: 499000, period: 'yearly' }    // ₹4990 (12 months @ ~415/mo)
+      },
+      'enterprise': {
+        'month': { name: 'Toeasy Enterprise Monthly', amount: 249900, period: 'monthly' }, // ₹2499
+        'year': { name: 'Toeasy Enterprise Annual', amount: 2499000, period: 'yearly' }    // ₹24990
+      }
+    };
+
+    const targetPlanData = planConfig[planId]?.[interval];
+
+    if (targetPlanData) {
       let razorpayPlanId = '';
 
       try {
         // 1. Fetch available plans to find a match
-        // Razorpay listing is paginated, fetching last 100 should cover active plans usually
-        // Ideally we should cache this mapping in DB
         const plans = await razorpay.plans.all({ count: 100 });
         const existingPlan = plans.items.find((p: any) =>
           p.item.name === targetPlanData.name &&
           p.item.amount === targetPlanData.amount &&
-          p.period === 'yearly'
+          p.period === targetPlanData.period
         );
 
         if (existingPlan) {
           razorpayPlanId = existingPlan.id;
         } else {
           // 2. Create Plan if not found
+          console.log(`Creating missing plan: ${targetPlanData.name}`);
           const newPlan = await razorpay.plans.create({
-            period: 'yearly',
+            period: targetPlanData.period,
             interval: 1,
             item: {
               name: targetPlanData.name,
               amount: targetPlanData.amount,
-              currency: 'INR', // Currently enforcing INR
-              description: 'Annual Autopay Membership'
+              currency: 'INR', // Enforcing INR for consistency
+              description: `${targetPlanData.period === 'monthly' ? 'Monthly' : 'Annual'} Autopay Membership`
             }
           });
           razorpayPlanId = newPlan.id;
@@ -88,7 +96,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
         // 3. Create Subscription
         const subscription = await razorpay.subscriptions.create({
           plan_id: razorpayPlanId,
-          total_count: 100, // Indefinite
+          total_count: 100, // Indefinite recurrence (100 cycles)
           quantity: 1,
           customer_notify: 1,
           notes: { planId, interval, userId: req.user!.id }
@@ -96,27 +104,28 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 
         razorpayData = {
           subscription_id: subscription.id,
-          amount: amountSmallestUnit,
+          amount: targetPlanData.amount, // Use plan amount
           currency: validCurrency.toUpperCase()
         };
 
       } catch (e: any) {
-        console.error("Subscription setup failed, falling back to Order", e);
-        // Fallback to one-time charge
+        console.error("Subscription setup failed, falling back to One-time Order", e);
+        // Fallback to one-time charge if subscription fails (e.g. gateway issues)
         const order = await razorpay.orders.create({
           amount: amountSmallestUnit,
           currency: validCurrency.toUpperCase(),
-          receipt: `receipt_${req.user!.id}_${Date.now()}`
+          receipt: `receipt_${req.user!.id}_${Date.now()}`,
+          notes: { planId, interval, userId: req.user!.id }
         });
         razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
       }
     } else {
-      // ONE-TIME PASS LOGIC
+      // Fallback for unknown plan/interval combination (should ideally not be hit with proper validation)
+      console.warn(`Unknown planId/interval combination: ${planId}/${interval}. Falling back to one-time order.`);
       const order = await razorpay.orders.create({
         amount: amountSmallestUnit,
         currency: validCurrency.toUpperCase(),
-        receipt: `receipt_${req.user!.id}_${Date.now()}`,
-        notes: { planId, interval, userId: req.user!.id }
+        receipt: `receipt_${req.user!.id}_${Date.now()}`
       });
       razorpayData = { order_id: order.id, amount: order.amount, currency: order.currency };
     }
@@ -132,7 +141,7 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
       key: config.razorpay.keyId,
       ...razorpayData,
       name: "Toeasy Intelligence",
-      description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Membership (${interval === 'year' ? 'Annual Autopay' : '1-Month Pass'})`,
+      description: `${planId === 'pro' ? 'Pro' : 'Enterprise'} Membership (${interval}ly autopay)`,
       prefill: {
         name: user.full_name || 'User',
         email: user.email,

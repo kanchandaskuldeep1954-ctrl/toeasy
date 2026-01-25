@@ -273,7 +273,7 @@ export const paymentAPI = {
   initiate: (subscriptionId: string, amount: number) =>
     getClient().post('/payments/initiate', { subscription_id: subscriptionId, amount }),
 
-  verify: (data: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) =>
+  verify: (data: { razorpay_order_id?: string; razorpay_subscription_id?: string; razorpay_payment_id: string; razorpay_signature: string }) =>
     getClient().post('/payments/verify', data),
 
   listTransactions: () =>
