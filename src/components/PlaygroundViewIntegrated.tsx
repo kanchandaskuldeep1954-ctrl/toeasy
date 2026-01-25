@@ -436,29 +436,26 @@ const PlaygroundViewIntegrated: React.FC = () => {
           {/* Editor Input */}
           <div className="flex-1 relative overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
             {editorMode === 'ask' ? (
-              <div className="absolute inset-0 flex items-center justify-center p-4">
-                <div className="w-full max-w-3xl relative">
-                  <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[20px] opacity-20 blur-xl"></div>
-                  <form onSubmit={executeQuery} className="relative">
-                    <div className="absolute left-6 top-6 text-indigo-500 animate-pulse">
-                      <Sparkles className="w-6 h-6" />
-                    </div>
-                    <textarea
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Ask anything about your data, e.g., 'Show me top products by revenue last month'..."
-                      className="w-full pl-16 pr-6 py-6 h-32 bg-white dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-[20px] text-lg text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-xl resize-none"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                          e.preventDefault();
-                          executeQuery();
-                        }
-                      }}
-                    />
-                    <div className="absolute right-4 bottom-4 text-xs text-slate-400 font-medium bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded">
-                      Press Enter to Run
-                    </div>
-                  </form>
+              <div className="absolute inset-0 p-6">
+                <div className="relative h-full">
+                  <div className="absolute left-4 top-4 text-slate-400 pointer-events-none">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <textarea
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Ask anything about your data, e.g., 'Show me top products by revenue last month'..."
+                    className="w-full h-full pl-12 pr-4 py-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-base text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none transition-all shadow-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        executeQuery();
+                      }
+                    }}
+                  />
+                  <div className="absolute right-4 bottom-4 text-[10px] text-slate-400 font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700">
+                    Press Enter to Run
+                  </div>
                 </div>
               </div>
             ) : (
