@@ -161,9 +161,12 @@ export const PaymentFlow: React.FC<PaymentFlowProps> = ({
         {paymentState.status === 'idle' && (
           <div className="space-y-4">
             <div className="rounded-lg bg-slate-50 p-4 dark:bg-slate-800">
-              <p className="text-sm text-slate-600 dark:text-slate-400">Plan</p>
-              <p className="text-lg font-semibold text-slate-900 dark:text-white">
-                {planId === 'pro' ? 'Pro Plan' : 'Enterprise Plan'} ({interval === 'month' ? 'Monthly' : 'Yearly'})
+              <p className="text-sm text-slate-600 dark:text-slate-400">Intelligence Tier</p>
+              <p className="text-lg font-semibold text-slate-900 dark:text-white capitalize">
+                {planId} - {interval === 'month' ? '1-Month Pass' : 'Annual Growth (ABP)'}
+              </p>
+              <p className="text-[10px] font-bold text-slate-400 mt-1 uppercase">
+                {interval === 'month' ? '⚡ One-time payment (No recurring charge)' : '🔄 Recurring billing enabled (Autopay)'}
               </p>
             </div>
 
