@@ -143,17 +143,17 @@ const LandingPage: React.FC = () => {
                             {[...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
                                     {[
-                                        { name: 'PostgreSQL', url: 'https://api.svgl.app/svg/postgresql.svg' },
-                                        { name: 'Snowflake', url: 'https://api.svgl.app/svg/snowflake.svg' },
-                                        { name: 'BigQuery', url: 'https://api.svgl.app/svg/google-cloud.svg' },
-                                        { name: 'MySQL', url: 'https://api.svgl.app/svg/mysql.svg' },
-                                        { name: 'MongoDB', url: 'https://api.svgl.app/svg/mongodb.svg' },
-                                        { name: 'Redis', url: 'https://api.svgl.app/svg/redis.svg' },
-                                        { name: 'AWS', url: 'https://skillicons.dev/icons?i=aws' },
-                                        { name: 'Stripe', url: 'https://api.svgl.app/svg/stripe.svg' },
-                                        { name: 'Salesforce', url: 'https://api.svgl.app/svg/salesforce.svg' },
-                                        { name: 'Tableau', url: 'https://api.svgl.app/svg/tableau.svg' },
-                                        { name: 'PowerBI', url: 'https://api.svgl.app/svg/power-bi.svg' },
+                                        { name: 'PostgreSQL', url: 'https://www.vectorlogo.zone/logos/postgresql/postgresql-icon.svg' },
+                                        { name: 'Snowflake', url: 'https://www.vectorlogo.zone/logos/snowflake/snowflake-icon.svg' },
+                                        { name: 'BigQuery', url: 'https://www.vectorlogo.zone/logos/google_cloud_bigquery/google_cloud_bigquery-icon.svg' },
+                                        { name: 'MySQL', url: 'https://www.vectorlogo.zone/logos/mysql/mysql-icon.svg' },
+                                        { name: 'MongoDB', url: 'https://www.vectorlogo.zone/logos/mongodb/mongodb-icon.svg' },
+                                        { name: 'Redis', url: 'https://www.vectorlogo.zone/logos/redis/redis-icon.svg' },
+                                        { name: 'AWS', url: 'https://www.vectorlogo.zone/logos/amazon_aws/amazon_aws-icon.svg' },
+                                        { name: 'Stripe', url: 'https://www.vectorlogo.zone/logos/stripe/stripe-icon.svg' },
+                                        { name: 'Salesforce', url: 'https://www.vectorlogo.zone/logos/salesforce/salesforce-icon.svg' },
+                                        { name: 'Tableau', url: 'https://www.vectorlogo.zone/logos/tableau/tableau-icon.svg' },
+                                        { name: 'PowerBI', url: 'https://www.vectorlogo.zone/logos/microsoft_powerbi/microsoft_powerbi-icon.svg' },
                                     ].map((brand) => (
                                         <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
                                             <div className="w-10 h-10 flex items-center justify-center p-1 transition-all group-hover/item:scale-125">
