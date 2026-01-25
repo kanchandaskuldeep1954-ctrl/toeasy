@@ -76,7 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                         </div>
                         {(!collapsed || mobileOpen) && (
                             <span className="ml-3 font-black text-xl tracking-tight text-slate-900 dark:text-white animate-in">
-                                Toeasy<span className="text-indigo-600">.AI</span>
+                                Toeasy
                             </span>
                         )}
                     </div>
