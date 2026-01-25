@@ -1611,9 +1611,8 @@ ANALYZE and return ONLY valid JSON (no markdown):
       
       USER INSTRUCTIONS: "${instruction}"
       
-      CURRENT REPORT STRUCTURE:
+      CURRENT REPORT STRUCTURE (Summary):
       - Title: ${report.title}
-      - Version: ${report.version}
       - Sections: ${report.sections.map((s: any) => s.title).join(', ')}
       
       DATASET CONTEXT:
@@ -1621,16 +1620,30 @@ ANALYZE and return ONLY valid JSON (no markdown):
       - Columns: ${headers.slice(0, 15).join(', ')}
       
       TASK:
-      1. Refine the narrative, add new sections, or update existing ones per instructions.
-      2. If instructions imply new insights, use your knowledge of the dataset context.
+      1. Refine the narrative, add new sections (e.g., Risk Analysis, Predictive Outlook), or update existing ones per instructions.
+      2. USE ONLY AVAILABLE DATA. Do NOT hallucinate specific numbers if they are not in the KPIs or Dataset Context. If unsure, use qualitative language (e.g., "appears to be...", "further analysis required").
       3. Maintain the professional tone of the report.
-      4. Ensure the output is a valid JSON StrategicReport object.
+      4. Ensure the output is a VALID, COMPLETE JSON StrategicReport object.
       
-      RETURN UPDATED JSON (No Markdown):
-      ${JSON.stringify(report, null, 2)}`;
+      CRITICAL: Return the FULL JSON object. Do not truncate.
+      
+      INPUT REPORT JSON:
+      ${JSON.stringify(report)}
+      
+      RETURN UPDATED JSON (No Markdown):`;
 
-      const result = await this.callGroq(groqPrompt, 4000);
-      return this.cleanAndParseJSON(result);
+      // Increase token limit for full report rewrite
+      const result = await this.callGroq(groqPrompt, 6000);
+
+      const modified = this.cleanAndParseJSON(result);
+
+      // Validation: Ensure we have a valid report structure
+      if (!modified || !modified.title || !Array.isArray(modified.sections) || modified.sections.length === 0) {
+        console.warn('Modify Report: AI returned invalid structure, reverting to original.', modified);
+        return report;
+      }
+
+      return modified;
 
     } catch (error) {
       console.error('Modify report error:', error);
