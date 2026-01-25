@@ -141,9 +141,9 @@ const BillingViewIntegrated: React.FC = () => {
     }
   };
 
-  const handleUpgrade = async (planId: string, price: number) => {
+  const handleUpgrade = async (planId: string, monthlyPrice: number, yearlyTotal: number) => {
     // Downgrade to free
-    if (price === 0) {
+    if (planId === 'basic') {
       if (!window.confirm('Are you sure? Premium features will be locked.')) return;
       try {
         await axios.post(
@@ -159,7 +159,9 @@ const BillingViewIntegrated: React.FC = () => {
     }
 
     // Open payment flow for paid plans
-    const amount = billingCycle === 'year' ? price * 12 : price;
+    // CRITICAL FIX: Use explicit yearly total, do NOT multiply monthly by 12
+    const amount = billingCycle === 'year' ? yearlyTotal : monthlyPrice;
+
     setPaymentFlow({
       isOpen: true,
       planId: planId as 'pro' | 'enterprise',
@@ -190,7 +192,7 @@ const BillingViewIntegrated: React.FC = () => {
       id: 'basic',
       name: 'Starter',
       monthlyPrice: 0,
-      yearlyPrice: 0,
+      yearlyTotal: 0,
       description: 'Perfect for getting started',
       features: ['Up to 10 datasets', '100 API calls/day', '1GB storage', 'Basic support'],
       isCurrent: subscription?.tier === 'basic',
@@ -200,8 +202,8 @@ const BillingViewIntegrated: React.FC = () => {
       id: 'pro',
       name: 'Professional',
       monthlyPrice: currency === 'INR' ? 499 : 25,
-      yearlyPrice: currency === 'INR' ? 499 : 20,
-      description: billingCycle === 'month' ? 'Monthly Membership (Autopay)' : 'Annual Commitment (Save 20%)',
+      yearlyTotal: currency === 'INR' ? 4990 : 250,
+      description: billingCycle === 'month' ? 'Monthly Membership (Autopay)' : 'Annual Commitment (Save ~17%)',
       features: ['Up to 100 datasets', 'Unlimited API calls', '100GB storage', 'Priority support', 'Advanced validation'],
       isCurrent: subscription?.tier === 'pro',
       isPopular: true
@@ -210,7 +212,7 @@ const BillingViewIntegrated: React.FC = () => {
       id: 'enterprise',
       name: 'Enterprise',
       monthlyPrice: currency === 'INR' ? 2499 : 89,
-      yearlyPrice: currency === 'INR' ? 2165 : 74,
+      yearlyTotal: currency === 'INR' ? 24990 : 890,
       description: billingCycle === 'month' ? 'Monthly Pro Agency (Autopay)' : 'Enterprise Intelligence (Autopay)',
       features: ['Unlimited datasets', 'Unlimited API calls', 'Unlimited storage', '24/7 support', 'SSO & Security', 'Custom integrations'],
       isCurrent: subscription?.tier === 'enterprise',

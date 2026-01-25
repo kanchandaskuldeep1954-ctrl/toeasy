@@ -50,14 +50,31 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
     // UNIFIED SUBSCRIPTION LOGIC (Monthly & Yearly are both Autopay now)
     // We treat both intervals as subscriptions.
 
+    // UNIFIED SUBSCRIPTION LOGIC (Monthly & Yearly are both Autopay now)
     const planConfig: any = {
       'pro': {
-        'month': { name: 'Toeasy Pro Monthly', amount: 49900, period: 'monthly' }, // ₹499
-        'year': { name: 'Toeasy Pro Annual', amount: 499000, period: 'yearly' }    // ₹4990 (12 months @ ~415/mo)
+        'month': {
+          name: 'Toeasy Pro Monthly',
+          amount: validCurrency === 'inr' ? pricing.pro.inr.monthly * 100 : pricing.pro.usd.monthly * 100,
+          period: 'monthly'
+        },
+        'year': {
+          name: 'Toeasy Pro Annual',
+          amount: validCurrency === 'inr' ? pricing.pro.inr.yearly * 100 : pricing.pro.usd.yearly * 100,
+          period: 'yearly'
+        }
       },
       'enterprise': {
-        'month': { name: 'Toeasy Enterprise Monthly', amount: 249900, period: 'monthly' }, // ₹2499
-        'year': { name: 'Toeasy Enterprise Annual', amount: 2499000, period: 'yearly' }    // ₹24990
+        'month': {
+          name: 'Toeasy Enterprise Monthly',
+          amount: validCurrency === 'inr' ? pricing.enterprise.inr.monthly * 100 : pricing.enterprise.usd.monthly * 100,
+          period: 'monthly'
+        },
+        'year': {
+          name: 'Toeasy Enterprise Annual',
+          amount: validCurrency === 'inr' ? pricing.enterprise.inr.yearly * 100 : pricing.enterprise.usd.yearly * 100,
+          period: 'yearly'
+        }
       }
     };
 

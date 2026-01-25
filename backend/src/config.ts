@@ -89,11 +89,11 @@ export const pricing = {
     inr: { monthly: 0, yearly: 0 }
   },
   pro: {
-    usd: { monthly: 25, yearly: 240 }, // $20/mo * 12
-    inr: { monthly: 599, yearly: 5990 } // ₹499/mo * 12
+    usd: { monthly: 25, yearly: 250 },
+    inr: { monthly: 499, yearly: 4990 } // Monthly Recurring vs Annual Recurring
   },
   enterprise: {
     usd: { monthly: 89, yearly: 890 },
-    inr: { monthly: 2599, yearly: 25990 }
+    inr: { monthly: 2499, yearly: 24990 }
   },
 };
