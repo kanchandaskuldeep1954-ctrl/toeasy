@@ -1,14 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
-import { GroqService } from '../services/groqService';
-import { executeSql } from '../services/sqlExecutor';
+import {
+  Play, Save, Database, Table, BarChart2, MessageSquare,
+  ChevronLeft, ChevronRight, X, Download, Terminal,
+  Sparkles, History, MoreVertical, Layout, Trash2, Search
+} from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
-  XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area
+  XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, Legend
 } from 'recharts';
 
+// --- Types ---
 interface QueryResult {
   id: string;
   query_text: string;
@@ -16,7 +20,6 @@ interface QueryResult {
   execution_time: number;
   row_count: number;
   created_at: string;
-  updated_at: string;
 }
 
 interface SavedQuery {
@@ -30,53 +33,62 @@ interface SavedQuery {
   rowCount?: number;
 }
 
+// --- Components ---
+
 const PlaygroundViewIntegrated: React.FC = () => {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace');
   const datasetId = searchParams.get('dataset');
+  const queryId = searchParams.get('query');
 
-  const [mode, setMode] = useState<'ask' | 'sql'>('ask');
-  const [query, setQuery] = useState('');
+  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+
+  // --- State ---
+
+  // Layout
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState<'table' | 'chart' | 'messages'>('table');
+  const [editorMode, setEditorMode] = useState<'ask' | 'sql'>('ask');
+
+  // Query & Data
+  const [query, setQuery] = useState(''); // Natural language
   const [sqlQuery, setSqlQuery] = useState('SELECT * FROM data LIMIT 10');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Metadata
   const [explanation, setExplanation] = useState<string | null>(null);
   const [generatedSql, setGeneratedSql] = useState<string | null>(null);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [rowCount, setRowCount] = useState<number>(0);
 
+  // Library
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
   const [loadingSaved, setLoadingSaved] = useState(false);
-
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveForm, setSaveForm] = useState({ name: '', description: '' });
 
+  // Dataset Context
   const [datasetData, setDatasetData] = useState<any[]>([]);
-  const [loadingDataset, setLoadingDataset] = useState(false);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  // --- Effects ---
 
-  const queryId = searchParams.get('query');
-
-  // Mobile State
-  const [mobileTab, setMobileTab] = useState<'editor' | 'results'>('editor');
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // Load saved queries on mount
   useEffect(() => {
-    if (workspaceId && datasetId && token && workspaceId !== 'null' && datasetId !== 'null') {
+    if (workspaceId && datasetId && token && workspaceId !== 'null') {
       loadSavedQueries();
       loadDatasetPreview();
     }
   }, [workspaceId, datasetId, token]);
 
   useEffect(() => {
-    if (workspaceId && queryId && token && workspaceId !== 'null') {
+    if (workspaceId && queryId && token) {
       loadSpecificQuery();
     }
   }, [workspaceId, queryId, token]);
+
+  // --- API Functions ---
 
   const loadSpecificQuery = async () => {
     try {
@@ -85,7 +97,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const q = response.data;
-      setMode(q.query_type === 'natural' ? 'ask' : 'sql');
+      setEditorMode(q.query_type === 'natural' ? 'ask' : 'sql');
       if (q.query_type === 'natural') {
         setQuery(q.query_text);
       } else {
@@ -98,7 +110,6 @@ const PlaygroundViewIntegrated: React.FC = () => {
 
   const loadDatasetPreview = async () => {
     try {
-      setLoadingDataset(true);
       const response = await axios.get(
         `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/preview`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -106,8 +117,6 @@ const PlaygroundViewIntegrated: React.FC = () => {
       setDatasetData(response.data?.data || []);
     } catch (err) {
       console.error('Failed to load dataset preview:', err);
-    } finally {
-      setLoadingDataset(false);
     }
   };
 
@@ -118,7 +127,6 @@ const PlaygroundViewIntegrated: React.FC = () => {
         `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/queries`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      // Backend returns { data: Query[], total: number } or similar
       const queriesData = response.data.data || response.data || [];
       const mappedQueries = (Array.isArray(queriesData) ? queriesData : []).map((q: any) => ({
         id: q.id,
@@ -139,32 +147,28 @@ const PlaygroundViewIntegrated: React.FC = () => {
 
   const executeQuery = async (e?: React.FormEvent) => {
     e?.preventDefault();
-
-    if (!workspaceId || !datasetId) {
-      setError('Workspace or dataset not selected');
-      return;
-    }
+    if (!workspaceId || !datasetId) return setError('Workspace or dataset not selected');
 
     setLoading(true);
     setError(null);
     setResults([]);
     setExecutionTime(null);
     setExplanation(null);
-    setGeneratedSql(null);
+
+    // Auto-switch to table view on new execution
+    setActiveTab('table');
 
     try {
       const startTime = performance.now();
       let finalSql = sqlQuery;
-      let explanation_ = '';
 
-      if (mode === 'ask') {
-        // Generate SQL from natural language using backend with actual dataset
+      if (editorMode === 'ask') {
         try {
           const aiRes = await axios.post(
             `${backendUrl}/generate-sql`,
             {
               dataset: {
-                data: datasetData.slice(0, 5), // Send first 5 rows as sample
+                data: datasetData.slice(0, 5),
                 columns: datasetData.length > 0 ? Object.keys(datasetData[0]) : []
               },
               query
@@ -172,7 +176,6 @@ const PlaygroundViewIntegrated: React.FC = () => {
             { headers: { Authorization: `Bearer ${token}` } }
           );
           finalSql = aiRes.data.sql;
-          explanation_ = aiRes.data.explanation || '';
           setGeneratedSql(aiRes.data.sql);
           setExplanation(aiRes.data.explanation);
         } catch (aiErr) {
@@ -180,26 +183,26 @@ const PlaygroundViewIntegrated: React.FC = () => {
         }
       }
 
-      // Execute query on backend
       const queryResponse = await axios.post(
         `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/query`,
         {
           query_text: finalSql || sqlQuery,
-          type: mode === 'ask' ? 'natural' : 'sql'
+          type: editorMode === 'ask' ? 'natural' : 'sql'
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const endTime = performance.now();
-      const time = Math.round(endTime - startTime);
-
       setResults(queryResponse.data.results || []);
-      setExecutionTime(time);
+      setExecutionTime(Math.round(endTime - startTime));
       setRowCount(queryResponse.data.results?.length || 0);
 
+      // If results are available and small enough, auto-switch to chart if numbers present? 
+      // For now, keep as table.
+
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Query execution failed';
-      setError(message);
+      setError(err instanceof Error ? err.message : 'Query execution failed');
+      setActiveTab('messages'); // Show error tab
     } finally {
       setLoading(false);
     }
@@ -209,15 +212,14 @@ const PlaygroundViewIntegrated: React.FC = () => {
     if (!saveForm.name || !workspaceId || !datasetId) return;
 
     try {
-      const queryToSave = mode === 'ask' && generatedSql ? generatedSql : sqlQuery;
-
+      const queryToSave = editorMode === 'ask' && generatedSql ? generatedSql : sqlQuery;
       const response = await axios.post(
         `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/queries`,
         {
           name: saveForm.name,
           description: saveForm.description,
           sql: queryToSave,
-          type: mode === 'ask' ? 'natural' : 'sql',
+          type: editorMode === 'ask' ? 'natural' : 'sql',
           resultCount: results.length
         },
         { headers: { Authorization: `Bearer ${token}` } }
@@ -233,7 +235,6 @@ const PlaygroundViewIntegrated: React.FC = () => {
         createdAt: response.data.createdAt,
       };
       setSavedQueries([...savedQueries, savedQuery]);
-
       setShowSaveModal(false);
       setSaveForm({ name: '', description: '' });
     } catch (err) {
@@ -242,7 +243,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
   };
 
   const loadQuery = (q: SavedQuery) => {
-    setMode(q.type === 'natural' ? 'ask' : 'sql');
+    setEditorMode(q.type === 'natural' ? 'ask' : 'sql');
     if (q.type === 'natural') {
       setQuery(q.sql);
     } else {
@@ -264,221 +265,380 @@ const PlaygroundViewIntegrated: React.FC = () => {
     }
   };
 
+  const exportCSV = () => {
+    if (!results.length) return;
+    const headers = Object.keys(results[0]);
+    const csv = [
+      headers.join(','),
+      ...results.map(row => headers.map(fieldName => JSON.stringify(row[fieldName])).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `query_results_${new Date().getTime()}.csv`;
+    a.click();
+  };
+
+  // --- Render Helpers ---
+
+  const renderChart = () => {
+    if (!results.length) return (
+      <div className="flex flex-col items-center justify-center h-full text-slate-400">
+        <BarChart2 className="w-12 h-12 mb-4 opacity-20" />
+        <p>Run a query to see visualization</p>
+      </div>
+    );
+
+    // Auto-detect numeric columns
+    const numericKeys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
+    const labelKey = Object.keys(results[0]).find(k => typeof results[0][k] === 'string') || Object.keys(results[0])[0];
+
+    if (numericKeys.length === 0) return <div className="p-8 text-center text-slate-500">No numeric data to visualize</div>;
+
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={results.slice(0, 50)}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+          <XAxis dataKey={labelKey} tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} />
+          <YAxis tick={{ fontSize: 10 }} />
+          <Tooltip
+            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+          />
+          <Legend />
+          {numericKeys.slice(0, 3).map((key, i) => (
+            <Bar key={key} dataKey={key} fill={['#6366f1', '#8b5cf6', '#ec4899'][i % 3]} radius={[4, 4, 0, 0]} />
+          ))}
+        </BarChart>
+      </ResponsiveContainer>
+    );
+  };
+
   return (
-    <div className="max-w-[1600px] mx-auto h-full flex flex-col lg:flex-row gap-6 p-4 relative overflow-hidden">
+    <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
 
-      {/* Mobile Sidebar Toggle */}
-      <button
-        className="lg:hidden absolute top-4 left-4 z-40 p-2 bg-white dark:bg-slate-800 rounded-lg shadow-md border border-slate-200 dark:border-slate-700"
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-      >
-        <svg className="w-5 h-5 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-      </button>
-
-      {/* Sidebar: Query Library - Drawer on Mobile */}
+      {/* --- Sidebar: Query Library --- */}
       <div className={`
-          fixed inset-y-0 left-0 z-50 w-80 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-2xl transform transition-transform duration-300 lg:translate-x-0 lg:static lg:h-full lg:shadow-xl lg:rounded-[32px] lg:border p-6 flex flex-col gap-6 shrink-0
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+        flex-shrink-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-all duration-300 ease-in-out z-20 flex flex-col
+        ${isSidebarOpen ? 'w-72' : 'w-0 opacity-0 overflow-hidden'}
       `}>
-        <div className="flex justify-between items-center lg:hidden">
-          <h3 className="font-bold text-slate-900 dark:text-white">Saved Queries</h3>
-          <button onClick={() => setIsSidebarOpen(false)} className="p-2 bg-slate-100 dark:bg-slate-800 rounded-full">✕</button>
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-bold">
+            <History className="w-5 h-5" />
+            <span className="truncate">Query Library</span>
+          </div>
+          <button onClick={() => setIsSidebarOpen(false)} className="lg:hidden p-1 rounded hover:bg-slate-100"><X className="w-4 h-4" /></button>
         </div>
 
-        {/* Sidebar Content Wrapper to reuse desktop structure but adjust for mobile drawer */}
-        <div className="h-full flex flex-col">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-indigo-600">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" /></svg>
+        <div className="p-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 w-4 h-4 text-slate-400" />
+            <input
+              placeholder="Search queries..."
+              className="w-full pl-9 pr-3 py-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
+            />
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-2">
+          {loadingSaved ? (
+            <div className="text-center py-8 text-slate-400 text-xs">Loading...</div>
+          ) : savedQueries.length === 0 ? (
+            <div className="text-center py-8 text-slate-400 text-xs">No saved queries found.</div>
+          ) : (
+            savedQueries.map(q => (
+              <div key={q.id}
+                onClick={() => loadQuery(q)}
+                className="group p-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/10 border border-transparent hover:border-indigo-100 dark:hover:border-indigo-900/30 cursor-pointer transition-all relative"
+              >
+                <div className="flex justify-between items-start mb-1">
+                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${q.type === 'natural' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'}`}>
+                    {q.type === 'natural' ? 'AI' : 'SQL'}
+                  </span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteQuery(q.id); }}
+                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded transition-all"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+                <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate">{q.name}</h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{q.description || "No description"}</p>
+                <div className="mt-2 flex items-center justify-between text-[10px] text-slate-400">
+                  <span>{q.rowCount ? `${q.rowCount} rows` : '0 rows'}</span>
+                  <span>{new Date(q.createdAt).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+
+      {/* --- Main Content --- */}
+      <div className="flex-1 flex flex-col h-full min-w-0 bg-slate-50 dark:bg-slate-950 relative">
+
+        {/* Toggle Sidebar Button (when closed) */}
+        {!isSidebarOpen && (
+          <button
+            onClick={() => setIsSidebarOpen(true)}
+            className="absolute left-4 top-4 z-30 p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-md rounded-lg text-slate-500 hover:text-indigo-600"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* --- Top Half: Editor Area --- */}
+        <div className="h-[45%] flex flex-col border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm relative z-10">
+
+          {/* Toolbar */}
+          <div className="h-14 px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-4">
+              <div className={`flex items-center gap-1 px-1 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 ${!isSidebarOpen ? 'ml-10' : ''}`}>
+                <button
+                  onClick={() => setEditorMode('ask')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${editorMode === 'ask' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Natural Language</span>
+                </button>
+                <button
+                  onClick={() => setEditorMode('sql')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${editorMode === 'sql' ? 'bg-white dark:bg-slate-700 shadow text-indigo-600 dark:text-indigo-400' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <Terminal className="w-3.5 h-3.5" />
+                  <span>SQL Editor</span>
+                </button>
+              </div>
             </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider">Query Library</h3>
-              <p className="text-[10px] text-slate-500 font-medium">{savedQueries.length} Saved</p>
+
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowSaveModal(true)}
+                disabled={!results.length}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                <span className="hidden sm:inline">Save Query</span>
+              </button>
+              <button
+                onClick={executeQuery}
+                disabled={loading || (editorMode === 'ask' && !query) || (editorMode === 'sql' && !sqlQuery)}
+                className="flex items-center gap-2 px-6 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+              >
+                {loading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white/20 border-t-white" /> : <Play className="w-4 h-4 fill-current" />}
+                <span>Run Analysis</span>
+              </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 -mr-2 pr-2">
-            {loadingSaved ? (
-              <div className="text-center py-10 opacity-50">
-                <p className="text-[10px] text-slate-400">Loading...</p>
-              </div>
-            ) : savedQueries && Array.isArray(savedQueries) && savedQueries.length === 0 ? (
-              <div className="text-center py-10 opacity-50">
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">No Saved Queries</p>
+          {/* Editor Input */}
+          <div className="flex-1 relative overflow-hidden bg-slate-50/50 dark:bg-slate-900/50">
+            {editorMode === 'ask' ? (
+              <div className="absolute inset-0 flex items-center justify-center p-4">
+                <div className="w-full max-w-3xl relative">
+                  <div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[20px] opacity-20 blur-xl"></div>
+                  <form onSubmit={executeQuery} className="relative">
+                    <div className="absolute left-6 top-6 text-indigo-500 animate-pulse">
+                      <Sparkles className="w-6 h-6" />
+                    </div>
+                    <textarea
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder="Ask anything about your data, e.g., 'Show me top products by revenue last month'..."
+                      className="w-full pl-16 pr-6 py-6 h-32 bg-white dark:bg-slate-800/80 backdrop-blur-sm border border-slate-200 dark:border-slate-700 rounded-[20px] text-lg text-slate-700 dark:text-slate-200 font-medium placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-xl resize-none"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          executeQuery();
+                        }
+                      }}
+                    />
+                    <div className="absolute right-4 bottom-4 text-xs text-slate-400 font-medium bg-slate-100 dark:bg-slate-900/50 px-2 py-1 rounded">
+                      Press Enter to Run
+                    </div>
+                  </form>
+                </div>
               </div>
             ) : (
-              savedQueries && Array.isArray(savedQueries) && savedQueries.map(q => (
-                <div key={q.id} className="group p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-200 dark:hover:border-indigo-900 transition-all cursor-pointer relative" onClick={() => loadQuery(q)}>
-                  <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">{q.name}</h4>
-                  <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{q.description || "No description"}</p>
-                  {q.executionTime && (
-                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-between">
-                      <span className="text-[9px] text-slate-400">{q.executionTime}ms</span>
-                      <span className="text-[9px] text-slate-400">{q.rowCount} rows</span>
-                    </div>
-                  )}
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteQuery(q.id); }}
-                    className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-rose-400 hover:text-rose-600"
-                  >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                  </button>
-                </div>
-              ))
+              <div className="absolute inset-0 p-4">
+                <textarea
+                  value={sqlQuery}
+                  onChange={(e) => setSqlQuery(e.target.value)}
+                  className="w-full h-full p-6 font-mono text-sm bg-slate-900 text-indigo-100 rounded-xl leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500/50 border border-slate-700 shadow-inner"
+                  spellCheck="false"
+                />
+              </div>
             )}
           </div>
         </div>
-      </div>
-      <div className="flex-1 flex flex-col gap-6 overflow-hidden pt-12 lg:pt-0">
-        {/* Header & Modes */}
-        <div className="flex flex-col sm:flex-row justify-between items-end gap-6 shrink-0">
-          <div className="space-y-1">
-            <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">SQL Playground</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Execute queries against your dataset.</p>
-          </div>
-          <div className="flex bg-white dark:bg-slate-800 p-1.5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-xl">
-            <button onClick={() => setMode('ask')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'ask' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>Natural Language</button>
-            <button onClick={() => setMode('sql')} className={`px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${mode === 'sql' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'}`}>SQL Editor</button>
-          </div>
-        </div>
 
-        {/* Mobile Tabs */}
-        <div className="flex lg:hidden bg-slate-100 dark:bg-slate-800 p-1 rounded-xl shrink-0">
-          <button onClick={() => setMobileTab('editor')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'editor' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Editor</button>
-          <button onClick={() => setMobileTab('results')} className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${mobileTab === 'results' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600 dark:text-indigo-400' : 'text-slate-500'}`}>Results ({results.length})</button>
-        </div>
 
-        {/* Desktop Split View / Mobile Tab View */}
-        <div className="flex-1 flex flex-col lg:flex-row gap-6 min-h-0">
+        {/* --- Bottom Half: Results Area --- */}
+        <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
 
-          {/* Input Area */}
-          <div className={`
-             flex-1 bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl p-6 lg:p-8 overflow-y-auto
-             ${mobileTab === 'editor' ? 'flex' : 'hidden lg:flex'} flex-col
-        `}>
-            <form onSubmit={(e) => {
-              executeQuery(e);
-              setMobileTab('results'); // Auto-switch to results on submit (mobile)
-            }} className="flex flex-col gap-6 h-full">
-              {mode === 'ask' ? (
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-6 flex items-center pointer-events-none">
-                    <span className="text-2xl">🤖</span>
-                  </div>
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Ask: 'Show me top 10 products by sales...'"
-                    className="w-full pl-16 pr-4 py-6 bg-slate-50 dark:bg-slate-800 border-2 border-transparent focus:border-indigo-500/20 dark:focus:border-indigo-500/20 rounded-[30px] text-lg font-bold focus:ring-[15px] focus:ring-indigo-500/5 transition-all outline-none text-slate-900 dark:text-white"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4 flex-1 flex flex-col">
-                  <textarea
-                    value={sqlQuery}
-                    onChange={(e) => setSqlQuery(e.target.value)}
-                    className="w-full flex-1 p-8 font-mono text-xs bg-slate-950 text-indigo-400 rounded-[30px] focus:outline-none border border-white/5 shadow-2xl leading-relaxed resize-none"
-                    spellCheck={false}
-                  />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-4">Write SQL to query your dataset</p>
-                </div>
-              )}
+          {/* Result Tabs */}
+          <div className="flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
+            <div className="flex gap-1">
+              <button
+                onClick={() => setActiveTab('table')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'table' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <Table className="w-4 h-4" />
+                Results ({rowCount})
+              </button>
+              <button
+                onClick={() => setActiveTab('chart')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'chart' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <BarChart2 className="w-4 h-4" />
+                Visualization
+              </button>
+              <button
+                onClick={() => setActiveTab('messages')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'messages' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                Execution Details
+              </button>
+            </div>
 
-              {error && (
-                <div className="p-6 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold rounded-[30px]">
-                  {error}
-                </div>
-              )}
-
-              <div className="flex justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowSaveModal(true)}
-                  disabled={results.length === 0}
-                  className="px-8 py-4 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] disabled:opacity-50 transition-all"
-                >
-                  Save Query
+            <div className="flex items-center gap-2">
+              {results.length > 0 && activeTab === 'table' && (
+                <button onClick={exportCSV} className="p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Export CSV">
+                  <Download className="w-4 h-4" />
                 </button>
-                <button
-                  type="submit"
-                  disabled={loading || !(query?.trim()) && !(sqlQuery?.trim())}
-                  className="px-12 py-4 bg-indigo-600 text-white rounded-full font-black text-[10px] uppercase tracking-[0.3em] shadow-2xl hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  {loading ? 'Executing...' : 'Execute'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Results Area */}
-          <div className={`
-             flex-1 bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-slate-800 shadow-2xl overflow-hidden flex-col
-             ${mobileTab === 'results' ? 'flex' : 'hidden lg:flex'}
-        `}>
-            <div className="p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
-              <div>
-                <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest">Results</h3>
-                <p className="text-[9px] text-slate-500 mt-1">{rowCount} rows • {executionTime}ms</p>
+              )}
+              <div className="text-[10px] font-mono text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded">
+                {executionTime ? `${executionTime}ms` : '0ms'}
               </div>
             </div>
-            <div className="flex-1 overflow-auto">
-              {results && Array.isArray(results) && results.length > 0 ? (
-                <table className="w-full text-left text-xs border-separate border-spacing-0">
-                  <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800 shadow-sm z-20">
-                    <tr>
-                      {results[0] && Object.keys(results[0]).map(h => (
-                        <th key={h} className="px-6 py-4 text-[10px] font-black text-slate-500 uppercase tracking-widest border-b border-slate-200 dark:border-slate-700 whitespace-nowrap">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {results && Array.isArray(results) && results.map((row, i) => (
-                      <tr key={i} className="hover:bg-indigo-50/20 transition-colors">
-                        {row && Object.values(row).map((val: any, j) => (
-                          <td key={j} className="px-6 py-4 text-slate-600 dark:text-slate-400 truncate max-w-[200px]">{String(val ?? '-')}</td>
+          </div>
+
+          {/* Content Area */}
+          <div className="flex-1 overflow-hidden relative">
+            {activeTab === 'table' && (
+              <div className="absolute inset-0 overflow-auto">
+                {results.length > 0 ? (
+                  <table className="w-full text-left text-xs border-separate border-spacing-0">
+                    <thead className="sticky top-0 z-10">
+                      <tr className="bg-slate-50 dark:bg-slate-800 shadow-sm">
+                        {Object.keys(results[0]).map((h, i) => (
+                          <th key={i} className="px-6 py-3 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 whitespace-nowrap bg-slate-50 dark:bg-slate-800">
+                            {h}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 opacity-30">
-                  <div className="text-6xl mb-6">📊</div>
-                  <p className="text-[10px] font-black uppercase tracking-widest">No results yet. Execute a query to begin.</p>
-                </div>
-              )}
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
+                      {results.map((row, i) => (
+                        <tr key={i} className="hover:bg-indigo-50/10 dark:hover:bg-indigo-900/10 transition-colors">
+                          {Object.values(row).map((val: any, j) => (
+                            <td key={j} className="px-6 py-3 text-slate-600 dark:text-slate-300 border-b border-slate-50 dark:border-slate-800/50 truncate max-w-[200px]">
+                              {String(val ?? '-')}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <Database className="w-16 h-16 mb-4 opacity-10" />
+                    <p className="font-medium">No results to display</p>
+                    <p className="text-sm opacity-60 mt-1">Execute a query above to see data</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'chart' && (
+              <div className="absolute inset-0 p-6">
+                {renderChart()}
+              </div>
+            )}
+
+            {activeTab === 'messages' && (
+              <div className="absolute inset-0 overflow-auto p-6 space-y-6">
+                {error ? (
+                  <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm">
+                    <strong className="block mb-1 font-bold flex items-center gap-2"><X className="w-4 h-4" /> Error Executing Query</strong>
+                    <pre className="whitespace-pre-wrap font-mono text-xs">{error}</pre>
+                  </div>
+                ) : !generatedSql && !explanation ? (
+                  <div className="text-center text-slate-400 py-10">No messages or execution logs.</div>
+                ) : null}
+
+                {explanation && (
+                  <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800 rounded-lg">
+                    <h4 className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-bold mb-2 text-sm">
+                      <Sparkles className="w-4 h-4" /> AI Explanation
+                    </h4>
+                    <p className="text-slate-700 dark:text-slate-300 text-sm leading-relaxed">{explanation}</p>
+                  </div>
+                )}
+
+                {generatedSql && (
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider">Generated SQL</h4>
+                    <div className="p-4 bg-slate-900 rounded-lg border border-slate-700 overflow-x-auto">
+                      <code className="text-indigo-300 font-mono text-xs">{generatedSql}</code>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Save Modal */}
-        {showSaveModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-            <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800">
-              <h3 className="text-xl font-black uppercase tracking-tighter mb-6">Save Query</h3>
-              <div className="space-y-4">
+      </div>
+
+      {/* --- Save Modal --- */}
+      {showSaveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">Save Query</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Query Name</label>
                 <input
                   value={saveForm.name}
                   onChange={(e) => setSaveForm({ ...saveForm, name: e.target.value })}
-                  placeholder="Query name..."
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                  placeholder="e.g. Monthly Revenue Analysis"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                   autoFocus
                 />
+              </div>
+              <div>
+                <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Description (Optional)</label>
                 <textarea
                   value={saveForm.description}
                   onChange={(e) => setSaveForm({ ...saveForm, description: e.target.value })}
-                  placeholder="Description..."
-                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-500/20 resize-none h-24"
+                  placeholder="What does this query do?"
+                  className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none h-24"
                 />
               </div>
-              <div className="flex justify-end gap-3 mt-8">
-                <button onClick={() => setShowSaveModal(false)} className="px-6 py-3 rounded-xl text-xs font-bold uppercase text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">Cancel</button>
-                <button onClick={saveQuery} disabled={!saveForm.name} className="px-6 py-3 rounded-xl text-xs font-bold uppercase bg-indigo-600 text-white hover:bg-indigo-500 disabled:opacity-50">Save</button>
-              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowSaveModal(false)}
+                className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveQuery}
+                disabled={!saveForm.name}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 text-white hover:bg-indigo-500 transition-colors disabled:opacity-50"
+              >
+                Save to Library
+              </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 };
