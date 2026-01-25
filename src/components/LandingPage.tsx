@@ -143,28 +143,24 @@ const LandingPage: React.FC = () => {
                             {[...Array(2)].map((_, i) => (
                                 <React.Fragment key={i}>
                                     {[
-                                        { name: 'PostgreSQL', domain: 'postgresql.org' },
-                                        { name: 'Snowflake', domain: 'snowflake.com' },
-                                        { name: 'BigQuery', domain: 'cloud.google.com' },
-                                        { name: 'MySQL', domain: 'mysql.com' },
-                                        { name: 'MongoDB', domain: 'mongodb.com' },
-                                        { name: 'Redis', domain: 'redis.io' },
-                                        { name: 'AWS', domain: 'aws.amazon.com' },
-                                        { name: 'Stripe', domain: 'stripe.com' },
-                                        { name: 'Salesforce', domain: 'salesforce.com' },
-                                        { name: 'Tableau', domain: 'tableau.com' },
-                                        { name: 'PowerBI', domain: 'powerbi.microsoft.com' },
+                                        { name: 'PostgreSQL', slug: 'postgresql', color: '336791' },
+                                        { name: 'Snowflake', slug: 'snowflake', color: '29B5E8' },
+                                        { name: 'BigQuery', slug: 'googlebigquery', color: '4285F4' },
+                                        { name: 'MySQL', slug: 'mysql', color: '4479A1' },
+                                        { name: 'MongoDB', slug: 'mongodb', color: '47A248' },
+                                        { name: 'Redis', slug: 'redis', color: 'DC382D' },
+                                        { name: 'AWS', slug: 'amazonaws', color: '232F3E' },
+                                        { name: 'Stripe', slug: 'stripe', color: '008CDD' },
+                                        { name: 'Salesforce', slug: 'salesforce', color: '00A1E0' },
+                                        { name: 'Tableau', slug: 'tableau', color: 'E97627' },
+                                        { name: 'PowerBI', slug: 'powerbi', color: 'F2C811' },
                                     ].map((brand) => (
                                         <div key={brand.name + i} className="flex items-center gap-4 group/item cursor-default opacity-40 hover:opacity-100 transition-opacity duration-300">
                                             <div className="w-10 h-10 flex items-center justify-center p-1.5 transition-all group-hover/item:scale-125">
                                                 <img
-                                                    src={`https://logo.clearbit.com/${brand.domain}`}
+                                                    src={`https://cdn.simpleicons.org/${brand.slug}/${brand.color}`}
                                                     alt={brand.name}
-                                                    className="w-full h-full object-contain filter grayscale group-hover/item:grayscale-0 transition-all duration-300"
-                                                    onError={(e) => {
-                                                        // Fallback to a letter badge if logo service fails
-                                                        (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${brand.name}&background=6366f1&color=fff`;
-                                                    }}
+                                                    className="w-full h-full object-contain transition-all duration-300"
                                                 />
                                             </div>
                                             <span className="font-black text-base text-slate-600 dark:text-slate-400 group-hover/item:text-slate-900 dark:group-hover/item:text-white tracking-tight">
