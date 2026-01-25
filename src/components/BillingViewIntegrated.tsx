@@ -92,7 +92,8 @@ const BillingViewIntegrated: React.FC = () => {
       ]);
 
       setSubscription(subRes.data);
-      setBillingCycle(subRes.data.interval);
+      // NOTE: We do NOT override billingCycle from subscription.interval
+      // The toggle should default to 'year' (best value) for marketing purposes
 
       // Handle both old and new usage response formats
       const usageData = usageRes.data;
