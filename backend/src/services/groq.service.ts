@@ -1606,48 +1606,55 @@ ANALYZE and return ONLY valid JSON (no markdown):
   static async modifyReportWithAI(dataset: any, report: any, instruction: string): Promise<any> {
     try {
       const headers = dataset.headers || [];
-      const groqPrompt = `You are a Senior Data Scientist and Report Architect. 
-      You need to modify the following Strategic Report based on the user's instructions.
-      
-      USER INSTRUCTIONS: "${instruction}"
-      
-      CURRENT REPORT STRUCTURE (Summary):
-      - Title: ${report.title}
-      - Sections: ${report.sections.map((s: any) => s.title).join(', ')}
-      
-      DATASET CONTEXT:
-      - Rows: ${dataset.data?.length || 0}
-      - Columns: ${headers.slice(0, 15).join(', ')}
-      
-      TASK:
-      1. Refine the narrative, add new sections (e.g., Risk Analysis, Predictive Outlook), or update existing ones per instructions.
-      2. USE ONLY AVAILABLE DATA. Do NOT hallucinate specific numbers if they are not in the KPIs or Dataset Context. If unsure, use qualitative language (e.g., "appears to be...", "further analysis required").
-      3. Maintain the professional tone of the report.
-      4. Ensure the output is a VALID, COMPLETE JSON StrategicReport object.
-      
-      CRITICAL: Return the FULL JSON object. Do not truncate.
-      
-      INPUT REPORT JSON:
-      ${JSON.stringify(report)}
-      
-      RETURN UPDATED JSON (No Markdown):`;
+      // Minimize context to save tokens
+      const kpiSummary = (report.sections || [])
+        .flatMap((s: any) => s.kpis || [])
+        .map((k: any) => `${k.label}: ${k.value}`)
+        .slice(0, 20)
+        .join(', ');
 
-      // Increase token limit for full report rewrite
-      const result = await this.callGroq(groqPrompt, 6000);
+      const groqPrompt = `You are a Senior Data Scientist. Modify this report based on user instructions.
+      
+      INSTRUCTION: "${instruction}"
+      
+      DATASET: ${dataset.data?.length || 0} rows, Columns: ${headers.slice(0, 15).join(', ')}
+      KNOWN METRICS: ${kpiSummary}
+      
+      STRICT RULES:
+      1. REAL DATA ONLY. Do not make up numbers. If a metric is not in KNOWN METRICS, do not invent it. Say "requires further analysis".
+      2. RISK/PREDICTIVE SECTIONS: If asked for these, add them as NEW sections. Use general logic based on the domain (e.g., "Market volatility", "Seasonal trends") if you don't have predictive data models.
+      3. OUTPUT FORMAT: Return ONLY the 'sections' array JSON. Do not return the whole report wrapper.
+      4. DO NOT TRUNCATE. If the report is too long, summarize the UNCHANGED sections briefly but keep the NEW content detailed.
+      
+      INPUT SECTIONS:
+      ${JSON.stringify(report.sections)}
+      
+      RETURN ONLY JSON ARRAY (Sections):
+      [
+        { "id": "...", "title": "...", "content": "..." },
+        ...
+      ]`;
 
-      const modified = this.cleanAndParseJSON(result);
+      // Use max available tokens
+      const result = await this.callGroq(groqPrompt, 7000);
 
-      // Validation: Ensure we have a valid report structure
-      if (!modified || !modified.title || !Array.isArray(modified.sections) || modified.sections.length === 0) {
-        console.warn('Modify Report: AI returned invalid structure, reverting to original.', modified);
+      const modifiedSections = this.cleanAndParseJSON(result);
+
+      if (!Array.isArray(modifiedSections) || modifiedSections.length === 0) {
+        console.warn('Modify Report: AI returned invalid structure, reverting.', modifiedSections);
         return report;
       }
 
-      return modified;
+      // Merge back into full report object
+      return {
+        ...report,
+        sections: modifiedSections,
+        version: String(Number(report.version || "1.0") + 0.1) // Increment version
+      };
 
     } catch (error) {
       console.error('Modify report error:', error);
-      return report; // Return original on failure
+      return report;
     }
   }
 

@@ -722,11 +722,15 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                             <textarea
                                 value={copilotInput}
                                 onChange={(e) => setCopilotInput(e.target.value)}
+                                onFocus={() => setSelectionOverlay(null)} // Auto-dismiss selection popover on focus
                                 placeholder="E.g., 'Make it more technical' or 'Add a table for...'"
                                 className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 min-h-[100px] focus:ring-2 focus:ring-indigo-500"
                             />
                             <button
-                                onClick={() => handleCopilotUpdate(copilotInput)}
+                                onClick={() => {
+                                    handleCopilotUpdate(copilotInput);
+                                    setSelectionOverlay(null); // Ensure overlay is gone
+                                }}
                                 disabled={copilotLoading || !copilotInput.trim()}
                                 className="w-full mt-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                             >
