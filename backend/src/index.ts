@@ -309,6 +309,26 @@ app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res
   }
 });
 
+// Modify Report with AI (Copilot)
+app.post('/api/modify-report', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const { dataset, report, instruction } = req.body;
+
+    if (!dataset || !report || !instruction) {
+      return res.status(400).json({ error: 'Dataset, report, and instruction required' });
+    }
+
+    console.log('Modifying report with instruction:', instruction);
+
+    const modifiedReport = await GroqService.modifyReportWithAI(dataset, report, instruction);
+
+    res.json(modifiedReport);
+  } catch (err) {
+    console.error('Modify report error:', err instanceof Error ? err.message : err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to modify report' });
+  }
+});
+
 // Consult Verified Agent (Chat/Q&A)
 app.post('/api/consult-agent', authenticateToken, async (req: AuthRequest, res) => {
   try {

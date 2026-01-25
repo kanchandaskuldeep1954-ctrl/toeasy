@@ -294,6 +294,11 @@ export class GroqService {
     return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset, reportType });
   }
 
+  // Modify report with AI (Copilot)
+  static async modifyReport(dataset: Dataset, report: StrategicReport, instruction: string): Promise<StrategicReport> {
+    return await this.callApi<StrategicReport>('modify-report', 'POST', { dataset, report, instruction });
+  }
+
   // Extract KPIs
   static async extractKPIs(dataset: Dataset, data: DataRow[]): Promise<KPI[]> {
     const dash = await this.suggestDashboard(dataset);

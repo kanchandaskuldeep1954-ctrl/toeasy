@@ -46,6 +46,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [activeSection, setActiveSection] = useState<string>('');
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [showCopilot, setShowCopilot] = useState(true);
+    const [copilotInput, setCopilotInput] = useState('');
+    const [copilotLoading, setCopilotLoading] = useState(false);
     const contentRef = useRef<HTMLDivElement>(null);
 
     const copilotSuggestions = [
@@ -155,6 +157,24 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
         generate();
     }, [dataset?.name, retryCount]);
+
+    const handleCopilotUpdate = async (instruction: string) => {
+        if (!instruction.trim() || !report || !dataset) return;
+
+        setCopilotLoading(true);
+        try {
+            const updatedReport = await GroqService.modifyReport(dataset, report, instruction);
+            setReport(updatedReport);
+            setCopilotInput('');
+            // Optional: Scroll to top of report to show changes
+            contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        } catch (e) {
+            console.error('Copilot update failed:', e);
+            alert('Failed to update report. Please try again.');
+        } finally {
+            setCopilotLoading(false);
+        }
+    };
 
     const renderChart = (chart: ChartSpec) => {
         return (
@@ -617,7 +637,12 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
                         <div className="grid gap-3">
                             {copilotSuggestions.map((s, i) => (
-                                <button key={i} className="group p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-600 rounded-2xl border border-slate-100 dark:border-slate-800 text-left transition-all">
+                                <button
+                                    key={i}
+                                    onClick={() => handleCopilotUpdate(s.prompt)}
+                                    disabled={copilotLoading}
+                                    className="group p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-600 rounded-2xl border border-slate-100 dark:border-slate-800 text-left transition-all disabled:opacity-50"
+                                >
                                     <div className="flex items-center gap-3 mb-2">
                                         <span className="text-lg">{s.icon}</span>
                                         <span className="text-[11px] font-black uppercase text-slate-900 dark:text-white group-hover:text-white">{s.title}</span>
@@ -632,11 +657,17 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Manual Refinement</h4>
                             <textarea
+                                value={copilotInput}
+                                onChange={(e) => setCopilotInput(e.target.value)}
                                 placeholder="E.g., 'Make it more technical' or 'Add a table for...'"
-                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-indigo-500 min-h-[100px]"
+                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 min-h-[100px] focus:ring-2 focus:ring-indigo-500"
                             />
-                            <button className="w-full mt-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all">
-                                Update Report
+                            <button
+                                onClick={() => handleCopilotUpdate(copilotInput)}
+                                disabled={copilotLoading || !copilotInput.trim()}
+                                className="w-full mt-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+                            >
+                                {copilotLoading ? 'Optimizing...' : 'Update Report'}
                             </button>
                         </div>
                     </div>

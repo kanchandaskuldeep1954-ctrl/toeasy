@@ -1603,5 +1603,40 @@ ANALYZE and return ONLY valid JSON (no markdown):
   }
 
 
+  static async modifyReportWithAI(dataset: any, report: any, instruction: string): Promise<any> {
+    try {
+      const headers = dataset.headers || [];
+      const groqPrompt = `You are a Senior Data Scientist and Report Architect. 
+      You need to modify the following Strategic Report based on the user's instructions.
+      
+      USER INSTRUCTIONS: "${instruction}"
+      
+      CURRENT REPORT STRUCTURE:
+      - Title: ${report.title}
+      - Version: ${report.version}
+      - Sections: ${report.sections.map((s: any) => s.title).join(', ')}
+      
+      DATASET CONTEXT:
+      - Rows: ${dataset.data?.length || 0}
+      - Columns: ${headers.slice(0, 15).join(', ')}
+      
+      TASK:
+      1. Refine the narrative, add new sections, or update existing ones per instructions.
+      2. If instructions imply new insights, use your knowledge of the dataset context.
+      3. Maintain the professional tone of the report.
+      4. Ensure the output is a valid JSON StrategicReport object.
+      
+      RETURN UPDATED JSON (No Markdown):
+      ${JSON.stringify(report, null, 2)}`;
+
+      const result = await this.callGroq(groqPrompt, 4000);
+      return this.cleanAndParseJSON(result);
+
+    } catch (error) {
+      console.error('Modify report error:', error);
+      return report; // Return original on failure
+    }
+  }
+
 }
 
