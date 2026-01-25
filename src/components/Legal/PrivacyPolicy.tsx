@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const PrivacyPolicy: React.FC = () => {
     return (
@@ -27,7 +28,7 @@ const PrivacyPolicy: React.FC = () => {
                     <ul className="list-disc pl-6 space-y-2">
                         <li>To provide and maintain our Service.</li>
                         <li>To notify you about changes to our Service.</li>
-                        <li>To provide customer support.</li>
+                        <li>To provide customer support. Check our <Link to="/faq" className="text-indigo-600 font-bold hover:underline">FAQ</Link> for common issues.</li>
                         <li>To gather analysis or valuable information so that we can improve our Service.</li>
                         <li>To monitor the usage of our Service.</li>
                         <li>To detect, prevent and address technical issues.</li>

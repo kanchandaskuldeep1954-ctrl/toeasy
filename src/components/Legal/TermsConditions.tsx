@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 const TermsConditions: React.FC = () => {
     return (
@@ -62,7 +63,7 @@ const TermsConditions: React.FC = () => {
                 </section>
 
                 <div className="pt-12 border-t border-slate-200 dark:border-slate-800 text-center">
-                    <p className="text-sm text-slate-500">If you have any questions about these Terms, please <a href="/contact" className="text-indigo-600 font-bold hover:underline">contact us</a>.</p>
+                    <p className="text-sm text-slate-500">If you have any questions about these Terms, please <Link to="/contact" className="text-indigo-600 font-bold hover:underline">contact us</Link>.</p>
                 </div>
             </div>
         </div>

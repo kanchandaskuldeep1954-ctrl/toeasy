@@ -7,6 +7,7 @@ interface PublicLayoutProps {
 
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
+    const navigate = useNavigate();
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col">
@@ -117,8 +118,8 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                         <h4 className="font-black text-xs uppercase tracking-widest text-slate-400 dark:text-slate-500">Support</h4>
                         <ul className="space-y-2">
                             <li><Link to="/contact" className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600">Contact Us</Link></li>
-                            <li><Link to="/contact" className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600">FAQ</Link></li>
-                            <li><Link to="/contact" className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600">Help Center</Link></li>
+                            <li><Link to="/faq" className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600">FAQ</Link></li>
+                            <li><Link to="/help" className="text-sm text-slate-600 dark:text-slate-400 hover:text-indigo-600">Help Center</Link></li>
                         </ul>
                     </div>
                 </div>

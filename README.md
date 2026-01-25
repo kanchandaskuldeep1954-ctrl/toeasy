@@ -298,7 +298,7 @@ This project is proprietary software. All rights reserved.
 
 ## 📞 Support
 
-- **Email**: support@Toeasy
+- **Email**: support@Toeasy.online
 - **Issues**: GitHub Issues
 - **Documentation**: https://docs.Toeasy
 
