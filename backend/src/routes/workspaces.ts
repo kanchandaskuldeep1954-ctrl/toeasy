@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
-import { checkSubscription } from '../middleware/subscription.js';
+import { checkSubscription, checkTierLimit } from '../middleware/subscription.js';
 
 const router = Router();
 
@@ -25,7 +25,7 @@ router.get('/', async (req: AuthRequest, res) => {
 });
 
 // Create workspace
-router.post('/', async (req: AuthRequest, res) => {
+router.post('/', checkTierLimit('maxWorkspaces'), async (req: AuthRequest, res) => {
   try {
     const { name, description } = req.body;
 

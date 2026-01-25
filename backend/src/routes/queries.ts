@@ -16,22 +16,6 @@ router.use('/:workspaceId', verifyWorkspaceOwnership);
 // Execute query on dataset
 router.post('/:workspaceId/datasets/:datasetId/query', checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
-    // Check daily query limit
-    const dailyLimit = (req as any).tierLimit;
-    if (dailyLimit !== undefined && dailyLimit !== null) {
-      const queryCountResult = await query(
-        'SELECT COUNT(*) as count FROM queries WHERE executed_by = $1 AND created_at > NOW() - INTERVAL \'1 day\'',
-        [req.user!.id]
-      );
-      const count = parseInt(queryCountResult.rows[0].count);
-      if (count >= dailyLimit) {
-        return res.status(403).json({
-          error: 'Daily limit exceeded',
-          message: `You have reached your daily limit of ${dailyLimit} AI queries. Upgrade to Pro for unlimited access.`
-        });
-      }
-    }
-
     // Accept both query_text (from frontend) and queryText (from internal calls)
     const queryText = req.body.query_text || req.body.queryText;
     const type = req.body.type || 'sql';

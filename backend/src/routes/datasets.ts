@@ -190,7 +190,7 @@ router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
 });
 
 // Analyze dataset with AI
-router.post('/:workspaceId/datasets/:datasetId/analyze', async (req: AuthRequest, res) => {
+router.post('/:workspaceId/datasets/:datasetId/analyze', checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
     // Get dataset
     const datasetResult = await query(

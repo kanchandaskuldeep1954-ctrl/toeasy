@@ -63,7 +63,7 @@ export function checkTierLimit(limitKey: string) {
 
     // Explicitly check for limits that can be verified immediately
     if (limitKey === 'maxWorkspaces') {
-      const result = await query('SELECT COUNT(*) as count FROM workspaces WHERE user_id = $1', [req.user.id]);
+      const result = await query('SELECT COUNT(*) as count FROM workspaces WHERE user_id = $1 AND is_archived = false', [req.user.id]);
       if (parseInt(result.rows[0].count) >= limit) {
         return res.status(403).json({
           error: 'Tier limit reached',
@@ -74,7 +74,7 @@ export function checkTierLimit(limitKey: string) {
     }
 
     if (limitKey === 'maxDatasets') {
-      const workspaceId = req.params.workspaceId;
+      const workspaceId = req.params.workspaceId || req.body.workspaceId;
       if (workspaceId) {
         const result = await query('SELECT COUNT(*) as count FROM datasets WHERE workspace_id = $1', [workspaceId]);
         if (parseInt(result.rows[0].count) >= limit) {
@@ -84,6 +84,20 @@ export function checkTierLimit(limitKey: string) {
             limit
           });
         }
+      }
+    }
+
+    if (limitKey === 'aiQueriesPerDay') {
+      const result = await query(
+        "SELECT COUNT(*) as count FROM queries WHERE executed_by = $1 AND created_at >= CURRENT_DATE",
+        [req.user.id]
+      );
+      if (parseInt(result.rows[0].count) >= limit) {
+        return res.status(403).json({
+          error: 'Tier limit reached',
+          message: `You have reached your daily limit of ${limit} AI queries. Please upgrade to Pro for unlimited access.`,
+          limit
+        });
       }
     }
 

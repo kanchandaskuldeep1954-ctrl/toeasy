@@ -6,6 +6,7 @@ import { config } from './config.js';
 import { initializeRedis, closeRedis } from './services/cacheService.js';
 import { cacheMiddleware, invalidateCacheMiddleware } from './middleware/cacheMiddleware.js';
 import { authenticateToken, AuthRequest } from './middleware/auth.js';
+import { checkSubscription, checkTierLimit } from './middleware/subscription.js';
 import { GroqService } from './services/groq.service.js';
 import { query } from './db.js';
 import { ScraperService } from './services/scraper.service.js';
@@ -116,7 +117,7 @@ app.use('/api/sharing', sharingRoutes); // Public share links (some routes requi
 app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 
 // Top-level AI endpoints (not nested under workspaces)
-app.post('/api/generate-sql', authenticateToken, async (req: AuthRequest, res) => {
+app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
     const { dataset, query: nlQuery } = req.body;
 
@@ -148,7 +149,7 @@ app.post('/api/generate-sql', authenticateToken, async (req: AuthRequest, res) =
 });
 
 // Generate synthetic dataset endpoint
-app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, res) => {
+app.post('/api/generate-synthetic', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
     const { topic, fields, count } = req.body;
 
@@ -156,22 +157,15 @@ app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, 
       return res.status(400).json({ error: 'Topic, fields, and count required' });
     }
 
-    // Check subscription tier for max rows
-    const userResult = await query(
-      'SELECT tier FROM subscriptions WHERE user_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1',
-      [req.user!.id, 'active']
-    );
-
-    // Use centralized tier limits
-    const tier = userResult.rows.length > 0 ? userResult.rows[0].tier : 'basic';
-    const limits = config.tierLimits[tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
+    // Use centralized limits from middleware
+    const limits = (req as any).tierLimits || config.tierLimits[req.user!.tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
     const maxRows = limits.maxGenerateRows;
 
     if (count > maxRows) {
       return res.status(400).json({
-        error: `Your ${tier} plan allows maximum ${maxRows} rows. Upgrade to generate more.`,
+        error: `Your ${req.user!.tier} plan allows maximum ${maxRows} rows. Upgrade to generate more.`,
         maxAllowed: maxRows,
-        tier
+        tier: req.user!.tier
       });
     }
 
@@ -208,7 +202,7 @@ app.post('/api/generate-synthetic', authenticateToken, async (req: AuthRequest, 
 // ===== AI DASHBOARD ENDPOINTS =====
 
 // Suggest Dashboard Config from Dataset
-app.post('/api/suggest-dashboard', authenticateToken, async (req: AuthRequest, res) => {
+app.post('/api/suggest-dashboard', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
     const { dataset } = req.body;
 
