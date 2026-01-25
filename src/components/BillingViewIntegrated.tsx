@@ -110,29 +110,29 @@ const BillingViewIntegrated: React.FC = () => {
       // NOTE: We do NOT override billingCycle from subscription.interval
       // The toggle should default to 'year' (best value) for marketing purposes
 
-      // Handle both old and new usage response formats
+      // Handle new usage response format with limits
       const usageData = usageRes.data;
       if (usageData.stats) {
-        // New format: { tier, stats: {...} }
+        // New format: { tier, limits: {...}, stats: {...} }
         setUsage({
           datasets_used: usageData.stats.datasets || 0,
-          datasets_limit: 100,
-          api_calls_used: usageData.stats.api_calls_used || 0,
-          api_calls_limit: 999999,
+          datasets_limit: usageData.limits?.maxDatasets || 3,
+          api_calls_used: usageData.stats.queriesExecuted || 0, // Mapping queries to API calls for simplicity
+          api_calls_limit: usageData.limits?.aiQueriesPerDay || 10,
           storage_used_gb: usageData.stats.storage_used_gb || 0,
-          storage_limit_gb: 100,
+          storage_limit_gb: usageData.tier === 'basic' ? 1 : (usageData.tier === 'pro' ? 100 : 1000), // Tier based fallback if not in limits
           rows_processed: usageData.stats.rows_processed || 0,
-          queries_executed: usageData.stats.queries_executed || 0
+          queries_executed: usageData.stats.queriesExecuted || 0
         });
       } else {
-        // Old format or direct stats
+        // Fallback for old format
         setUsage({
           datasets_used: usageData.datasets_used || 0,
-          datasets_limit: usageData.datasets_limit || 100,
+          datasets_limit: usageData.datasets_limit || 3,
           api_calls_used: usageData.api_calls_used || 0,
-          api_calls_limit: usageData.api_calls_limit || 999999,
+          api_calls_limit: usageData.api_calls_limit || 10,
           storage_used_gb: usageData.storage_used_gb || 0,
-          storage_limit_gb: usageData.storage_limit_gb || 100,
+          storage_limit_gb: usageData.storage_limit_gb || 1,
           rows_processed: usageData.rows_processed || 0,
           queries_executed: usageData.queries_executed || 0
         });

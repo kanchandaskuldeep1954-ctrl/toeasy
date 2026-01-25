@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { config } from '../config.js';
 import bcryptjs from 'bcryptjs';
 
 const router = Router();
@@ -119,9 +120,11 @@ router.get('/me/usage', authenticateToken, async (req: AuthRequest, res) => {
     );
 
     const stats = statsResult.rows[0];
+    const limits = config.tierLimits[tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
 
     res.json({
       tier,
+      limits,
       stats: {
         workspaces: stats.workspace_count,
         datasets: stats.dataset_count,

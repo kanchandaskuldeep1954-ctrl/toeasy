@@ -7,6 +7,13 @@ const BACKEND_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localh
 
 interface UserUsage {
   tier: string;
+  limits: {
+    maxWorkspaces: number;
+    maxDatasets: number;
+    aiQueriesPerDay: number;
+    maxRowsPerDataset: number;
+    maxGenerateRows: number;
+  };
   stats: {
     workspaces: number;
     datasets: number;
@@ -229,8 +236,8 @@ export const ProfilePage: React.FC = () => {
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Current Tier</span>
                 <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide border ${profile.tier === 'pro' || profile.tier === 'enterprise'
-                    ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+                  ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                   }`}>
                   {profile.tier || 'Basic'}
                 </span>
@@ -265,8 +272,8 @@ export const ProfilePage: React.FC = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {[
-                  { label: 'Dashboards Created', value: usage?.stats.dashboards || 0, color: 'indigo', icon: 'M4 6h16M4 12h16M4 18h7', target: 50 },
-                  { label: 'AI Queries Executed', value: usage?.stats.queriesExecuted || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', target: 1000 }
+                  { label: 'Workspaces Created', value: usage?.stats.workspaces || 0, color: 'indigo', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', target: usage?.limits.maxWorkspaces || 1 },
+                  { label: 'AI Queries (Last 24h)', value: usage?.stats.queriesExecuted || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', target: usage?.limits.aiQueriesPerDay || 10 }
                 ].map((stat, idx) => (
                   <div key={idx} className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800/50 group hover:border-indigo-500/30 transition-all">
                     <div className="flex justify-between items-start mb-4">
@@ -274,7 +281,7 @@ export const ProfilePage: React.FC = () => {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={stat.icon} /></svg>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-black text-slate-900 dark:text-white">{stat.value.toLocaleString()}</p>
+                        <p className="text-2xl font-black text-slate-900 dark:text-white">{stat.value.toLocaleString()} / {stat.target > 10000 ? '∞' : stat.target}</p>
                         <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{stat.label}</p>
                       </div>
                     </div>
@@ -347,8 +354,8 @@ export const ProfilePage: React.FC = () => {
 
                 {passwordMessage && (
                   <div className={`p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-in fade-in slide-in-from-top-2 duration-300 ${passwordMessage.type === 'success'
-                      ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                      : 'bg-rose-50 text-rose-600 border border-rose-100'
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
+                    : 'bg-rose-50 text-rose-600 border border-rose-100'
                     }`}>
                     {passwordMessage.text}
                   </div>
