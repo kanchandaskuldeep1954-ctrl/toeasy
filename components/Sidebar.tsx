@@ -43,7 +43,7 @@ const Sidebar: React.FC = () => {
 
   const handleNavigate = (path: string) => {
     // Pages that require dataset context (when dataset is selected)
-    const datasetDependentPaths = ['/app/clean', '/app/explore', '/app/dashboard', '/app/report', '/app/playground'];
+    const datasetDependentPaths = ['/app/clean', '/app/explore', '/app/dashboard', '/app/report', '/app/playground', '/app/dashboards', '/app/reports'];
     // Pages that only require workspace context
     const workspaceDependentPaths = ['/app/upload', '/app/create'];
 

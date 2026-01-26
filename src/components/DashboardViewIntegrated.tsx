@@ -179,8 +179,74 @@ const DashboardViewIntegrated: React.FC = () => {
   };
 
   return (
-    <div className="relative h-screen overflow-hidden">
-      <DashboardView dataset={dataset} onUpdate={handleUpdate} />
+    <div className="relative h-screen overflow-hidden flex flex-col">
+      {/* Analysis Context Header */}
+      <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between z-[110]">
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => {
+              const path = datasetId ? `/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}` : `/app/dashboards?workspace=${workspaceId}`;
+              import('react-router-dom').then(m => window.location.href = path); // Simplest escape for now or use navigate
+            }}
+            className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
+          >
+            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
+            Library
+          </button>
+          <div className="h-4 w-px bg-slate-800"></div>
+          <div className="flex items-center gap-2">
+            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">{dataset?.name} /</span>
+            <div className="relative">
+              <button
+                onClick={() => setIsSwitcherOpen(!isSwitcherOpen)}
+                className="flex items-center gap-2 text-white text-xs font-black uppercase tracking-tight hover:text-indigo-400 transition-colors"
+              >
+                {dashboardEntity?.name || 'Default Dashboard'}
+                <svg className={`w-3 h-3 transition-transform ${isSwitcherOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+              </button>
+
+              {isSwitcherOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 animate-in fade-in slide-in-from-top-2">
+                  <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1">Switch Analysis</p>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar">
+                    {siblings.map(sib => (
+                      <button
+                        key={sib.id}
+                        onClick={() => {
+                          window.location.href = `/app/dashboard?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${sib.id === dashboardId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      >
+                        <span className="opacity-50">📊</span>
+                        <span className="truncate">{sib.name}</span>
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => window.location.href = `/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}&new=true`}
+                      className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-600/10 transition-all mt-2 border-t border-white/5 pt-3"
+                    >
+                      + New Version
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4">
+          <div className="flex -space-x-2">
+            {[1, 2].map(i => (
+              <div key={i} className="w-6 h-6 rounded-full border-2 border-slate-900 bg-indigo-500 flex items-center justify-center text-[8px] font-bold text-white">AI</div>
+            ))}
+          </div>
+          <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Live Sync Active</span>
+        </div>
+      </div>
+
+      <div className="flex-1 relative overflow-hidden">
+        <DashboardView dataset={dataset} onUpdate={handleUpdate} />
+      </div>
 
       {/* Agent Overlay - Responsive */}
       <div className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 transition-all duration-300 z-[100] flex flex-col items-end ${isAgentOpen ? 'w-[calc(100%-2rem)] md:w-80' : 'w-auto'}`}>

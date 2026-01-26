@@ -21,13 +21,14 @@ export const ReportLibrary: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const workspaceId = searchParams.get('workspace') || activeWorkspace?.id?.toString() || '';
+    const filterDatasetId = searchParams.get('dataset') || '';
 
     const [reports, setReports] = useState<StrategicReportEntity[]>([]);
     const [datasets, setDatasets] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showNewForm, setShowNewForm] = useState(false);
-    const [formData, setFormData] = useState({ name: '', description: '', datasetId: '' });
+    const [formData, setFormData] = useState({ name: '', description: '', datasetId: filterDatasetId });
     const [submitting, setSubmitting] = useState(false);
 
     const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
@@ -50,7 +51,11 @@ export const ReportLibrary: React.FC = () => {
             const allDashboards = dRes.data.data || [];
             const reportEntities = allDashboards.filter((d: any) => d.layout?.type === 'report');
 
-            setReports(reportEntities);
+            const filtered = filterDatasetId
+                ? reportEntities.filter((r: any) => r.layout?.dataset_id === filterDatasetId)
+                : reportEntities;
+
+            setReports(filtered);
             setDatasets(dsRes.data || []);
             setError(null);
         } catch (err) {
@@ -114,15 +119,19 @@ export const ReportLibrary: React.FC = () => {
                 {/* Header */}
                 <div className="flex items-center justify-between mb-8">
                     <div>
-                        <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Strategic Reports</h1>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium">Consolidated intelligence and long-form analysis</p>
+                        <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
+                            {filterDatasetId ? `${datasets.find(d => d.id === filterDatasetId)?.name || 'Dataset'} Reports` : 'Strategic Report Library'}
+                        </h1>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">
+                            {filterDatasetId ? 'Consolidated intelligence for this data source' : 'Organization-wide long-form analysis'}
+                        </p>
                     </div>
                     {!showNewForm && (
                         <button
                             onClick={() => setShowNewForm(true)}
-                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-indigo-600/20 active:scale-95"
+                            className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
                         >
-                            + New Report
+                            + New Strategic Draft
                         </button>
                     )}
                 </div>
