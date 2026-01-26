@@ -16,7 +16,13 @@ const DashboardViewIntegrated: React.FC = () => {
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [dashboardEntity, setDashboardEntity] = useState<any>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
+
+  // Version Control State
+  const [versions, setVersions] = useState<any[]>([]);
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(searchParams.get('version') || null);
+
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
+  const [isVersionSwitcherOpen, setIsVersionSwitcherOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +38,7 @@ const DashboardViewIntegrated: React.FC = () => {
     if (workspaceId && (datasetId || dashboardId) && token) {
       loadAll();
     }
-  }, [workspaceId, datasetId, dashboardId, token]);
+  }, [workspaceId, datasetId, dashboardId, token, selectedVersionId]);
 
   const loadAll = async () => {
     try {
@@ -52,21 +58,23 @@ const DashboardViewIntegrated: React.FC = () => {
         setDashboardEntity(dash);
         targetDatasetId = dash.layout?.dataset_id || datasetId;
         initialConfig = dash.layout?.config;
-        entityHasConfig = true; // Signals we are in a specific dashboard context
+        entityHasConfig = true;
       }
 
       if (!targetDatasetId) {
         throw new Error('No dataset linked to this analysis.');
       }
 
-      // 2. Fetch Dataset + Siblings
-      const [dsRes, siblingsRes] = await Promise.all([
+      // 2. Fetch Dataset + Siblings + Versions
+      const [dsRes, siblingsRes, versionsRes] = await Promise.all([
         axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } })
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       const dsData = dsRes.data;
       const allDashboards = siblingsRes.data.data || [];
+      setVersions(versionsRes.data || []);
 
       const dashSiblings = allDashboards.filter((d: any) => d.layout?.dataset_id === targetDatasetId && d.layout?.type !== 'report');
 
@@ -90,11 +98,35 @@ const DashboardViewIntegrated: React.FC = () => {
         return val;
       };
 
-      // Prioritize Cleaned Data if available
-      const cleanedData = safeParse(dsData.cleaned_data);
-      const rawData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
-      const headers = safeParse(dsData.headers) || [];
-      const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
+      // DATA FETCHING LOGIC (Version Aware)
+      let finalData: any[] = [];
+      let finalHeaders: string[] = [];
+      let sourceName = 'RAW_ORIGINAL';
+
+      // A. If a specific version is selected, fetch it
+      if (selectedVersionId && selectedVersionId !== 'root') {
+        try {
+          const verRes = await axios.get(
+            `${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions/${selectedVersionId}`,
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          finalData = verRes.data.data;
+          finalHeaders = verRes.data.headers;
+          sourceName = `VERSION:${verRes.data.version_name}`;
+        } catch (e) {
+          console.error("Failed to fetch version, falling back to main", e);
+          // Fallback to main logic
+        }
+      }
+
+      // B. If no version selected, or fallback needed: use Cleaned -> Raw logic
+      if (finalData.length === 0) {
+        const cleanedData = safeParse(dsData.cleaned_data);
+        finalData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
+        const hdrs = safeParse(dsData.headers) || [];
+        finalHeaders = hdrs.length > 0 ? hdrs : Object.keys(finalData?.[0] || {});
+        sourceName = cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL';
+      }
 
       // Transform - Priority to entity config. If entity context active, NEVER fallback to dataset global.
       const transformedDataset: Dataset = {
@@ -102,9 +134,9 @@ const DashboardViewIntegrated: React.FC = () => {
         name: dsData.name || 'Dataset',
         sourceType: dsData.source_type || 'csv',
         headers: finalHeaders,
-        data: rawData,
+        data: finalData,
         // Add source indicator for UI
-        dataQualitySource: cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL',
+        dataQualitySource: sourceName as any,
         stats: dsData.stats || [],
         createdAt: dsData.created_at || new Date().toISOString(),
         rowCount: rawData.length,
@@ -216,7 +248,57 @@ const DashboardViewIntegrated: React.FC = () => {
           </button>
           <div className="h-4 w-px bg-slate-800"></div>
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">{dataset?.name} /</span>
+
+            {/* Dataset / Version Selector */}
+            <div className="relative">
+              <button
+                onClick={() => setIsVersionSwitcherOpen(!isVersionSwitcherOpen)}
+                className="group"
+              >
+                <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider group-hover:text-indigo-400 transition-colors flex items-center gap-1">
+                  {selectedVersionId ? versions.find(v => v.id == selectedVersionId)?.version_name : dataset?.name}
+                  <span className="opacity-50 text-[8px]">{selectedVersionId ? '(Version)' : '(Master)'}</span>
+                  <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
+                </span>
+              </button>
+
+              {isVersionSwitcherOpen && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 z-50">
+                  <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1">Select Data Version</p>
+                  <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
+                    {/* Master/Latest Option */}
+                    <button
+                      onClick={() => { setSelectedVersionId(null); setIsVersionSwitcherOpen(false); }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${!selectedVersionId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                    >
+                      <span className="opacity-50">🚀</span>
+                      <div>
+                        <div className="truncate">Latest (Master)</div>
+                        <div className="text-[9px] opacity-60 font-normal">Auto-updates with cleaning</div>
+                      </div>
+                    </button>
+
+                    {/* Historic Versions */}
+                    {versions.map(ver => (
+                      <button
+                        key={ver.id}
+                        onClick={() => { setSelectedVersionId(ver.id); setIsVersionSwitcherOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${selectedVersionId == ver.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      >
+                        <span className="opacity-50">{ver.created_by_tool === 'playground' ? '⚡' : '💾'}</span>
+                        <div>
+                          <div className="truncate">{ver.version_name}</div>
+                          <div className="text-[9px] opacity-60 font-normal">{new Date(ver.created_at).toLocaleDateString()} • {ver.created_by_tool}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <span className="text-slate-600 text-[10px]">/</span>
+
             <div className="relative">
               <button
                 onClick={() => setIsSwitcherOpen(!isSwitcherOpen)}
@@ -266,7 +348,11 @@ const DashboardViewIntegrated: React.FC = () => {
             ))}
           </div>
 
-          {dataset?.dataQualitySource === 'PRO_CLEANED' ? (
+          {dataset?.dataQualitySource?.toString().startsWith('VERSION:') ? (
+            <div className="hidden md:flex px-2 py-1 bg-violet-500/10 border border-violet-500/20 rounded text-[9px] font-black text-violet-400 uppercase tracking-widest items-center gap-1">
+              <span>⚡</span> {dataset.dataQualitySource.toString().replace('VERSION:', '')}
+            </div>
+          ) : dataset?.dataQualitySource === 'PRO_CLEANED' ? (
             <div className="hidden md:flex px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded text-[9px] font-black text-white uppercase tracking-widest shadow-lg shadow-emerald-500/20 items-center gap-1">
               <span>💎</span> PRO CLEANED
             </div>
