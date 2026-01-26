@@ -211,6 +211,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         try {
             const updatedReport = await GroqService.modifyReport(dataset, report, instruction);
             setReport(updatedReport);
+            if (onUpdate) onUpdate({ ...dataset, strategicReport: updatedReport });
             setCopilotInput('');
             // Optional: Scroll to top of report to show changes
             contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });

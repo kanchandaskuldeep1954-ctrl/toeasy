@@ -393,7 +393,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     {/* Dashboard Identity */}
                     <div className="flex items-center gap-3">
                         {isEditingTitle ? (
-                            <input autoFocus value={dashboardName} onChange={e => setDashboardName(e.target.value)} onBlur={() => setIsEditingTitle(false)} className="text-sm font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded px-2 outline-none w-[200px]" />
+                            <input
+                                autoFocus
+                                value={dashboardName}
+                                onChange={e => setDashboardName(e.target.value)}
+                                onBlur={() => {
+                                    setIsEditingTitle(false);
+                                    if (onUpdate && config) onUpdate({ ...dataset, dashboardConfig: config });
+                                }}
+                                onKeyDown={e => e.key === 'Enter' && setIsEditingTitle(false)}
+                                className="text-sm font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded px-2 outline-none w-[200px]"
+                            />
                         ) : (
                             <h2 onClick={() => setIsEditingTitle(true)} className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white cursor-pointer hover:text-indigo-500 transition-all flex items-center gap-2 group">
                                 {dashboardName}
@@ -424,7 +434,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             <span>{isForecastMode ? 'FORECAST ACTIVE' : 'PREDICTIVE'}</span>
                         </button>
                         <button
-                            onClick={() => initAnalysis(true)}
+                            onClick={() => loadOrGenerate(true)}
                             disabled={loading}
                             className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50`}
                         >
