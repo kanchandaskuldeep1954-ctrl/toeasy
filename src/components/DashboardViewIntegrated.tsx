@@ -90,7 +90,9 @@ const DashboardViewIntegrated: React.FC = () => {
         return val;
       };
 
-      const rawData = safeParse(dsData.raw_data || dsData.data) || [];
+      // Prioritize Cleaned Data if available
+      const cleanedData = safeParse(dsData.cleaned_data);
+      const rawData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
       const headers = safeParse(dsData.headers) || [];
       const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
@@ -101,6 +103,8 @@ const DashboardViewIntegrated: React.FC = () => {
         sourceType: dsData.source_type || 'csv',
         headers: finalHeaders,
         data: rawData,
+        // Add source indicator for UI
+        dataQualitySource: cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL',
         stats: dsData.stats || [],
         createdAt: dsData.created_at || new Date().toISOString(),
         rowCount: rawData.length,
@@ -261,7 +265,18 @@ const DashboardViewIntegrated: React.FC = () => {
               <div key={i} className="w-6 h-6 rounded-full border-2 border-slate-900 bg-indigo-500 flex items-center justify-center text-[8px] font-bold text-white">AI</div>
             ))}
           </div>
-          <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Live Sync Active</span>
+
+          {dataset?.dataQualitySource === 'PRO_CLEANED' ? (
+            <div className="hidden md:flex px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded text-[9px] font-black text-white uppercase tracking-widest shadow-lg shadow-emerald-500/20 items-center gap-1">
+              <span>💎</span> PRO CLEANED
+            </div>
+          ) : (
+            <div className="hidden md:block px-2 py-1 bg-slate-800 rounded text-[9px] font-bold text-slate-500 uppercase tracking-widest border border-slate-700">
+              RAW ORIGINAL
+            </div>
+          )}
+
+          <span className="hidden md:inline text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Live Sync Active</span>
         </div>
       </div>
 

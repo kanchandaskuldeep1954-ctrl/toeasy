@@ -141,6 +141,7 @@ export interface Dataset {
   cleaningReport?: string;
   validationRules?: ValidationRule[];
   dashboardConfig?: DashboardConfig;
+  dataQualitySource?: 'PRO_CLEANED' | 'RAW_ORIGINAL';
   savedQueries?: SavedQuery[];
 }
 

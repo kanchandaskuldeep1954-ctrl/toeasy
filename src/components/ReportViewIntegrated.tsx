@@ -75,7 +75,9 @@ const ReportViewIntegrated: React.FC = () => {
                 return val;
             };
 
-            const rawData = safeParse(dsData.raw_data || dsData.data) || [];
+            // Prioritize Cleaned Data
+            const cleanedData = safeParse(dsData.cleaned_data);
+            const rawData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
             const headers = safeParse(dsData.headers) || [];
             const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
@@ -85,6 +87,7 @@ const ReportViewIntegrated: React.FC = () => {
                 sourceType: dsData.source_type || 'csv',
                 headers: finalHeaders,
                 data: rawData,
+                dataQualitySource: cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL',
                 stats: dsData.stats || [],
                 createdAt: dsData.created_at || new Date().toISOString(),
                 rowCount: rawData.length,
@@ -223,10 +226,20 @@ const ReportViewIntegrated: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                    <span className="hidden md:flex text-[9px] font-black text-emerald-500 uppercase tracking-widest items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                         Strategic Intelligence
                     </span>
+
+                    {dataset?.dataQualitySource === 'PRO_CLEANED' ? (
+                        <div className="px-2 py-1 bg-emerald-900/40 border border-emerald-500/30 rounded text-[9px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
+                            <span>💎</span> CLEAN DATA
+                        </div>
+                    ) : (
+                        <div className="px-2 py-1 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold text-slate-500 uppercase tracking-widest">
+                            RAW DATA
+                        </div>
+                    )}
                 </div>
             </div>
 

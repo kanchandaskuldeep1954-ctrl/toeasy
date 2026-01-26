@@ -168,27 +168,47 @@ export const DashboardLibrary: React.FC = () => {
                   value={formData.datasetId}
                   onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
-                  required
-                >
-                  <option value="">Select a Dataset...</option>
-                  {datasets.map(ds => (
-                    <option key={ds.id} value={ds.id}>{ds.name} ({(JSON.parse(ds.raw_data || '[]').length).toLocaleString()} rows)</option>
-                  ))}
-                </select>
-              </div>
-              <div>
                 <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Dashboard Name*</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Growth Analytics"
+                  placeholder={filterDatasetId ? `${datasets.find(d => d.id === filterDatasetId)?.name} Analysis` : "e.g., Growth Analytics"}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
-                  required
+                  autoFocus
                 />
               </div>
+              {!filterDatasetId && (
+                <div>
+                  <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Data Source*</label>
+                  <select
+                    value={formData.datasetId}
+                    onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
+                    required
+                  >
+                    <option value="">Select a Dataset...</option>
+                    {datasets.map(ds => (
+                      <option key={ds.id} value={ds.id}>{ds.name} ({(JSON.parse(ds.raw_data || '[]').length).toLocaleString()} rows)</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {filterDatasetId && (
+                <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-500/30 flex items-center gap-2">
+                  <span className="text-lg">🎯</span>
+                  <div>
+                    <p className="text-[10px] font-bold uppercase text-indigo-500 dark:text-indigo-400">Context Active</p>
+                    <p className="text-xs font-bold text-indigo-900 dark:text-indigo-100">
+                      Creating analysis for: {datasets.find(d => d.id === filterDatasetId)?.name}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               <div>
-                <label className="text-sm text-slate-400 mb-2 block">Description</label>
+                <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -200,7 +220,7 @@ export const DashboardLibrary: React.FC = () => {
               <div className="flex gap-2">
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || (!filterDatasetId && !formData.datasetId)}
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
                 >
                   {submitting ? 'Creating...' : 'Create'}
