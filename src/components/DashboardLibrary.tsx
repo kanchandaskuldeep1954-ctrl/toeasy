@@ -121,7 +121,7 @@ export const DashboardLibrary: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-              {filterDatasetId ? `${(datasets || []).find(d => d.id === filterDatasetId)?.name || 'Dataset'} Vault` : 'Dashboards Library'}
+              {filterDatasetId ? `${(Array.isArray(datasets) ? datasets : []).find(d => d.id === filterDatasetId)?.name || 'Dataset'} Vault` : 'Dashboards Library'}
             </h1>
             <p className="text-slate-500 dark:text-slate-400 font-medium">
               {filterDatasetId ? 'Manage analysis versions for this data source' : 'Global collection of analytics workspaces'}

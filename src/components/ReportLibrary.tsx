@@ -120,7 +120,7 @@ export const ReportLibrary: React.FC = () => {
                 <div className="flex items-center justify-between mb-8">
                     <div>
                         <h1 className="text-3xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">
-                            {filterDatasetId ? `${(datasets || []).find(d => d.id === filterDatasetId)?.name || 'Dataset'} Reports` : 'Strategic Report Library'}
+                            {filterDatasetId ? `${(Array.isArray(datasets) ? datasets : []).find(d => d.id === filterDatasetId)?.name || 'Dataset'} Reports` : 'Strategic Report Library'}
                         </h1>
                         <p className="text-slate-500 dark:text-slate-400 font-medium">
                             {filterDatasetId ? 'Consolidated intelligence for this data source' : 'Organization-wide long-form analysis'}

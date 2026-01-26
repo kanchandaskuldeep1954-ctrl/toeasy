@@ -15,6 +15,8 @@ const DashboardViewIntegrated: React.FC = () => {
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [dashboardEntity, setDashboardEntity] = useState<any>(null);
+  const [siblings, setSiblings] = useState<any[]>([]);
+  const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,13 +56,16 @@ const DashboardViewIntegrated: React.FC = () => {
         throw new Error('No dataset linked to this analysis.');
       }
 
-      // 2. Fetch Dataset for data source
-      const dsRes = await axios.get(
-        `${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+      // 2. Fetch Dataset + Siblings
+      const [dsRes, siblingsRes] = await Promise.all([
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
 
       const dsData = dsRes.data;
+      const allDashboards = siblingsRes.data.data || [];
+      const dashSiblings = allDashboards.filter((d: any) => d.layout?.dataset_id === targetDatasetId && d.layout?.type !== 'report');
+      setSiblings(dashSiblings);
 
       const safeParse = (val: any) => {
         if (!val) return undefined;
