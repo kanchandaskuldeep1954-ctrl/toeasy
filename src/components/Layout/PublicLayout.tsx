@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { useTheme } from '../../hooks/useTheme';
+
 interface PublicLayoutProps {
     children: React.ReactNode;
 }
@@ -8,9 +10,10 @@ interface PublicLayoutProps {
 const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
     const navigate = useNavigate();
+    const { theme, toggleTheme } = useTheme();
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans flex flex-col transition-colors duration-300">
             {/* Navigation */}
             <nav className="sticky top-0 z-50 glass border-b border-white/20 dark:border-white/5 relative">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -31,6 +34,17 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                         </div>
 
                         <div className="hidden md:flex items-center gap-4">
+                            <button
+                                onClick={toggleTheme}
+                                className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-slate-200 dark:border-slate-700 active:scale-95"
+                                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                            >
+                                {theme === 'dark' ? (
+                                    <svg className="w-5 h-5 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" /></svg>
+                                ) : (
+                                    <svg className="w-5 h-5 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                                )}
+                            </button>
                             <Link to="/login" className="text-sm font-bold text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                                 Sign In
                             </Link>
@@ -68,6 +82,20 @@ const PublicLayout: React.FC<PublicLayoutProps> = ({ children }) => {
                                 <Link to="/contact" className="text-base font-semibold px-4 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" onClick={() => setMobileMenuOpen(false)}>Contact Us</Link>
                             </div>
                             <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex flex-col gap-3">
+                                <button
+                                    onClick={toggleTheme}
+                                    className="flex items-center justify-between px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-900 dark:text-white font-bold"
+                                >
+                                    <span>Theme</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium uppercase tracking-widest text-slate-400">{theme}</span>
+                                        {theme === 'dark' ? (
+                                            <svg className="w-5 h-5 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" /></svg>
+                                        ) : (
+                                            <svg className="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                                        )}
+                                    </div>
+                                </button>
                                 <Link to="/login" className="text-center py-2.5 font-bold text-slate-600 dark:text-slate-300 hover:text-indigo-600 transition-colors" onClick={() => setMobileMenuOpen(false)}>
                                     Sign In
                                 </Link>
