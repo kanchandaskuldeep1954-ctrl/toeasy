@@ -168,6 +168,15 @@ export const DashboardLibrary: React.FC = () => {
                   value={formData.datasetId}
                   onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="">Select a Dataset...</option>
+                  {datasets.map(ds => (
+                    <option key={ds.id} value={ds.id}>{ds.name} ({ds.row_count?.toLocaleString() || 0} rows)</option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Dashboard Name*</label>
                 <input
                   type="text"
