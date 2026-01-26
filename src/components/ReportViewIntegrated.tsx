@@ -197,11 +197,15 @@ const ReportViewIntegrated: React.FC = () => {
                                             <button
                                                 key={sib.id}
                                                 onClick={() => {
-                                                    window.location.href = `/app/report?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
+                                                    if (sib.isPrimary) {
+                                                        window.location.href = `/app/report?dataset=${datasetId}&workspace=${workspaceId}`;
+                                                    } else {
+                                                        window.location.href = `/app/report?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
+                                                    }
                                                 }}
-                                                className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${sib.id === reportId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                                                className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${((sib.isPrimary && !reportId) || (sib.id === reportId)) ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                                             >
-                                                <span className="opacity-50">📄</span>
+                                                <span className="opacity-50">{sib.isPrimary ? '🧠' : '📄'}</span>
                                                 <span className="truncate">{sib.name}</span>
                                             </button>
                                         ))}

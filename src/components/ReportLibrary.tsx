@@ -49,14 +49,27 @@ export const ReportLibrary: React.FC = () => {
             ]);
 
             const allDashboards = dRes.data.data || [];
+            const dsList = dsRes.data || [];
+
             const reportEntities = allDashboards.filter((d: any) => d.layout?.type === 'report');
 
-            const filtered = filterDatasetId
-                ? reportEntities.filter((r: any) => r.layout?.dataset_id === filterDatasetId)
-                : reportEntities;
+            // Synthesis: Primary Strategic Report for every dataset
+            const primaryReports = dsList.map((ds: any) => ({
+                id: `primary-${ds.id}`,
+                dataset_id: ds.id,
+                name: `${ds.name} Master`,
+                description: 'Initial AI-generated strategic assessment',
+                isPrimary: true,
+                created_at: ds.created_at,
+                updated_at: ds.updated_at
+            }));
 
-            setReports(filtered);
-            setDatasets(dsRes.data || []);
+            const combined = filterDatasetId
+                ? [...primaryReports.filter(p => p.dataset_id === filterDatasetId), ...reportEntities.filter((r: any) => r.layout?.dataset_id === filterDatasetId)]
+                : [...primaryReports, ...reportEntities];
+
+            setReports(combined as any);
+            setDatasets(dsList);
             setError(null);
         } catch (err) {
             console.error('Error fetching reports:', err);
@@ -207,22 +220,34 @@ export const ReportLibrary: React.FC = () => {
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {reports.map((report) => (
+                        {reports.map((report: any) => (
                             <div
                                 key={report.id}
-                                className="group relative p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-[32px] hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer"
-                                onClick={() => navigate(`/app/report?id=${report.id}&workspace=${workspaceId}`)}
+                                className={`group relative p-8 bg-white dark:bg-slate-900 border ${report.isPrimary ? 'border-emerald-500/30' : 'border-slate-200 dark:border-slate-800'} rounded-[32px] hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer`}
+                                onClick={() => {
+                                    const path = report.isPrimary
+                                        ? `/app/report?dataset=${report.dataset_id}&workspace=${workspaceId}`
+                                        : `/app/report?id=${report.id}&workspace=${workspaceId}`;
+                                    navigate(path);
+                                }}
                             >
+                                {report.isPrimary && (
+                                    <div className="absolute top-0 left-0 bg-emerald-600 text-white text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-br-2xl">
+                                        Core Strategy
+                                    </div>
+                                )}
                                 <div className="flex items-start justify-between mb-8">
                                     <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        <span className="text-2xl">📄</span>
+                                        <span className="text-2xl">{report.isPrimary ? '🧠' : '📄'}</span>
                                     </div>
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
-                                        className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
-                                    >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-                                    </button>
+                                    {!report.isPrimary && (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
+                                            className="p-2 text-slate-300 hover:text-rose-500 transition-colors"
+                                        >
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>
+                                    )}
                                 </div>
                                 <h3 className="text-xl font-black text-slate-900 dark:text-white mb-2 leading-tight">{report.name}</h3>
                                 <p className="text-slate-400 text-sm font-medium line-clamp-2 mb-6">Strategic insights prepared on {new Date(report.created_at).toLocaleDateString()}</p>

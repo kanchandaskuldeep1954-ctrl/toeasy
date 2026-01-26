@@ -67,8 +67,17 @@ const DashboardViewIntegrated: React.FC = () => {
 
       const dsData = dsRes.data;
       const allDashboards = siblingsRes.data.data || [];
+
       const dashSiblings = allDashboards.filter((d: any) => d.layout?.dataset_id === targetDatasetId && d.layout?.type !== 'report');
-      setSiblings(dashSiblings);
+
+      // Synthesis: Prepend the "Master" version to the switcher
+      const masterVersion = {
+        id: 'primary',
+        name: 'Master Analysis',
+        isPrimary: true
+      };
+
+      setSiblings([masterVersion, ...dashSiblings]);
 
       const safeParse = (val: any) => {
         if (!val) return undefined;
@@ -221,11 +230,15 @@ const DashboardViewIntegrated: React.FC = () => {
                       <button
                         key={sib.id}
                         onClick={() => {
-                          window.location.href = `/app/dashboard?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
+                          if (sib.isPrimary) {
+                            window.location.href = `/app/dashboard?dataset=${datasetId}&workspace=${workspaceId}`;
+                          } else {
+                            window.location.href = `/app/dashboard?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
+                          }
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${sib.id === dashboardId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${((sib.isPrimary && !dashboardId) || (sib.id === dashboardId)) ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                       >
-                        <span className="opacity-50">📊</span>
+                        <span className="opacity-50">{sib.isPrimary ? '💎' : '📊'}</span>
                         <span className="truncate">{sib.name}</span>
                       </button>
                     ))}
