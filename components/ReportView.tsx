@@ -144,63 +144,65 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         return () => { isMounted.current = false; };
     }, []);
 
-    useEffect(() => {
+    const generate = useCallback(async (forced: boolean = false) => {
         if (!dataset) return;
 
-        // Skip if report already exists for this type
-        if (report && dataset.strategicReport) {
+        // Skip if report already exists and not forced
+        if (!forced && dataset.strategicReport) {
+            setReport(dataset.strategicReport);
+            setActiveSection(dataset.strategicReport.sections?.[0]?.id || '');
+            setLoading(false);
             return;
         }
 
-        // Generate new report
-        const generate = async () => {
-            setLoading(true);
-            setError(null);
+        setLoading(true);
+        setError(null);
 
-            try {
-                if (onAIAction) onAIAction();
+        try {
+            if (onAIAction) onAIAction();
 
-                // Try with 45 second timeout
-                const content = await generateReportWithTimeout(45000);
+            // Try with 45 second timeout
+            const content = await generateReportWithTimeout(45000);
 
-                if (!isMounted.current) return;
+            if (!isMounted.current) return;
 
-                // Validate response structure
-                if (!content || !content.sections || !Array.isArray(content.sections)) {
-                    throw new Error('Invalid report structure received');
-                }
-
-                setReport(content);
-                setActiveSection(content.sections?.[0]?.id || '');
-                setError(null);
-                if (onUpdate) onUpdate({ ...dataset, strategicReport: content } as any);
-
-            } catch (e: any) {
-                if (!isMounted.current) return;
-                console.error('Report generation failed:', e);
-
-                let errorMessage = e instanceof Error ? e.message : 'Failed to generate report';
-
-                if (e.message?.includes('429') || e.response?.status === 429) {
-                    errorMessage = "Server is under high load (Too Many Requests). Using basic template instead.";
-                    useFallback();
-                    return;
-                }
-
-                // After 2 retries, use fallback automatically
-                if (retryCount >= 2) {
-                    console.log('Using fallback report after multiple failures');
-                    useFallback();
-                } else {
-                    setError(errorMessage);
-                }
-            } finally {
-                if (isMounted.current) setLoading(false);
+            // Validate response structure
+            if (!content || !content.sections || !Array.isArray(content.sections)) {
+                throw new Error('Invalid report structure received');
             }
-        };
 
-        generate();
-    }, [dataset?.name, retryCount]);
+            setReport(content);
+            setActiveSection(content.sections?.[0]?.id || '');
+            setError(null);
+            if (onUpdate) onUpdate({ ...dataset, strategicReport: content } as any);
+
+        } catch (e: any) {
+            if (!isMounted.current) return;
+            console.error('Report generation failed:', e);
+
+            let errorMessage = e instanceof Error ? e.message : 'Failed to generate report';
+
+            if (e.message?.includes('429') || e.response?.status === 429) {
+                errorMessage = "Server is under high load (Too Many Requests). Using basic template instead.";
+                useFallback();
+                return;
+            }
+
+            // After 2 retries, use fallback automatically
+            if (retryCount >= 2) {
+                console.log('Using fallback report after multiple failures');
+                useFallback();
+            } else {
+                setError(errorMessage);
+            }
+        } finally {
+            if (isMounted.current) setLoading(false);
+        }
+    }, [dataset, onAIAction, onUpdate, retryCount]);
+
+    useEffect(() => {
+        generate(false);
+    }, [dataset?.name, retryCount, generate]);
 
     const handleCopilotUpdate = async (instruction: string) => {
         if (!instruction.trim() || !report || !dataset) return;
@@ -414,6 +416,13 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
 
                 <nav className="space-y-1">
+                    <button
+                        onClick={() => generate(true)}
+                        disabled={loading}
+                        className="w-full mb-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50"
+                    >
+                        {loading ? 'Rebuilding...' : 'Rebuild AI Report'}
+                    </button>
                     {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => (
                         <a
                             key={section.id}
@@ -460,6 +469,15 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         <svg className={`w-5 h-5 transition-transform group-hover:scale-110 ${isSharing ? 'text-indigo-500' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                         </svg>
+                    </button>
+
+                    <button
+                        onClick={() => generate(true)}
+                        disabled={loading}
+                        className={`p-2 rounded-full transition-all ${loading ? 'animate-spin bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        title="Rebuild AI Report"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                     </button>
 
                     <button

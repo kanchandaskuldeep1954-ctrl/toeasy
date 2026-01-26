@@ -4,18 +4,19 @@ import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import ReportView from '../../components/ReportView';
 import { Dataset } from '../../types';
+import datasetAPI from '../services/api';
 
 const ReportViewIntegrated: React.FC = () => {
     const { token } = useAuth();
     const [searchParams] = useSearchParams();
-    const workspaceId = searchParams.get('workspace');
-    const datasetId = searchParams.get('dataset');
+    const workspaceId = searchParams.get('workspace') || '';
+    const datasetId = searchParams.get('dataset') || '';
 
     const [dataset, setDataset] = useState<Dataset | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
     useEffect(() => {
         if (workspaceId && datasetId && token) {
@@ -34,21 +35,21 @@ const ReportViewIntegrated: React.FC = () => {
             const data = response.data;
 
             const safeParse = (val: any) => {
-                if (!val) return [];
+                if (!val) return undefined;
                 if (typeof val === 'string') {
                     try {
                         const first = JSON.parse(val);
                         return typeof first === 'string' ? JSON.parse(first) : first;
-                    } catch (e) { return []; }
+                    } catch (e) { return undefined; }
                 }
                 return val;
             };
 
-            const rawData = safeParse(data.raw_data || data.data);
-            const headers = safeParse(data.headers);
+            const rawData = safeParse(data.raw_data || data.data) || [];
+            const headers = safeParse(data.headers) || [];
             const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
-            // Transform backend response to Dataset format
+            // Transform backend response to Dataset format - CACHE MAPPING
             const transformedDataset: Dataset = {
                 id: data.id || datasetId,
                 name: data.name || 'Dataset',
@@ -61,6 +62,8 @@ const ReportViewIntegrated: React.FC = () => {
                 quarantinedData: [],
                 cleaningActions: [],
                 cleaningHistory: data.cleaning_history || [],
+                dashboardConfig: data.dashboard_config ? safeParse(data.dashboard_config) : undefined,
+                strategicReport: data.strategic_report ? safeParse(data.strategic_report) : undefined,
             };
 
             setDataset(transformedDataset);
@@ -70,6 +73,22 @@ const ReportViewIntegrated: React.FC = () => {
             console.error(err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdate = async (updated: Dataset) => {
+        if (!workspaceId || !datasetId) return;
+        try {
+            // Immediate state sync
+            setDataset(updated);
+
+            // Persist to DB
+            await datasetAPI.dataset.update(workspaceId, datasetId, {
+                dashboard_config: updated.dashboardConfig,
+                strategic_report: updated.strategicReport
+            });
+        } catch (err) {
+            console.error('Failed to persist report update:', err);
         }
     };
 
@@ -103,7 +122,7 @@ const ReportViewIntegrated: React.FC = () => {
         );
     }
 
-    return <ReportView dataset={dataset} />;
+    return <ReportView dataset={dataset} onUpdate={handleUpdate} />;
 };
 
 export default ReportViewIntegrated;

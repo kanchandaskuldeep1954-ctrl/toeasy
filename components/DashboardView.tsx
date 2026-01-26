@@ -133,11 +133,11 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         return () => { isMounted.current = false; };
     }, []);
 
-    const initAnalysis = async () => {
-        if (config) return;
+    const initAnalysis = async (force: boolean = false) => {
+        if (!force && config) return;
         setLoading(true);
         try {
-            if (dataset.dashboardConfig) {
+            if (!force && dataset.dashboardConfig) {
                 setConfig(dataset.dashboardConfig);
                 setLoading(false);
                 return;
@@ -153,7 +153,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     useEffect(() => {
         setDashboardName(cleanName + ' Dashboard');
-        initAnalysis();
+        initAnalysis(false);
     }, [dataset.name, cleanName]);
 
     useEffect(() => {
@@ -379,7 +379,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         <button onClick={() => setIsForecastMode(!isForecastMode)} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-900 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
                             <span>{isForecastMode ? 'FORECAST ACTIVE' : 'PREDICTIVE'}</span>
                         </button>
-                        <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-[9px] font-black uppercase tracking-wider shadow-lg">BOARDROOM</button>
+                        <button
+                            onClick={() => initAnalysis(true)}
+                            disabled={loading}
+                            className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50`}
+                        >
+                            <span>{loading ? 'REBUILDING...' : 'REBUILD AI'}</span>
+                        </button>
+                        <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all">BOARDROOM</button>
                         <button
                             onClick={handleShare}
                             disabled={isSharing}

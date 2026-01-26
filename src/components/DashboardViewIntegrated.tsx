@@ -3,13 +3,14 @@ import { useAuth } from '../hooks/useAuth';
 import { useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import DashboardView from '../../components/DashboardView';
-import { Dataset } from '../types';
+import { Dataset } from '../../types';
+import datasetAPI from '../services/api';
 
 const DashboardViewIntegrated: React.FC = () => {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
-  const workspaceId = searchParams.get('workspace');
-  const datasetId = searchParams.get('dataset');
+  const workspaceId = searchParams.get('workspace') || '';
+  const datasetId = searchParams.get('dataset') || '';
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,24 +41,25 @@ const DashboardViewIntegrated: React.FC = () => {
       const data = response.data;
 
       const safeParse = (val: any) => {
-        if (!val) return [];
+        if (!val) return undefined;
         if (typeof val === 'string') {
           try {
             const first = JSON.parse(val);
             return typeof first === 'string' ? JSON.parse(first) : first;
-          } catch (e) { return []; }
+          } catch (e) { return undefined; }
         }
         return val;
       };
 
-      const rawData = safeParse(data.raw_data || data.data);
-      const headers = safeParse(data.headers);
+      const rawData = safeParse(data.raw_data || data.data) || [];
+      const headers = safeParse(data.headers) || [];
       const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
-      // Transform backend response to Dataset format
+      // Transform backend response to Dataset format - MAPPING CACHED CONFIGS
       const transformedDataset: Dataset = {
         id: data.id || datasetId,
         name: data.name || 'Dataset',
+        sourceType: data.source_type || 'csv',
         headers: finalHeaders,
         data: rawData,
         stats: data.stats || [],
@@ -65,6 +67,8 @@ const DashboardViewIntegrated: React.FC = () => {
         rowCount: rawData.length,
         quarantinedData: [],
         cleaningActions: [],
+        dashboardConfig: data.dashboard_config ? safeParse(data.dashboard_config) : undefined,
+        strategicReport: data.strategic_report ? safeParse(data.strategic_report) : undefined,
       };
 
       setDataset(transformedDataset);
@@ -74,6 +78,22 @@ const DashboardViewIntegrated: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleUpdate = async (updated: Dataset) => {
+    if (!workspaceId || !datasetId) return;
+    try {
+      // Sync state first for immediate UI feedback
+      setDataset(updated);
+
+      // Persist to backend - convert back to snake_case for DB
+      await datasetAPI.dataset.update(workspaceId, datasetId, {
+        dashboard_config: updated.dashboardConfig,
+        strategic_report: updated.strategicReport
+      });
+    } catch (err) {
+      console.error('Failed to persist dashboard update:', err);
     }
   };
 
@@ -128,7 +148,7 @@ const DashboardViewIntegrated: React.FC = () => {
 
   return (
     <div className="relative h-screen overflow-hidden">
-      <DashboardView dataset={dataset} />
+      <DashboardView dataset={dataset} onUpdate={handleUpdate} />
 
       {/* Agent Overlay - Responsive */}
       <div className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 transition-all duration-300 z-[100] flex flex-col items-end ${isAgentOpen ? 'w-[calc(100%-2rem)] md:w-80' : 'w-auto'}`}>
