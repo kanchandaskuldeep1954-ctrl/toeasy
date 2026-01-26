@@ -757,6 +757,6 @@ return (
 
   </div>
 );
-};
+
 
 export default PlaygroundViewIntegrated;
