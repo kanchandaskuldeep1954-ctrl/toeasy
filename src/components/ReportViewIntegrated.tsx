@@ -11,28 +11,50 @@ const ReportViewIntegrated: React.FC = () => {
     const [searchParams] = useSearchParams();
     const workspaceId = searchParams.get('workspace') || '';
     const datasetId = searchParams.get('dataset') || '';
+    const reportId = searchParams.get('id') || '';
 
     const [dataset, setDataset] = useState<Dataset | null>(null);
+    const [reportEntity, setReportEntity] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
     useEffect(() => {
-        if (workspaceId && datasetId && token) {
-            loadDataset();
+        if (workspaceId && (datasetId || reportId) && token) {
+            loadAll();
         }
-    }, [workspaceId, datasetId, token]);
+    }, [workspaceId, datasetId, reportId, token]);
 
-    const loadDataset = async () => {
+    const loadAll = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(
-                `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}`,
+
+            let targetDatasetId = datasetId;
+            let initialReport = undefined;
+
+            // 1. If we have a report ID, fetch the specific entity
+            if (reportId) {
+                const response = await axios.get(
+                    `${backendUrl}/workspaces/${workspaceId}/dashboards/${reportId}`,
+                    { headers: { Authorization: `Bearer ${token}` } }
+                );
+                setReportEntity(response.data);
+                targetDatasetId = response.data.layout?.dataset_id || datasetId;
+                initialReport = response.data.layout?.report;
+            }
+
+            if (!targetDatasetId) {
+                throw new Error('No dataset linked to this report.');
+            }
+
+            // 2. Fetch Dataset for data source
+            const dsRes = await axios.get(
+                `${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
 
-            const data = response.data;
+            const dsData = dsRes.data;
 
             const safeParse = (val: any) => {
                 if (!val) return undefined;
@@ -45,31 +67,30 @@ const ReportViewIntegrated: React.FC = () => {
                 return val;
             };
 
-            const rawData = safeParse(data.raw_data || data.data) || [];
-            const headers = safeParse(data.headers) || [];
+            const rawData = safeParse(dsData.raw_data || dsData.data) || [];
+            const headers = safeParse(dsData.headers) || [];
             const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
-            // Transform backend response to Dataset format - CACHE MAPPING
             const transformedDataset: Dataset = {
-                id: data.id || datasetId,
-                name: data.name || 'Dataset',
-                sourceType: data.source_type || 'csv',
+                id: dsData.id || targetDatasetId,
+                name: dsData.name || 'Dataset',
+                sourceType: dsData.source_type || 'csv',
                 headers: finalHeaders,
                 data: rawData,
-                stats: data.stats || [],
-                createdAt: data.created_at || new Date().toISOString(),
+                stats: dsData.stats || [],
+                createdAt: dsData.created_at || new Date().toISOString(),
                 rowCount: rawData.length,
                 quarantinedData: [],
                 cleaningActions: [],
-                cleaningHistory: data.cleaning_history || [],
-                dashboardConfig: data.dashboard_config ? safeParse(data.dashboard_config) : undefined,
-                strategicReport: data.strategic_report ? safeParse(data.strategic_report) : undefined,
+                cleaningHistory: dsData.cleaning_history || [],
+                dashboardConfig: dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined,
+                strategicReport: initialReport || (dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined),
             };
 
             setDataset(transformedDataset);
             setError(null);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load dataset');
+            setError(err instanceof Error ? err.message : 'Failed to load report');
             console.error(err);
         } finally {
             setLoading(false);
@@ -77,16 +98,27 @@ const ReportViewIntegrated: React.FC = () => {
     };
 
     const handleUpdate = async (updated: Dataset) => {
-        if (!workspaceId || !datasetId) return;
+        if (!workspaceId) return;
         try {
-            // Immediate state sync
             setDataset(updated);
 
-            // Persist to DB
-            await datasetAPI.dataset.update(workspaceId, datasetId, {
-                dashboard_config: updated.dashboardConfig,
-                strategic_report: updated.strategicReport
-            });
+            if (reportId) {
+                // Persist to the specific dashboard record (used as report storage)
+                await axios.put(`${backendUrl}/workspaces/${workspaceId}/dashboards/${reportId}`, {
+                    name: reportEntity?.name || updated.name + ' Strategic Report',
+                    layout: {
+                        type: 'report',
+                        dataset_id: updated.id || datasetId,
+                        report: updated.strategicReport
+                    }
+                }, { headers: { Authorization: `Bearer ${token}` } });
+            } else {
+                // Fallback to updating the dataset default (Legacy)
+                await datasetAPI.dataset.update(workspaceId, updated.id || datasetId, {
+                    dashboard_config: updated.dashboardConfig,
+                    strategic_report: updated.strategicReport
+                });
+            }
         } catch (err) {
             console.error('Failed to persist report update:', err);
         }

@@ -133,8 +133,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         return () => { isMounted.current = false; };
     }, []);
 
-    const initAnalysis = async (force: boolean = false) => {
-        if (!force && config) return;
+    const loadOrGenerate = async (force: boolean = false) => {
+        // If we are forcing, or if we have it in the dataset, we proceed.
+        // Otherwise, we wait for user intent.
+        if (!force && !dataset.dashboardConfig) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
         try {
             if (!force && dataset.dashboardConfig) {
@@ -147,13 +153,22 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             if (!isMounted.current) return;
             setConfig(generatedConfig);
             if (onUpdate) onUpdate({ ...dataset, dashboardConfig: generatedConfig });
-        } catch (e) { console.error(e); }
-        finally { if (isMounted.current) setLoading(false); }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            if (isMounted.current) setLoading(false);
+        }
     };
 
     useEffect(() => {
         setDashboardName(cleanName + ' Dashboard');
-        initAnalysis(false);
+        // Auto-load ONLY if it already exists in the dataset.
+        // No auto-generation on first visit to save tokens.
+        if (dataset.dashboardConfig) {
+            loadOrGenerate(false);
+        } else {
+            setLoading(false);
+        }
     }, [dataset.name, cleanName]);
 
     useEffect(() => {
@@ -335,7 +350,36 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         }
     };
 
-    if (loading || !config) return <div className="h-full flex items-center justify-center bg-slate-950 text-white/50 animate-pulse">Establishing Neural Link...</div>;
+    if (loading) return <div className="h-full flex items-center justify-center bg-slate-950 text-white/50 animate-pulse">Establishing Neural Link...</div>;
+
+    if (!config) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#080c14] transition-colors p-6">
+                <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 bg-indigo-600/10 border-2 border-dashed border-indigo-500/30 rounded-[32px] flex items-center justify-center mx-auto group">
+                        <svg className="w-12 h-12 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-3">Analysis Drafting</h2>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed">
+                            No visual insights have been drafted for this dataset yet. Use the Toeasy AI to automatically generate a professional dashboard.
+                        </p>
+                    </div>
+                    <div className="pt-4">
+                        <button
+                            onClick={() => loadOrGenerate(true)}
+                            className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3 mx-auto"
+                        >
+                            <span>✨ Generate Dashboard</span>
+                        </button>
+                        <p className="text-[10px] text-slate-400 mt-4 uppercase tracking-widest font-bold opacity-50 italic">Generated analysis will be saved forever</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const visibleCharts = config.charts || [];
 

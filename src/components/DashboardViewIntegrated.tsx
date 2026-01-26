@@ -11,8 +11,10 @@ const DashboardViewIntegrated: React.FC = () => {
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace') || '';
   const datasetId = searchParams.get('dataset') || '';
+  const dashboardId = searchParams.get('id') || '';
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
+  const [dashboardEntity, setDashboardEntity] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,20 +27,40 @@ const DashboardViewIntegrated: React.FC = () => {
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
-    if (workspaceId && datasetId && token) {
-      loadDataset();
+    if (workspaceId && (datasetId || dashboardId) && token) {
+      loadAll();
     }
-  }, [workspaceId, datasetId, token]);
+  }, [workspaceId, datasetId, dashboardId, token]);
 
-  const loadDataset = async () => {
+  const loadAll = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}`,
+
+      let targetDatasetId = datasetId;
+      let initialConfig = undefined;
+
+      // 1. If we have a dashboard ID, fetch the specific entity
+      if (dashboardId) {
+        const response = await axios.get(
+          `${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setDashboardEntity(response.data);
+        targetDatasetId = response.data.layout?.dataset_id || datasetId;
+        initialConfig = response.data.layout?.config;
+      }
+
+      if (!targetDatasetId) {
+        throw new Error('No dataset linked to this analysis.');
+      }
+
+      // 2. Fetch Dataset for data source
+      const dsRes = await axios.get(
+        `${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const data = response.data;
+      const dsData = dsRes.data;
 
       const safeParse = (val: any) => {
         if (!val) return undefined;
@@ -51,30 +73,30 @@ const DashboardViewIntegrated: React.FC = () => {
         return val;
       };
 
-      const rawData = safeParse(data.raw_data || data.data) || [];
-      const headers = safeParse(data.headers) || [];
+      const rawData = safeParse(dsData.raw_data || dsData.data) || [];
+      const headers = safeParse(dsData.headers) || [];
       const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
-      // Transform backend response to Dataset format - MAPPING CACHED CONFIGS
+      // Transform - Priority to entity config
       const transformedDataset: Dataset = {
-        id: data.id || datasetId,
-        name: data.name || 'Dataset',
-        sourceType: data.source_type || 'csv',
+        id: dsData.id || targetDatasetId,
+        name: dsData.name || 'Dataset',
+        sourceType: dsData.source_type || 'csv',
         headers: finalHeaders,
         data: rawData,
-        stats: data.stats || [],
-        createdAt: data.created_at || new Date().toISOString(),
+        stats: dsData.stats || [],
+        createdAt: dsData.created_at || new Date().toISOString(),
         rowCount: rawData.length,
         quarantinedData: [],
         cleaningActions: [],
-        dashboardConfig: data.dashboard_config ? safeParse(data.dashboard_config) : undefined,
-        strategicReport: data.strategic_report ? safeParse(data.strategic_report) : undefined,
+        dashboardConfig: initialConfig || (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
+        strategicReport: dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined,
       };
 
       setDataset(transformedDataset);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dataset');
+      setError(err instanceof Error ? err.message : 'Failed to load dashboard');
       console.error(err);
     } finally {
       setLoading(false);
@@ -82,16 +104,26 @@ const DashboardViewIntegrated: React.FC = () => {
   };
 
   const handleUpdate = async (updated: Dataset) => {
-    if (!workspaceId || !datasetId) return;
+    if (!workspaceId) return;
     try {
-      // Sync state first for immediate UI feedback
       setDataset(updated);
 
-      // Persist to backend - convert back to snake_case for DB
-      await datasetAPI.dataset.update(workspaceId, datasetId, {
-        dashboard_config: updated.dashboardConfig,
-        strategic_report: updated.strategicReport
-      });
+      if (dashboardId) {
+        // Persist to the specific dashboard entity
+        await axios.put(`${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`, {
+          name: dashboardEntity?.name || updated.name + ' Analysis',
+          layout: {
+            dataset_id: updated.id || datasetId,
+            config: updated.dashboardConfig
+          }
+        }, { headers: { Authorization: `Bearer ${token}` } });
+      } else {
+        // Fallback to updating the dataset legacy default
+        await datasetAPI.dataset.update(workspaceId, updated.id || datasetId, {
+          dashboard_config: updated.dashboardConfig,
+          strategic_report: updated.strategicReport
+        });
+      }
     } catch (err) {
       console.error('Failed to persist dashboard update:', err);
     }

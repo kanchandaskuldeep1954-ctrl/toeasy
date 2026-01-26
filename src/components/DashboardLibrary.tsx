@@ -24,32 +24,33 @@ export const DashboardLibrary: React.FC = () => {
   const workspaceId = searchParams.get('workspace') || activeWorkspace?.id?.toString() || '';
 
   const [dashboards, setDashboards] = useState<Dashboard[]>([]);
+  const [datasets, setDatasets] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
-  const [formData, setFormData] = useState({ name: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', description: '', datasetId: '' });
   const [submitting, setSubmitting] = useState(false);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
     if (workspaceId) {
-      fetchDashboards();
+      loadAll();
     }
   }, [token, workspaceId]);
 
-  const fetchDashboards = async () => {
+  const loadAll = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(
-        `${backendUrl}/workspaces/${workspaceId}/dashboards`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setDashboards(response.data || []);
+      const [dRes, dsRes] = await Promise.all([
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } })
+      ]);
+      setDashboards(dRes.data.data || []);
+      setDatasets(dsRes.data || []);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch dashboards');
-      console.error('Error fetching dashboards:', err);
+      console.error('Error fetching data:', err);
     } finally {
       setLoading(false);
     }
@@ -57,8 +58,8 @@ export const DashboardLibrary: React.FC = () => {
 
   const handleCreateDashboard = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.name.trim()) {
-      setError('Dashboard name is required');
+    if (!formData.name.trim() || !formData.datasetId) {
+      setError('Name and Dataset are required');
       return;
     }
 
@@ -66,15 +67,18 @@ export const DashboardLibrary: React.FC = () => {
       setSubmitting(true);
       const response = await axios.post(
         `${backendUrl}/workspaces/${workspaceId}/dashboards`,
-        { name: formData.name, description: formData.description, layout: {} },
+        {
+          name: formData.name,
+          description: formData.description,
+          layout: { dataset_id: formData.datasetId, config: null }
+        },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setDashboards([...dashboards, response.data]);
-      setFormData({ name: '', description: '' });
-      setShowNewForm(false);
-      setError(null);
+
+      const newDashboard = response.data;
+      navigate(`/app/dashboard?id=${newDashboard.id}&workspace=${workspaceId}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create dashboard');
+      setError('Failed to create dashboard');
     } finally {
       setSubmitting(false);
     }
@@ -132,13 +136,27 @@ export const DashboardLibrary: React.FC = () => {
             <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">Create New Dashboard</h2>
             <form onSubmit={handleCreateDashboard} className="space-y-4 max-w-md">
               <div>
-                <label className="text-sm text-slate-400 mb-2 block">Dashboard Name*</label>
+                <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Data Source*</label>
+                <select
+                  value={formData.datasetId}
+                  onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
+                  required
+                >
+                  <option value="">Select a Dataset...</option>
+                  {datasets.map(ds => (
+                    <option key={ds.id} value={ds.id}>{ds.name} ({(JSON.parse(ds.raw_data || '[]').length).toLocaleString()} rows)</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Dashboard Name*</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g., Sales Overview"
-                  className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+                  placeholder="e.g., Growth Analytics"
+                  className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
                   required
                 />
               </div>
@@ -193,7 +211,7 @@ export const DashboardLibrary: React.FC = () => {
               <div
                 key={dashboard.id}
                 className="group relative p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
-                onClick={() => navigate(`/app/dashboard?id=${dashboard.id}`)}
+                onClick={() => navigate(`/app/dashboard?id=${dashboard.id}&workspace=${workspaceId}`)}
               >
                 <div className="absolute top-0 right-0 p-6 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                   <button

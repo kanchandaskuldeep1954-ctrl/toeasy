@@ -371,6 +371,34 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         </div>
     );
 
+    if (!report) {
+        return (
+            <div className="h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 transition-colors p-6">
+                <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="w-24 h-24 bg-indigo-600/10 border-2 border-dashed border-indigo-500/30 rounded-[32px] flex items-center justify-center mx-auto group">
+                        <svg className="w-12 h-12 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <div>
+                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-3">Strategic Drafting</h2>
+                        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed">
+                            No strategic analysis has been drafted for this dataset. Use the Toeasy AI to compile a comprehensive intelligence report.
+                        </p>
+                    </div>
+                    <div className="pt-4">
+                        <button
+                            onClick={() => generate(true)}
+                            className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3 mx-auto"
+                        >
+                            <span>✨ Generate Report</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     // Error state with retry and fallback options
     if (error) return (
         <div className="h-full flex flex-col items-center justify-center space-y-8 animate-in fade-in bg-slate-100 dark:bg-slate-950">
