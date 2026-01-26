@@ -34,6 +34,7 @@ const ReportViewIntegrated: React.FC = () => {
 
             let targetDatasetId = datasetId;
             let initialReport = undefined;
+            let entityHasReport = false;
 
             // 1. If we have a report ID, fetch the specific entity
             if (reportId) {
@@ -41,9 +42,11 @@ const ReportViewIntegrated: React.FC = () => {
                     `${backendUrl}/workspaces/${workspaceId}/dashboards/${reportId}`,
                     { headers: { Authorization: `Bearer ${token}` } }
                 );
-                setReportEntity(response.data);
-                targetDatasetId = response.data.layout?.dataset_id || datasetId;
-                initialReport = response.data.layout?.report;
+                const ent = response.data;
+                setReportEntity(ent);
+                targetDatasetId = ent.layout?.dataset_id || datasetId;
+                initialReport = ent.layout?.report;
+                entityHasReport = true;
             }
 
             if (!targetDatasetId) {
@@ -89,7 +92,7 @@ const ReportViewIntegrated: React.FC = () => {
                 cleaningActions: [],
                 cleaningHistory: dsData.cleaning_history || [],
                 dashboardConfig: dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined,
-                strategicReport: initialReport || (dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined),
+                strategicReport: entityHasReport ? initialReport : (dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined),
             };
 
             setDataset(transformedDataset);

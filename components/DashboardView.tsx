@@ -101,7 +101,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     }, [dataset.data, activeFilters]);
 
     const dynamicKPIs = useMemo(() => {
-        if (!config?.kpis) return [];
+        if (!config?.kpis || !Array.isArray(config.kpis)) return [];
 
         return config.kpis.map(kpi => {
             if (!kpi.calculation || !kpi.calculation.column) return kpi;
@@ -207,8 +207,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     const handleSaveChart = (newChart: ChartSpec) => {
         if (!config) return;
-        const exists = config.charts.find(c => c.id === newChart.id);
-        const updatedCharts = exists ? config.charts.map(c => c.id === newChart.id ? newChart : c) : [newChart, ...config.charts];
+        const currentCharts = Array.isArray(config.charts) ? config.charts : [];
+        const exists = currentCharts.find(c => c.id === newChart.id);
+        const updatedCharts = exists ? currentCharts.map(c => c.id === newChart.id ? newChart : c) : [newChart, ...currentCharts];
         const newConfig = { ...config, charts: updatedCharts };
         setConfig(newConfig);
         if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
@@ -324,8 +325,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         try {
             // Capture frozen snapshot
             const snapshot = {
-                kpis: dynamicKPIs.map(k => ({ label: k.label, value: k.value, change: (k as any).change })),
-                charts: config.charts.map(c => ({
+                kpis: (dynamicKPIs || []).map(k => ({ label: k.label, value: k.value, change: (k as any).change })),
+                charts: (config.charts || []).map(c => ({
                     type: c.type,
                     title: c.title,
                     data: getChartData(c),

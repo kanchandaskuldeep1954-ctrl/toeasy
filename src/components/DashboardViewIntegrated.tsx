@@ -40,6 +40,7 @@ const DashboardViewIntegrated: React.FC = () => {
 
       let targetDatasetId = datasetId;
       let initialConfig = undefined;
+      let entityHasConfig = false;
 
       // 1. If we have a dashboard ID, fetch the specific entity
       if (dashboardId) {
@@ -47,9 +48,11 @@ const DashboardViewIntegrated: React.FC = () => {
           `${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`,
           { headers: { Authorization: `Bearer ${token}` } }
         );
-        setDashboardEntity(response.data);
-        targetDatasetId = response.data.layout?.dataset_id || datasetId;
-        initialConfig = response.data.layout?.config;
+        const dash = response.data;
+        setDashboardEntity(dash);
+        targetDatasetId = dash.layout?.dataset_id || datasetId;
+        initialConfig = dash.layout?.config;
+        entityHasConfig = true; // Signals we are in a specific dashboard context
       }
 
       if (!targetDatasetId) {
@@ -82,7 +85,7 @@ const DashboardViewIntegrated: React.FC = () => {
       const headers = safeParse(dsData.headers) || [];
       const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
 
-      // Transform - Priority to entity config
+      // Transform - Priority to entity config. If entity context active, NEVER fallback to dataset global.
       const transformedDataset: Dataset = {
         id: dsData.id || targetDatasetId,
         name: dsData.name || 'Dataset',
@@ -94,7 +97,7 @@ const DashboardViewIntegrated: React.FC = () => {
         rowCount: rawData.length,
         quarantinedData: [],
         cleaningActions: [],
-        dashboardConfig: initialConfig || (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
+        dashboardConfig: entityHasConfig ? initialConfig : (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
         strategicReport: dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined,
       };
 
