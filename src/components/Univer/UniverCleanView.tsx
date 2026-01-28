@@ -19,6 +19,11 @@ import {
 } from '../../services/univerService';
 
 import { useTheme } from '../../hooks/useTheme';
+import { useVersion } from '../../context/VersionContext';
+import { VersionBadge } from '../Version/VersionBadge';
+import { CommitVersionModal } from '../Version/CommitVersionModal';
+import { VersionTimeline } from '../Version/VersionTimeline';
+import type { Version } from '../Version/types';
 
 const UniverCleanView: React.FC = () => {
     const [searchParams] = useSearchParams();
@@ -45,6 +50,22 @@ const UniverCleanView: React.FC = () => {
     const [isCleaningLive, setIsCleaningLive] = useState(false);
     const [cleaningProgress, setCleaningProgress] = useState(0);
     const [quarantinedData, setQuarantinedData] = useState<DataRow[]>([]);
+
+    // Version Control State
+    const {
+        versions,
+        currentVersion,
+        isDirty,
+        loadVersions,
+        commitVersion: commitVersionToApi,
+        selectVersion,
+        restoreVersion,
+        setDirty,
+        setCurrentVersion
+    } = useVersion();
+    const [showVersionPanel, setShowVersionPanel] = useState(false);
+    const [showCommitModal, setShowCommitModal] = useState(false);
+    const [isCommittingVersion, setIsCommittingVersion] = useState(false);
 
     // Refs
     const hasHydratedRef = useRef<string | null>(null);
@@ -109,6 +130,11 @@ const UniverCleanView: React.FC = () => {
                 // Restore persistent change history
                 if (summary?.history) {
                     setChangeHistory(summary.history);
+                }
+
+                // Load versions for this dataset
+                if (datasetId) {
+                    loadVersions(datasetId);
                 }
 
                 if (univerEditorRef.current) {
@@ -540,7 +566,7 @@ const UniverCleanView: React.FC = () => {
             setSemantics(newSemantics);
 
             // Explicitly force state update to reflect new quality score immediately
-            setActiveDataset(prev => prev ? { ...prev, ...updatedDataset } : prev);
+            setActiveDataset({ ...dataset, ...updatedDataset } as any);
 
             setProcessingStatus('✅ Cleaning complete!');
             await new Promise(resolve => setTimeout(resolve, 1500));
@@ -666,11 +692,115 @@ const UniverCleanView: React.FC = () => {
             );
             alert('✅ Cleaning confirmed and saved!');
             setShowConfirmDialog(false);
+            setDirty(false); // Reset dirty state after save
         } catch (e: any) {
             console.error('Save error:', e);
             alert(`Failed to save: ${e.message || 'Unknown error'}`);
         } finally {
             setIsConfirming(false);
+        }
+    };
+
+    // Handle committing a new version
+    const handleCommitVersion = async (name: string, description: string) => {
+        if (!dataset || !datasetId || !workspaceId) return;
+
+        setIsCommittingVersion(true);
+        try {
+            const newVersion = await commitVersionToApi(
+                datasetId,
+                name,
+                description,
+                dataset.data || [],
+                dataset.headers || displayHeaders,
+                'cleaning'
+            );
+
+            setShowCommitModal(false);
+            setDirty(false);
+
+            // Show success feedback
+            alert(`✅ Version "${name}" created successfully!`);
+        } catch (e: any) {
+            console.error('Commit version error:', e);
+            alert(`Failed to commit version: ${e.message || 'Unknown error'}`);
+        } finally {
+            setIsCommittingVersion(false);
+        }
+    };
+
+    // Handle selecting a version from timeline
+    const handleVersionSelect = async (version: Version) => {
+        if (!version.id || !datasetId) return;
+
+        try {
+            setProcessingStatus('Loading version...');
+            // In VersionContext, selectVersion fetches the data if not already present
+            const loadedVersion = await selectVersion(version.id);
+
+            if (loadedVersion && loadedVersion.data) {
+                // Update local state
+                const newData = loadedVersion.data;
+                const newHeaders = loadedVersion.headers || Object.keys(newData[0] || {});
+
+                // Update dataset context
+                const updatedDataset = { ...dataset, data: newData, headers: newHeaders };
+                setActiveDataset(updatedDataset as any);
+
+                // Force FortuneSheet to re-render
+                if (univerEditorRef.current?.forceUpdate) {
+                    univerEditorRef.current.forceUpdate(newData, newHeaders);
+                }
+
+                // Clear old issues as they apply to the previous version
+                setIssues([]);
+                setProcessingStatus(`Version "${version.version_name}" loaded`);
+
+                // Close panel
+                setShowVersionPanel(false);
+            }
+        } catch (error) {
+            console.error("Failed to load version", error);
+            alert("Failed to load selected version.");
+        } finally {
+            setTimeout(() => setProcessingStatus(''), 2000);
+        }
+    };
+
+    // Handle restoring a version
+    const handleVersionRestore = async (version: Version) => {
+        if (!confirm(`Are you sure you want to restore "${version.version_name}"? This will replace your current working data.`)) {
+            return;
+        }
+
+        if (!datasetId) return;
+
+        try {
+            setProcessingStatus('Restoring version...');
+            const data = await restoreVersion(datasetId, version.id);
+
+            if (data) {
+                const newHeaders = version.headers || Object.keys(data[0] || {});
+
+                // Update dataset
+                const updatedDataset = { ...dataset, data: data, headers: newHeaders };
+                setActiveDataset(updatedDataset as any);
+
+                // Force sheet update
+                if (univerEditorRef.current?.forceUpdate) {
+                    univerEditorRef.current.forceUpdate(data, newHeaders);
+                }
+
+                setIssues([]);
+                setDirty(true); // Mark as dirty logic handled by VersionContext implicitly if we want, but here we mark local dirty
+                setProcessingStatus(`Restored to "${version.version_name}"`);
+                setShowVersionPanel(false);
+            }
+        } catch (error) {
+            console.error("Failed to restore version", error);
+            alert("Failed to restore version.");
+        } finally {
+            setTimeout(() => setProcessingStatus(''), 2000);
         }
     };
 
@@ -761,7 +891,26 @@ const UniverCleanView: React.FC = () => {
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                        {/* Version Badge */}
+                        <VersionBadge
+                            version={currentVersion}
+                            isDirty={isDirty || changeHistory.length > 0}
+                            onClick={() => setShowVersionPanel(true)}
+                        />
+
+                        {/* Save Version Button */}
+                        <button
+                            onClick={() => setShowCommitModal(true)}
+                            className="px-3 py-2 bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-xl text-xs font-bold hover:bg-emerald-200 dark:hover:bg-emerald-900/50 transition-all flex items-center gap-1.5"
+                            title="Save current state as a new version"
+                        >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                            </svg>
+                            Save Version
+                        </button>
+
                         <button
                             onClick={() => setShowExportModal(true)}
                             className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold hover:bg-slate-200 transition-all"
@@ -1047,6 +1196,50 @@ const UniverCleanView: React.FC = () => {
                 data={dataset.data || []}
                 filename={dataset.name || 'cleaned-data'}
             />
+
+            {/* Commit Version Modal */}
+            <CommitVersionModal
+                isOpen={showCommitModal}
+                onClose={() => setShowCommitModal(false)}
+                onCommit={handleCommitVersion}
+                isCommitting={isCommittingVersion}
+                suggestedName={`Cleaning ${new Date().toLocaleDateString()}`}
+                tool="cleaning"
+            />
+
+            {/* Version Timeline Panel - Slide in from right */}
+            {showVersionPanel && (
+                <div className="fixed inset-0 z-[100] flex justify-end">
+                    <div
+                        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+                        onClick={() => setShowVersionPanel(false)}
+                    />
+                    <div className="relative w-full max-w-md h-full bg-white dark:bg-slate-900 shadow-2xl animate-in slide-in-from-right duration-300 overflow-hidden">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
+                            <h3 className="text-lg font-bold text-slate-800 dark:text-white">
+                                Version History
+                            </h3>
+                            <button
+                                onClick={() => setShowVersionPanel(false)}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                            >
+                                <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+                        <div className="p-4 h-[calc(100%-64px)] overflow-auto">
+                            <VersionTimeline
+                                datasetId={datasetId || ''}
+                                workspaceId={workspaceId || ''}
+                                currentVersionId={currentVersion?.id}
+                                onVersionSelect={handleVersionSelect}
+                                onRestore={handleVersionRestore}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Mobile AI Panel Button */}
             <button

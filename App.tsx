@@ -5,6 +5,8 @@ import { AuthProvider } from './src/context/AuthContext';
 import { WorkspaceProvider } from './src/context/WorkspaceContext';
 import { useWorkspace } from './src/hooks/useWorkspace';
 import { DatasetProvider } from './src/context/DatasetContext';
+import { VersionProvider } from './src/context/VersionContext';
+import { ActivityProvider } from './src/context/ActivityContext';
 import { ProtectedRoute } from './src/routes/ProtectedRoute';
 import { PublicRoute } from './src/routes/PublicRoute';
 import { SourceType } from './types';
@@ -93,105 +95,113 @@ const AppLayout: React.FC = () => {
   );
 };
 
+import { WorkflowProvider } from './src/context/WorkflowContext';
+
 function App() {
   return (
     <AuthProvider>
       <WorkspaceProvider>
         <DatasetProvider>
-          <Router>
-            <Routes>
-              {/* Public Routes */}
-              <Route
-                path="/"
-                element={
-                  <PublicLayout>
-                    <LandingPage />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/contact"
-                element={
-                  <PublicLayout>
-                    <ContactUs />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/terms"
-                element={
-                  <PublicLayout>
-                    <TermsConditions />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/privacy"
-                element={
-                  <PublicLayout>
-                    <PrivacyPolicy />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/refunds"
-                element={
-                  <PublicLayout>
-                    <RefundPolicy />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/faq"
-                element={
-                  <PublicLayout>
-                    <FAQ />
-                  </PublicLayout>
-                }
-              />
-              <Route
-                path="/help"
-                element={
-                  <PublicLayout>
-                    <FAQ />
-                  </PublicLayout>
-                }
-              />
+          <VersionProvider>
+            <ActivityProvider>
+              <Router>
+                <WorkflowProvider>
+                  <Routes>
+                    {/* Public Routes */}
+                    <Route
+                      path="/"
+                      element={
+                        <PublicLayout>
+                          <LandingPage />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/contact"
+                      element={
+                        <PublicLayout>
+                          <ContactUs />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/terms"
+                      element={
+                        <PublicLayout>
+                          <TermsConditions />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/privacy"
+                      element={
+                        <PublicLayout>
+                          <PrivacyPolicy />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/refunds"
+                      element={
+                        <PublicLayout>
+                          <RefundPolicy />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/faq"
+                      element={
+                        <PublicLayout>
+                          <FAQ />
+                        </PublicLayout>
+                      }
+                    />
+                    <Route
+                      path="/help"
+                      element={
+                        <PublicLayout>
+                          <FAQ />
+                        </PublicLayout>
+                      }
+                    />
 
-              {/* Public Share Route (NO AUTH) */}
-              <Route path="/public/share/:token" element={<PublicShareView />} />
+                    {/* Public Share Route (NO AUTH) */}
+                    <Route path="/public/share/:token" element={<PublicShareView />} />
 
-              <Route
-                path="/login"
-                element={
-                  <PublicRoute>
-                    <LoginPage />
-                  </PublicRoute>
-                }
-              />
-              <Route
-                path="/signup"
-                element={
-                  <PublicRoute>
-                    <SignupPage />
-                  </PublicRoute>
-                }
-              />
+                    <Route
+                      path="/login"
+                      element={
+                        <PublicRoute>
+                          <LoginPage />
+                        </PublicRoute>
+                      }
+                    />
+                    <Route
+                      path="/signup"
+                      element={
+                        <PublicRoute>
+                          <SignupPage />
+                        </PublicRoute>
+                      }
+                    />
 
-              {/* Protected Routes */}
-              <Route
-                path="/app/*"
-                element={
-                  <ProtectedRoute>
-                    <AppLayout />
-                  </ProtectedRoute>
-                }
-              />
+                    {/* Protected Routes */}
+                    <Route
+                      path="/app/*"
+                      element={
+                        <ProtectedRoute>
+                          <AppLayout />
+                        </ProtectedRoute>
+                      }
+                    />
 
-              {/* Default redirect for /app */}
-              <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
-            </Routes>
-          </Router>
+                    {/* Default redirect for /app */}
+                    <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
+                  </Routes>
+                </WorkflowProvider>
+              </Router>
+            </ActivityProvider>
+          </VersionProvider>
         </DatasetProvider>
       </WorkspaceProvider>
     </AuthProvider >
