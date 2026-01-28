@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useDataset } from './DatasetContext';
+import { useDataset } from '../hooks/useDataset';
 import { useVersion } from './VersionContext';
-import { useLocation, useNavigate, useBeforeUnload } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export interface ChangeSet {
     id: string;
@@ -29,7 +29,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const navigate = useNavigate();
 
     // We sync with other contexts
-    const { isDirty: isDatasetDirty } = useDataset(); // Assuming DatasetContext has isDirty
+    const { activeDataset } = useDataset();
     const { isDirty: isVersionDirty } = useVersion();
 
     // Local state
@@ -38,7 +38,7 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const [manualDirty, setManualDirty] = useState(false);
 
     // Derived global dirty state
-    const isGlobalDirty = isDatasetDirty || isVersionDirty || manualDirty || pendingChanges.length > 0;
+    const isGlobalDirty = isVersionDirty || manualDirty || pendingChanges.length > 0;
 
     // Update current view on location change
     useEffect(() => {
@@ -46,7 +46,6 @@ export const WorkflowProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }, [location]);
 
     // Warning on unload
-    // React Router v6 doesn't have usePrompt anymore, so we use window.onbeforeunload
     useEffect(() => {
         const handleBeforeUnload = (e: BeforeUnloadEvent) => {
             if (isGlobalDirty) {
