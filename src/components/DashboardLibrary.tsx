@@ -98,7 +98,10 @@ export const DashboardLibrary: React.FC = () => {
       });
 
       const combined = filterDatasetId
-        ? [...primaryItems.filter(p => p.dataset_id === filterDatasetId), ...versionItems.filter((d: any) => d.layout?.dataset_id === filterDatasetId)]
+        ? [
+          ...primaryItems.filter(p => String(p.dataset_id) === String(filterDatasetId)),
+          ...versionItems.filter((d: any) => String(d.layout?.dataset_id) === String(filterDatasetId))
+        ]
         : [...primaryItems, ...versionItems];
 
       setDashboards(combined as any);

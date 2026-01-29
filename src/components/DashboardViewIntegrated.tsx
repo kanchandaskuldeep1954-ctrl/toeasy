@@ -32,7 +32,7 @@ const DashboardViewIntegrated: React.FC = () => {
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   useEffect(() => {
     if (workspaceId && (datasetId || dashboardId) && token) {
@@ -76,7 +76,7 @@ const DashboardViewIntegrated: React.FC = () => {
       const allDashboards = siblingsRes.data.data || [];
       setVersions(versionsRes.data || []);
 
-      const dashSiblings = allDashboards.filter((d: any) => d.layout?.dataset_id === targetDatasetId && d.layout?.type !== 'report');
+      const dashSiblings = allDashboards.filter((d: any) => String(d.layout?.dataset_id) === String(targetDatasetId) && d.layout?.type !== 'report');
 
       // Synthesis: Prepend the "Master" version to the switcher
       const masterVersion = {
