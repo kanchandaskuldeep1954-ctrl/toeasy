@@ -4,6 +4,7 @@ import { Dataset, StrategicReport } from '../../types';
 import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { activityAPI } from '../services/api';
 
 const TheWarRoom: React.FC = () => {
     const { activeWorkspace } = useWorkspace();
@@ -13,6 +14,8 @@ const TheWarRoom: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'all' | 'strategic' | 'forensic' | 'clean'>('all');
     const [isGenerating, setIsGenerating] = useState(false);
+    const [healthScore, setHealthScore] = useState(0);
+    const [alertCount, setAlertCount] = useState(0);
 
     const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
@@ -25,9 +28,6 @@ const TheWarRoom: React.FC = () => {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            // In a real app, this would be a dedicated endpoint
-            // For now, we aggregate from workspace datasets or use a placeholder
-            // This represents the "Freedom/Space" for many possible reports
             const response = await axios.get(`${backendUrl}/workspaces/${activeWorkspace?.id}/datasets`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
@@ -39,10 +39,19 @@ const TheWarRoom: React.FC = () => {
                 type: d.strategicReport ? 'strategic' : 'clean',
                 datasetName: d.name,
                 date: d.created_at,
-                datasetId: d.id
+                datasetId: d.id,
+                score: d.strategicReport?.overall_score || 0
             }));
 
             setReports(reportItems);
+
+            // Calculate health score
+            if (reportItems.length > 0) {
+                const totalScore = reportItems.reduce((acc: number, r: any) => acc + (r.score || 80), 0);
+                setHealthScore(Math.round(totalScore / reportItems.length));
+            } else {
+                setHealthScore(0);
+            }
         } catch (e) {
             console.error("Failed to fetch reports", e);
         } finally {
@@ -53,21 +62,36 @@ const TheWarRoom: React.FC = () => {
     const [feed, setFeed] = useState<any[]>([]);
 
     useEffect(() => {
-        if (reports.length > 0) {
-            const systemPulse = [
-                { id: 'p1', type: 'check', title: 'System Healthy', desc: `Proactive monitoring active for ${activeWorkspace?.name || 'Workspace'}.`, time: 'Now' },
-                { id: 'p2', type: 'pulse', title: 'Intelligence Ready', desc: `${reports.length} strategic reports available for review.`, time: 'Updated' }
-            ];
+        if (!activeWorkspace?.id || !token) return;
 
-            // Add dynamic alerts if health score is low (simulated or based on actual data if available)
-            // In a pro version, this would fetch from a /notifications endpoint
-            setFeed(systemPulse);
-        } else {
-            setFeed([
-                { id: 'p0', type: 'pulse', title: 'Awaiting Initiation', desc: 'No active reports detected. Commission an audit to begin monitoring.', time: 'Idle' }
-            ]);
-        }
-    }, [reports.length, activeWorkspace]);
+        const fetchPulse = async () => {
+            try {
+                const res = await activityAPI.list(String(activeWorkspace.id), undefined, 5);
+                const acts = res.data.data || [];
+
+                const pulseItems = acts.map((a: any) => ({
+                    id: a.id,
+                    type: a.actionCategory === 'alert' ? 'alert' : (a.actionCategory === 'system' ? 'check' : 'pulse'),
+                    title: a.actionType,
+                    desc: a.actionDetail,
+                    time: new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                }));
+
+                // Count alerts
+                setAlertCount(acts.filter((a: any) => a.actionCategory === 'alert').length);
+
+                if (pulseItems.length > 0) {
+                    setFeed(pulseItems);
+                } else {
+                    setFeed([{ id: 'p0', type: 'pulse', title: 'System Healthy', desc: `Proactive monitoring active for ${activeWorkspace?.name || 'Workspace'}.`, time: 'Now' }]);
+                }
+            } catch (e) {
+                console.warn("Failed to fetch activity feed", e);
+            }
+        };
+
+        fetchPulse();
+    }, [reports.length, activeWorkspace, token]);
 
     const handleInitializeAudit = async (type: string) => {
         setIsGenerating(false);
@@ -139,10 +163,10 @@ const TheWarRoom: React.FC = () => {
                         <div className="p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl">
                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Global Health</h4>
                             <div className="flex items-end gap-3">
-                                <span className="text-4xl font-black text-indigo-600">84%</span>
+                                <span className="text-4xl font-black text-indigo-600">{healthScore}%</span>
                                 <span className="text-[10px] font-bold text-emerald-500 mb-1.5 flex items-center gap-1">
                                     <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-                                    +2.4%
+                                    Active
                                 </span>
                             </div>
                             <p className="text-[10px] text-slate-500 mt-2 font-medium">Average integrity across {reports.length} monitored datasets.</p>
@@ -155,13 +179,13 @@ const TheWarRoom: React.FC = () => {
                             </div>
                             <p className="text-[10px] text-slate-500 mt-2 font-medium">Strategic intelligence coverage for {activeWorkspace?.name || 'Workspace'}.</p>
                         </div>
-                        <div className="p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl border-l-4 border-l-red-500/50">
+                        <div className={`p-8 bg-white dark:bg-[#0f172a] rounded-[40px] border border-slate-200 dark:border-white/10 shadow-xl ${alertCount > 0 ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-emerald-500'}`}>
                             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Critical Exceptions</h4>
                             <div className="flex items-end gap-3">
-                                <span className="text-4xl font-black text-slate-900 dark:text-white">0</span>
+                                <span className="text-4xl font-black text-slate-900 dark:text-white">{alertCount}</span>
                                 <span className="text-[10px] font-bold text-slate-400 mb-1.5 uppercase">Alerts Pending</span>
                             </div>
-                            <p className="text-[10px] text-slate-500 mt-2 font-medium">No variance alerts detected in the last 24 hours.</p>
+                            <p className="text-[10px] text-slate-500 mt-2 font-medium">{alertCount > 0 ? `${alertCount} variance alerts detected in the last 24 hours.` : 'No variance alerts detected in the last 24 hours.'}</p>
                         </div>
                     </div>
 

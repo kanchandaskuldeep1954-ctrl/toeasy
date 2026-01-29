@@ -73,11 +73,23 @@ export const DashboardLibrary: React.FC = () => {
       // Synthesis: Create a "Primary Analysis" entry for every dataset (The MASTER Session)
       const primaryItems = dsList.map((ds: any) => {
         const config = safeParse(ds.dashboard_config);
+
+        let rowCount = ds.row_count || 0;
+        if (!rowCount && ds.raw_data) {
+          try {
+            const parsed = typeof ds.raw_data === 'string' ? JSON.parse(ds.raw_data) : ds.raw_data;
+            rowCount = Array.isArray(parsed) ? parsed.length : 0;
+          } catch (e) { rowCount = 0; }
+        }
+
+        const headers = ds.headers || [];
+        const defaultDesc = `Interactive analysis of ${rowCount.toLocaleString()} records across ${headers.length || 'multiple'} dimensions.`;
+
         return {
           id: `primary-${ds.id}`,
           dataset_id: ds.id,
           name: config?.name || ds.name + ' Master',
-          description: config?.description || 'Main intelligence session for this dataset',
+          description: config?.description || defaultDesc,
           isPrimary: true,
           created_at: ds.created_at,
           updated_at: ds.updated_at,

@@ -8,6 +8,8 @@ declare global {
   }
 }
 
+import { BILLING_PLANS, PlanConfig } from '../src/config/plans';
+
 interface BillingViewProps {
   subscription: Subscription;
   usage: UserUsage;
@@ -18,39 +20,11 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
   const [billingCycle, setBillingCycle] = useState<'month' | 'year'>(subscription.interval);
   const [processingTier, setProcessingTier] = useState<PlanTier | null>(null);
 
-  const plans = [
-    {
-      id: 'basic' as PlanTier,
-      name: 'Starter',
-      price: 0,
-      description: 'Ideal for small scale personal data projects.',
-      features: ['Up to 500 rows', '10 AI Queries / day', '1 Data Connector', 'Basic Audit'],
-      buttonText: subscription.tier === 'basic' ? 'Current Plan' : 'Downgrade to Free',
-      limitRows: 500,
-      limitQueries: 10
-    },
-    {
-      id: 'pro' as PlanTier,
-      name: 'Professional',
-      price: billingCycle === 'month' ? 29 : 24,
-      description: 'Powerful tools for data analysts and consultants.',
-      features: ['Up to 50,000 rows', 'Unlimited AI Queries', '5 Data Connectors', 'Custom Validation Rules', 'Executive Reports'],
-      buttonText: subscription.tier === 'pro' ? 'Current Plan' : 'Upgrade to Pro',
-      highlight: true,
-      limitRows: 50000,
-      limitQueries: 999999
-    },
-    {
-      id: 'enterprise' as PlanTier,
-      name: 'Enterprise',
-      price: billingCycle === 'month' ? 99 : 82,
-      description: 'The complete data OS for modern businesses.',
-      features: ['Unlimited rows', 'Unlimited AI Queries', 'All Connectors (SQL, APIs)', 'Priority AI Processing', 'SSO & Advanced Security', 'API Access'],
-      buttonText: subscription.tier === 'enterprise' ? 'Current Plan' : 'Contact Sales',
-      limitRows: 999999999,
-      limitQueries: 999999
-    }
-  ];
+  const plans = BILLING_PLANS.map(p => ({
+    ...p,
+    price: billingCycle === 'month' ? p.priceMonthly : p.priceYearly,
+    buttonText: subscription.tier === p.id ? 'Current Plan' : (p.priceMonthly === 0 ? 'Downgrade to Free' : (p.id === 'enterprise' ? 'Contact Sales' : `Upgrade to ${p.name}`))
+  }));
 
   const handleSubscription = async (planId: PlanTier, price: number) => {
     // If downgrading to basic (free), process immediately

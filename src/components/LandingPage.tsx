@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Reveal } from './Motion/Reveal';
 
+const DEMO_VIDEO_URL = "https://www.youtube.com/embed/z_g0p5Z-H8s?autoplay=1&mute=1&loop=1&playlist=z_g0p5Z-H8s&controls=0&modestbranding=1&rel=0";
+
 const LandingPage: React.FC = () => {
     return (
         <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
@@ -101,7 +103,7 @@ const LandingPage: React.FC = () => {
                             <div className="rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden bg-slate-100 dark:bg-slate-900 aspect-video relative">
                                 <iframe
                                     className="absolute inset-0 w-full h-full"
-                                    src="https://www.youtube.com/embed/z_g0p5Z-H8s?autoplay=1&mute=1&loop=1&playlist=z_g0p5Z-H8s&controls=0&modestbranding=1&rel=0"
+                                    src={DEMO_VIDEO_URL}
                                     title="Toeasy AI Demo"
                                     frameBorder="0"
                                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

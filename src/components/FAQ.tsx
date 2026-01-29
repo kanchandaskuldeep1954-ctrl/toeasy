@@ -1,6 +1,11 @@
 import React, { useState } from 'react';
 import { ChevronDown, Search, MessageSquare, Phone, Mail } from 'lucide-react';
 
+import { BILLING_PLANS } from '../config/plans';
+
+const basicPlan = BILLING_PLANS.find(p => p.id === 'basic');
+const proPlan = BILLING_PLANS.find(p => p.id === 'pro');
+
 const faqData = [
     {
         category: 'Getting Started',
@@ -20,11 +25,11 @@ const faqData = [
         questions: [
             {
                 q: 'What are the limits of the Starter plan?',
-                a: 'The Starter plan includes 1 Workspace, 3 Datasets, and a limit of 500 rows per dataset. You also get 10 AI-powered queries per day to help you explore your data.'
+                a: `The Starter plan includes 1 Workspace, 3 Datasets, and a limit of ${basicPlan?.limitRows.toLocaleString()} rows per dataset. You also get ${basicPlan?.limitQueries} AI-powered queries per day to help you explore your data.`
             },
             {
                 q: 'How do I upgrade to the Pro plan?',
-                a: 'Navigate to the "Billing" section in your sidebar. Select the "Professional" plan and choose between monthly or yearly billing to unlock 50 workspaces and unlimited AI queries.'
+                a: `Navigate to the "Billing" section in your sidebar. Select the "Professional" plan and choose between monthly or yearly billing to unlock powerful features and ${proPlan?.limitQueries === 999999 ? 'unlimited' : proPlan?.limitQueries} AI queries.`
             },
             {
                 q: 'Can I cancel my subscription anytime?',
@@ -41,7 +46,7 @@ const faqData = [
             },
             {
                 q: 'Where do I find your privacy policy?',
-                a: 'Our privacy policy is available at the bottom of every page or by contacting privacy@toeasy.online.'
+                a: 'Our privacy policy is available at the bottom of every page or by contacting support@toeasy.online.'
             }
         ]
     }
