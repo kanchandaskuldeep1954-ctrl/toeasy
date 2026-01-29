@@ -41,36 +41,10 @@ export const VersionTimeline: React.FC<VersionTimelineProps> = ({
     onRestore,
     onCompare,
 }) => {
-    const { token } = useAuth();
-    const [versions, setVersions] = useState<Version[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const { versions, isLoading: loading, error } = useVersion();
     const [expandedId, setExpandedId] = useState<string | null>(null);
     const [compareMode, setCompareMode] = useState(false);
     const [compareSelection, setCompareSelection] = useState<Version[]>([]);
-
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
-    useEffect(() => {
-        loadVersions();
-    }, [datasetId, workspaceId]);
-
-    const loadVersions = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await axios.get(
-                `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/versions`,
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
-            setVersions(response.data);
-        } catch (err: any) {
-            console.error('Failed to load versions:', err);
-            setError(err.response?.data?.error || 'Failed to load versions');
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleVersionClick = (version: Version) => {
         if (compareMode) {
@@ -165,8 +139,8 @@ export const VersionTimeline: React.FC<VersionTimelineProps> = ({
                         setCompareSelection([]);
                     }}
                     className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all ${compareMode
-                            ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                        ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                         }`}
                 >
                     <GitCompare className="w-3.5 h-3.5" />
@@ -207,10 +181,10 @@ export const VersionTimeline: React.FC<VersionTimelineProps> = ({
                                     {/* Timeline Node */}
                                     <div
                                         className={`absolute left-3 w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${isCurrent
-                                                ? 'bg-indigo-500 border-indigo-500 text-white'
-                                                : isSelected
-                                                    ? 'bg-purple-500 border-purple-500 text-white'
-                                                    : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'
+                                            ? 'bg-indigo-500 border-indigo-500 text-white'
+                                            : isSelected
+                                                ? 'bg-purple-500 border-purple-500 text-white'
+                                                : 'bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-600'
                                             }`}
                                         style={{ top: '8px' }}
                                     >
@@ -222,10 +196,10 @@ export const VersionTimeline: React.FC<VersionTimelineProps> = ({
                                     <div
                                         onClick={() => handleVersionClick(version)}
                                         className={`group p-4 rounded-xl border transition-all cursor-pointer ${isCurrent
-                                                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
-                                                : isSelected
-                                                    ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
-                                                    : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
+                                            ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800'
+                                            : isSelected
+                                                ? 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+                                                : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 hover:border-indigo-300 dark:hover:border-indigo-700'
                                             }`}
                                     >
                                         {/* Header Row */}
