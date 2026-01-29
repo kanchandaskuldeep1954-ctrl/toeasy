@@ -373,3 +373,14 @@ export interface ChartRecommendation {
   confidence: number;
   insights?: string[];
 }
+export interface ShareSnapshot {
+  resourceType: 'dashboard' | 'report';
+  title: string;
+  snapshot: {
+    kpis?: any[];
+    charts?: any[];
+    summary?: string;
+    sections?: any[];
+  };
+  viewedAt?: string;
+}

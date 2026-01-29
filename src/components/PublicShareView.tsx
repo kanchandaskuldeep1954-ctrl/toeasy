@@ -1,13 +1,8 @@
-/**
- * PublicShareView Component
- * 
- * Renders shared dashboards/reports publicly WITHOUT authentication.
- * Uses frozen snapshot data - NO regeneration, NO hallucination.
- * 
- * Route: /public/share/:token
- */
-
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
+import { ShareSnapshot } from '../../types';
+import PlotlyChart from '../../components/Dashboard/PlotlyChart';
 
 const PublicShareView: React.FC = () => {
     const { token } = useParams<{ token: string }>();

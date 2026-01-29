@@ -45,7 +45,8 @@ router.post('/create', authenticateToken, async (req: AuthRequest, res) => {
         );
 
         const shareLink = result.rows[0];
-        const publicUrl = `${process.env.FRONTEND_URL || 'https://toeasy.vercel.app'}/public/share/${shareLink.share_token}`;
+        const origin = req.headers.origin || process.env.FRONTEND_URL || 'https://toeasy.vercel.app';
+        const publicUrl = `${origin}/public/share/${shareLink.share_token}`;
 
         res.json({
             success: true,
