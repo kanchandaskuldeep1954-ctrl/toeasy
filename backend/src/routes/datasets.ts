@@ -261,7 +261,7 @@ router.get('/:workspaceId/datasets/:datasetId/versions/:versionId', async (req: 
 router.get('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
   try {
     const result = await query(
-      `SELECT id, name, row_count, column_count, file_size, raw_data, analysis_result, created_at 
+      `SELECT id, name, row_count, column_count, file_size, raw_data, analysis_result, dashboard_config, strategic_report, created_at 
        FROM datasets 
        WHERE id = $1 AND workspace_id = $2`,
       [req.params.datasetId, req.params.workspaceId]
@@ -568,7 +568,7 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
 // Update dataset (name, description, health_score, etc.)
 router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
   try {
-    const { name, description, health_score, cleaning_confirmed, raw_data, headers, quarantined_data } = req.body;
+    const { name, description, health_score, cleaning_confirmed, raw_data, headers, quarantined_data, dashboard_config, strategic_report } = req.body;
 
     // Support updating data, headers, and quarantined objects in the generic PUT route
     const result = await query(
@@ -578,11 +578,13 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
            health_score = COALESCE($3, health_score),
            cleaning_confirmed = COALESCE($4, cleaning_confirmed),
            raw_data = COALESCE($5, raw_data),
-        cleaned_data = CASE WHEN $5 IS NOT NULL THEN NULL ELSE cleaned_data END,
-        headers = COALESCE($6, headers),
+           cleaned_data = CASE WHEN $5 IS NOT NULL THEN NULL ELSE cleaned_data END,
+           headers = COALESCE($6, headers),
            quarantined_data = COALESCE($7, quarantined_data),
+           dashboard_config = COALESCE($8, dashboard_config),
+           strategic_report = COALESCE($9, strategic_report),
            updated_at = NOW()
-       WHERE id = $8 AND workspace_id = $9
+       WHERE id = $10 AND workspace_id = $11
        RETURNING *`,
       [
         name !== undefined ? name : null,
@@ -592,6 +594,8 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
         raw_data !== undefined ? (typeof raw_data === 'string' ? JSON.parse(raw_data) : raw_data) : null,
         headers !== undefined ? (typeof headers === 'string' ? headers : JSON.stringify(headers)) : null,
         quarantined_data !== undefined ? (typeof quarantined_data === 'string' ? quarantined_data : JSON.stringify(quarantined_data)) : null,
+        dashboard_config !== undefined ? (typeof dashboard_config === 'string' ? JSON.parse(dashboard_config) : dashboard_config) : null,
+        strategic_report !== undefined ? (typeof strategic_report === 'string' ? JSON.parse(strategic_report) : strategic_report) : null,
         req.params.datasetId,
         req.params.workspaceId
       ]

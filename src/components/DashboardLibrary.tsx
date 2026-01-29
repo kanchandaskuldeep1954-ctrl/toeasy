@@ -43,15 +43,21 @@ export const DashboardLibrary: React.FC = () => {
     }
   }, [token, workspaceId, searchParams]);
 
+  // Sync formData.datasetId with URL parameter
+  useEffect(() => {
+    if (filterDatasetId) {
+      setFormData(prev => ({ ...prev, datasetId: filterDatasetId }));
+    }
+  }, [filterDatasetId]);
+
   const loadAll = async () => {
     try {
       setLoading(true);
-      const [dRes, dsRes] = await Promise.all([
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } })
-      ]);
-      const allDashboards = dRes.data.data || [];
-      const dsList = dsRes.data || [];
+      const dRes = await axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } });
+      const dsRes = await axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } });
+
+      const allDashboards = dRes.data.data || dRes.data || [];
+      const dsList = Array.isArray(dsRes.data) ? dsRes.data : (dsRes.data.data || []);
 
       // Synthesis: Create a "Primary Analysis" entry for every dataset
       const primaryItems = dsList.map((ds: any) => ({
@@ -98,8 +104,12 @@ export const DashboardLibrary: React.FC = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
-      const newDashboard = response.data;
-      navigate(`/app/dashboard?id=${newDashboard.id}&workspace=${workspaceId}`);
+      const newDashboard = response.data.data || response.data;
+      if (newDashboard.id) {
+        navigate(`/app/dashboard?id=${newDashboard.id}&workspace=${workspaceId}`);
+      } else {
+        throw new Error('Dashboard created but no ID returned');
+      }
     } catch (err) {
       setError('Failed to create dashboard');
     } finally {
@@ -169,11 +179,21 @@ export const DashboardLibrary: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
                   className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
                   required
+                  disabled={!!filterDatasetId}
                 >
                   <option value="">Select a Dataset...</option>
-                  {datasets.map(ds => (
-                    <option key={ds.id} value={ds.id}>{ds.name} ({ds.row_count?.toLocaleString() || 0} rows)</option>
-                  ))}
+                  {datasets.map(ds => {
+                    let rowCount = ds.row_count;
+                    if (!rowCount && ds.raw_data) {
+                      try {
+                        const parsed = typeof ds.raw_data === 'string' ? JSON.parse(ds.raw_data) : ds.raw_data;
+                        rowCount = Array.isArray(parsed) ? parsed.length : 0;
+                      } catch (e) { rowCount = 0; }
+                    }
+                    return (
+                      <option key={ds.id} value={ds.id}>{ds.name} ({(rowCount || 0).toLocaleString()} rows)</option>
+                    );
+                  })}
                 </select>
               </div>
               <div>
@@ -187,22 +207,6 @@ export const DashboardLibrary: React.FC = () => {
                   autoFocus
                 />
               </div>
-              {!filterDatasetId && (
-                <div>
-                  <label className="text-sm text-slate-400 mb-2 block uppercase tracking-widest font-bold text-[10px]">Data Source*</label>
-                  <select
-                    value={formData.datasetId}
-                    onChange={(e) => setFormData({ ...formData, datasetId: e.target.value })}
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none font-medium appearance-none cursor-pointer"
-                    required
-                  >
-                    <option value="">Select a Dataset...</option>
-                    {datasets.map(ds => (
-                      <option key={ds.id} value={ds.id}>{ds.name} ({(JSON.parse(ds.raw_data || '[]').length).toLocaleString()} rows)</option>
-                    ))}
-                  </select>
-                </div>
-              )}
 
               {filterDatasetId && (
                 <div className="p-3 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl border border-indigo-100 dark:border-indigo-500/30 flex items-center gap-2">
