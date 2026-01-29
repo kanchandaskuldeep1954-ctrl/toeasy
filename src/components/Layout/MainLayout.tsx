@@ -1,6 +1,7 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import WorkspaceTabs from '../WorkspaceTabs';
+import NotificationCenter from '../NotificationCenter';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -8,7 +9,7 @@ interface MainLayoutProps {
 
 import { ActivityFeed } from '../Activity/ActivityFeed';
 import { useWorkspace } from '../../hooks/useWorkspace';
-import { Bell, X } from 'lucide-react';
+import { Activity, X } from 'lucide-react';
 
 const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -35,23 +36,26 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         onClick={() => setShowActivity(!showActivity)}
                         className="ml-auto p-2 text-slate-500 hover:bg-slate-100 rounded-lg"
                     >
-                        <Bell className="w-5 h-5" />
+                        <Activity className="w-5 h-5" />
                     </button>
                 </div>
 
                 {/* Perspective Tabs Bar */}
                 <div className="flex items-center justify-between pr-4 bg-white border-b border-gray-200">
                     <WorkspaceTabs />
-                    <button
-                        onClick={() => setShowActivity(!showActivity)}
-                        className={`hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${showActivity
+                    <div className="flex items-center gap-2">
+                        <NotificationCenter />
+                        <button
+                            onClick={() => setShowActivity(!showActivity)}
+                            className={`hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${showActivity
                                 ? 'bg-indigo-50 text-indigo-700'
                                 : 'text-gray-600 hover:bg-gray-100'
-                            }`}
-                    >
-                        <Bell className="w-4 h-4" />
-                        Activity
-                    </button>
+                                }`}
+                        >
+                            <Activity className="w-4 h-4" />
+                            Activity
+                        </button>
+                    </div>
                 </div>
 
                 <div className="flex flex-1 overflow-hidden">

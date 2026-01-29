@@ -243,6 +243,37 @@ export const metricsAPI = {
     getClient().post(`/workspaces/${workspaceId}/metrics/${metricId}/track-usage`, usage)
 };
 
+export const alertsAPI = {
+  list: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/alerts`),
+
+  create: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/alerts`, data),
+
+  delete: (workspaceId: string, alertId: string | number) =>
+    getClient().delete(`/workspaces/${workspaceId}/alerts/${alertId}`),
+
+  toggle: (workspaceId: string, alertId: string | number, is_active: boolean) =>
+    getClient().post(`/workspaces/${workspaceId}/alerts/${alertId}/toggle`, { is_active }),
+
+  check: (workspaceId: string) =>
+    getClient().post(`/workspaces/${workspaceId}/alerts/check`)
+};
+
+export const notificationsAPI = {
+  list: (unreadOnly = false) =>
+    getClient().get(`/notifications`, { params: { unreadOnly } }),
+
+  markRead: (id: string | number) =>
+    getClient().post(`/notifications/${id}/read`),
+
+  markAllRead: () =>
+    getClient().post(`/notifications/read-all`),
+
+  delete: (id: string | number) =>
+    getClient().delete(`/notifications/${id}`)
+};
+
 // ============================================
 // Query Endpoints
 // ============================================

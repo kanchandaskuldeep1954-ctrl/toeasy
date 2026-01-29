@@ -38,6 +38,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                 { name: 'Intelligence', path: buildPath('/app/war-room'), icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
                 { name: 'Dataflows', path: buildPath('/app/dataflows'), icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
                 { name: 'Playground', path: buildPath('/app/playground'), icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
+                { name: 'Alerts', path: buildPath('/app/alerts'), icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
             ]
         },
         {
