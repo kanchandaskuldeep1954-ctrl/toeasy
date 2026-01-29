@@ -967,6 +967,11 @@ const UniverCleanView: React.FC = () => {
                                     headers={displayHeaders}
                                     issues={issues}
                                     theme={theme as any}
+                                    lastUpdated={
+                                        // Use either backend update timestamp OR a local tracking of changes
+                                        // We can use the last entry in changeHistory or dataset.updated_at
+                                        (dataset as any).updated_at || changeHistory.length
+                                    }
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         if (isCleaningLive) return; // Skip updates during automated bulk cleaning
                                         const header = displayHeaders[col];

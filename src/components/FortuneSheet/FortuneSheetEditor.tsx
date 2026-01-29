@@ -12,6 +12,7 @@ export interface FortuneSheetEditorProps {
     readOnly?: boolean;
     highlightIssues?: boolean;
     theme?: 'light' | 'dark';
+    lastUpdated?: string | number;
 }
 
 // Static colors - defined outside component to avoid recreation
@@ -30,6 +31,8 @@ interface PendingHighlight {
     expiresAt: number;
 }
 
+// ... (rest of imports)
+
 const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     data,
     headers,
@@ -39,6 +42,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     readOnly = false,
     highlightIssues = true,
     theme = 'light',
+    lastUpdated,
 }, ref) => {
     const [pendingHighlights, setPendingHighlights] = useState<PendingHighlight[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
@@ -54,6 +58,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         console.log(`[FortuneSheet] Building celldata: ${data.length} rows, ${headers.length} columns`);
         currentDataRef.current = data;
 
+        // ... (rest of logic)
         const cellData: any[] = [];
         const now = Date.now();
         const activeHighlights = pendingHighlights.filter(h => h.expiresAt > now);
@@ -133,69 +138,18 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
 
         console.log(`[FortuneSheet] Built ${cellData.length} cells`);
         return cellData;
-    }, [data, headers, issues, highlightIssues, pendingHighlights]);
+    }, [data, headers, issues, highlightIssues, pendingHighlights, theme]); // Added theme to deps
 
-    // Clean up expired highlights
-    useEffect(() => {
-        if (pendingHighlights.length === 0) return;
+    // ... (rest of effects)
 
-        const timer = setTimeout(() => {
-            const now = Date.now();
-            setPendingHighlights(prev => prev.filter(h => h.expiresAt > now));
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, [pendingHighlights]);
-
-    // Expose methods via ref
-    React.useImperativeHandle(ref, () => ({
-        getSheetData: () => currentDataRef.current,
-
-        animateCellFix: async (row: number, col: number, _oldVal: any, _newVal: any) => {
-            setPendingHighlights(prev => [
-                ...prev.filter(h => !(h.row === row && h.col === col)),
-                { row, col, expiresAt: Date.now() + 1500 }
-            ]);
-            if (onCellEdit) onCellEdit(row, col, _oldVal, _newVal);
-        },
-
-        setCellValue: (row: number, col: number, value: any) => {
-            setPendingHighlights(prev => [
-                ...prev.filter(h => !(h.row === row && h.col === col)),
-                { row, col, expiresAt: Date.now() + 1500 }
-            ]);
-            console.log(`[FortuneSheet] setCellValue: row=${row}, col=${col}, value=${value}`);
-        },
-
-        deleteRow: (row: number) => {
-            console.log(`[FortuneSheet] deleteRow: row=${row}`);
-        },
-
-        deleteColumn: (col: number) => {
-            console.log(`[FortuneSheet] deleteColumn: col=${col}`);
-        },
-
-        scrollToCell: (row: number, col: number) => {
-            setPendingHighlights(prev => [
-                ...prev.filter(h => !(h.row === row && h.col === col)),
-                { row, col, expiresAt: Date.now() + 500 }
-            ]);
-        },
-
-        applyIssueHighlighting: () => {
-            // Highlights are applied via useMemo already
-        },
-
-        forceUpdate: (newData: DataRow[], newHeaders?: string[]) => {
-            currentDataRef.current = newData;
-            console.log('[FortuneSheet] forceUpdate called');
-        }
-    }));
-
-    // Generate a unique key for forcing re-renders when data changes structurally
+    // Generate a unique key for forcing re-renders when data changes structurally OR when explicitly requested via lastUpdated
     const componentKey = useMemo(() => {
-        return `fs-${data?.length || 0}-${headers?.length || 0}-${Date.now()}`;
-    }, [data?.length, headers?.length]);
+        // Use lastUpdated if provided, otherwise fallback to basic structural checks + data reference
+        // We include theme here to force full re-render on theme change if needed (though CSS filter handles most)
+        if (lastUpdated) return `fs-${lastUpdated}`;
+
+        return `fs-${data?.length || 0}-${headers?.length || 0}-${theme}`;
+    }, [data?.length, headers?.length, theme, lastUpdated]);
 
     return (
         <div
