@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import ReportView from './ReportView';
-import { Dataset } from '../types';
+import ReportView from '../../components/ReportView';
+import { Dataset } from '../../types';
 import { reportsAPI, datasetAPI } from '../services/api';
 
 const ReportViewIntegrated: React.FC = () => {
