@@ -274,7 +274,7 @@ export const UploadViewPhase3: React.FC = () => {
               <li>• CSV with headers in first row</li>
               <li>• JSON with array of objects</li>
               <li>• Maximum file size: 500MB</li>
-              <li>• Maximum rows: 10,000,000</li>
+              <li>• Maximum rows: {user?.tier === 'pro' ? '100,000' : (user?.tier === 'enterprise' ? '10,000,000' : '500')}</li>
             </ul>
           </div>
         </div>

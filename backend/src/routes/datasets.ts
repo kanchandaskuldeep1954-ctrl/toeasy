@@ -51,7 +51,7 @@ router.get('/:workspaceId/datasets', async (req: AuthRequest, res) => {
 });
 
 // Create/upload dataset
-router.post('/:workspaceId/datasets', checkTierLimit('maxDatasets'), async (req: AuthRequest, res) => {
+router.post('/:workspaceId/datasets', checkTierLimit('maxDatasets'), checkTierLimit('maxRowsPerDataset'), async (req: AuthRequest, res) => {
   try {
     const { name, data, headers, description } = req.body;
 
