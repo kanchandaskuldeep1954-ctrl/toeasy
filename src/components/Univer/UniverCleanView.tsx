@@ -180,32 +180,41 @@ const UniverCleanView: React.FC = () => {
                 let semanticResult = semantics;
                 if (!semanticResult) {
                     setLoadingStep('🔍 Deep Semantic Analysis...');
-                    semanticResult = await analyzeDatasetSemantics(dataset);
-                    setSemantics(semanticResult);
+                    try {
+                        semanticResult = await analyzeDatasetSemantics(dataset);
+                        setSemantics(semanticResult || null);
+                    } catch (err) {
+                        console.warn('Semantic analysis failed:', err);
+                        // Continue without semantics
+                    }
                 }
 
                 // Step 2: Generate Recovery Plans
                 if (!issues || issues.length === 0) {
                     setLoadingStep('🧠 Generating Recovery Plans...');
-                    const plans = generateRecoveryPlans(dataset.data, dataset.headers, semanticResult);
-                    const cellIssues = recoveryPlansToCellIssues(plans, dataset.headers);
-                    setIssues(cellIssues);
+                    const plans = generateRecoveryPlans(dataset.data || [], dataset.headers || [], semanticResult);
+                    const cellIssues = plans ? recoveryPlansToCellIssues(plans, dataset.headers || []) : [];
+                    setIssues(cellIssues || []);
                 }
 
                 // Step 3: Generate Validation Rules
                 setLoadingStep('⚒️ Creating Validation Rules...');
                 if (!dataset.validationRules || dataset.validationRules.length === 0) {
                     const rules = await GroqService.suggestValidationRules(dataset, semanticResult);
-                    setValidationRules(rules);
+                    setValidationRules(rules || []);
                     // Only update if it's genuinely missing from the DB
-                    updateDataset(Number(dataset.id), { validationRules: rules } as any);
+                    if (rules && rules.length > 0) {
+                        updateDataset(Number(dataset.id), { validationRules: rules } as any);
+                    }
                 } else if (!validationRules || validationRules.length === 0) {
-                    setValidationRules(dataset.validationRules);
+                    setValidationRules(dataset.validationRules || []);
                 }
 
                 setLoadingStep('');
             } catch (e) {
                 console.error('Initialization failed:', e);
+                setLoadingStep('Initialization error (partial load)');
+                // Don't leave it loading forever
             } finally {
                 setIsLoading(false);
             }

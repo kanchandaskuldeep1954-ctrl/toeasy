@@ -217,8 +217,13 @@ export class GroqService {
 
   // Suggest validation rules
   static async suggestValidationRules(dataset: Dataset, semanticContext?: any): Promise<ValidationRule[]> {
-    const result = await this.callApi<{ rules: ValidationRule[] }>('suggest-rules', 'POST', { dataset, semanticContext });
-    return result.rules;
+    try {
+      const result = await this.callApi<{ rules: ValidationRule[] }>('suggest-rules', 'POST', { dataset, semanticContext });
+      return result.rules || [];
+    } catch (e) {
+      console.warn("Suggest rules failed, returning empty rules:", e);
+      return [];
+    }
   }
 
   // Generate rule from natural language
