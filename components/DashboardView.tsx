@@ -134,8 +134,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     }, []);
 
     const loadOrGenerate = async (force: boolean = false) => {
-        // If we are forcing, or if we have it in the dataset, we proceed.
-        // Otherwise, we wait for user intent.
+        // PRESERVE USER WORK: Never auto-AI if a config already exists, unless forced
+        if (!force && dataset.dashboardConfig) {
+            setConfig(dataset.dashboardConfig);
+            setLoading(false);
+            return;
+        }
+
+        // If no force and no config, we just show the "Empty / Draft" state
         if (!force && !dataset.dashboardConfig) {
             setLoading(false);
             return;
@@ -143,33 +149,35 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
         setLoading(true);
         try {
-            if (!force && dataset.dashboardConfig) {
-                setConfig(dataset.dashboardConfig);
-                setLoading(false);
-                return;
-            }
             if (onAIAction) onAIAction();
             const generatedConfig = await GroqService.suggestDashboard(dataset);
             if (!isMounted.current) return;
+
+            // Apply the generated name from AI if available
+            if (generatedConfig.name) setDashboardName(generatedConfig.name);
+
             setConfig(generatedConfig);
+
+            // PERSIST IMMEDIATELY
             if (onUpdate) onUpdate({ ...dataset, dashboardConfig: generatedConfig });
         } catch (e) {
-            console.error(e);
+            console.error('AI Draft Error:', e);
         } finally {
             if (isMounted.current) setLoading(false);
         }
     };
 
     useEffect(() => {
-        setDashboardName(cleanName + ' Dashboard');
-        // Auto-load ONLY if it already exists in the dataset.
-        // No auto-generation on first visit to save tokens.
-        if (dataset.dashboardConfig) {
-            loadOrGenerate(false);
-        } else {
-            setLoading(false);
+        // Sync name but don't overwrite user's custom name if config exists
+        if (!dataset.dashboardConfig) {
+            setDashboardName(cleanName + ' Dashboard');
+        } else if (dataset.dashboardConfig.name) {
+            setDashboardName(dataset.dashboardConfig.name);
         }
-    }, [dataset.name, cleanName]);
+
+        // Auto-load strictly from DB
+        loadOrGenerate(false);
+    }, [dataset.id, dataset.name]);
 
     useEffect(() => {
         if (!config || !dataset) return;

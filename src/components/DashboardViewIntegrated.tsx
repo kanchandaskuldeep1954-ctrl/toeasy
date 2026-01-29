@@ -162,23 +162,33 @@ const DashboardViewIntegrated: React.FC = () => {
       setDataset(updated);
 
       if (dashboardId) {
-        // Persist to the specific dashboard entity
+        // Persist to the specific dashboard entity (VERSION)
+        // We wrap the config inside layout.config to match the backend expectations
         await axios.put(`${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`, {
-          name: dashboardEntity?.name || updated.name + ' Analysis',
+          name: updated.dashboardConfig?.name || dashboardEntity?.name || updated.name + ' Analysis',
           layout: {
             dataset_id: updated.id || datasetId,
             config: updated.dashboardConfig
           }
         }, { headers: { Authorization: `Bearer ${token}` } });
+
+        // Update local entity state to keep UI in sync
+        setDashboardEntity((prev: any) => ({
+          ...prev,
+          name: updated.dashboardConfig?.name || prev.name,
+          layout: { ...prev.layout, config: updated.dashboardConfig }
+        }));
       } else {
-        // Fallback to updating the dataset legacy default
+        // Persist to the dataset default (MASTER)
         await datasetAPI.dataset.update(workspaceId, updated.id || datasetId, {
-          dashboard_config: updated.dashboardConfig,
+          dashboard_config: JSON.stringify(updated.dashboardConfig),
           strategic_report: updated.strategicReport
         });
       }
+
+      console.log('✅ Dashboard persisted successfully');
     } catch (err) {
-      console.error('Failed to persist dashboard update:', err);
+      console.error('❌ Failed to persist dashboard update:', err);
     }
   };
 

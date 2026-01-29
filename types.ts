@@ -114,34 +114,33 @@ export interface SavedQuery {
 }
 
 export interface Dataset {
-  id?: string;
+  id: string;
   workspace_id?: string;
-  createdAt?: string;
-  rowCount?: number;
-  cleaningActions?: CleaningAction[];
+  createdAt: string;
+  rowCount: number;
   name: string;
   sourceType: SourceType;
   headers: string[];
   data: DataRow[];
-  originalData?: DataRow[];
+  cleaningActions?: CleaningAction[];
+  cleaningHistory?: CleaningAction[];
   quarantinedData?: DataRow[];
-  stats: ColumnStats[];
+  stats?: ColumnStats[];
   healthScore?: number;
   fraudRate?: number;
   issuesCount?: { errors: number; warnings: number; infos: number; frauds: number };
   lastCleaned?: Date;
-  cleaningHistory: CleaningAction[];
   historyStack?: HistoryStep[];
   cleaningSuggestions?: CleaningAction[];
   analysisInsights?: AnalysisInsight[];
   kpis?: KPI[];
   customCharts?: ChartSpec[];
-  generatedReport?: string; // Legacy
-  strategicReport?: StrategicReport; // New structured report
+  generatedReport?: string;
+  strategicReport?: StrategicReport;
   cleaningReport?: string;
   validationRules?: ValidationRule[];
   dashboardConfig?: DashboardConfig;
-  dataQualitySource?: 'PRO_CLEANED' | 'RAW_ORIGINAL';
+  dataQualitySource?: 'PRO_CLEANED' | 'RAW_ORIGINAL' | 'VERSION';
   savedQueries?: SavedQuery[];
 }
 
@@ -264,13 +263,15 @@ export interface Pattern {
 }
 
 export interface DashboardConfig {
+  name?: string;
+  description?: string;
   charts: ChartSpec[];
   kpis: KPI[];
   patterns: Pattern[];
-  filters?: FilterSpec[]; // Add filters from AnalyticsEngine
-  insights?: string[]; // Add insights from AnalyticsEngine
-  layout?: any; // Add layout
-  metadata: any;
+  filters?: FilterSpec[];
+  insights?: string[];
+  layout?: any;
+  metadata?: any;
 }
 
 export interface ReportSection {
