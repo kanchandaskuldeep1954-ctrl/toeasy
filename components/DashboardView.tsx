@@ -319,6 +319,16 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         }
     };
 
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+
+    const handleCopyLink = () => {
+        if (!shareUrl) return;
+        navigator.clipboard.writeText(shareUrl);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+    };
+
     const handleNativeShare = async () => {
         if (!shareUrl) return;
         if (navigator.share) {
