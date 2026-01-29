@@ -292,15 +292,15 @@ app.post('/api/modify-kpi', authenticateToken, async (req: AuthRequest, res) => 
 // Generate Strategic Report
 app.post('/api/generate-report', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { dataset, reportType } = req.body;
+    const { dataset, reportType, extraContext } = req.body;
 
     if (!dataset) {
       return res.status(400).json({ error: 'Dataset required' });
     }
 
-    console.log(`Generating ${reportType || 'strategic'} report`);
+    console.log(`Generating ${reportType || 'strategic'} report with extraContext:`, !!extraContext);
 
-    const report = await GroqService.generateReport(dataset, reportType);
+    const report = await GroqService.generateReport(dataset, reportType, extraContext);
 
     res.json(report);
   } catch (err) {

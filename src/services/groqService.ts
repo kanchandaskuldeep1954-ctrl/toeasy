@@ -295,8 +295,8 @@ export class GroqService {
   }
 
   // Generate report
-  static async generateReport(dataset: Dataset, reportType: string = 'strategic'): Promise<StrategicReport> {
-    return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset, reportType });
+  static async generateReport(dataset: Dataset, reportType: string = 'strategic', extraContext?: { cleaningHistory?: any[], activityLogs?: any[], webData?: any }): Promise<StrategicReport> {
+    return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset, reportType, extraContext });
   }
 
   // Modify report with AI (Copilot)

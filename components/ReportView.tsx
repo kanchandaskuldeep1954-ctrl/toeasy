@@ -5,7 +5,7 @@ import { GroqService } from '../services/groqService';
 import { ExportService } from '../services/exportService';
 import ReactMarkdown from 'react-markdown';
 import PlotlyChart from './Dashboard/PlotlyChart';
-import { sharingAPI } from '../src/services/api';
+import { sharingAPI, activityAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
 
 interface ReportViewProps {
@@ -65,24 +65,11 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         { title: 'Forecasting v2.0', icon: '🔮', prompt: 'Extend the trendlines to Q4 2026 using a 15% optimistic growth variable.' }
     ];
 
-    // Generate report with timeout
-    const generateReportWithTimeout = async (timeoutMs: number = 45000): Promise<StrategicReport> => {
-        return new Promise((resolve, reject) => {
-            const timeoutId = setTimeout(() => {
-                reject(new Error(`Report generation timed out after ${timeoutMs / 1000} seconds`));
-            }, timeoutMs);
-
-            GroqService.generateReport(dataset)
-                .then(result => {
-                    clearTimeout(timeoutId);
-                    resolve(result);
-                })
-                .catch(err => {
-                    clearTimeout(timeoutId);
-                    reject(err);
-                });
-        });
-    };
+    const isMounted = useRef(true);
+    useEffect(() => {
+        isMounted.current = true;
+        return () => { isMounted.current = false; };
+    }, []);
 
     // Retry handler
     const handleRetry = () => {
@@ -90,8 +77,6 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         setLoading(true);
         setRetryCount(prev => prev + 1);
     };
-
-    /* Redundant: report types removed */
 
     // Use fallback report
     const useFallback = () => {
@@ -123,7 +108,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
             const response = await sharingAPI.create({
                 resourceType: 'report',
-                resourceId: dataset.id,
+                resourceId: String(dataset.id),
                 workspaceId,
                 title: report.title,
                 snapshot
@@ -137,12 +122,6 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             setIsSharing(false);
         }
     };
-
-    const isMounted = useRef(true);
-    useEffect(() => {
-        isMounted.current = true;
-        return () => { isMounted.current = false; };
-    }, []);
 
     const generate = useCallback(async (forced: boolean = false) => {
         if (!dataset) return;
@@ -161,8 +140,36 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         try {
             if (onAIAction) onAIAction();
 
-            // Try with 45 second timeout
-            const content = await generateReportWithTimeout(45000);
+            // 1. Gather Extra Context (Boss Move)
+            let activityLogs: any[] = [];
+            try {
+                const actRes = await activityAPI.list(workspaceId || '', dataset.id, 10);
+                activityLogs = actRes.data.data;
+            } catch (actErr) {
+                console.warn('Failed to fetch activity logs for report context', actErr);
+            }
+
+            const extraContext = {
+                cleaningHistory: dataset.cleaningHistory || [],
+                activityLogs: activityLogs
+            };
+
+            // 2. Try with 45 second timeout
+            const content = await new Promise((resolve, reject) => {
+                const timeoutId = setTimeout(() => {
+                    reject(new Error(`Report generation timed out after 45 seconds`));
+                }, 45000);
+
+                GroqService.generateReport(dataset, 'strategic', extraContext)
+                    .then(result => {
+                        clearTimeout(timeoutId);
+                        resolve(result);
+                    })
+                    .catch(err => {
+                        clearTimeout(timeoutId);
+                        reject(err);
+                    });
+            }) as StrategicReport;
 
             if (!isMounted.current) return;
 
@@ -198,7 +205,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [dataset, onAIAction, onUpdate, retryCount]);
+    }, [dataset, onAIAction, onUpdate, retryCount, workspaceId]);
 
     useEffect(() => {
         generate(false);

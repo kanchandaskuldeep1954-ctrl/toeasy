@@ -644,7 +644,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
-  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic'): Promise<any> {
+  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic', extraContext: { cleaningHistory?: any[], activityLogs?: any[], webData?: any } = {}): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const data = dataset.data || [];
@@ -652,6 +652,15 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       // 1. Generate Real Analytics Artifacts (KPIs & Charts)
       const { kpis, charts, forensics } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
+
+      // 2. Context Extraction (Cleaning & Activity Awareness)
+      const cleaningContext = extraContext.cleaningHistory && extraContext.cleaningHistory.length > 0
+        ? `DATA CLEANING HISTORY (Transparency & Trust):\n${extraContext.cleaningHistory.slice(-5).map((h: any) => `- ${h.action || 'Transformation'}: ${h.description || 'Optimized columns'}`).join('\n')}`
+        : 'No specific cleaning history provided.';
+
+      const activityContext = extraContext.activityLogs && extraContext.activityLogs.length > 0
+        ? `WORKSPACE ACTIVITY (Operational Context):\n${extraContext.activityLogs.slice(-5).map((a: any) => `- ${a.action} on ${a.resource_type} (${new Date(a.created_at).toLocaleDateString()})`).join('\n')}`
+        : 'No recent activity logs available.';
 
       // Context Extraction
       const piiColumns = forensics.profiles.filter(p => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map(p => p.column);
@@ -687,8 +696,13 @@ Return ONLY valid JSON (no markdown, no explanation):
       PREDICTIVE CONTEXT:
       ${predictiveContext}
 
+      PROCESS AWARENESS (CRITICAL):
+      ${cleaningContext}
+      ${activityContext}
+
       TASK:
       Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.
+      INTEGRATE PROCESS AWARENESS: Refer to the cleaning history specifically when discussing "Data Quality" to show how the current state was achieved. Use Activity logs to contextualize the report for the current workspace's objectives.
       
       RETURN JSON STRUCTURE (No Markdown):
       {

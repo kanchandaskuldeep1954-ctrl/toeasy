@@ -7,7 +7,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+const API_BASE_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
 let apiClient: AxiosInstance;
 
@@ -374,6 +374,18 @@ export const tabsAPI = {
     getClient().put('/tabs/reorder', { workspaceId, tabIds })
 };
 
+// ============================================
+// Activity Endpoints
+// ============================================
+
+export const activityAPI = {
+  list: (workspaceId: string, datasetId?: string, limit: number = 20) =>
+    getClient().get('/activity', { params: { workspaceId, datasetId, limit } }),
+
+  log: (data: { workspaceId: string, datasetId?: string, actionType: string, actionCategory: string, actionDetail: string, actionMetadata?: any, sourceComponent: string }) =>
+    getClient().post('/activity', data)
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -391,5 +403,6 @@ export default {
   cleaning: cleaningAPI,
   sharing: sharingAPI,
   tabs: tabsAPI,
+  activity: activityAPI,
   initializeAPIClient
 };
