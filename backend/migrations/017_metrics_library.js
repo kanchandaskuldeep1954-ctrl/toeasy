@@ -3,7 +3,7 @@
  * Implements centralized metrics library for calculated fields
  */
 
-exports.up = async function (knex) {
+export const up = async function (knex) {
     // Create metrics table
     await knex.schema.createTable('metrics', (table) => {
         table.increments('id').primary();
@@ -53,7 +53,7 @@ exports.up = async function (knex) {
     console.log('Created metrics, metric_usage, and metric_versions tables');
 };
 
-exports.down = async function (knex) {
+export const down = async function (knex) {
     await knex.schema.dropTableIfExists('metric_versions');
     await knex.schema.dropTableIfExists('metric_usage');
     await knex.schema.dropTableIfExists('metrics');
