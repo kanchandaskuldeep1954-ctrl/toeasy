@@ -88,13 +88,27 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
             return Array.from(map.values());
         }
 
-        // Scatter / Bubble
-        return filteredData.map(row => ({
-            x: parseNumericValue(row[xAxis]),
-            y: parseNumericValue(row[yAxis]),
-            z: zAxis ? parseNumericValue(row[zAxis]) : 100,
-            name: row[dataset.headers[0]]
-        })).slice(0, 500);
+        // Scatter / Bubble - SUPPORT CATEGORICAL AXES
+        return filteredData.map(row => {
+            const xRaw = row[xAxis];
+            const yRaw = row[yAxis];
+
+            // Try numeric first, fallback to raw if specifically categorical
+            const xNum = parseNumericValue(xRaw);
+            const yNum = parseNumericValue(yRaw);
+
+            // If the raw value is a non-empty string and numeric parsing yielded 0 (likely categorical)
+            // but the original wasn't '0' or 'false', we use the original string.
+            const xFinal = (xNum === 0 && xRaw !== 0 && xRaw !== '0' && typeof xRaw === 'string') ? xRaw : xNum;
+            const yFinal = (yNum === 0 && yRaw !== 0 && yRaw !== '0' && typeof yRaw === 'string') ? yRaw : yNum;
+
+            return {
+                x: xFinal,
+                y: yFinal,
+                z: zAxis ? parseNumericValue(row[zAxis]) : 100,
+                name: row[dataset.headers[0]]
+            };
+        }).slice(0, 500);
     }
 
     // --- Box / Violin Logic (Raw Distribution) ---
