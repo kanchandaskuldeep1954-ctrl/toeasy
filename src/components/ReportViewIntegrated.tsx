@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import ReportView from '../../components/ReportView';
 import { Dataset } from '../../types';
 import { reportsAPI, datasetAPI } from '../services/api';
 
 const ReportViewIntegrated: React.FC = () => {
     const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const workspaceId = searchParams.get('workspace') || '';
     const datasetId = searchParams.get('dataset') || '';
     const reportId = searchParams.get('id') || '';
@@ -106,26 +107,60 @@ const ReportViewIntegrated: React.FC = () => {
         if (!workspaceId) return;
         try {
             setDataset(updated);
+
+            // 1. If we are in a specific report, update its content
             if (reportId) {
                 await reportsAPI.update(workspaceId, reportId, {
                     content: updated.strategicReport
                 });
+            } else {
+                // 2. If we are in Master Draft mode, persist the report content back to the dataset
+                await datasetAPI.update(workspaceId, datasetId || '', {
+                    strategic_report: updated.strategicReport
+                });
             }
-        } catch (err) { console.error(err); }
+        } catch (err) {
+            console.error('Failed to persist report update:', err);
+        }
     };
 
     const handleSaveVersion = async () => {
-        if (!reportId || !dataset?.strategicReport) return;
+        if (!dataset?.strategicReport) return;
         try {
             setIsSavingVersion(true);
-            await reportsAPI.saveVersion(workspaceId, reportId, { change_summary: versionNote });
+
+            let activeReportId = reportId;
+
+            // 1. If no reportId, create the report entity first
+            if (!activeReportId) {
+                const createRes = await reportsAPI.create(workspaceId, {
+                    name: `${dataset.name} Master`,
+                    description: 'Primary strategic assessment',
+                    dataset_id: datasetId || '',
+                    content: dataset.strategicReport
+                });
+                activeReportId = createRes.data.data.id;
+
+                // Redirect to the new report view to enable versioning context
+                navigate(`/app/report?id=${activeReportId}&workspace=${workspaceId}&dataset=${datasetId}`);
+                return;
+            }
+
+            // 2. Existing versioning logic
+            await reportsAPI.saveVersion(workspaceId, activeReportId, { change_summary: versionNote });
             setVersionNote('');
             setIsSavingVersion(false);
+
             // Refresh versions
-            const vRes = await reportsAPI.listVersions(workspaceId, reportId);
+            const vRes = await reportsAPI.listVersions(workspaceId, activeReportId);
             setVersions(vRes.data.data);
             alert('Version snapshot saved successfully!');
-        } catch (e) { alert('Failed to save version'); }
+        } catch (e) {
+            console.error('Failed to save version:', e);
+            alert('Failed to save version');
+        } finally {
+            setIsSavingVersion(false);
+        }
     };
 
     const handleRestore = async (versionId: number) => {
