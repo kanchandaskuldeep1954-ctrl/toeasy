@@ -65,7 +65,10 @@ export const ReportLibrary: React.FC = () => {
             }));
 
             const combined = filterDatasetId
-                ? [...primaryReports.filter(p => p.dataset_id === filterDatasetId), ...reportEntities.filter((r: any) => r.layout?.dataset_id === filterDatasetId)]
+                ? [
+                    ...primaryReports.filter(p => String(p.dataset_id) === String(filterDatasetId)),
+                    ...reportEntities.filter((r: any) => String(r.layout?.dataset_id) === String(filterDatasetId))
+                ]
                 : [...primaryReports, ...reportEntities];
 
             setReports(combined as any);
