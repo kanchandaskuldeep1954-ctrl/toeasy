@@ -201,7 +201,13 @@ export const dashboardAPI = {
     getClient().put(`/workspaces/${workspaceId}/dashboards/${dashboardId}`, data),
 
   delete: (workspaceId: string, dashboardId: string) =>
-    getClient().delete(`/workspaces/${workspaceId}/dashboards/${dashboardId}`)
+    getClient().delete(`/workspaces/${workspaceId}/dashboards/${dashboardId}`),
+
+  getVersions: (workspaceId: string, dashboardId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/dashboards/${dashboardId}/versions`),
+
+  createVersion: (workspaceId: string, dashboardId: string, data: { name: string; description?: string; config: any }) =>
+    getClient().post(`/workspaces/${workspaceId}/dashboards/${dashboardId}/versions`, data)
 };
 
 // ============================================

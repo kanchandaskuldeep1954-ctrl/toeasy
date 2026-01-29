@@ -1,25 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DashboardView from '../../components/DashboardView';
 import { Dataset } from '../../types';
-import datasetAPI from '../services/api';
+import { dashboardAPI, datasetAPI } from '../services/api';
 
 const DashboardViewIntegrated: React.FC = () => {
   const { token } = useAuth();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const workspaceId = searchParams.get('workspace') || '';
   const datasetId = searchParams.get('dataset') || '';
-  const dashboardId = searchParams.get('id') || '';
+  const initialDashboardId = searchParams.get('id') || '';
 
   const [dataset, setDataset] = useState<Dataset | null>(null);
   const [dashboardEntity, setDashboardEntity] = useState<any>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
 
   // Version Control State
-  const [versions, setVersions] = useState<any[]>([]);
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(searchParams.get('version') || null);
+  const [dataVersions, setDataVersions] = useState<any[]>([]);
+  const [selectedDataVersionId, setSelectedDataVersionId] = useState<string | null>(searchParams.get('version') || null);
 
   const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
   const [isVersionSwitcherOpen, setIsVersionSwitcherOpen] = useState(false);
@@ -32,60 +33,53 @@ const DashboardViewIntegrated: React.FC = () => {
   const [isAgentThinking, setIsAgentThinking] = useState(false);
   const [isAgentOpen, setIsAgentOpen] = useState(false);
 
-  const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
   useEffect(() => {
-    if (workspaceId && (datasetId || dashboardId) && token) {
+    if (workspaceId && (datasetId || initialDashboardId)) {
       loadAll();
     }
-  }, [workspaceId, datasetId, dashboardId, token, selectedVersionId]);
+  }, [workspaceId, datasetId, initialDashboardId, selectedDataVersionId]);
 
   const loadAll = async () => {
     try {
       setLoading(true);
 
       let targetDatasetId = datasetId;
-      let initialConfig = undefined;
-      let entityHasConfig = false;
+      let currentDashboard = null;
 
-      // 1. If we have a dashboard ID, fetch the specific entity
-      if (dashboardId) {
-        const response = await axios.get(
-          `${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        const dash = response.data;
-        setDashboardEntity(dash);
-        targetDatasetId = dash.layout?.dataset_id || datasetId;
-        initialConfig = dash.layout?.config;
-        entityHasConfig = true;
+      // 1. Fetch Dashboard if ID present
+      if (initialDashboardId) {
+        const dRes = await dashboardAPI.get(workspaceId, initialDashboardId);
+        currentDashboard = dRes.data.data || dRes.data;
+        setDashboardEntity(currentDashboard);
+        targetDatasetId = currentDashboard.dataset_id || datasetId;
       }
 
       if (!targetDatasetId) {
         throw new Error('No dataset linked to this analysis.');
       }
 
-      // 2. Fetch Dataset + Siblings + Versions
+      // 2. Fetch Dataset and related data
       const [dsRes, siblingsRes, versionsRes] = await Promise.all([
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
+        datasetAPI.get(workspaceId, targetDatasetId),
+        dashboardAPI.list(workspaceId),
+        axios.get(`${(import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api'}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
       ]);
 
       const dsData = dsRes.data;
       const allDashboards = siblingsRes.data.data || [];
-      setVersions(versionsRes.data || []);
+      setDataVersions(versionsRes.data || []);
 
-      const dashSiblings = allDashboards.filter((d: any) => String(d.layout?.dataset_id) === String(targetDatasetId) && d.layout?.type !== 'report');
+      // Filter siblings for this dataset
+      const dashSiblings = allDashboards.filter((d: any) => String(d.dataset_id) === String(targetDatasetId));
+      setSiblings(dashSiblings);
 
-      // Synthesis: Prepend the "Master" version to the switcher
-      const masterVersion = {
-        id: 'primary',
-        name: 'Master Analysis',
-        isPrimary: true
-      };
-
-      setSiblings([masterVersion, ...dashSiblings]);
+      // If no dashboardId but we have siblings, check for primary
+      if (!initialDashboardId && !currentDashboard) {
+        const primary = dashSiblings.find((d: any) => d.is_primary);
+        if (primary) {
+          setDashboardEntity(primary);
+        }
+      }
 
       const safeParse = (val: any) => {
         if (!val) return undefined;
@@ -103,24 +97,15 @@ const DashboardViewIntegrated: React.FC = () => {
       let finalHeaders: string[] = [];
       let sourceName = 'RAW_ORIGINAL';
 
-      // A. If a specific version is selected, fetch it
-      if (selectedVersionId && selectedVersionId !== 'root') {
-        try {
-          const verRes = await axios.get(
-            `${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions/${selectedVersionId}`,
-            { headers: { Authorization: `Bearer ${token}` } }
-          );
-          finalData = verRes.data.data;
-          finalHeaders = verRes.data.headers;
-          sourceName = `VERSION:${verRes.data.version_name}`;
-        } catch (e) {
-          console.error("Failed to fetch version, falling back to main", e);
-          // Fallback to main logic
-        }
-      }
-
-      // B. If no version selected, or fallback needed: use Cleaned -> Raw logic
-      if (finalData.length === 0) {
+      if (selectedDataVersionId && selectedDataVersionId !== 'root') {
+        const verRes = await axios.get(
+          `${(import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api'}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions/${selectedDataVersionId}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        finalData = verRes.data.data;
+        finalHeaders = verRes.data.headers;
+        sourceName = `VERSION:${verRes.data.version_name}`;
+      } else {
         const cleanedData = safeParse(dsData.cleaned_data);
         finalData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
         const hdrs = safeParse(dsData.headers) || [];
@@ -128,22 +113,19 @@ const DashboardViewIntegrated: React.FC = () => {
         sourceName = cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL';
       }
 
-      // Transform - Priority to entity config. If entity context active, NEVER fallback to dataset global.
       const transformedDataset: Dataset = {
         id: dsData.id || targetDatasetId,
         name: dsData.name || 'Dataset',
         sourceType: dsData.source_type || 'csv',
         headers: finalHeaders,
         data: finalData,
-        // Add source indicator for UI
         dataQualitySource: sourceName as any,
         stats: dsData.stats || [],
         createdAt: dsData.created_at || new Date().toISOString(),
         rowCount: finalData.length,
         quarantinedData: [],
         cleaningActions: [],
-        dashboardConfig: entityHasConfig ? initialConfig : (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
-        strategicReport: dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined,
+        dashboardConfig: currentDashboard?.layout || (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
       };
 
       setDataset(transformedDataset);
@@ -157,39 +139,8 @@ const DashboardViewIntegrated: React.FC = () => {
   };
 
   const handleUpdate = async (updated: Dataset) => {
-    if (!workspaceId) return;
-    try {
-      setDataset(updated);
-
-      if (dashboardId) {
-        // Persist to the specific dashboard entity (VERSION)
-        // We wrap the config inside layout.config to match the backend expectations
-        await axios.put(`${backendUrl}/workspaces/${workspaceId}/dashboards/${dashboardId}`, {
-          name: updated.dashboardConfig?.name || dashboardEntity?.name || updated.name + ' Analysis',
-          layout: {
-            dataset_id: updated.id || datasetId,
-            config: updated.dashboardConfig
-          }
-        }, { headers: { Authorization: `Bearer ${token}` } });
-
-        // Update local entity state to keep UI in sync
-        setDashboardEntity((prev: any) => ({
-          ...prev,
-          name: updated.dashboardConfig?.name || prev.name,
-          layout: { ...prev.layout, config: updated.dashboardConfig }
-        }));
-      } else {
-        // Persist to the dataset default (MASTER)
-        await datasetAPI.dataset.update(workspaceId, updated.id || datasetId, {
-          dashboard_config: JSON.stringify(updated.dashboardConfig),
-          strategic_report: updated.strategicReport
-        });
-      }
-
-      console.log('✅ Dashboard persisted successfully');
-    } catch (err) {
-      console.error('❌ Failed to persist dashboard update:', err);
-    }
+    // Core saving is handled inside DashboardView via auto-save
+    setDataset(updated);
   };
 
   if (loading) {
@@ -222,11 +173,9 @@ const DashboardViewIntegrated: React.FC = () => {
     );
   }
 
-
   const consultAgent = async () => {
     if (!agentQuery) return;
     setIsAgentThinking(true);
-    // Dynamic import to avoid circular dependency if needed, or just import GroqService
     try {
       const { GroqService } = await import('../services/groqService');
       const res = await GroqService.consultVerifiedAgent(
@@ -247,10 +196,7 @@ const DashboardViewIntegrated: React.FC = () => {
       <div className="bg-slate-900 border-b border-slate-800 px-6 py-3 flex items-center justify-between z-[110]">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => {
-              const path = datasetId ? `/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}` : `/app/dashboards?workspace=${workspaceId}`;
-              import('react-router-dom').then(m => window.location.href = path); // Simplest escape for now or use navigate
-            }}
+            onClick={() => navigate(`/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}`)}
             className="text-slate-400 hover:text-white transition-colors flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
           >
             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
@@ -258,16 +204,14 @@ const DashboardViewIntegrated: React.FC = () => {
           </button>
           <div className="h-4 w-px bg-slate-800"></div>
           <div className="flex items-center gap-2">
-
-            {/* Dataset / Version Selector */}
             <div className="relative">
               <button
                 onClick={() => setIsVersionSwitcherOpen(!isVersionSwitcherOpen)}
                 className="group"
               >
                 <span className="text-slate-500 text-[10px] font-bold uppercase tracking-wider group-hover:text-indigo-400 transition-colors flex items-center gap-1">
-                  {selectedVersionId ? versions.find(v => v.id == selectedVersionId)?.version_name : dataset?.name}
-                  <span className="opacity-50 text-[8px]">{selectedVersionId ? '(Version)' : '(Master)'}</span>
+                  {selectedDataVersionId ? dataVersions.find(v => v.id == selectedDataVersionId)?.version_name : dataset?.name}
+                  <span className="opacity-50 text-[8px]">{selectedDataVersionId ? '(Version)' : '(Master)'}</span>
                   <svg className="w-2 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 9l-7 7-7-7" /></svg>
                 </span>
               </button>
@@ -276,10 +220,9 @@ const DashboardViewIntegrated: React.FC = () => {
                 <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl p-2 animate-in fade-in slide-in-from-top-2 z-50">
                   <p className="px-3 py-2 text-[8px] font-black text-slate-500 uppercase tracking-widest border-b border-white/5 mb-1">Select Data Version</p>
                   <div className="max-h-60 overflow-y-auto custom-scrollbar space-y-1">
-                    {/* Master/Latest Option */}
                     <button
-                      onClick={() => { setSelectedVersionId(null); setIsVersionSwitcherOpen(false); }}
-                      className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${!selectedVersionId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                      onClick={() => { setSelectedDataVersionId(null); setIsVersionSwitcherOpen(false); }}
+                      className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${!selectedDataVersionId ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                     >
                       <span className="opacity-50">🚀</span>
                       <div>
@@ -288,12 +231,11 @@ const DashboardViewIntegrated: React.FC = () => {
                       </div>
                     </button>
 
-                    {/* Historic Versions */}
-                    {versions.map(ver => (
+                    {dataVersions.map(ver => (
                       <button
                         key={ver.id}
-                        onClick={() => { setSelectedVersionId(ver.id); setIsVersionSwitcherOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${selectedVersionId == ver.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        onClick={() => { setSelectedDataVersionId(ver.id); setIsVersionSwitcherOpen(false); }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${selectedDataVersionId == ver.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                       >
                         <span className="opacity-50">{ver.created_by_tool === 'playground' ? '⚡' : '💾'}</span>
                         <div>
@@ -326,20 +268,17 @@ const DashboardViewIntegrated: React.FC = () => {
                       <button
                         key={sib.id}
                         onClick={() => {
-                          if (sib.isPrimary) {
-                            window.location.href = `/app/dashboard?dataset=${datasetId}&workspace=${workspaceId}`;
-                          } else {
-                            window.location.href = `/app/dashboard?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`;
-                          }
+                          navigate(`/app/dashboard?id=${sib.id}&workspace=${workspaceId}&dataset=${datasetId}`);
+                          setIsSwitcherOpen(false);
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${((sib.isPrimary && !dashboardId) || (sib.id === dashboardId)) ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${(sib.id === (dashboardEntity?.id || initialDashboardId)) ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                       >
-                        <span className="opacity-50">{sib.isPrimary ? '💎' : '📊'}</span>
+                        <span className="opacity-50">{sib.is_primary ? '💎' : '📊'}</span>
                         <span className="truncate">{sib.name}</span>
                       </button>
                     ))}
                     <button
-                      onClick={() => window.location.href = `/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}&new=true`}
+                      onClick={() => navigate(`/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}&new=true`)}
                       className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-600/10 transition-all mt-2 border-t border-white/5 pt-3"
                     >
                       + New Version
@@ -377,14 +316,16 @@ const DashboardViewIntegrated: React.FC = () => {
       </div>
 
       <div className="flex-1 relative overflow-hidden">
-        <DashboardView dataset={dataset} onUpdate={handleUpdate} />
+        <DashboardView
+          dataset={dataset}
+          dashboardId={dashboardEntity?.id || initialDashboardId}
+          onUpdate={handleUpdate}
+        />
       </div>
 
-      {/* Agent Overlay - Responsive */}
       <div className={`fixed bottom-4 right-4 md:bottom-6 md:right-6 transition-all duration-300 z-[100] flex flex-col items-end ${isAgentOpen ? 'w-[calc(100%-2rem)] md:w-80' : 'w-auto'}`}>
         {isAgentOpen ? (
           <div className="w-full bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200">
-            {/* Header */}
             <div className="bg-indigo-600 p-3 flex justify-between items-center cursor-pointer" onClick={() => setIsAgentOpen(false)}>
               <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-white animate-pulse"></span>
@@ -395,7 +336,6 @@ const DashboardViewIntegrated: React.FC = () => {
               </button>
             </div>
 
-            {/* Chat Area */}
             <div className="h-64 overflow-y-auto p-4 bg-slate-50 dark:bg-slate-950/50 custom-scrollbar">
               {agentResponse ? (
                 <div className="bg-white dark:bg-slate-800 p-3 rounded-lg rounded-tl-none shadow-sm text-xs text-slate-700 dark:text-slate-300 leading-relaxed border border-slate-100 dark:border-slate-700">
@@ -411,14 +351,12 @@ const DashboardViewIntegrated: React.FC = () => {
               )}
             </div>
 
-            {/* Input */}
             <div className="p-2 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex gap-2">
               <input
                 value={agentQuery}
                 onChange={e => setAgentQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && consultAgent()}
                 placeholder="Ask about this dashboard..."
-                autoFocus
                 className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none text-slate-700 dark:text-slate-200 placeholder:text-slate-400"
               />
               <button

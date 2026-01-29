@@ -28,25 +28,34 @@ router.use(checkSubscription);
 // List dashboards in workspace (with pagination)
 router.get('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
   try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500); // Max 500
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 500);
     const offset = parseInt(req.query.offset as string) || 0;
+    const datasetId = req.query.datasetId;
+
+    let whereClause = 'workspace_id = $1';
+    let params: any[] = [req.params.workspaceId];
+
+    if (datasetId) {
+      whereClause += ' AND dataset_id = $2';
+      params.push(datasetId);
+    }
 
     // Get total count
     const countResult = await query(
-      `SELECT COUNT(*) as total FROM dashboards WHERE workspace_id = $1`,
-      [req.params.workspaceId]
+      `SELECT COUNT(*) as total FROM dashboards WHERE ${whereClause}`,
+      params
     );
 
     const total = parseInt(countResult.rows[0].total);
 
     // Get paginated results
     const result = await query(
-      `SELECT id, name, description, layout, created_at, updated_at 
+      `SELECT id, name, description, layout, dataset_id, is_primary, created_at, updated_at 
        FROM dashboards 
-       WHERE workspace_id = $1 
-       ORDER BY created_at DESC
-       LIMIT $2 OFFSET $3`,
-      [req.params.workspaceId, limit, offset]
+       WHERE ${whereClause}
+       ORDER BY is_primary DESC, created_at DESC
+       LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
     );
 
     const dashboards = result.rows.map(d => ({
@@ -70,30 +79,22 @@ router.get('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
 // Create dashboard
 router.post('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
   try {
-    const { name, description, layout, charts, filters, theme } = req.body;
+    const { name, description, layout, dataset_id, is_primary } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Dashboard name required' });
     }
 
-    // Convert layout to JSON if it's a string or object
     let layoutJson = '[]';
     if (layout) {
-      if (typeof layout === 'string') {
-        // If it's already a string like "grid", just use it as a simple value
-        layoutJson = JSON.stringify({ type: layout });
-      } else if (Array.isArray(layout)) {
-        layoutJson = JSON.stringify(layout);
-      } else {
-        layoutJson = JSON.stringify(layout);
-      }
+      layoutJson = typeof layout === 'string' ? JSON.stringify({ type: layout }) : JSON.stringify(layout);
     }
 
     const result = await query(
-      `INSERT INTO dashboards (workspace_id, name, description, layout) 
-       VALUES ($1, $2, $3, $4) 
-       RETURNING id, name, description, layout, created_at`,
-      [req.params.workspaceId, name, description || null, layoutJson]
+      `INSERT INTO dashboards (workspace_id, name, description, layout, dataset_id, is_primary) 
+       VALUES ($1, $2, $3, $4, $5, $6) 
+       RETURNING id, name, description, layout, dataset_id, is_primary, created_at`,
+      [req.params.workspaceId, name, description || null, layoutJson, dataset_id || null, is_primary || false]
     );
 
     const dashboard = result.rows[0];
@@ -111,7 +112,7 @@ router.post('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
 router.get('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res) => {
   try {
     const result = await query(
-      `SELECT id, name, description, layout, created_at, updated_at 
+      `SELECT id, name, description, layout, dataset_id, is_primary, created_at, updated_at 
        FROM dashboards 
        WHERE id = $1 AND workspace_id = $2`,
       [req.params.dashboardId, req.params.workspaceId]
@@ -135,26 +136,23 @@ router.get('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
 // Update dashboard
 router.put('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res) => {
   try {
-    const { name, description, layout } = req.body;
+    const { name, description, layout, is_primary } = req.body;
 
-    // Convert layout to JSON if needed
     let layoutJson = '[]';
     if (layout) {
-      if (typeof layout === 'string') {
-        layoutJson = JSON.stringify({ type: layout });
-      } else if (Array.isArray(layout)) {
-        layoutJson = JSON.stringify(layout);
-      } else {
-        layoutJson = JSON.stringify(layout);
-      }
+      layoutJson = typeof layout === 'string' ? JSON.stringify({ type: layout }) : JSON.stringify(layout);
     }
 
     const result = await query(
       `UPDATE dashboards 
-       SET name = $1, description = $2, layout = $3, updated_at = NOW() 
-       WHERE id = $4 AND workspace_id = $5 
-       RETURNING id, name, description, layout, updated_at`,
-      [name, description, layoutJson, req.params.dashboardId, req.params.workspaceId]
+       SET name = COALESCE($1, name), 
+           description = COALESCE($2, description), 
+           layout = COALESCE($3, layout), 
+           is_primary = COALESCE($4, is_primary),
+           updated_at = NOW() 
+       WHERE id = $5 AND workspace_id = $6 
+       RETURNING id, name, description, layout, dataset_id, is_primary, updated_at`,
+      [name || null, description || null, layout ? layoutJson : null, is_primary !== undefined ? is_primary : null, req.params.dashboardId, req.params.workspaceId]
     );
 
     if (result.rows.length === 0) {
@@ -172,12 +170,52 @@ router.put('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
   }
 });
 
+// CREATE VERSION
+router.post('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthRequest, res) => {
+  try {
+    const { name, description, config } = req.body;
+
+    if (!name || !config) {
+      return res.status(400).json({ error: 'Version name and config required' });
+    }
+
+    const result = await query(
+      `INSERT INTO dashboard_versions (dashboard_id, version_name, description, config) 
+       VALUES ($1, $2, $3, $4) 
+       RETURNING id, version_name, description, config, created_at`,
+      [req.params.dashboardId, name, description || null, JSON.stringify(config)]
+    );
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) {
+    console.error('Create version error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// LIST VERSIONS
+router.get('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthRequest, res) => {
+  try {
+    const result = await query(
+      `SELECT id, version_name, description, config, created_at 
+       FROM dashboard_versions 
+       WHERE dashboard_id = $1 
+       ORDER BY created_at DESC`,
+      [req.params.dashboardId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    console.error('List versions error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Suggest dashboard layout with AI
 router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthRequest, res) => {
   try {
     const { datasetId } = req.body;
 
-    // Get dataset
     const datasetResult = await query(
       'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
       [datasetId, req.params.workspaceId]
@@ -189,10 +227,8 @@ router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthReq
 
     const data = JSON.parse(datasetResult.rows[0].raw_data);
     const headers = Object.keys(data[0] || {});
-    // PASSING LARGER SAMPLE (2000) FOR ANALYTICS ENGINE
     const sample = data.slice(0, 2000);
 
-    // Call Groq service
     const dashboard = await GroqService.generateDashboard(headers, sample);
 
     res.json({ dashboard });

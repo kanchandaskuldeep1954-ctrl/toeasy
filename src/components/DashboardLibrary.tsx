@@ -53,71 +53,32 @@ export const DashboardLibrary: React.FC = () => {
   const loadAll = async () => {
     try {
       setLoading(true);
-      const dRes = await axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } });
+      // Fetch datasets for name lookup
       const dsRes = await axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } });
-
-      const allDashboards = dRes.data.data || dRes.data || [];
       const dsList = Array.isArray(dsRes.data) ? dsRes.data : (dsRes.data.data || []);
+      setDatasets(dsList);
 
-      const safeParse = (val: any) => {
-        if (!val) return undefined;
-        if (typeof val === 'string') {
-          try {
-            const parsed = JSON.parse(val);
-            return typeof parsed === 'string' ? JSON.parse(parsed) : parsed;
-          } catch (e) { return undefined; }
-        }
-        return val;
-      };
+      // Fetch all dashboards for this workspace (optionally filtered by dataset)
+      const dUrl = filterDatasetId
+        ? `${backendUrl}/workspaces/${workspaceId}/dashboards?datasetId=${filterDatasetId}`
+        : `${backendUrl}/workspaces/${workspaceId}/dashboards`;
 
-      // Synthesis: Create a "Primary Analysis" entry for every dataset (The MASTER Session)
-      const primaryItems = dsList.map((ds: any) => {
-        const config = safeParse(ds.dashboard_config);
+      const dRes = await axios.get(dUrl, { headers: { Authorization: `Bearer ${token}` } });
+      const allDashboards = dRes.data.data || dRes.data || [];
 
-        let rowCount = ds.row_count || 0;
-        if (!rowCount && ds.raw_data) {
-          try {
-            const parsed = typeof ds.raw_data === 'string' ? JSON.parse(ds.raw_data) : ds.raw_data;
-            rowCount = Array.isArray(parsed) ? parsed.length : 0;
-          } catch (e) { rowCount = 0; }
-        }
+      const processed = allDashboards.map((d: any) => {
+        const layout = d.layout;
+        const chartsCount = layout?.charts?.length || 0;
+        const kpisCount = layout?.kpis?.length || 0;
 
-        const headers = ds.headers || [];
-        const defaultDesc = `Interactive analysis of ${rowCount.toLocaleString()} records across ${headers.length || 'multiple'} dimensions.`;
-
-        return {
-          id: `primary-${ds.id}`,
-          dataset_id: ds.id,
-          name: config?.name || ds.name + ' Master',
-          description: config?.description || defaultDesc,
-          isPrimary: true,
-          created_at: ds.created_at,
-          updated_at: ds.updated_at,
-          charts_count: config?.charts?.length || 0,
-          kpis_count: config?.kpis?.length || 0
-        };
-      });
-
-      // Synthesis: Process saved versions (The DASHBOARDS table)
-      const versionItems = allDashboards.filter((d: any) => d.layout?.type !== 'report').map((d: any) => {
-        const config = d.layout?.config;
         return {
           ...d,
-          name: d.name,
-          charts_count: config?.charts?.length || 0,
-          kpis_count: config?.kpis?.length || 0
+          charts_count: chartsCount || d.charts_count,
+          kpis_count: kpisCount || d.kpis_count
         };
       });
 
-      const combined = filterDatasetId
-        ? [
-          ...primaryItems.filter(p => String(p.dataset_id) === String(filterDatasetId)),
-          ...versionItems.filter((d: any) => String(d.layout?.dataset_id) === String(filterDatasetId))
-        ]
-        : [...primaryItems, ...versionItems];
-
-      setDashboards(combined as any);
-      setDatasets(dsList);
+      setDashboards(processed);
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -141,14 +102,16 @@ export const DashboardLibrary: React.FC = () => {
         {
           name: formData.name,
           description: formData.description,
-          layout: { dataset_id: formData.datasetId, config: null }
+          dataset_id: formData.datasetId,
+          is_primary: false,
+          layout: { charts: [], kpis: [], filters: [] }
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       const newDashboard = response.data.data || response.data;
       if (newDashboard.id) {
-        navigate(`/app/dashboard?id=${newDashboard.id}&workspace=${workspaceId}`);
+        navigate(`/app/dashboard?id=${newDashboard.id}&workspace=${workspaceId}&dataset=${formData.datasetId}`);
       } else {
         throw new Error('Dashboard created but no ID returned');
       }
@@ -315,10 +278,7 @@ export const DashboardLibrary: React.FC = () => {
                 className="group relative bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-white/5 overflow-hidden hover:shadow-2xl hover:shadow-indigo-500/10 transition-all cursor-pointer animate-in fade-in slide-in-from-bottom-4 duration-500"
                 style={{ animationDelay: `${i * 50}ms` }}
                 onClick={() => {
-                  const url = dash.isPrimary
-                    ? `/app/dashboard?dataset=${dash.dataset_id}&workspace=${workspaceId}`
-                    : `/app/dashboard?id=${dash.id}&workspace=${workspaceId}&dataset=${dash.layout?.dataset_id || filterDatasetId}`;
-                  navigate(url);
+                  navigate(`/app/dashboard?id=${dash.id}&workspace=${workspaceId}&dataset=${dash.dataset_id}`);
                 }}
               >
                 <div className="p-8">
