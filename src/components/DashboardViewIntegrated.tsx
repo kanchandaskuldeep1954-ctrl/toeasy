@@ -139,7 +139,7 @@ const DashboardViewIntegrated: React.FC = () => {
         dataQualitySource: sourceName as any,
         stats: dsData.stats || [],
         createdAt: dsData.created_at || new Date().toISOString(),
-        rowCount: rawData.length,
+        rowCount: finalData.length,
         quarantinedData: [],
         cleaningActions: [],
         dashboardConfig: entityHasConfig ? initialConfig : (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
