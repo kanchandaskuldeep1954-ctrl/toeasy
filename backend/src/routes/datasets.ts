@@ -142,24 +142,24 @@ router.get('/:workspaceId/datasets/:datasetId/versions', async (req: AuthRequest
       [datasetId]
     );
 
-    // If no versions exist but dataset does, synthesise a "v0 - Raw Original" from the main table
-    // (This handles legacy datasets that haven't been versioned yet)
-    if (result.rows.length === 0) {
-      const dsResult = await query('SELECT created_at FROM datasets WHERE id = $1', [datasetId]);
-      if (dsResult.rows.length > 0) {
-        return res.json([{
-          id: 'root', // Virtual ID
-          version_name: 'Raw Original',
-          description: 'Original upload (Legacy)',
-          row_count: 0,
-          created_by_tool: 'upload',
-          created_at: dsResult.rows[0].created_at,
-          isVirtual: true
-        }]);
-      }
+    const versions = result.rows;
+
+    // Always fetch dataset creation info to provide the "Raw Original" entry
+    const dsResult = await query('SELECT created_at FROM datasets WHERE id = $1', [datasetId]);
+
+    if (dsResult.rows.length > 0) {
+      versions.push({
+        id: 'root', // Virtual ID
+        version_name: 'Raw Original',
+        description: 'Original upload',
+        row_count: 0, // Could fetch actual count but '0' or 'Original' is fine for label
+        created_by_tool: 'upload',
+        created_at: dsResult.rows[0].created_at,
+        isVirtual: true
+      });
     }
 
-    res.json(result.rows);
+    res.json(versions);
   } catch (err) {
     console.error('List versions error:', err);
     res.status(500).json({ error: 'Failed to list versions' });
