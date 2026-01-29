@@ -42,6 +42,7 @@ import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
+import MetricsLibrary from './src/components/MetricsLibrary';
 
 // Legal & Public Pages
 import PublicLayout from './src/components/Layout/PublicLayout';
@@ -84,6 +85,7 @@ const AppLayout: React.FC = () => {
           <Route path="rules" element={<ValidationRulesManager />} />
           <Route path="quarantine" element={<QuarantineVault />} />
           <Route path="metrics" element={<UsageMetrics />} />
+          <Route path="metrics-library" element={<MetricsLibrary />} />
           <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
           <Route path="billing" element={<BillingViewIntegrated />} />
 

@@ -28,6 +28,7 @@ import integrationRoutes from './routes/integrations.js';
 import sharingRoutes from './routes/sharing.js';
 import tabsRoutes from './routes/tabs.js';
 import activityRoutes from './routes/activity.js';
+import metricsRoutes from './routes/metrics.js';
 
 const app = express();
 
@@ -117,6 +118,7 @@ app.use('/api/integrations', authenticateToken, integrationRoutes);
 app.use('/api/sharing', sharingRoutes); // Public share links (some routes require auth, some don't)
 app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 app.use('/api/activity', authenticateToken, activityRoutes); // Activity Log
+app.use('/api', metricsRoutes); // Metrics Library
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

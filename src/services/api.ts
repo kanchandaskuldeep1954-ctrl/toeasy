@@ -214,6 +214,36 @@ export const dashboardAPI = {
 };
 
 // ============================================
+// Metrics Library Endpoints
+// ============================================
+
+export const metricsAPI = {
+  list: (workspaceId: string, params?: { category?: string; certified?: boolean; search?: string }) =>
+    getClient().get(`/workspaces/${workspaceId}/metrics`, { params }),
+
+  get: (workspaceId: string, metricId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/metrics/${metricId}`),
+
+  create: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/metrics`, data),
+
+  update: (workspaceId: string, metricId: string, data: any) =>
+    getClient().put(`/workspaces/${workspaceId}/metrics/${metricId}`, data),
+
+  delete: (workspaceId: string, metricId: string) =>
+    getClient().delete(`/workspaces/${workspaceId}/metrics/${metricId}`),
+
+  certify: (workspaceId: string, metricId: string, certified: boolean) =>
+    getClient().patch(`/workspaces/${workspaceId}/metrics/${metricId}/certify`, { certified }),
+
+  getCategories: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/metrics/categories`),
+
+  trackUsage: (workspaceId: string, metricId: string, usage: { used_in_type: string; used_in_id: string | number }) =>
+    getClient().post(`/workspaces/${workspaceId}/metrics/${metricId}/track-usage`, usage)
+};
+
+// ============================================
 // Query Endpoints
 // ============================================
 
