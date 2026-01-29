@@ -46,7 +46,7 @@ export const ReportLibrary: React.FC = () => {
             ]);
 
             const reportEntities = rRes.data.data || [];
-            const dsList = dsRes.data || [];
+            const dsList = dsRes.data.data || [];
 
             // Synthesis: Primary Strategic Report for every dataset (Mocked if doesn't exist)
             const primaryReports = dsList.filter(ds => !reportEntities.some(r => String(r.dataset_id) === String(ds.id))).map((ds: any) => ({
