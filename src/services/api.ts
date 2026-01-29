@@ -203,6 +203,9 @@ export const dashboardAPI = {
   delete: (workspaceId: string, dashboardId: string) =>
     getClient().delete(`/workspaces/${workspaceId}/dashboards/${dashboardId}`),
 
+  get: (workspaceId: string, dashboardId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/dashboards/${dashboardId}`),
+
   getVersions: (workspaceId: string, dashboardId: string) =>
     getClient().get(`/workspaces/${workspaceId}/dashboards/${dashboardId}/versions`),
 
