@@ -1,3 +1,6 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useWorkspace } from '../hooks/useWorkspace';
 import { reportsAPI, datasetAPI } from '../services/api';
 
 interface StrategicReportEntity {
@@ -39,7 +42,7 @@ export const ReportLibrary: React.FC = () => {
             setLoading(true);
             const [rRes, dsRes] = await Promise.all([
                 reportsAPI.list(workspaceId, filterDatasetId || undefined),
-                datasetAPI.dataset.list(workspaceId)
+                datasetAPI.list(workspaceId)
             ]);
 
             const reportEntities = rRes.data.data || [];

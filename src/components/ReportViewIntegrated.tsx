@@ -1,3 +1,7 @@
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import ReportView from './ReportView';
+import { Dataset } from '../types';
 import { reportsAPI, datasetAPI } from '../services/api';
 
 const ReportViewIntegrated: React.FC = () => {
@@ -49,7 +53,7 @@ const ReportViewIntegrated: React.FC = () => {
 
             // 2. Fetch Dataset + Siblings
             const [dsRes, siblingsRes] = await Promise.all([
-                datasetAPI.dataset.get(workspaceId, targetDatasetId),
+                datasetAPI.get(workspaceId, targetDatasetId),
                 reportsAPI.list(workspaceId, targetDatasetId)
             ]);
 
