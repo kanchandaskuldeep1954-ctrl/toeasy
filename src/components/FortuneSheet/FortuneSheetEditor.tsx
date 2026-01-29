@@ -31,8 +31,6 @@ interface PendingHighlight {
     expiresAt: number;
 }
 
-// ... (rest of imports)
-
 const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
     data,
     headers,
@@ -46,6 +44,7 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
 }, ref) => {
     const [pendingHighlights, setPendingHighlights] = useState<PendingHighlight[]>([]);
     const currentDataRef = useRef<DataRow[]>(data);
+    const [refreshTick, setRefreshTick] = useState(0);
 
     // Build celldata from data + headers + issues + pending highlights
     // Using useMemo instead of useState + useEffect for immediate computation
@@ -58,7 +57,6 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
         console.log(`[FortuneSheet] Building celldata: ${data.length} rows, ${headers.length} columns`);
         currentDataRef.current = data;
 
-        // ... (rest of logic)
         const cellData: any[] = [];
         const now = Date.now();
         const activeHighlights = pendingHighlights.filter(h => h.expiresAt > now);
@@ -138,18 +136,71 @@ const FortuneSheetEditor = React.forwardRef<any, FortuneSheetEditorProps>(({
 
         console.log(`[FortuneSheet] Built ${cellData.length} cells`);
         return cellData;
-    }, [data, headers, issues, highlightIssues, pendingHighlights, theme]); // Added theme to deps
+    }, [data, headers, issues, highlightIssues, pendingHighlights, theme]);
 
-    // ... (rest of effects)
+    // Clean up expired highlights
+    useEffect(() => {
+        if (pendingHighlights.length === 0) return;
 
-    // Generate a unique key for forcing re-renders when data changes structurally OR when explicitly requested via lastUpdated
+        const timer = setTimeout(() => {
+            const now = Date.now();
+            setPendingHighlights(prev => prev.filter(h => h.expiresAt > now));
+        }, 1000);
+
+        return () => clearTimeout(timer);
+    }, [pendingHighlights]);
+
+    // Expose methods via ref
+    React.useImperativeHandle(ref, () => ({
+        getSheetData: () => currentDataRef.current,
+
+        animateCellFix: async (row: number, col: number, _oldVal: any, _newVal: any) => {
+            setPendingHighlights(prev => [
+                ...prev.filter(h => !(h.row === row && h.col === col)),
+                { row, col, expiresAt: Date.now() + 1500 }
+            ]);
+            if (onCellEdit) onCellEdit(row, col, _oldVal, _newVal);
+        },
+
+        setCellValue: (row: number, col: number, value: any) => {
+            setPendingHighlights(prev => [
+                ...prev.filter(h => !(h.row === row && h.col === col)),
+                { row, col, expiresAt: Date.now() + 1500 }
+            ]);
+            console.log(`[FortuneSheet] setCellValue: row=${row}, col=${col}, value=${value}`);
+        },
+
+        deleteRow: (row: number) => {
+            console.log(`[FortuneSheet] deleteRow: row=${row}`);
+            setRefreshTick(prev => prev + 1);
+        },
+
+        deleteColumn: (col: number) => {
+            console.log(`[FortuneSheet] deleteColumn: col=${col}`);
+            setRefreshTick(prev => prev + 1);
+        },
+
+        scrollToCell: (row: number, col: number) => {
+            console.log(`[FortuneSheet] scrollToCell: row=${row}, col=${col}`);
+        },
+
+        applyIssueHighlighting: () => {
+            // Highlights are applied via useMemo already
+        },
+
+        forceUpdate: (newData: DataRow[], newHeaders?: string[]) => {
+            currentDataRef.current = newData;
+            console.log('[FortuneSheet] forceUpdate called, bumping refreshTick');
+            setRefreshTick(prev => prev + 1);
+        }
+    }));
+
+    // Generate a unique key for forcing re-renders when data changes structurally OR when explicitly requested
     const componentKey = useMemo(() => {
-        // Use lastUpdated if provided, otherwise fallback to basic structural checks + data reference
-        // We include theme here to force full re-render on theme change if needed (though CSS filter handles most)
-        if (lastUpdated) return `fs-${lastUpdated}`;
-
-        return `fs-${data?.length || 0}-${headers?.length || 0}-${theme}`;
-    }, [data?.length, headers?.length, theme, lastUpdated]);
+        // We include refreshTick here to force a clean reload of the library component
+        if (lastUpdated) return `fs-${lastUpdated}-${refreshTick}`;
+        return `fs-${data?.length || 0}-${headers?.length || 0}-${theme}-${refreshTick}`;
+    }, [data?.length, headers?.length, theme, lastUpdated, refreshTick]);
 
     return (
         <div

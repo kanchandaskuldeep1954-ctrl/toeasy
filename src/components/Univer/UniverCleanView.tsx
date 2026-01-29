@@ -743,8 +743,17 @@ const UniverCleanView: React.FC = () => {
                 const newData = loadedVersion.data;
                 const newHeaders = loadedVersion.headers || Object.keys(newData[0] || {});
 
+                // Reset initializedRef to force AI re-analysis on the new version data
+                initializedRef.current = null;
+
                 // Update dataset context
-                const updatedDataset = { ...dataset, data: newData, headers: newHeaders };
+                const updatedDataset = {
+                    ...dataset,
+                    data: newData,
+                    raw_data: newData,
+                    headers: newHeaders,
+                    updated_at: new Date().toISOString() // Force timestamp update for reactivity
+                };
                 setActiveDataset(updatedDataset as any);
 
                 // Force FortuneSheet to re-render
@@ -754,6 +763,7 @@ const UniverCleanView: React.FC = () => {
 
                 // Clear old issues as they apply to the previous version
                 setIssues([]);
+                setSemantics(null); // Reset semantics to force re-analysis
                 setProcessingStatus(`Version "${version.version_name}" loaded`);
 
                 // Close panel
@@ -782,8 +792,18 @@ const UniverCleanView: React.FC = () => {
             if (data) {
                 const newHeaders = version.headers || Object.keys(data[0] || {});
 
+                // Reset initializedRef to force AI re-analysis
+                initializedRef.current = null;
+                setSemantics(null);
+
                 // Update dataset
-                const updatedDataset = { ...dataset, data: data, headers: newHeaders };
+                const updatedDataset = {
+                    ...dataset,
+                    data: data,
+                    raw_data: data,
+                    headers: newHeaders,
+                    updated_at: new Date().toISOString()
+                };
                 setActiveDataset(updatedDataset as any);
 
                 // Force sheet update
@@ -792,7 +812,7 @@ const UniverCleanView: React.FC = () => {
                 }
 
                 setIssues([]);
-                setDirty(true); // Mark as dirty logic handled by VersionContext implicitly if we want, but here we mark local dirty
+                setDirty(true);
                 setProcessingStatus(`Restored to "${version.version_name}"`);
                 setShowVersionPanel(false);
             }
@@ -968,9 +988,8 @@ const UniverCleanView: React.FC = () => {
                                     issues={issues}
                                     theme={theme as any}
                                     lastUpdated={
-                                        // Use either backend update timestamp OR a local tracking of changes
-                                        // We can use the last entry in changeHistory or dataset.updated_at
-                                        (dataset as any).updated_at || changeHistory.length
+                                        // Use either backend update timestamp OR version ID OR history length
+                                        (dataset as any).updated_at || currentVersion?.id || changeHistory.length || 'initial'
                                     }
                                     onCellEdit={(row, col, oldVal, newVal) => {
                                         if (isCleaningLive) return; // Skip updates during automated bulk cleaning
