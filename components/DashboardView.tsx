@@ -518,360 +518,395 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         </button>
                         <p className="text-[10px] text-slate-400 mt-4 uppercase tracking-widest font-bold opacity-50 italic">Generated analysis will be saved forever</p>
                     </div>
-                </div>
-            </div>
-        );
-    }
+                    const [forceManual, setForceManual] = useState(false);
 
-    const visibleCharts = config.charts || [];
+                    // Show drafting screen if no config OR (empty config AND not forced manual)
+                    const isEmptyConfig = config && (!config.charts || config.charts.length === 0) && (!config.kpis || config.kpis.length === 0);
+                    const showDrafting = !config || (isEmptyConfig && !forceManual);
 
-    return (
-        <div className={`h-full overflow-y-auto bg-slate-50 dark:bg-[#080c14] pb-40 relative no-scrollbar ${isCinematicMode ? 'overflow-hidden' : ''}`}>
-
-            {/* Version Commit Modal */}
-            {showVersionModal && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95">
-                        <div className="flex items-center gap-3 mb-4">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    if (showDrafting) {
+        return (
+                    <div className="h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#080c14] transition-colors p-6">
+                        <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
+                            <div className="w-24 h-24 bg-indigo-600/10 border-2 border-dashed border-indigo-500/30 rounded-[32px] flex items-center justify-center mx-auto group">
+                                <svg className="w-12 h-12 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
                             </div>
                             <div>
-                                <h3 className="text-lg font-bold text-slate-900 dark:text-white">Save Version</h3>
-                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Create a checkpoint</p>
+                                <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-3">Analysis Drafting</h2>
+                                <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed">
+                                    No visual insights have been drafted for this dataset yet. Use the Toeasy AI to automatically generate a professional dashboard.
+                                </p>
                             </div>
-                        </div>
-                        <input
-                            autoFocus
-                            value={versionName}
-                            onChange={(e) => setVersionName(e.target.value)}
-                            placeholder="Version Name (e.g. Q1 Review)"
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg p-3 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
-                        />
-                        <div className="flex justify-end gap-3">
-                            <button onClick={() => { setShowVersionModal(false); setVersionName(''); }} className="px-4 py-2 text-slate-500 hover:text-slate-900 dark:hover:text-white text-xs font-bold uppercase">Cancel</button>
-                            <button
-                                onClick={handleCommitVersion}
-                                disabled={!versionName.trim() || isCommitting}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase shadow-lg disabled:opacity-50 transition-all"
-                            >
-                                {isCommitting ? 'Saving...' : 'Save Checkpoint'}
-                            </button>
+                            <div className="pt-4 flex flex-col items-center gap-4">
+                                <button
+                                    onClick={() => loadOrGenerate(true)}
+                                    className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3"
+                                >
+                                    <span>✨ Generate Dashboard</span>
+                                </button>
+                                <button
+                                    onClick={() => setForceManual(true)}
+                                    className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hover:text-indigo-500 transition-colors"
+                                >
+                                    Start Manually →
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
+                    );
+    }
 
-            {/* Share Modal */}
-            {showShareModal && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
-                        <div className="flex justify-between items-start mb-6">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
-                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
-                                </div>
-                                <div>
-                                    <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Analysis</h3>
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Share this dashboard with anyone</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
-                            </button>
-                        </div>
+                    const visibleCharts = config.charts || [];
 
-                        <div className="space-y-8">
-                            {/* Premium Social Share Row */}
-                            <div className="flex justify-between gap-4">
-                                {socialShares.map((social) => (
-                                    <button
-                                        key={social.name}
-                                        onClick={() => social.action(shareUrl || '')}
-                                        className="flex-1 flex flex-col items-center gap-2 group"
-                                    >
-                                        <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center transition-all group-hover:scale-110 group-hover:shadow-lg" style={{ '--hover-color': social.color } as any}>
-                                            <svg className="w-6 h-6 transition-colors group-hover:text-[var(--hover-color)]" fill="currentColor" viewBox="0 0 24 24">
-                                                <path d={social.icon} />
-                                            </svg>
+                    return (
+                    <div className={`h-full overflow-y-auto bg-slate-50 dark:bg-[#080c14] pb-40 relative no-scrollbar ${isCinematicMode ? 'overflow-hidden' : ''}`}>
+
+                        {/* Version Commit Modal */}
+                        {showVersionModal && (
+                            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
+                                <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-200 dark:border-slate-700 animate-in zoom-in-95">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                         </div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
-                                            {social.name}
-                                        </span>
-                                    </button>
-                                ))}
-                                {(navigator as any).share && (
-                                    <button
-                                        onClick={handleNativeShare}
-                                        className="flex-1 flex flex-col items-center gap-2 group"
-                                    >
-                                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-lg group-hover:bg-indigo-500">
-                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                        <div>
+                                            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Save Version</h3>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Create a checkpoint</p>
                                         </div>
-                                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">More</span>
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="p-5 bg-slate-950/5 dark:bg-white/5 rounded-[24px] border border-slate-200/50 dark:border-white/5 flex flex-col gap-3">
-                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Magic Share Link</p>
-                                <div className="flex items-center gap-4">
+                                    </div>
                                     <input
-                                        readOnly
-                                        value={shareUrl || ''}
-                                        className="flex-1 bg-transparent border-none text-sm font-bold text-slate-900 dark:text-white outline-none truncate"
+                                        autoFocus
+                                        value={versionName}
+                                        onChange={(e) => setVersionName(e.target.value)}
+                                        placeholder="Version Name (e.g. Q1 Review)"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-600 rounded-lg p-3 text-sm text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-indigo-500 mb-4"
                                     />
-                                    <button
-                                        onClick={handleCopyLink}
-                                        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-105 active:scale-95'}`}
-                                    >
-                                        {copySuccess ? '✓ COPIED' : 'COPY'}
-                                    </button>
+                                    <div className="flex justify-end gap-3">
+                                        <button onClick={() => { setShowVersionModal(false); setVersionName(''); }} className="px-4 py-2 text-slate-500 hover:text-slate-900 dark:hover:text-white text-xs font-bold uppercase">Cancel</button>
+                                        <button
+                                            onClick={handleCommitVersion}
+                                            disabled={!versionName.trim() || isCommitting}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold uppercase shadow-lg disabled:opacity-50 transition-all"
+                                        >
+                                            {isCommitting ? 'Saving...' : 'Save Checkpoint'}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-200/50 dark:border-amber-900/20">
-                                <div className="flex gap-3">
-                                    <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                    <p className="text-xs text-amber-800 dark:text-amber-200/70 leading-relaxed font-medium">
-                                        This is a <strong>frozen snapshot</strong>. Any changes you make to this dashboard hereafter will not be reflected in this specific link. You will need to generate a new link to share updates.
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div className="flex gap-3">
-                                <a
-                                    href={shareUrl || '#'}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex-1 px-6 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-center hover:scale-[1.02] transition-all"
-                                >
-                                    Open Preview
-                                </a>
-                                <button
-                                    onClick={() => setShowShareModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                                >
-                                    Done
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ULTRA-SLIM PROFESSIONAL HEADER */}
-            <div className={`sticky top-0 z-[100] px-6 py-2.5 bg-white/60 dark:bg-slate-950/60 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 no-print transition-all`}>
-                <div className="flex items-center justify-between gap-6 max-w-[1800px] mx-auto">
-
-                    {/* Dashboard Identity */}
-                    <div className="flex items-center gap-3">
-                        {isEditingTitle ? (
-                            <input
-                                autoFocus
-                                value={dashboardName}
-                                onChange={e => setDashboardName(e.target.value)}
-                                onBlur={() => {
-                                    setIsEditingTitle(false);
-                                    if (onUpdate && config) onUpdate({ ...dataset, dashboardConfig: config });
-                                }}
-                                onKeyDown={e => e.key === 'Enter' && setIsEditingTitle(false)}
-                                className="text-sm font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded px-2 outline-none w-[200px]"
-                            />
-                        ) : (
-                            <h2 onClick={() => setIsEditingTitle(true)} className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white cursor-pointer hover:text-indigo-500 transition-all flex items-center gap-2 group">
-                                {dashboardName}
-                                <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            </h2>
                         )}
-                        {/* Save Status & Version Commit */}
-                        <div className="flex items-center gap-2 ml-2">
-                            {isSaving ? (
-                                <span className="text-[9px] font-bold text-indigo-400 animate-pulse flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
-                                    SAVING...
-                                </span>
-                            ) : lastSaved ? (
-                                <span className="text-[9px] font-bold text-emerald-500 flex items-center gap-1" title={`Last saved: ${lastSaved.toLocaleString()}`}>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    SAVED
-                                </span>
-                            ) : null}
-                            {dashboardId && (
-                                <button
-                                    onClick={() => setShowVersionModal(true)}
-                                    className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1 transition-colors"
-                                    title="Save a version checkpoint"
-                                >
-                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                    COMMIT
-                                </button>
-                            )}
-                        </div>
-                    </div>
 
-                    {/* Compact Filter Stack */}
-                    <div className="flex-1 flex items-center justify-center gap-2 overflow-x-auto no-scrollbar">
-                        <FilterPanel
-                            filters={config?.filters || []}
-                            activeFilters={activeFilters}
-                            onFilterChange={(col, val) => setActiveFilters(prev => ({ ...prev, [col]: val }))}
-                            onClearAll={() => setActiveFilters({})}
-                            onAddFilter={() => setIsFilterStudioOpen(true)}
-                            onRemoveFilter={handleRemoveFilter}
-                            isEditMode={isEditingFilters}
-                        />
-                        <button onClick={() => setIsEditingFilters(!isEditingFilters)} className={`p-1 rounded-lg transition-all ${isEditingFilters ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                        </button>
-                    </div>
+                        {/* Share Modal */}
+                        {showShareModal && (
+                            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
+                                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                            </div>
+                                            <div>
+                                                <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Analysis</h3>
+                                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Share this dashboard with anyone</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                        </button>
+                                    </div>
 
-                    {/* Pro Buttons */}
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => setIsForecastMode(!isForecastMode)} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-900 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
-                            <span>{isForecastMode ? 'FORECAST ACTIVE' : 'PREDICTIVE'}</span>
-                        </button>
-                        <button
-                            onClick={() => loadOrGenerate(true)}
-                            disabled={loading}
-                            className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50`}
-                        >
-                            <span>{loading ? 'REBUILDING...' : 'REBUILD AI'}</span>
-                        </button>
-                        <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all">BOARDROOM</button>
-                        <button
-                            onClick={handleShare}
-                            disabled={isSharing}
-                            className={`p-1.5 rounded-lg transition-colors ${isSharing ? 'animate-pulse bg-indigo-100 dark:bg-indigo-900/30' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
-                            title="Share Dashboard Link"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                            </svg>
-                        </button>
-                        <button onClick={() => setShowExportModal(true)} className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" />
-                            </svg>
-                        </button>
-                    </div>
-                </div>
-            </div>
+                                    <div className="space-y-8">
+                                        {/* Premium Social Share Row */}
+                                        <div className="flex justify-between gap-4">
+                                            {socialShares.map((social) => (
+                                                <button
+                                                    key={social.name}
+                                                    onClick={() => social.action(shareUrl || '')}
+                                                    className="flex-1 flex flex-col items-center gap-2 group"
+                                                >
+                                                    <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center transition-all group-hover:scale-110 group-hover:shadow-lg" style={{ '--hover-color': social.color } as any}>
+                                                        <svg className="w-6 h-6 transition-colors group-hover:text-[var(--hover-color)]" fill="currentColor" viewBox="0 0 24 24">
+                                                            <path d={social.icon} />
+                                                        </svg>
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                                                        {social.name}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                            {(navigator as any).share && (
+                                                <button
+                                                    onClick={handleNativeShare}
+                                                    className="flex-1 flex flex-col items-center gap-2 group"
+                                                >
+                                                    <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-lg group-hover:bg-indigo-500">
+                                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                                    </div>
+                                                    <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">More</span>
+                                                </button>
+                                            )}
+                                        </div>
 
-            {/* MAIN CONTENT CANVAS */}
-            <div className="p-6 md:p-10 max-w-[1800px] mx-auto space-y-10 animate-in fade-in duration-700">
+                                        <div className="p-5 bg-slate-950/5 dark:bg-white/5 rounded-[24px] border border-slate-200/50 dark:border-white/5 flex flex-col gap-3">
+                                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Magic Share Link</p>
+                                            <div className="flex items-center gap-4">
+                                                <input
+                                                    readOnly
+                                                    value={shareUrl || ''}
+                                                    className="flex-1 bg-transparent border-none text-sm font-bold text-slate-900 dark:text-white outline-none truncate"
+                                                />
+                                                <button
+                                                    onClick={handleCopyLink}
+                                                    className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-105 active:scale-95'}`}
+                                                >
+                                                    {copySuccess ? '✓ COPIED' : 'COPY'}
+                                                </button>
+                                            </div>
+                                        </div>
 
-                {/* Forensic Health Stripe */}
-                {dataQuality && (
-                    <div className="flex items-center gap-3 px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
-                        <div className={`w-2 h-2 rounded-full ${dataQuality.overallScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{dataQuality.overallScore}% Integrity Score • {filteredData.length.toLocaleString()} Operational Records • Active Filters: {Object.keys(activeFilters).length || 'None'}</span>
-                    </div>
-                )}
+                                        <div className="bg-amber-50 dark:bg-amber-900/10 p-4 rounded-2xl border border-amber-200/50 dark:border-amber-900/20">
+                                            <div className="flex gap-3">
+                                                <svg className="w-5 h-5 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                                <p className="text-xs text-amber-800 dark:text-amber-200/70 leading-relaxed font-medium">
+                                                    This is a <strong>frozen snapshot</strong>. Any changes you make to this dashboard hereafter will not be reflected in this specific link. You will need to generate a new link to share updates.
+                                                </p>
+                                            </div>
+                                        </div>
 
-                {/* KPI Strip */}
-                <div className="flex flex-wrap gap-4">
-                    {dynamicKPIs.map((kpi) => (
-                        <div key={kpi.id} className="min-w-[180px] flex-1">
-                            <KPICard kpi={kpi} dataset={dataset} columns={dataset.headers} onUpdate={handleUpdateKPI} onDelete={handleRemoveKPI} />
-                        </div>
-                    ))}
-                    <button onClick={handleAddKPI} className="px-6 py-4 rounded-[24px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">+ Metric</button>
-                </div>
-
-                {/* Unified Masonry Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8 pb-32">
-                    {visibleCharts.map((chart, i) => {
-                        const data = getChartData(chart);
-                        const isWide = i % 3 === 0;
-                        return (
-                            <div key={chart.id} className={`glass-card p-8 rounded-[32px] min-h-[480px] flex flex-col group relative ${isWide ? 'md:col-span-2' : ''} border border-slate-200 dark:border-white/5`}>
-                                <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
-                                    <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                                </div>
-                                <div className="mb-8">
-                                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{chart.title}</h3>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{chart.description || `Relational context: ${chart.xAxis} vs ${chart.yAxis}`}</p>
-                                </div>
-                                <div className="flex-1 w-full relative min-h-[300px]">
-                                    <PlotlyChart chart={injectChartConfig(chart)} data={data} onClick={(data) => handleChartClick(data, chart)} />
+                                        <div className="flex gap-3">
+                                            <a
+                                                href={shareUrl || '#'}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex-1 px-6 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-center hover:scale-[1.02] transition-all"
+                                            >
+                                                Open Preview
+                                            </a>
+                                            <button
+                                                onClick={() => setShowShareModal(false)}
+                                                className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                                            >
+                                                Done
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        );
-                    })}
+                        )}
 
-                    <button onClick={() => setIsCreatingNew(true)} className="bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[480px]">
-                        <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-4xl">+</span></div>
-                        <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
-                    </button>
-                </div>
-            </div>
+                        {/* ULTRA-SLIM PROFESSIONAL HEADER */}
+                        <div className={`sticky top-0 z-[100] px-6 py-2.5 bg-white/60 dark:bg-slate-950/60 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 no-print transition-all`}>
+                            <div className="flex items-center justify-between gap-6 max-w-[1800px] mx-auto">
 
-            {/* Global Perspective AI (Floating Input) */}
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[200]">
-                <div className="bg-slate-900 dark:bg-white p-1.5 rounded-full shadow-3xl flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-inner">
-                        {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /> : <span className="text-lg text-slate-900 dark:text-white">✨</span>}
-                    </div>
-                    <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
-                        <input value={dashboardPrompt} onChange={e => setDashboardPrompt(e.target.value)} placeholder="Describe a chart to build..." className="w-full bg-transparent border-none outline-none text-sm font-medium text-white dark:text-slate-900 placeholder-white/30 dark:placeholder-slate-400" />
-                    </form>
-                    <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50">Draft</button>
-                </div>
-            </div>
+                                {/* Dashboard Identity */}
+                                <div className="flex items-center gap-3">
+                                    {isEditingTitle ? (
+                                        <input
+                                            autoFocus
+                                            value={dashboardName}
+                                            onChange={e => setDashboardName(e.target.value)}
+                                            onBlur={() => {
+                                                setIsEditingTitle(false);
+                                                if (onUpdate && config) onUpdate({ ...dataset, dashboardConfig: config });
+                                            }}
+                                            onKeyDown={e => e.key === 'Enter' && setIsEditingTitle(false)}
+                                            className="text-sm font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded px-2 outline-none w-[200px]"
+                                        />
+                                    ) : (
+                                        <h2 onClick={() => setIsEditingTitle(true)} className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white cursor-pointer hover:text-indigo-500 transition-all flex items-center gap-2 group">
+                                            {dashboardName}
+                                            <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                        </h2>
+                                    )}
+                                    {/* Save Status & Version Commit */}
+                                    <div className="flex items-center gap-2 ml-2">
+                                        {isSaving ? (
+                                            <span className="text-[9px] font-bold text-indigo-400 animate-pulse flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
+                                                SAVING...
+                                            </span>
+                                        ) : lastSaved ? (
+                                            <span className="text-[9px] font-bold text-emerald-500 flex items-center gap-1" title={`Last saved: ${lastSaved.toLocaleString()}`}>
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                                SAVED
+                                            </span>
+                                        ) : null}
+                                        {dashboardId && (
+                                            <button
+                                                onClick={() => setShowVersionModal(true)}
+                                                className="px-2 py-1 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-lg text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase flex items-center gap-1 transition-colors"
+                                                title="Save a version checkpoint"
+                                            >
+                                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                COMMIT
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
 
-            {/* Modal Components */}
-            {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
-            {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
-
-            {/* Filter Studio Overlay */}
-            {isFilterStudioOpen && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-[48px] p-12 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/5 animate-in zoom-in-95">
-                        <div className="flex justify-between items-start mb-10">
-                            <div><h3 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Filter Studio</h3><p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Select dimensions for slicing</p></div>
-                            <button onClick={() => setIsFilterStudioOpen(false)} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">✕</button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
-                            {dataset.headers.map(col => {
-                                const active = config?.filters?.some(f => f.column === col);
-                                return (
-                                    <button key={col} disabled={active} onClick={() => handleAddFilter(col)} className={`flex items-center justify-between p-5 rounded-3xl border transition-all text-left group ${active ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-50' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-indigo-500/10'}`}>
-                                        <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[11px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">{col.substring(0, 2).toUpperCase()}</div><span className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-300">{col}</span></div>
-                                        {active ? <span className="text-[10px] font-black text-slate-400">IN USE</span> : <span className="text-[10px] font-black text-indigo-500 opacity-0 group-hover:opacity-100">ENABLE +</span>}
+                                {/* Compact Filter Stack */}
+                                <div className="flex-1 flex items-center justify-center gap-2 overflow-x-auto no-scrollbar">
+                                    <FilterPanel
+                                        filters={config?.filters || []}
+                                        activeFilters={activeFilters}
+                                        onFilterChange={(col, val) => setActiveFilters(prev => ({ ...prev, [col]: val }))}
+                                        onClearAll={() => setActiveFilters({})}
+                                        onAddFilter={() => setIsFilterStudioOpen(true)}
+                                        onRemoveFilter={handleRemoveFilter}
+                                        isEditMode={isEditingFilters}
+                                    />
+                                    <button onClick={() => setIsEditingFilters(!isEditingFilters)} className={`p-1 rounded-lg transition-all ${isEditingFilters ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
                                     </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
+                                </div>
 
-            {/* Boardroom Overlay */}
-            {isCinematicMode && (
-                <div className="fixed inset-0 z-[400] bg-white dark:bg-[#040810] flex flex-col p-12 animate-in fade-in duration-700">
-                    <div className="flex justify-between items-center mb-16">
-                        <div className="flex items-center gap-4"><div className="w-14 h-14 rounded-3xl bg-indigo-600 flex items-center justify-center text-3xl shadow-2xl">🎬</div><div><h1 className="text-3xl font-black uppercase text-slate-900 dark:text-white leading-none">The Boardroom</h1><p className="text-[10px] text-slate-500 mt-2 uppercase tracking-[0.3em] font-black">Strategic Intelligence Series</p></div></div>
-                        <button onClick={() => setIsCinematicMode(false)} className="w-14 h-14 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center max-w-7xl mx-auto w-full">
-                        <div className="w-full glass-card !p-16 rounded-[64px] shadow-4xl flex-1 flex flex-col bg-white/50 dark:bg-slate-900/50">
-                            <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-12 text-center">{visibleCharts[activeCinematicIndex]?.title}</h2>
-                            <div className="flex-1 min-h-[400px]"><PlotlyChart chart={injectChartConfig(visibleCharts[activeCinematicIndex])} data={getChartData(visibleCharts[activeCinematicIndex])} height={600} /></div>
+                                {/* Pro Buttons */}
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setIsForecastMode(!isForecastMode)} className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${isForecastMode ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/30' : 'bg-slate-100 dark:bg-slate-900 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}>
+                                        <span>{isForecastMode ? 'FORECAST ACTIVE' : 'PREDICTIVE'}</span>
+                                    </button>
+                                    <button
+                                        onClick={() => loadOrGenerate(true)}
+                                        disabled={loading}
+                                        className={`px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50`}
+                                    >
+                                        <span>{loading ? 'REBUILDING...' : 'REBUILD AI'}</span>
+                                    </button>
+                                    <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all">BOARDROOM</button>
+                                    <button
+                                        onClick={handleShare}
+                                        disabled={isSharing}
+                                        className={`p-1.5 rounded-lg transition-colors ${isSharing ? 'animate-pulse bg-indigo-100 dark:bg-indigo-900/30' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white'}`}
+                                        title="Share Dashboard Link"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                                        </svg>
+                                    </button>
+                                    <button onClick={() => setShowExportModal(true)} className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <div className="flex justify-center gap-10 py-12">
-                        <button disabled={activeCinematicIndex === 0} onClick={() => setActiveCinematicIndex(prev => prev - 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
-                        <div className="flex gap-4 items-center">
-                            {visibleCharts.slice(0, 8).map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === activeCinematicIndex ? 'w-12 bg-indigo-600' : 'w-2 bg-slate-200 dark:bg-slate-800'}`} />)}
+
+                        {/* MAIN CONTENT CANVAS */}
+                        <div className="p-6 md:p-10 max-w-[1800px] mx-auto space-y-10 animate-in fade-in duration-700">
+
+                            {/* Forensic Health Stripe */}
+                            {dataQuality && (
+                                <div className="flex items-center gap-3 px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
+                                    <div className={`w-2 h-2 rounded-full ${dataQuality.overallScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{dataQuality.overallScore}% Integrity Score • {filteredData.length.toLocaleString()} Operational Records • Active Filters: {Object.keys(activeFilters).length || 'None'}</span>
+                                </div>
+                            )}
+
+                            {/* KPI Strip */}
+                            <div className="flex flex-wrap gap-4">
+                                {dynamicKPIs.map((kpi) => (
+                                    <div key={kpi.id} className="min-w-[180px] flex-1">
+                                        <KPICard kpi={kpi} dataset={dataset} columns={dataset.headers} onUpdate={handleUpdateKPI} onDelete={handleRemoveKPI} />
+                                    </div>
+                                ))}
+                                <button onClick={handleAddKPI} className="px-6 py-4 rounded-[24px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">+ Metric</button>
+                            </div>
+
+                            {/* Unified Masonry Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8 pb-32">
+                                {visibleCharts.map((chart, i) => {
+                                    const data = getChartData(chart);
+                                    const isWide = i % 3 === 0;
+                                    return (
+                                        <div key={chart.id} className={`glass-card p-8 rounded-[32px] min-h-[480px] flex flex-col group relative ${isWide ? 'md:col-span-2' : ''} border border-slate-200 dark:border-white/5`}>
+                                            <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
+                                                <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                                            </div>
+                                            <div className="mb-8">
+                                                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{chart.title}</h3>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{chart.description || `Relational context: ${chart.xAxis} vs ${chart.yAxis}`}</p>
+                                            </div>
+                                            <div className="flex-1 w-full relative min-h-[300px]">
+                                                <PlotlyChart chart={injectChartConfig(chart)} data={data} onClick={(data) => handleChartClick(data, chart)} />
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+
+                                <button onClick={() => setIsCreatingNew(true)} className="bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[480px]">
+                                    <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-4xl">+</span></div>
+                                    <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
+                                </button>
+                            </div>
                         </div>
-                        <button disabled={activeCinematicIndex === visibleCharts.length - 1} onClick={() => setActiveCinematicIndex(prev => prev + 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
+
+                        {/* Global Perspective AI (Floating Input) */}
+                        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[200]">
+                            <div className="bg-slate-900 dark:bg-white p-1.5 rounded-full shadow-3xl flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-inner">
+                                    {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /> : <span className="text-lg text-slate-900 dark:text-white">✨</span>}
+                                </div>
+                                <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
+                                    <input value={dashboardPrompt} onChange={e => setDashboardPrompt(e.target.value)} placeholder="Describe a chart to build..." className="w-full bg-transparent border-none outline-none text-sm font-medium text-white dark:text-slate-900 placeholder-white/30 dark:placeholder-slate-400" />
+                                </form>
+                                <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50">Draft</button>
+                            </div>
+                        </div>
+
+                        {/* Modal Components */}
+                        {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
+                        {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
+
+                        {/* Filter Studio Overlay */}
+                        {isFilterStudioOpen && (
+                            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
+                                <div className="bg-white dark:bg-slate-900 rounded-[48px] p-12 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/5 animate-in zoom-in-95">
+                                    <div className="flex justify-between items-start mb-10">
+                                        <div><h3 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Filter Studio</h3><p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Select dimensions for slicing</p></div>
+                                        <button onClick={() => setIsFilterStudioOpen(false)} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">✕</button>
+                                    </div>
+                                    <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
+                                        {dataset.headers.map(col => {
+                                            const active = config?.filters?.some(f => f.column === col);
+                                            return (
+                                                <button key={col} disabled={active} onClick={() => handleAddFilter(col)} className={`flex items-center justify-between p-5 rounded-3xl border transition-all text-left group ${active ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-50' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-indigo-500/10'}`}>
+                                                    <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[11px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">{col.substring(0, 2).toUpperCase()}</div><span className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-300">{col}</span></div>
+                                                    {active ? <span className="text-[10px] font-black text-slate-400">IN USE</span> : <span className="text-[10px] font-black text-indigo-500 opacity-0 group-hover:opacity-100">ENABLE +</span>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Boardroom Overlay */}
+                        {isCinematicMode && (
+                            <div className="fixed inset-0 z-[400] bg-white dark:bg-[#040810] flex flex-col p-12 animate-in fade-in duration-700">
+                                <div className="flex justify-between items-center mb-16">
+                                    <div className="flex items-center gap-4"><div className="w-14 h-14 rounded-3xl bg-indigo-600 flex items-center justify-center text-3xl shadow-2xl">🎬</div><div><h1 className="text-3xl font-black uppercase text-slate-900 dark:text-white leading-none">The Boardroom</h1><p className="text-[10px] text-slate-500 mt-2 uppercase tracking-[0.3em] font-black">Strategic Intelligence Series</p></div></div>
+                                    <button onClick={() => setIsCinematicMode(false)} className="w-14 h-14 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                                </div>
+                                <div className="flex-1 flex flex-col items-center justify-center max-w-7xl mx-auto w-full">
+                                    <div className="w-full glass-card !p-16 rounded-[64px] shadow-4xl flex-1 flex flex-col bg-white/50 dark:bg-slate-900/50">
+                                        <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-12 text-center">{visibleCharts[activeCinematicIndex]?.title}</h2>
+                                        <div className="flex-1 min-h-[400px]"><PlotlyChart chart={injectChartConfig(visibleCharts[activeCinematicIndex])} data={getChartData(visibleCharts[activeCinematicIndex])} height={600} /></div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-center gap-10 py-12">
+                                    <button disabled={activeCinematicIndex === 0} onClick={() => setActiveCinematicIndex(prev => prev - 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
+                                    <div className="flex gap-4 items-center">
+                                        {visibleCharts.slice(0, 8).map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === activeCinematicIndex ? 'w-12 bg-indigo-600' : 'w-2 bg-slate-200 dark:bg-slate-800'}`} />)}
+                                    </div>
+                                    <button disabled={activeCinematicIndex === visibleCharts.length - 1} onClick={() => setActiveCinematicIndex(prev => prev + 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                    );
 
 };
 
-export default DashboardView;
+                    export default DashboardView;
