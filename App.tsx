@@ -43,7 +43,6 @@ import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 import MetricsLibrary from './src/components/MetricsLibrary';
-import AlertsManager from './src/components/AlertsManager';
 
 // Legal & Public Pages
 import PublicLayout from './src/components/Layout/PublicLayout';
@@ -87,7 +86,6 @@ const AppLayout: React.FC = () => {
           <Route path="quarantine" element={<QuarantineVault />} />
           <Route path="metrics" element={<UsageMetrics />} />
           <Route path="metrics-library" element={<MetricsLibrary />} />
-          <Route path="alerts" element={<AlertsManager />} />
           <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
           <Route path="billing" element={<BillingViewIntegrated />} />
 

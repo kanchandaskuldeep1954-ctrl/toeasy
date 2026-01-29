@@ -29,8 +29,6 @@ import sharingRoutes from './routes/sharing.js';
 import tabsRoutes from './routes/tabs.js';
 import activityRoutes from './routes/activity.js';
 import metricsRoutes from './routes/metrics.js';
-import alertsRoutes from './routes/alerts.js';
-import notificationRoutes from './routes/notifications.js';
 import reportRoutes from './routes/reports.js';
 
 const app = express();
@@ -123,8 +121,6 @@ app.use('/api/sharing', sharingRoutes); // Public share links (some routes requi
 app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 app.use('/api/activity', authenticateToken, activityRoutes); // Activity Log
 app.use('/api', metricsRoutes); // Metrics Library
-app.use('/api', alertsRoutes); // Alerts
-app.use('/api/notifications', notificationRoutes); // Notifications
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

@@ -1,7 +1,6 @@
 import React from 'react';
 import Sidebar from './Sidebar';
 import WorkspaceTabs from '../WorkspaceTabs';
-import NotificationCenter from '../NotificationCenter';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -44,7 +43,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <div className="flex items-center justify-between pr-4 bg-white border-b border-gray-200">
                     <WorkspaceTabs />
                     <div className="flex items-center gap-2">
-                        <NotificationCenter />
                         <button
                             onClick={() => setShowActivity(!showActivity)}
                             className={`hidden lg:flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${showActivity
