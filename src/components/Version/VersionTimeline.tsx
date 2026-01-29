@@ -9,11 +9,10 @@
  * - Restore and compare actions
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { GitBranch, Clock, FileText, Undo2, GitCompare, Check, User, Wrench, ChevronDown, ChevronUp } from 'lucide-react';
 import { Version, VersionTimelineProps } from './types';
-import axios from 'axios';
-import { useAuth } from '../../hooks/useAuth';
+import { useVersion } from '../../context/VersionContext';
 
 const TOOL_ICONS: Record<string, React.ReactNode> = {
     upload: <FileText className="w-3.5 h-3.5" />,
