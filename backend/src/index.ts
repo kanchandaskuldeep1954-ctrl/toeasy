@@ -31,6 +31,7 @@ import activityRoutes from './routes/activity.js';
 import metricsRoutes from './routes/metrics.js';
 import alertsRoutes from './routes/alerts.js';
 import notificationRoutes from './routes/notifications.js';
+import reportRoutes from './routes/reports.js';
 
 const app = express();
 
@@ -108,6 +109,7 @@ app.get('/api/test-db', async (req, res) => {
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/workspaces', datasetRoutes);
 app.use('/api/workspaces', dashboardRoutes);
+app.use('/api/workspaces', reportRoutes);
 app.use('/api/workspaces', queryRoutes); // includes /workspaces/:id/datasets/:id/query
 app.use('/api/workspaces', validationRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);

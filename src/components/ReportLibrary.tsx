@@ -1,8 +1,4 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
-import { useWorkspace } from '../hooks/useWorkspace';
-import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import { reportsAPI, datasetAPI } from '../services/api';
 
 interface StrategicReportEntity {
     id: string;
@@ -10,13 +6,14 @@ interface StrategicReportEntity {
     user_id: string;
     name: string;
     description?: string;
-    layout: any;
+    current_content: any;
+    dataset_id: string;
+    version_count?: number;
     created_at: string;
     updated_at: string;
 }
 
 export const ReportLibrary: React.FC = () => {
-    const { token } = useAuth();
     const { activeWorkspace } = useWorkspace();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
@@ -31,30 +28,25 @@ export const ReportLibrary: React.FC = () => {
     const [formData, setFormData] = useState({ name: '', description: '', datasetId: filterDatasetId });
     const [submitting, setSubmitting] = useState(false);
 
-    const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
     useEffect(() => {
         if (workspaceId) {
             loadAll();
         }
-    }, [token, workspaceId]);
+    }, [workspaceId]);
 
     const loadAll = async () => {
         try {
             setLoading(true);
-            // We store reports in the dashboards table with a type tag in the layout
-            const [dRes, dsRes] = await Promise.all([
-                axios.get(`${backendUrl}/workspaces/${workspaceId}/dashboards`, { headers: { Authorization: `Bearer ${token}` } }),
-                axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } })
+            const [rRes, dsRes] = await Promise.all([
+                reportsAPI.list(workspaceId, filterDatasetId || undefined),
+                datasetAPI.dataset.list(workspaceId)
             ]);
 
-            const allDashboards = dRes.data.data || [];
+            const reportEntities = rRes.data.data || [];
             const dsList = dsRes.data || [];
 
-            const reportEntities = allDashboards.filter((d: any) => d.layout?.type === 'report');
-
-            // Synthesis: Primary Strategic Report for every dataset
-            const primaryReports = dsList.map((ds: any) => ({
+            // Synthesis: Primary Strategic Report for every dataset (Mocked if doesn't exist)
+            const primaryReports = dsList.filter(ds => !reportEntities.some(r => String(r.dataset_id) === String(ds.id))).map((ds: any) => ({
                 id: `primary-${ds.id}`,
                 dataset_id: ds.id,
                 name: `${ds.name} Master`,
@@ -64,18 +56,14 @@ export const ReportLibrary: React.FC = () => {
                 updated_at: ds.updated_at
             }));
 
-            const combined = filterDatasetId
-                ? [
-                    ...primaryReports.filter(p => String(p.dataset_id) === String(filterDatasetId)),
-                    ...reportEntities.filter((r: any) => String(r.layout?.dataset_id) === String(filterDatasetId))
-                ]
-                : [...primaryReports, ...reportEntities];
+            const combined = [...primaryReports, ...reportEntities];
 
             setReports(combined as any);
             setDatasets(dsList);
             setError(null);
         } catch (err) {
             console.error('Error fetching reports:', err);
+            setError('Failed to load reports library');
         } finally {
             setLoading(false);
         }
@@ -90,19 +78,17 @@ export const ReportLibrary: React.FC = () => {
 
         try {
             setSubmitting(true);
-            const response = await axios.post(
-                `${backendUrl}/workspaces/${workspaceId}/dashboards`,
-                {
-                    name: formData.name.trim(),
-                    description: formData.description,
-                    layout: { type: 'report', dataset_id: formData.datasetId, report: null }
-                },
-                { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const res = await reportsAPI.create(workspaceId, {
+                name: formData.name.trim(),
+                description: formData.description,
+                dataset_id: formData.datasetId,
+                content: {}
+            });
 
-            const newReport = response.data;
+            const newReport = res.data.data;
             navigate(`/app/report?id=${newReport.id}&workspace=${workspaceId}`);
         } catch (err) {
+            console.error(err);
             setError('Failed to create report');
         } finally {
             setSubmitting(false);
@@ -112,9 +98,8 @@ export const ReportLibrary: React.FC = () => {
     const handleDeleteReport = async (id: string) => {
         if (!window.confirm('Delete this strategic report?')) return;
         try {
-            await axios.delete(`${backendUrl}/workspaces/${workspaceId}/dashboards/${id}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            // Need to add delete to reportsAPI
+            await (reportsAPI as any).delete(workspaceId, id);
             setReports(reports.filter(r => r.id !== id));
         } catch (err) {
             setError('Failed to delete report');

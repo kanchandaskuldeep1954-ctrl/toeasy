@@ -260,6 +260,32 @@ export const alertsAPI = {
     getClient().post(`/workspaces/${workspaceId}/alerts/check`)
 };
 
+export const reportsAPI = {
+  list: (workspaceId: string, datasetId?: string) =>
+    getClient().get(`/workspaces/${workspaceId}/reports`, { params: { datasetId } }),
+
+  get: (workspaceId: string, id: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/reports/${id}`),
+
+  create: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/reports`, data),
+
+  update: (workspaceId: string, id: string | number, data: any) =>
+    getClient().put(`/workspaces/${workspaceId}/reports/${id}`, data),
+
+  listVersions: (workspaceId: string, id: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/reports/${id}/versions`),
+
+  saveVersion: (workspaceId: string, id: string | number, data: { change_summary: string }) =>
+    getClient().post(`/workspaces/${workspaceId}/reports/${id}/versions`, data),
+
+  restoreVersion: (workspaceId: string, id: string | number, versionId: string | number) =>
+    getClient().post(`/workspaces/${workspaceId}/reports/${id}/restore/${versionId}`),
+
+  delete: (workspaceId: string, id: string | number) =>
+    getClient().delete(`/workspaces/${workspaceId}/reports/${id}`)
+};
+
 export const notificationsAPI = {
   list: (unreadOnly = false) =>
     getClient().get(`/notifications`, { params: { unreadOnly } }),
