@@ -143,50 +143,83 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     }, []);
 
     const loadOrGenerate = async (force: boolean = false) => {
-        // PRESERVE USER WORK: Never auto-AI if a config already exists, unless forced
-        if (!force && dataset.dashboardConfig) {
-            setConfig(dataset.dashboardConfig);
-            setLoading(false);
-            return;
-        }
-
-        // If no force and no config, we just show the "Empty / Draft" state
-        if (!force && !dataset.dashboardConfig) {
-            setLoading(false);
-            return;
-        }
-
         setLoading(true);
         try {
+            // PRIORITY 1: Load from backend API if dashboardId is available
+            if (propDashboardId && workspaceId && !force) {
+                try {
+                    const res = await dashboardAPI.get(workspaceId, propDashboardId);
+                    const dash = res.data?.data || res.data;
+                    if (dash && dash.layout) {
+                        setConfig(dash.layout);
+                        setDashboardName(dash.name || cleanName + ' Dashboard');
+                        setDashboardId(dash.id);
+                        setLoading(false);
+                        return;
+                    }
+                } catch (apiErr) {
+                    console.warn('Could not load dashboard from API, falling back to dataset config:', apiErr);
+                }
+            }
+
+            // PRIORITY 2: Load from dataset.dashboardConfig (legacy support)
+            if (!force && dataset.dashboardConfig) {
+                setConfig(dataset.dashboardConfig);
+                if (dataset.dashboardConfig.name) setDashboardName(dataset.dashboardConfig.name);
+                setLoading(false);
+                return;
+            }
+
+            // PRIORITY 3: If no config and not forced, show empty draft state
+            if (!force && !dataset.dashboardConfig) {
+                setLoading(false);
+                return;
+            }
+
+            // GENERATE NEW DASHBOARD (when force=true)
             if (onAIAction) onAIAction();
             const generatedConfig = await GroqService.suggestDashboard(dataset);
             if (!isMounted.current) return;
 
-            // Apply the generated name from AI if available
             if (generatedConfig.name) setDashboardName(generatedConfig.name);
-
             setConfig(generatedConfig);
 
-            // PERSIST IMMEDIATELY
+            // Try to persist to backend as new dashboard
+            if (workspaceId) {
+                try {
+                    const createRes = await dashboardAPI.create(workspaceId, {
+                        name: generatedConfig.name || (cleanName + ' Dashboard'),
+                        dataset_id: dataset.id,
+                        is_primary: true,
+                        layout: generatedConfig
+                    });
+                    const newDash = createRes.data?.data || createRes.data;
+                    if (newDash?.id) setDashboardId(newDash.id);
+                } catch (persistErr) {
+                    console.warn('Failed to persist generated dashboard:', persistErr);
+                }
+            }
+
+            // Legacy callback
             if (onUpdate) onUpdate({ ...dataset, dashboardConfig: generatedConfig });
         } catch (e) {
-            console.error('AI Draft Error:', e);
+            console.error('Dashboard Load/Generate Error:', e);
         } finally {
             if (isMounted.current) setLoading(false);
         }
     };
 
     useEffect(() => {
-        // Sync name but don't overwrite user's custom name if config exists
-        if (!dataset.dashboardConfig) {
+        // Sync name
+        if (!dataset.dashboardConfig && !propDashboardId) {
             setDashboardName(cleanName + ' Dashboard');
-        } else if (dataset.dashboardConfig.name) {
+        } else if (dataset.dashboardConfig?.name) {
             setDashboardName(dataset.dashboardConfig.name);
         }
 
-        // Auto-load strictly from DB
+        // Trigger load
         loadOrGenerate(false);
-    }, [dataset.id, dataset.name]);
+    }, [dataset.id, propDashboardId]);
 
     useEffect(() => {
         if (!config || !dataset) return;
