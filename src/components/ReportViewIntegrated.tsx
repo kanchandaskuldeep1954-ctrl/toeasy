@@ -139,7 +139,16 @@ const ReportViewIntegrated: React.FC = () => {
                     dataset_id: datasetId || '',
                     content: dataset.strategicReport
                 });
-                activeReportId = createRes.data.data.id;
+                const newReport = createRes.data.data;
+                activeReportId = newReport.id;
+
+                // Create the FIRST version immediately so history is not empty
+                await reportsAPI.saveVersion(workspaceId, activeReportId, {
+                    change_summary: versionNote || 'Initial Draft Snapshot'
+                });
+
+                setVersionNote('');
+                setIsSavingVersion(false);
 
                 // Redirect to the new report view to enable versioning context
                 navigate(`/app/report?id=${activeReportId}&workspace=${workspaceId}&dataset=${datasetId}`);

@@ -659,7 +659,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         onClick={() => setSelectionOverlay(null)} // Click outside to close
                     >
                         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest w-fit mb-6 print:hidden">
-                            Intelligence Report v{report.version}
+                            Report Version {report.version || '1.0'}
                         </div>
                         <h1 className="text-5xl md:text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-[0.9] mb-8">
                             {report.title}
