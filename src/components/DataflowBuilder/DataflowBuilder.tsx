@@ -98,6 +98,8 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
             id: c.id,
             source: c.sourceId,
             target: c.targetId,
+            sourceHandle: c.sourceHandle,
+            targetHandle: c.targetHandle,
             animated: true,
             style: { stroke: '#6366f1', strokeWidth: 2 },
         }));
@@ -154,7 +156,7 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
     // Connection Handler
     const onConnect = useCallback(
-        (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, style: { stroke: '#6366f1', strokeWidth: 2 } }, eds)),
+        (params: Connection) => setEdges((eds) => addEdge({ ...params, animated: true, className: '', style: { stroke: '#6366f1', strokeWidth: 2 } }, eds)),
         [setEdges]
     );
 
@@ -187,21 +189,22 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
 
         if (aiPrompt.toLowerCase().includes('clean') || aiPrompt.toLowerCase().includes('fix')) {
             newNodes.push({ id: 'ai-2', type: 'custom', position: { x, y }, data: { type: 'clean', name: 'AI Cleaning', description: 'Smart cleaning rules', config: { mode: 'auto' }, status: 'pending' } });
-            newEdges.push({ id: 'e1', source: 'ai-1', target: 'ai-2', animated: true, style: { stroke: '#6366f1' } });
+            newEdges.push({ id: 'e1', source: 'ai-1', target: 'ai-2', sourceHandle: 'data', targetHandle: 'input', animated: true, style: { stroke: '#6366f1' } });
             x += 250;
         }
 
         if (aiPrompt.toLowerCase().includes('report')) {
+            const prevNode = newNodes[newNodes.length - 1]; // Get the last added node
             newNodes.push({ id: 'ai-3', type: 'custom', position: { x, y }, data: { type: 'report', name: 'Generate Report', description: 'Financial & Strat Report', config: {}, status: 'pending' } });
-            // Connect to last node
-            newEdges.push({ id: 'e2', source: newNodes[newNodes.length - 2].id, target: 'ai-3', animated: true, style: { stroke: '#6366f1' } });
+            newEdges.push({ id: 'e2', source: prevNode.id, target: 'ai-3', sourceHandle: prevNode.data.type === 'clean' ? 'output' : 'data', targetHandle: 'input', animated: true, style: { stroke: '#6366f1' } });
             x += 250;
         }
 
         // Always end with export if mentioned
         if (aiPrompt.toLowerCase().includes('export') || aiPrompt.toLowerCase().includes('save')) {
+            const prevNode = newNodes[newNodes.length - 1]; // Get the last added node
             newNodes.push({ id: 'ai-4', type: 'custom', position: { x, y }, data: { type: 'export', name: 'Export Result', description: 'Save as CSV', config: {}, status: 'pending' } });
-            newEdges.push({ id: 'e3', source: newNodes[newNodes.length - 2].id, target: 'ai-4', animated: true, style: { stroke: '#6366f1' } });
+            newEdges.push({ id: 'e3', source: prevNode.id, target: 'ai-4', sourceHandle: prevNode.data.type === 'report' ? 'report' : (prevNode.data.type === 'clean' ? 'output' : 'data'), targetHandle: 'input', animated: true, style: { stroke: '#6366f1' } });
         }
 
         setNodes(newNodes);
@@ -229,23 +232,62 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
     };
 
     const handleRun = async () => {
+        if (isRunning || nodes.length === 0) return;
         setIsRunning(true);
-        setEdges(eds => eds.map(e => ({ ...e, className: '' }))); // Reset pulses
 
-        // Simulate execution
-        const updateStatus = (id: string, status: string) => {
-            setNodes(nds => nds.map(n => n.id === id ? { ...n, data: { ...n.data, status } } : n));
+        // Reset all statuses 
+        setNodes(nds => nds.map(n => ({ ...n, data: { ...n.data, status: 'pending' } })));
+        setEdges(eds => eds.map(e => ({ ...e, className: '', animated: false })));
+
+        const findStartNodes = () => {
+            const nodeIdsWithIncoming = new Set(edges.map(e => e.target));
+            return nodes.filter(n =>
+                !nodeIdsWithIncoming.has(n.id) ||
+                ['upload', 'webhook', 'ai_creator', 'dataset_creator'].includes(n.data.type)
+            );
         };
 
-        for (const node of nodes) {
-            updateStatus(node.id, 'running');
-            // Animate outgoing edges to show "data traveling"
-            setEdges(eds => eds.map(e => e.source === node.id ? { ...e, className: 'edge-pulse' } : e));
+        const executeNode = async (nodeId: string) => {
+            setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'running' } } : n));
 
-            await new Promise(r => setTimeout(r, 1200 + Math.random() * 800));
-            updateStatus(node.id, 'completed');
+            // Artificial delay to simulate "thinking" or "processing"
+            const node = nodes.find(n => n.id === nodeId);
+            const baseDelay = 1500;
+            const randomDelay = Math.random() * 1000;
+            await new Promise(r => setTimeout(r, baseDelay + randomDelay));
+
+            setNodes(nds => nds.map(n => n.id === nodeId ? { ...n, data: { ...n.data, status: 'completed' } } : n));
+
+            // Find outgoing edges
+            const outgoingEdges = edges.filter(e => e.source === nodeId);
+
+            // Logic for branching nodes (like 'if')
+            let activeEdges = outgoingEdges;
+            if (node?.data.type === 'if') {
+                // Mock: randomly pick true or false for demo
+                const result = Math.random() > 0.5 ? 'true' : 'false';
+                activeEdges = outgoingEdges.filter(e => e.sourceHandle === result);
+            }
+
+            // Animate and trigger next nodes
+            for (const edge of activeEdges) {
+                setEdges(eds => eds.map(e => e.id === edge.id ? { ...e, className: 'edge-pulse', animated: true } : e));
+                // Small delay for "traveling" effect
+                await new Promise(r => setTimeout(r, 600));
+                await executeNode(edge.target);
+            }
+        };
+
+        const startNodes = findStartNodes();
+
+        try {
+            // Run all start nodes in parallel
+            await Promise.all(startNodes.map(n => executeNode(n.id)));
+        } catch (err) {
+            console.error('Execution failed:', err);
+        } finally {
+            setIsRunning(false);
         }
-        setIsRunning(false);
     };
 
     return (
@@ -578,6 +620,39 @@ const DataflowBuilderContent: React.FC<DataflowBuilderProps> = ({
                     </div>
                 </div>
             )}
+
+            <style>{`
+                .edge-pulse {
+                    stroke-dasharray: 8px;
+                    stroke-dashoffset: 0;
+                    animation: dash 1s linear infinite;
+                    stroke: #6366f1 !important;
+                    stroke-width: 3px !important;
+                    filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.5));
+                }
+
+                @keyframes dash {
+                    to {
+                        stroke-dashoffset: -16px;
+                    }
+                }
+
+                @keyframes shimmer {
+                    100% {
+                        transform: translateX(100%);
+                    }
+                }
+
+                .react-flow__handle {
+                    width: 8px;
+                    height: 8px;
+                    border: 2px solid white;
+                }
+
+                .react-flow__edge-path {
+                    transition: stroke-width 0.3s;
+                }
+            `}</style>
         </div>
     );
 };
