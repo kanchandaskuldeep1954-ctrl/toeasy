@@ -16,6 +16,7 @@ import {
     hideTooltip,
     createGradient
 } from './chartUtils';
+import { EmptyChartState } from './EmptyChartState';
 import { sanitizeForChart, getQualityBadge } from '../../utils/dataGuardian';
 
 interface LineChartProps {
@@ -56,11 +57,19 @@ const D3LineChart: React.FC<LineChartProps> = ({
             sanitizedData: result.data.map(d => ({ label: d.label, value: d.value, type: d.originalRow?.type })) as DataPoint[],
             quality: result.quality,
             hasIssues: result.hasIssues
-        };
-    }, [data]);
+        return {
+                sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
+                quality: result.quality,
+                hasIssues: result.hasIssues
+            };
+        }, [data]);
+
+    if (!sanitizedData || sanitizedData.length === 0) {
+        return <EmptyChartState height={height} message="No valid data for Line Chart" />;
+    }
 
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !sanitizedData || sanitizedData.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();

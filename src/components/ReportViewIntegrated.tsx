@@ -25,6 +25,34 @@ const ReportViewIntegrated: React.FC = () => {
     const [showHistory, setShowHistory] = useState(false);
     const [isSavingVersion, setIsSavingVersion] = useState(false);
     const [versionNote, setVersionNote] = useState('');
+    const [isAIModalOpen, setIsAIModalOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState('');
+    const [isAiProcessing, setIsAiProcessing] = useState(false);
+
+    const handleAiSubmit = async () => {
+        if (!aiPrompt.trim() || !dataset || !dataset.strategicReport) return;
+        setIsAiProcessing(true);
+        try {
+            const reportData = reportEntity ? { ...reportEntity, sections: dataset.strategicReport.sections } : { sections: dataset.strategicReport.sections };
+            const res = await reportsAPI.modify(dataset, reportData, aiPrompt);
+            const modifiedReport = res.data;
+
+            if (modifiedReport && modifiedReport.sections) {
+                setActiveDataset({
+                    ...dataset,
+                    strategicReport: modifiedReport
+                });
+                setIsAIModalOpen(false);
+                setAiPrompt('');
+                alert('AI Adjustment applied to current draft!');
+            }
+        } catch (e) {
+            console.error('AI Adjustment failed:', e);
+            alert('AI failed to adjust the report. Please try again.');
+        } finally {
+            setIsAiProcessing(false);
+        }
+    };
 
     useEffect(() => {
         if (workspaceId && (datasetId || reportId)) {

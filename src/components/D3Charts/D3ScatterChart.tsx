@@ -12,6 +12,8 @@ import {
     showTooltip,
     hideTooltip
 } from './chartUtils';
+import { EmptyChartState } from './EmptyChartState';
+import { parseNumericSafe } from '../../utils/dataGuardian';
 
 interface ScatterDataPoint {
     x: number;
@@ -49,8 +51,29 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: height });
 
+    // Data Guardian: Sanitize incoming data
+    const { sanitizedData, quality, hasIssues } = useMemo(() => {
+        const result = sanitizeForChart(data, 'x', 'y', { removeInvalid: true, maxItems: 500 });
+        return {
+            sanitizedData: result.data.map(d => ({
+                ...d,
+                x: d.x,
+                y: d.y,
+                z: d.z,
+                label: d.label,
+                category: d.category
+            })) as ScatterDataPoint[],
+            quality: result.quality,
+            hasIssues: result.hasIssues
+        };
+    }, [data]);
+
+    if (!sanitizedData || sanitizedData.length === 0) {
+        return <EmptyChartState height={height} message="No valid data for Scatter Chart" />;
+    }
+
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !data || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();
@@ -69,8 +92,8 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
         const tooltip = createTooltip();
 
         // Scales
-        const xExtent = d3.extent(data, d => d.x) as [number, number];
-        const yExtent = d3.extent(data, d => d.y) as [number, number];
+        const xExtent = d3.extent(sanitizedData, d => d.x) as [number, number];
+        const yExtent = d3.extent(sanitizedData, d => d.y) as [number, number];
 
         const x = d3.scaleLinear()
             .domain([xExtent[0] * 0.9, xExtent[1] * 1.1])
@@ -81,13 +104,13 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
             .range([innerHeight, 0]);
 
         // Size scale for bubbles
-        const zExtent = d3.extent(data, d => d.z || 100) as [number, number];
+        const zExtent = d3.extent(sanitizedData, d => d.z || 100) as [number, number];
         const sizeScale = d3.scaleSqrt()
             .domain(zExtent)
             .range([5, 30]);
 
         // Color scale for categories
-        const categories = Array.from(new Set(data.map(d => d.category || 'default')));
+        const categories = Array.from(new Set(sanitizedData.map(d => d.category || 'default')));
         const colorScale = d3.scaleOrdinal<string>()
             .domain(categories)
             .range(CHART_COLORS);
@@ -148,7 +171,7 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
 
         // Draw points
         const points = g.selectAll('.point')
-            .data(data)
+            .data(sanitizedData)
             .enter()
             .append('circle')
             .attr('class', 'point')
@@ -186,7 +209,7 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
                 hideTooltip(tooltip);
             })
             .on('click', function (event, d) {
-                if (onPointClick) onPointClick(d, data.indexOf(d));
+                if (onPointClick) onPointClick(d, sanitizedData.indexOf(d));
             });
 
         // Animate points
@@ -225,7 +248,7 @@ const D3ScatterChart: React.FC<ScatterChartProps> = ({
         return () => {
             tooltip.remove();
         };
-    }, [data, dimensions, xLabel, yLabel, showBubbles, colorByCategory, onPointClick, animate]);
+    }, [sanitizedData, dimensions, xLabel, yLabel, showBubbles, colorByCategory, onPointClick, animate]);
 
     useEffect(() => {
         if (!containerRef.current) return;

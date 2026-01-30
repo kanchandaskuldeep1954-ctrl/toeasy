@@ -16,6 +16,7 @@ import {
     hideTooltip,
     createGradient
 } from './chartUtils';
+import { EmptyChartState } from './EmptyChartState';
 import { sanitizeForChart, getQualityBadge } from '../../utils/dataGuardian';
 
 interface BarChartProps {
@@ -56,11 +57,20 @@ const D3BarChart: React.FC<BarChartProps> = ({
             sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
             quality: result.quality,
             hasIssues: result.hasIssues
-        };
-    }, [data]);
+        return {
+                sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
+                quality: result.quality,
+                hasIssues: result.hasIssues
+            };
+        }, [data]);
+
+    // Render empty state if no valid data
+    if (!sanitizedData || sanitizedData.length === 0) {
+        return <EmptyChartState height={height} message="No valid data for Bar Chart" />;
+    }
 
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !sanitizedData || sanitizedData.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();

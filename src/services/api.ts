@@ -267,7 +267,10 @@ export const reportsAPI = {
     getClient().post(`/workspaces/${workspaceId}/reports/${id}/restore/${versionId}`),
 
   delete: (workspaceId: string, id: string | number) =>
-    getClient().delete(`/workspaces/${workspaceId}/reports/${id}`)
+    getClient().delete(`/workspaces/${workspaceId}/reports/${id}`),
+
+  modify: (dataset: any, report: any, instruction: string) =>
+    getClient().post(`/modify-report`, { dataset, report, instruction })
 };
 
 // ============================================
