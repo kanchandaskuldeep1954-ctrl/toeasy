@@ -760,7 +760,7 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       // Fallback: If no charts assigned, distribute them
       const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
-      const unusedCharts = charts.filter(c => !usedChartIds.has(c.id));
+      const unusedCharts = charts.filter((c: any) => !usedChartIds.has(c.id));
 
       if (unusedCharts.length > 0) {
         // distribute unused charts to sections
