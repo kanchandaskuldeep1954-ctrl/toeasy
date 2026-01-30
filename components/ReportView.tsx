@@ -8,7 +8,6 @@ import PlotlyChart from './Dashboard/PlotlyChart';
 import { sharingAPI, activityAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
 import { ExportModal } from '../src/components/ExportHub';
-import { ExportService } from '../src/services/exportService';
 
 interface ReportViewProps {
     dataset: Dataset;
