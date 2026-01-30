@@ -128,7 +128,7 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
                 x: xFinal,
                 y: yFinal,
                 z: zVal ?? 100,
-                name: row[dataset.headers[0]]
+                name: row[headers?.[0] || '']
             };
         }).slice(0, 500);
     }
@@ -154,7 +154,7 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
     // --- Sunburst Logic (Hierarchical) ---
     if (chart.type === 'sunburst') {
         const childCol = xAxis; // Usually the leaf
-        const parentCol = (chart as any).options?.parents || dataset.headers.find(h => h !== childCol && h !== yAxis);
+        const parentCol = (chart as any).options?.parents || (headers || []).find((h: string) => h !== childCol && h !== yAxis);
 
         const map = new Map<string, { value: number, parent: string }>();
         filteredData.forEach(row => {
