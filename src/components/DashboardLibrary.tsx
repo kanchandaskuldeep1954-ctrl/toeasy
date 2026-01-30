@@ -41,12 +41,6 @@ export const DashboardLibrary: React.FC = () => {
 
   const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
-  const [pagination, setPagination] = useState({
-    offset: 0,
-    limit: 20,
-    hasMore: true
-  });
-
   useEffect(() => {
     if (workspaceId) {
       loadDashboards(true);
