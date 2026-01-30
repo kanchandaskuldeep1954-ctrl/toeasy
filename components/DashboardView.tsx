@@ -120,13 +120,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
 
             const col = kpi.calculation.column;
             const op = kpi.calculation.operation;
-            const values = filteredData.map(r => Number(r[col])).filter(n => !isNaN(n));
+            const parseSafe = (val: any) => {
+                if (typeof val === 'number') return val;
+                if (!val) return NaN;
+                const clean = String(val).replace(/[$,%]/g, '').trim();
+                return parseFloat(clean);
+            };
+
+            const values = filteredData.map(r => parseSafe(r[col])).filter(n => !isNaN(n));
 
             let newVal = 0;
             if (op === 'sum') newVal = values.reduce((a, b) => a + b, 0);
             else if (op === 'avg') newVal = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
             else if (op === 'count') newVal = filteredData.length;
-            else if (op === 'max') newVal = Math.max(...values, 0);
+            else if (op === 'max') newVal = values.length ? Math.max(...values) : 0;
             else if (op === 'min') newVal = values.length ? Math.min(...values) : 0;
             else if (op === 'unique') newVal = new Set(filteredData.map(r => r[col])).size;
 

@@ -59,7 +59,7 @@ export class GroqService {
     console.log(`[Cleaning Engine] Processing ${(dataset.data || []).length} rows with ${rules.length} rules`);
 
     // Combine main data and any previously quarantined data
-    let pool = JSON.parse(JSON.stringify([...(dataset.data || []), ...(dataset.quarantinedData || [])])) as DataRow[];
+    let pool = (typeof structuredClone === 'function' ? structuredClone([...(dataset.data || []), ...(dataset.quarantinedData || [])]) : JSON.parse(JSON.stringify([...(dataset.data || []), ...(dataset.quarantinedData || [])]))) as DataRow[];
 
     // Initialize metadata for all rows
     pool.forEach(row => {

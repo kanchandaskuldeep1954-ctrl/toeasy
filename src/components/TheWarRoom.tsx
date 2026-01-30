@@ -47,7 +47,10 @@ const TheWarRoom: React.FC = () => {
 
             // Calculate health score
             if (reportItems.length > 0) {
-                const totalScore = reportItems.reduce((acc: number, r: any) => acc + (r.score || 80), 0);
+                const totalScore = reportItems.reduce((acc: number, r: any) => {
+                    const s = typeof r.score === 'number' ? r.score : parseFloat(String(r.score).replace(/[^0-9.]/g, '')) || 0;
+                    return acc + s;
+                }, 0);
                 setHealthScore(Math.round(totalScore / reportItems.length));
             } else {
                 setHealthScore(0);

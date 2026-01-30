@@ -54,12 +54,15 @@ const PlaygroundViewIntegrated: React.FC = () => {
   // Layout
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState<'table' | 'chart' | 'messages'>('table');
-  const [editorMode, setEditorMode] = useState<'ask' | 'sql' | 'script'>('ask');
+  const [editorMode, setEditorMode] = useState<'ask' | 'sql' | 'script' | 'python'>('ask');
+  const [pyodide, setPyodide] = useState<any>(null);
+  const [isPythonLoading, setIsPythonLoading] = useState(false);
 
   // Query & Data
   const [query, setQuery] = useState(''); // Natural language
   const [sqlQuery, setSqlQuery] = useState('SELECT * FROM data LIMIT 10');
   const [scriptCode, setScriptCode] = useState('// Transform your data using JS\n// Available: data (Array of Objects)\n\nreturn data.filter(row => row.price > 100);');
+  const [pythonCode, setPythonCode] = useState('import pandas as pd\nimport numpy as np\n\n# Your data is available as \'df\' (pandas DataFrame)\nprint("Analyzing dataset with Python...")\nprint(df.describe())\n\n# Return the result as a list of dicts for the table view\nresult = df.head(10).to_dict(\'records\')');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +89,29 @@ const PlaygroundViewIntegrated: React.FC = () => {
       loadDatasetPreview();
     }
   }, [workspaceId, datasetId, token]);
+
+  const initPyodide = async () => {
+    if (pyodide) return pyodide;
+    setIsPythonLoading(true);
+    try {
+      const p = await (window as any).loadPyodide();
+      await p.loadPackage(['pandas', 'numpy']);
+      setPyodide(p);
+      return p;
+    } catch (err) {
+      console.error('Failed to load Pyodide:', err);
+      setError('Failed to initialize Python environment. Please check your internet connection.');
+      return null;
+    } finally {
+      setIsPythonLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (editorMode === 'python' && !pyodide) {
+      initPyodide();
+    }
+  }, [editorMode]);
 
   useEffect(() => {
     if (workspaceId && queryId && token) {
@@ -203,6 +229,48 @@ const PlaygroundViewIntegrated: React.FC = () => {
           return; // Exit early, no backend call needed
         } catch (scriptErr: any) {
           throw new Error(`Script Execution Failed: ${scriptErr.message}`);
+        }
+      }
+
+      if (editorMode === 'python') {
+        const p = await initPyodide();
+        if (!p) throw new Error("Python environment not ready.");
+
+        try {
+          // Flatten data for pandas if needed, but standard array of objects works best
+          const currentData = dataset?.data || [];
+          if (!currentData || currentData.length === 0) throw new Error("No data available for Python analysis.");
+
+          // Inject data into Python
+          p.globals.set('raw_data', currentData);
+          await p.runPythonAsync(`
+import pandas as pd
+import json
+df = pd.DataFrame(raw_data)
+`);
+
+          // Clear previous stdout
+          let logs: string[] = [];
+          p.setStdout({ batched: (str: string) => logs.push(str) });
+
+          // Run user code
+          await p.runPythonAsync(pythonCode);
+
+          // Extract result
+          const pyResult = p.globals.get('result');
+          const finalResult = pyResult ? (typeof pyResult.toJs === 'function' ? pyResult.toJs() : pyResult) : [];
+
+          // Format result (if Proxy or other Pyodide type)
+          const cleanResult = Array.isArray(finalResult) ? finalResult : [];
+
+          setResults(cleanResult);
+          setExecutionTime(Math.round(performance.now() - startTime));
+          setRowCount(cleanResult.length);
+          if (logs.length > 0) setExplanation(`Python Output:\n${logs.join('\n')}`);
+          setLoading(false);
+          return;
+        } catch (pyErr: any) {
+          throw new Error(`Python Execution Failed: ${pyErr.message}`);
         }
       }
 
@@ -491,6 +559,14 @@ const PlaygroundViewIntegrated: React.FC = () => {
                 >
                   <div className="font-mono text-[10px] font-black">{'{}'}</div>
                   <span>JS Script</span>
+                </button>
+                <button
+                  onClick={() => setEditorMode('python')}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${editorMode === 'python' ? 'bg-white dark:bg-slate-700 shadow text-amber-600 dark:text-amber-400' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  <div className="font-mono text-[10px] font-black">PY</div>
+                  <span>Python (Pandas)</span>
+                  {isPythonLoading && <div className="animate-spin rounded-full h-3 w-3 border border-amber-500/20 border-t-amber-500" />}
                 </button>
               </div>
             </div>
