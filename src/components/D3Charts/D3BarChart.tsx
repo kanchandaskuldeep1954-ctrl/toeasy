@@ -1,9 +1,10 @@
 /**
  * D3 Bar Chart Component
  * Interactive bar chart with animations, tooltips, and cross-filtering support
+ * Now with Data Guardian Layer for reliability
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import {
     DataPoint,
@@ -15,6 +16,7 @@ import {
     hideTooltip,
     createGradient
 } from './chartUtils';
+import { sanitizeForChart, getQualityBadge } from '../../utils/dataGuardian';
 
 interface BarChartProps {
     data: DataPoint[];
@@ -47,8 +49,18 @@ const D3BarChart: React.FC<BarChartProps> = ({
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: height });
 
+    // Data Guardian: Sanitize incoming data
+    const { sanitizedData, quality, hasIssues } = useMemo(() => {
+        const result = sanitizeForChart(data, 'label', 'value', { removeInvalid: true, maxItems: 50 });
+        return {
+            sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
+            quality: result.quality,
+            hasIssues: result.hasIssues
+        };
+    }, [data]);
+
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !data || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || !sanitizedData || sanitizedData.length === 0 || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();
@@ -74,11 +86,11 @@ const D3BarChart: React.FC<BarChartProps> = ({
         if (horizontal) {
             // Horizontal bar chart
             const x = d3.scaleLinear()
-                .domain([0, d3.max(data, d => d.value) || 0])
+                .domain([0, d3.max(sanitizedData, d => d.value) || 0])
                 .range([0, dim.innerWidth]);
 
             const y = d3.scaleBand()
-                .domain(data.map(d => d.label))
+                .domain(sanitizedData.map(d => d.label))
                 .range([0, dim.innerHeight])
                 .padding(0.3);
 
@@ -99,7 +111,7 @@ const D3BarChart: React.FC<BarChartProps> = ({
 
             // Bars
             const bars = g.selectAll('.bar')
-                .data(data)
+                .data(sanitizedData)
                 .enter()
                 .append('rect')
                 .attr('class', 'bar')
@@ -140,7 +152,7 @@ const D3BarChart: React.FC<BarChartProps> = ({
             // Value labels
             if (showValues) {
                 g.selectAll('.value-label')
-                    .data(data)
+                    .data(sanitizedData)
                     .enter()
                     .append('text')
                     .attr('class', 'value-label')
@@ -160,12 +172,12 @@ const D3BarChart: React.FC<BarChartProps> = ({
         } else {
             // Vertical bar chart
             const x = d3.scaleBand()
-                .domain(data.map(d => d.label))
+                .domain(sanitizedData.map(d => d.label))
                 .range([0, dim.innerWidth])
                 .padding(0.3);
 
             const y = d3.scaleLinear()
-                .domain([0, d3.max(data, d => d.value) || 0])
+                .domain([0, d3.max(sanitizedData, d => d.value) || 0])
                 .nice()
                 .range([dim.innerHeight, 0]);
 
@@ -196,7 +208,7 @@ const D3BarChart: React.FC<BarChartProps> = ({
 
             // Bars
             const bars = g.selectAll('.bar')
-                .data(data)
+                .data(sanitizedData)
                 .enter()
                 .append('rect')
                 .attr('class', 'bar')
@@ -239,7 +251,7 @@ const D3BarChart: React.FC<BarChartProps> = ({
             // Value labels on top
             if (showValues) {
                 g.selectAll('.value-label')
-                    .data(data)
+                    .data(sanitizedData)
                     .enter()
                     .append('text')
                     .attr('class', 'value-label')
@@ -282,9 +294,19 @@ const D3BarChart: React.FC<BarChartProps> = ({
     }, [drawChart]);
 
     return (
-        <div ref={containerRef} className="w-full h-full">
+        <div ref={containerRef} className="w-full h-full relative">
             {title && (
-                <div className="text-sm font-bold text-slate-300 mb-2">{title}</div>
+                <div className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+                    {title}
+                    {hasIssues && (
+                        <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 cursor-help"
+                            title={`Data Quality: ${quality.qualityScore}% - ${quality.warnings.join(', ')}`}
+                        >
+                            {getQualityBadge(quality.qualityLevel).emoji} {quality.qualityScore}%
+                        </span>
+                    )}
+                </div>
             )}
             <svg ref={svgRef} className="w-full" style={{ height }} />
         </div>

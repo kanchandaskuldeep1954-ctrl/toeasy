@@ -22,9 +22,11 @@ export interface WorkspaceContextType {
   addWorkspace: (workspace: { name: string; description?: string }) => Promise<void>;
   updateWorkspace: (id: number, updates: { name?: string; description?: string }) => Promise<void>;
   removeWorkspace: (id: number) => Promise<void>;
-  fetchWorkspaces: () => Promise<void>;
+  fetchWorkspaces: (reset?: boolean) => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  hasMore: boolean;
+  loadMoreWorkspaces: () => void;
 }
 
 export const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -36,6 +38,14 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchedRef = useRef(false);
+
+  // Pagination State
+  const [pagination, setPagination] = useState({
+    offset: 0,
+    limit: 100,
+    total: 0,
+    hasMore: true
+  });
 
   // Load active workspace from localStorage on mount (as a hint)
   useEffect(() => {
@@ -50,26 +60,44 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     }
   }, []);
 
-  const fetchWorkspaces = useCallback(async () => {
+  const fetchWorkspaces = useCallback(async (reset = true) => {
     if (!token) return;
     try {
       setLoading(true);
-      const response = await workspaceAPI.list();
-      const data = response.data || [];
-      setWorkspaces(data);
+      const currentOffset = reset ? 0 : pagination.offset;
+      const response = await workspaceAPI.list(pagination.limit, currentOffset);
 
-      // Sync active workspace using functional update to avoid circular dependency
-      setActiveWorkspaceState((currentActive) => {
-        if (!currentActive) return null;
-        const current = data.find((ws: Workspace) => ws.id === currentActive.id);
-        if (current) {
-          localStorage.setItem('active_workspace', JSON.stringify(current));
-          return current;
-        } else {
-          localStorage.removeItem('active_workspace');
-          return null;
-        }
-      });
+      const data = response.data.data || []; // API returns { data, total, limit, offset, hasMore }
+      const meta = response.data;
+
+      if (reset) {
+        setWorkspaces(data);
+      } else {
+        setWorkspaces(prev => [...prev, ...data]);
+      }
+
+      setPagination(prev => ({
+        ...prev,
+        offset: meta.offset + meta.limit,
+        total: meta.total,
+        hasMore: meta.hasMore
+      }));
+
+      // Sync active workspace (only on initial load/reset)
+      if (reset) {
+        setActiveWorkspaceState((currentActive) => {
+          if (!currentActive) return null;
+          const current = data.find((ws: Workspace) => ws.id === currentActive.id);
+          if (current) {
+            localStorage.setItem('active_workspace', JSON.stringify(current));
+            return current;
+          } else {
+            // Keep it if it's not in the first page? Or clear it? 
+            // For now, let's keep it in local state even if not in first page list
+            return currentActive;
+          }
+        });
+      }
       setError(null);
     } catch (err: any) {
       setError(err.message || 'Failed to fetch workspaces');
@@ -77,14 +105,21 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     } finally {
       setLoading(false);
     }
-  }, [token]); // Removed activeWorkspace dependency
+  }, [token, pagination.limit, pagination.offset]); // Added pagination deps
+
+  const loadMoreWorkspaces = useCallback(() => {
+    if (!isLoading && pagination.hasMore) {
+      fetchWorkspaces(false);
+    }
+  }, [isLoading, pagination.hasMore, fetchWorkspaces]);
 
   // Initial fetch when token changes
   useEffect(() => {
     if (token && !fetchedRef.current) {
-      fetchWorkspaces();
+      fetchWorkspaces(true);
       fetchedRef.current = true;
-    } else if (!token) {
+    }
+    else if (!token) {
       setWorkspaces([]);
       setActiveWorkspaceState(null);
       fetchedRef.current = false;
@@ -181,7 +216,9 @@ export const WorkspaceProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         removeWorkspace,
         fetchWorkspaces,
         setLoading,
-        setError
+        setError,
+        hasMore: pagination.hasMore,
+        loadMoreWorkspaces
       }}
     >
       {children}

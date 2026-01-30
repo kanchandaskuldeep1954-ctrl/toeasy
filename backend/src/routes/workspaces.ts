@@ -12,12 +12,27 @@ router.use(checkSubscription);
 // List workspaces for user
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const result = await query(
-      'SELECT id, name, description, created_at FROM workspaces WHERE user_id = $1 AND is_archived = false ORDER BY created_at DESC',
+    const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
+    const offset = parseInt(req.query.offset as string) || 0;
+
+    const countResult = await query(
+      'SELECT COUNT(*) as total FROM workspaces WHERE user_id = $1 AND is_archived = false',
       [req.user!.id]
     );
+    const total = parseInt(countResult.rows[0].total);
 
-    res.json(result.rows);
+    const result = await query(
+      'SELECT id, name, description, created_at FROM workspaces WHERE user_id = $1 AND is_archived = false ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+      [req.user!.id, limit, offset]
+    );
+
+    res.json({
+      data: result.rows,
+      total,
+      limit,
+      offset,
+      hasMore: offset + limit < total
+    });
   } catch (err) {
     console.error('List workspaces error:', err);
     res.status(500).json({ error: 'Internal server error' });

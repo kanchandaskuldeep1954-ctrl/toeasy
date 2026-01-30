@@ -31,25 +31,37 @@ export const ReportLibrary: React.FC = () => {
     const [formData, setFormData] = useState({ name: '', description: '', datasetId: filterDatasetId });
     const [submitting, setSubmitting] = useState(false);
 
+    const [pagination, setPagination] = useState({
+        offset: 0,
+        limit: 20,
+        hasMore: true
+    });
+
     useEffect(() => {
         if (workspaceId) {
-            loadAll();
+            loadReports(true);
         }
     }, [workspaceId]);
 
-    const loadAll = async () => {
+    const loadReports = async (reset = true) => {
         try {
             setLoading(true);
+            const currentOffset = reset ? 0 : pagination.offset;
+            const limit = pagination.limit;
+
             const [rRes, dsRes] = await Promise.all([
-                reportsAPI.list(workspaceId, filterDatasetId || undefined),
-                datasetAPI.list(workspaceId)
+                reportsAPI.list(workspaceId, filterDatasetId || undefined, limit, currentOffset),
+                datasetAPI.list(workspaceId, limit, currentOffset)
             ]);
 
-            const reportEntities = rRes.data.data || [];
-            const dsList = dsRes.data.data || [];
+            const reportData = rRes.data;
+            const reportEntities = reportData.data || [];
 
-            // Synthesis: Primary Strategic Report for every dataset (Mocked if doesn't exist)
-            const primaryReports = dsList.filter(ds => !reportEntities.some(r => String(r.dataset_id) === String(ds.id))).map((ds: any) => ({
+            const dsData = dsRes.data;
+            const dsList = dsData.data || [];
+
+            // Synthesis: Primary Strategic Report for every dataset
+            const primaryReports = dsList.filter((ds: any) => !reportEntities.some((r: any) => String(r.dataset_id) === String(ds.id))).map((ds: any) => ({
                 id: `primary-${ds.id}`,
                 dataset_id: ds.id,
                 name: `${ds.name} Master`,
@@ -61,8 +73,23 @@ export const ReportLibrary: React.FC = () => {
 
             const combined = [...primaryReports, ...reportEntities];
 
-            setReports(combined as any);
-            setDatasets(dsList);
+            if (reset) {
+                setReports(combined as any);
+                setDatasets(dsList);
+            } else {
+                setReports(prev => [...prev, ...combined] as any);
+                setDatasets(prev => [...prev, ...dsList]);
+            }
+
+            const hasMoreReports = reportData.hasMore;
+            const hasMoreDatasets = dsData.hasMore;
+
+            setPagination(prev => ({
+                ...prev,
+                offset: currentOffset + limit,
+                hasMore: hasMoreReports || hasMoreDatasets
+            }));
+
             setError(null);
         } catch (err) {
             console.error('Error fetching reports:', err);
@@ -269,6 +296,17 @@ export const ReportLibrary: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {pagination.hasMore && !loading && reports.length > 0 && (
+                    <div className="flex justify-center mt-12">
+                        <button
+                            onClick={() => loadReports(false)}
+                            className="px-8 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+                        >
+                            Load More Intelligence
+                        </button>
                     </div>
                 )}
             </div>

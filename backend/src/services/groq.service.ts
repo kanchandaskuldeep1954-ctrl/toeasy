@@ -2,6 +2,8 @@ import Groq from 'groq-sdk';
 import { config } from '../config.js';
 import { DataForensicsEngine } from './dataForensicsEngine.js';
 import { AnalyticsEngine } from './analyticsEngine.js';
+import { logger } from '../utils/logger.js';
+import { SafeExecutor } from '../utils/safeExecutor.js';
 
 
 const groq = new Groq({
@@ -34,7 +36,7 @@ Provide a brief semantic analysis of what this dataset contains, potential quali
       actualFields = await this.detectFieldsForTopic(topic);
     }
 
-    console.log(`Synthetic data generation - Topic: ${topic}, Fields: ${actualFields.join(',')}, Count: ${count}`);
+    logger.info(`Synthetic data generation - Topic: ${topic}, Fields: ${actualFields.join(',')}, Count: ${count}`);
 
     // Build a smarter prompt for realistic data generation
     const fieldDescriptions = actualFields.map(f => `- ${f} (provide realistic values)`).join('\n');
@@ -354,12 +356,12 @@ Respond ONLY with valid JSON, no markdown or extra text:
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const data = dataset.data || [];
 
-      console.log(`[GroqService] Delegating dashboard generation for ${data.length} rows to AnalyticsEngine`);
+      logger.info(`[GroqService] Delegating dashboard generation for ${data.length} rows to AnalyticsEngine`);
 
       const config = await AnalyticsEngine.analyze(headers, data);
       return config;
     } catch (e) {
-      console.error('Analytics Engine failed in suggestDashboard:', e);
+      logger.error('Analytics Engine failed in suggestDashboard:', e);
       // Construct a minimal safe fallback
       return {
         charts: [],
@@ -862,12 +864,15 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
           // We wrap the test in a try-catch block inside the function to handle runtime errors gracefully without flagging the rule as invalid syntax
           // Smarter evaluation: If it contains 'return', assume it's a full script.
           // Otherwise, wrap it in 'return (...)'.
-          const exprBody = rule.expression.includes('return ')
-            ? `try { ${rule.expression} } catch(e) { return true; }`
-            : `try { return (${rule.expression}); } catch(e) { return true; }`;
+          // Wrap in IIFE
+          const exprCode = rule.expression.includes('return ')
+            ? `(function(row) { try { ${rule.expression} } catch(e) { return true; } })(row)`
+            : `(function(row) { try { return (${rule.expression}); } catch(e) { return true; } })(row)`;
 
-          const testFn = new Function('row', exprBody);
-          testFn(testRow);
+          const testScript = SafeExecutor.compile(exprCode);
+          if (testScript) {
+            SafeExecutor.executeScript(testScript, { row: testRow });
+          }
         } catch (e) {
           console.warn(`Rule "${rule.description}" expression syntax warning:`, e);
           // Only replace if it's a completely broken syntax that prevents compilation
@@ -882,8 +887,11 @@ Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focus
         if (rule.healFunction && rule.category === 'Recovery') {
           try {
             const testRow = { ...data[0] };
-            const healFn = new Function('row', rule.healFunction);
-            healFn(testRow);
+            const healCode = `(function(row) { ${rule.healFunction} })(row)`;
+            const healScript = SafeExecutor.compile(healCode);
+            if (healScript) {
+              SafeExecutor.executeScript(healScript, { row: testRow });
+            }
           } catch (e) {
             // Don't blindly replace, just log warning
             console.warn(`Rule "${rule.description}" healFunction warning:`, e);
@@ -1606,7 +1614,9 @@ ANALYZE and return ONLY valid JSON (no markdown):
         if (end !== -1) {
           return JSON.parse(cleaned.substring(0, end + 1));
         }
-      } catch (e2) { }
+      } catch (e2) {
+        console.warn('[GroqService] JSON recovery parse also failed');
+      }
 
       console.error('[GroqService] All JSON parse attempts failed', {
         error: e.message,

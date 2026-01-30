@@ -804,7 +804,9 @@ const ForensicCleanView: React.FC = () => {
                                   </div>
                                 );
                               }
-                            } catch (e) { }
+                            } catch (e) {
+                              console.warn('[CleanView] Failed to parse assistant message:', e);
+                            }
                             return msg.text;
                           })()}
                         </div>

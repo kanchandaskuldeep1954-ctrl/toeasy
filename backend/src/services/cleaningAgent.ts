@@ -1,5 +1,7 @@
 import { DataForensicsEngine, ForensicResult } from './dataForensicsEngine.js';
 import { GroqService } from './groq.service.js';
+import { logger } from '../utils/logger.js';
+import { SafeExecutor } from '../utils/safeExecutor.js';
 
 /**
  * ProCleaningAgent - Orchestrates professional-level data cleaning
@@ -10,14 +12,14 @@ export class ProCleaningAgent {
      * Deep analysis of any dataset using Forensics + AI
      */
     static async analyze(headers: string[], data: any[]): Promise<any> {
-        console.log(`[ProCleaningAgent] Starting analysis for ${data.length} rows`);
+        logger.info(`[ProCleaningAgent] Starting analysis for ${data.length} rows`);
 
         // Stage 1: Forensic Analysis (Universal - always works)
         let forensics: ForensicResult;
         try {
             forensics = await DataForensicsEngine.analyze(headers, data, 1000);
         } catch (forensicError) {
-            console.error('[ProCleaningAgent] Forensic analysis failed:', forensicError);
+            logger.error('[ProCleaningAgent] Forensic analysis failed:', forensicError);
             // Return minimal valid structure
             return {
                 insights: { category: 'Unknown', purpose: 'Data Analysis', semanticInsights: [] },
@@ -37,9 +39,9 @@ export class ProCleaningAgent {
                 ...data.slice(-20)
             ];
             semanticInsights = await GroqService.analyzeSemantics(headers, sample, forensics);
-            console.log(`[ProCleaningAgent] Semantic Analysis complete: ${semanticInsights.category}`);
+            logger.info(`[ProCleaningAgent] Semantic Analysis complete: ${semanticInsights.category}`);
         } catch (semanticError) {
-            console.error('[ProCleaningAgent] Semantic analysis failed, using defaults:', semanticError);
+            logger.error('[ProCleaningAgent] Semantic analysis failed, using defaults:', semanticError);
             semanticInsights = {
                 category: 'General Data',
                 purpose: 'Data Management',
@@ -60,11 +62,11 @@ export class ProCleaningAgent {
             aiRules = await GroqService.generateAdvancedRules(headers, sample, semanticInsights);
             if (!Array.isArray(aiRules)) aiRules = [];
         } catch (aiRuleError) {
-            console.error('[ProCleaningAgent] AI rule generation failed, using forensic rules only:', aiRuleError);
+            logger.warn('[ProCleaningAgent] AI rule generation failed, using forensic rules only:', aiRuleError);
             aiRules = [];
         }
 
-        console.log(`[ProCleaningAgent] Rules generated: ${forensicRules.length} (Forensic) + ${aiRules.length} (AI)`);
+        logger.info(`[ProCleaningAgent] Rules generated: ${forensicRules.length} (Forensic) + ${aiRules.length} (AI)`);
 
         // Stage 4: Deduplicate and Merge Rules
         const masterRules = this.mergeRules(forensicRules, aiRules);
@@ -130,21 +132,40 @@ export class ProCleaningAgent {
             }
 
             // Normal healing logic
-            const healFn = new Function('row', `try { ${rule.healFunction} } catch(e) { console.error('Heal error:', e); }`);
+            // Wrap in IIFE to allow return logic if needed, though heal usually modifies row in place
+            const healCode = `(function() { try { ${rule.healFunction} } catch(e) {} })()`;
+            const healScript = SafeExecutor.compile(healCode);
 
-            // Smarter expression evaluation: If it contains 'return', assume it's a full script.
-            // Otherwise, wrap it in 'return (...)'.
-            const exprBody = rule.expression.includes('return ')
-                ? `try { ${rule.expression} } catch(e) { return true; }`
-                : `try { return (${rule.expression}); } catch(e) { return true; }`;
+            // Smarter expression evaluation
+            const exprCode = rule.expression.includes('return ')
+                ? `(function() { try { ${rule.expression} } catch(e) { return true; } })()`
+                : `(function() { try { return (${rule.expression}); } catch(e) { return true; } })()`;
 
-            const checkFn = rule.expression ? new Function('row', exprBody) : null;
+            const checkScript = rule.expression ? SafeExecutor.compile(exprCode) : null;
 
             newData.forEach(row => {
-                const needsFix = checkFn ? !checkFn(row) : true;
+                let needsFix = true;
+                if (checkScript) {
+                    const res = SafeExecutor.executeScript(checkScript, { row });
+                    if (res.success && res.result === false) {
+                        needsFix = false; // Valid
+                    } else {
+                        needsFix = true; // Invalid or error
+                    }
+                    // Original logic: checkFn returns TRUE for VALID rows.
+                    // "newData.forEach(row => { const needsFix = checkFn ? !checkFn(row) : true;"
+                    // So if checkFn returns true (valid), needsFix is false.
+
+                    if (res.success && typeof res.result === 'boolean') {
+                        needsFix = !res.result;
+                    }
+                }
+
                 if (needsFix) {
                     const original = JSON.stringify(row);
-                    healFn(row);
+                    if (healScript) {
+                        SafeExecutor.executeScript(healScript, { row });
+                    }
                     if (original !== JSON.stringify(row)) {
                         affected++;
                     }
@@ -153,7 +174,7 @@ export class ProCleaningAgent {
 
             return { data: newData, headers: newHeaders, affected };
         } catch (e) {
-            console.error('[ProCleaningAgent] Fix application failed:', e);
+            logger.error('[ProCleaningAgent] Fix application failed:', e);
             return { data, headers: currentHeaders, affected: 0 };
         }
     }

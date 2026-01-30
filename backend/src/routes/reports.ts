@@ -10,6 +10,8 @@ router.get('/:workspaceId/reports', authenticateToken, async (req: AuthRequest, 
     try {
         const { workspaceId } = req.params;
         const { datasetId } = req.query;
+        const limit = Math.min(parseInt(req.query.limit as string) || 50, 500);
+        const offset = parseInt(req.query.offset as string) || 0;
 
         let sql = `
       SELECT r.*, u.email as owner_email,
@@ -25,10 +27,25 @@ router.get('/:workspaceId/reports', authenticateToken, async (req: AuthRequest, 
             params.push(datasetId);
         }
 
-        sql += ` ORDER BY r.updated_at DESC`;
+        // Get total count first
+        const countSql = `SELECT COUNT(*) as total FROM strategic_reports r WHERE r.workspace_id = $1 ${datasetId ? 'AND r.dataset_id = $2' : ''}`;
+        const countParams = datasetId ? [workspaceId, datasetId] : [workspaceId];
+        const countResult = await query(countSql, countParams);
+        const total = parseInt(countResult.rows[0].total);
+
+        // Get paginated data
+        sql += ` ORDER BY r.updated_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
+        params.push(limit, offset);
 
         const result = await query(sql, params);
-        res.json({ data: result.rows });
+
+        res.json({
+            data: result.rows,
+            total,
+            limit,
+            offset,
+            hasMore: offset + limit < total
+        });
     } catch (error) {
         console.error('Error fetching reports:', error);
         res.status(500).json({ error: 'Failed to fetch reports' });

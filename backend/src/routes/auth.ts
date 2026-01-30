@@ -3,10 +3,12 @@ import bcrypt from 'bcryptjs';
 import { query } from '../db.js';
 import { generateToken, generateRefreshToken } from '../middleware/auth.js';
 import { otpService } from '../services/otpService.js';
+import { validateResource } from '../middleware/validateResource.js';
+import { loginSchema, registerSchema } from '../schemas/validation.js';
 
 const router = Router();
 
-router.post('/register', async (req, res) => {
+router.post('/register', validateResource(registerSchema), async (req, res) => {
   try {
     const { email, password, full_name, name } = req.body;
 
@@ -152,7 +154,7 @@ router.post('/resend-otp', async (req, res) => {
   }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login', validateResource(loginSchema), async (req, res) => {
   try {
     const { email, password } = req.body;
 

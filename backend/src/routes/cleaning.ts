@@ -5,6 +5,10 @@ import { checkSubscription } from '../middleware/subscription.js';
 import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 import { GroqService } from '../services/groq.service.js';
 import { ProCleaningAgent } from '../services/cleaningAgent.js';
+import { SafeExecutor } from '../utils/safeExecutor.js';
+import { logger } from '../utils/logger.js';
+import { validateResource } from '../middleware/validateResource.js';
+import { cleaningProcessSchema } from '../schemas/validation.js';
 
 const router = Router();
 
@@ -187,9 +191,24 @@ router.post('/:workspaceId/datasets/:datasetId/scripts/:scriptId/test', async (r
             const row = sample[i];
             try {
                 // Test expression
-                const checkFn = new Function('value', 'row', 'index', 'fullData',
-                    `try { return (${script.expression}); } catch(e) { return true; }`);
-                const isValid = checkFn(row[script.target_column], row, i, sample);
+                // Prepare sandboxed scripts
+                const checkCode = `(function(value, row, index, fullData) { try { return (${script.expression}); } catch(e) { return true; } })(value, row, index, fullData)`;
+                const checkScript = SafeExecutor.compile(checkCode);
+
+                const healCode = script.heal_function
+                    ? `(function(value, row, index, fullData) { try { ${script.heal_function} } catch(e) { console.warn('[Cleaning] Heal function error:', e); } })(value, row, index, fullData)`
+                    : null;
+                const healScript = healCode ? SafeExecutor.compile(healCode) : null;
+
+                // Execute check
+                let isValid = true;
+                if (checkScript) {
+                    const res = SafeExecutor.executeScript(checkScript, { value: row[script.target_column], row, index: i, fullData: sample });
+                    // Explicitly check for boolean false to fail validation
+                    if (res.success && res.result === false) {
+                        isValid = false;
+                    }
+                }
 
                 if (isValid) {
                     testResults.passed++;
@@ -197,12 +216,10 @@ router.post('/:workspaceId/datasets/:datasetId/scripts/:scriptId/test', async (r
                     testResults.failed++;
 
                     // Try heal function if available
-                    if (script.heal_function) {
+                    if (script.heal_function && healScript) {
                         try {
-                            const healFn = new Function('value', 'row', 'index', 'fullData',
-                                `try { ${script.heal_function} } catch(e) {}`);
                             const originalValue = row[script.target_column];
-                            healFn(row[script.target_column], row, i, sample);
+                            SafeExecutor.executeScript(healScript, { value: row[script.target_column], row, index: i, fullData: sample });
                             if (row[script.target_column] !== originalValue) {
                                 testResults.healed++;
                             }

@@ -113,7 +113,7 @@ export class GroqService {
             const isValid = checkFn(val, row, index, pool);
 
             if (!isValid && rule.healFunction) {
-              const healFn = new Function('value', 'row', 'index', 'fullData', `try { ${rule.healFunction} } catch(e) {}`);
+              const healFn = new Function('value', 'row', 'index', 'fullData', `try { ${rule.healFunction} } catch(e) { console.warn('[GroqService] Heal function error:', e); }`);
               const preHealVal = JSON.stringify(row[rule.column]);
 
               healFn(val, row, index, pool);
@@ -129,7 +129,9 @@ export class GroqService {
                 changesInPass++;
               }
             }
-          } catch (e) { }
+          } catch (e) {
+            console.warn('[GroqService] Rule processing error:', rule.description, e);
+          }
         });
       });
 

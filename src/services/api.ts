@@ -98,8 +98,8 @@ export const authAPI = {
 // ============================================
 
 export const workspaceAPI = {
-  list: () =>
-    getClient().get('/workspaces'),
+  list: (limit: number = 100, offset: number = 0) =>
+    getClient().get('/workspaces', { params: { limit, offset } }),
 
   get: (id: string) =>
     getClient().get(`/workspaces/${id}`),
@@ -122,8 +122,8 @@ export const workspaceAPI = {
 // ============================================
 
 export const datasetAPI = {
-  list: (workspaceId: string) =>
-    getClient().get(`/workspaces/${workspaceId}/datasets`),
+  list: (workspaceId: string, limit: number = 50, offset: number = 0) =>
+    getClient().get(`/workspaces/${workspaceId}/datasets`, { params: { limit, offset } }),
 
   get: (workspaceId: string, datasetId: string) =>
     getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}`),
@@ -191,8 +191,8 @@ export const analysisAPI = {
 // ============================================
 
 export const dashboardAPI = {
-  list: (workspaceId: string) =>
-    getClient().get(`/workspaces/${workspaceId}/dashboards`),
+  list: (workspaceId: string, limit: number = 50, offset: number = 0, datasetId?: string) =>
+    getClient().get(`/workspaces/${workspaceId}/dashboards`, { params: { limit, offset, datasetId } }),
 
   create: (workspaceId: string, data: any) =>
     getClient().post(`/workspaces/${workspaceId}/dashboards`, data),
@@ -245,8 +245,8 @@ export const metricsAPI = {
 
 
 export const reportsAPI = {
-  list: (workspaceId: string, datasetId?: string) =>
-    getClient().get(`/workspaces/${workspaceId}/reports`, { params: { datasetId } }),
+  list: (workspaceId: string, datasetId?: string, limit: number = 50, offset: number = 0) =>
+    getClient().get(`/workspaces/${workspaceId}/reports`, { params: { datasetId, limit, offset } }),
 
   get: (workspaceId: string, id: string | number) =>
     getClient().get(`/workspaces/${workspaceId}/reports/${id}`),

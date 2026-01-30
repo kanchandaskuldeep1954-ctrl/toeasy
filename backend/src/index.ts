@@ -10,6 +10,8 @@ import { checkSubscription, checkTierLimit } from './middleware/subscription.js'
 import { GroqService } from './services/groq.service.js';
 import { query } from './db.js';
 import { ScraperService } from './services/scraper.service.js';
+import { logger } from './utils/logger.js';
+import { requestLogger } from './middleware/requestLogger.js';
 
 // Import routes
 import authRoutes from './routes/auth.js';
@@ -66,15 +68,7 @@ app.get('/health', (req, res) => {
 });
 
 // Request Logger
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  console.log('Headers:', JSON.stringify(req.headers['content-length'] ? { 'content-length': req.headers['content-length'] } : {}));
-  if (req.body && Object.keys(req.body).length > 0) {
-    const bodyPreview = JSON.stringify(req.body).substring(0, 200);
-    console.log('Body Preview:', bodyPreview + (bodyPreview.length >= 200 ? '...' : ''));
-  }
-  next();
-});
+app.use(requestLogger);
 
 // API Routes
 app.use('/api/auth', authRoutes);
@@ -450,7 +444,7 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Error:', err);
+  logger.error('Unhandled Error:', err);
   res.status(err.status || 500).json({
     error: err.message || 'Internal server error',
     details: err.details || JSON.stringify(err),
@@ -467,13 +461,13 @@ async function startServer() {
     await initializeRedis(config.redisUrl);
 
     const server = app.listen(PORT, () => {
-      console.log(`Backend server running on port ${PORT}`);
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`Backend server running on port ${PORT}`);
+      logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
-      console.log('SIGTERM received, shutting down gracefully...');
+      logger.info('SIGTERM received, shutting down gracefully...');
       server.close(async () => {
         await closeRedis();
         process.exit(0);
@@ -481,14 +475,14 @@ async function startServer() {
     });
 
     process.on('SIGINT', async () => {
-      console.log('SIGINT received, shutting down gracefully...');
+      logger.info('SIGINT received, shutting down gracefully...');
       server.close(async () => {
         await closeRedis();
         process.exit(0);
       });
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 }

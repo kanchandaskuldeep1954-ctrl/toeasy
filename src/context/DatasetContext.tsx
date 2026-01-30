@@ -51,7 +51,7 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
     if (!token || !workspaceId) return;
     try {
       setLoading(true);
-      const response = await datasetAPI.list(workspaceId);
+      const response = await datasetAPI.list(workspaceId, limit, offset);
       // The API returns { data: [...], total, ... }
       const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
       const count = response.data?.total || data.length;

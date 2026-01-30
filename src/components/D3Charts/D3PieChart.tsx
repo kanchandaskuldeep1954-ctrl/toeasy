@@ -1,9 +1,10 @@
 /**
  * D3 Pie/Donut Chart Component
  * Interactive pie chart with animations, tooltips, and labels
+ * Now with Data Guardian Layer for reliability
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import {
     DataPoint,
@@ -13,6 +14,7 @@ import {
     showTooltip,
     hideTooltip
 } from './chartUtils';
+import { sanitizeForChart, getQualityBadge } from '../../utils/dataGuardian';
 
 interface PieChartProps {
     data: DataPoint[];
@@ -41,8 +43,18 @@ const D3PieChart: React.FC<PieChartProps> = ({
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: height });
 
+    // Data Guardian: Sanitize incoming data
+    const { sanitizedData, quality, hasIssues } = useMemo(() => {
+        const result = sanitizeForChart(data, 'label', 'value', { removeInvalid: true, maxItems: 20 });
+        return {
+            sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })) as DataPoint[],
+            quality: result.quality,
+            hasIssues: result.hasIssues
+        };
+    }, [data]);
+
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !data || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || !sanitizedData || sanitizedData.length === 0 || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();
@@ -63,7 +75,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
 
         // Color scale
         const colorScale = d3.scaleOrdinal<string>()
-            .domain(data.map(d => d.label))
+            .domain(sanitizedData.map(d => d.label))
             .range(CHART_COLORS);
 
         // Pie generator
@@ -91,7 +103,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
 
         // Draw slices
         const slices = g.selectAll('.slice')
-            .data(pie(data))
+            .data(pie(sanitizedData))
             .enter()
             .append('g')
             .attr('class', 'slice');
@@ -123,7 +135,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
                 hideTooltip(tooltip);
             })
             .on('click', function (event, d) {
-                if (onSliceClick) onSliceClick(d.data, data.indexOf(d.data));
+                if (onSliceClick) onSliceClick(d.data, sanitizedData.indexOf(d.data));
             });
 
         // Animate slices
@@ -161,7 +173,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
 
         // Center text for donut
         if (donut) {
-            const total = data.reduce((sum, d) => sum + d.value, 0);
+            const total = sanitizedData.reduce((sum, d) => sum + d.value, 0);
             g.append('text')
                 .attr('text-anchor', 'middle')
                 .attr('dy', '-0.5em')
@@ -185,7 +197,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
                 .attr('transform', `translate(${chartWidth + 10}, 30)`);
 
             const legendItems = legend.selectAll('.legend-item')
-                .data(data)
+                .data(sanitizedData)
                 .enter()
                 .append('g')
                 .attr('class', 'legend-item')
@@ -193,7 +205,7 @@ const D3PieChart: React.FC<PieChartProps> = ({
                 .attr('cursor', 'pointer')
                 .attr('opacity', d => selectedItem && selectedItem !== d.label ? 0.4 : 1)
                 .on('click', function (event, d) {
-                    if (onSliceClick) onSliceClick(d, data.indexOf(d));
+                    if (onSliceClick) onSliceClick(d, sanitizedData.indexOf(d));
                 });
 
             legendItems.append('rect')
@@ -232,9 +244,19 @@ const D3PieChart: React.FC<PieChartProps> = ({
     }, [drawChart]);
 
     return (
-        <div ref={containerRef} className="w-full h-full">
+        <div ref={containerRef} className="w-full h-full relative">
             {title && (
-                <div className="text-sm font-bold text-slate-300 mb-2">{title}</div>
+                <div className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+                    {title}
+                    {hasIssues && (
+                        <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 cursor-help"
+                            title={`Data Quality: ${quality.qualityScore}% - ${quality.warnings.join(', ')}`}
+                        >
+                            {getQualityBadge(quality.qualityLevel).emoji} {quality.qualityScore}%
+                        </span>
+                    )}
+                </div>
             )}
             <svg ref={svgRef} className="w-full" style={{ height }} />
         </div>

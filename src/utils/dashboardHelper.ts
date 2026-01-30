@@ -12,18 +12,29 @@ const findClosestColumn = (target: string | undefined, headers: string[]): strin
     return headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
 };
 
-const parseNumericValue = (val: any): number => {
-    if (val === null || val === undefined) return 0;
-    if (typeof val === 'number') return val;
+/**
+ * Parse a value to number.
+ * Returns null for unparseable values (no longer returns 0 to avoid skewing aggregations).
+ * Consumer must filter out null values before calculations.
+ */
+const parseNumericValue = (val: any): number | null => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'number') return isNaN(val) ? null : val;
 
     const lower = String(val).toLowerCase().trim();
+
+    // Empty or N/A indicators
+    if (lower === '' || lower === '-' || lower === 'n/a' || lower === 'na' || lower === 'null' || lower === 'none') {
+        return null;
+    }
+
     // Semantic Booleans & Statuses
     if (['yes', 'true', 'y', '1', 'recovered', 'success', 'high'].includes(lower)) return 1;
     if (['no', 'false', 'n', '0', 'died', 'failure', 'low', 'stable'].includes(lower)) return 0;
 
     const str = String(val).replace(/[^0-9.-]/g, '');
     const num = parseFloat(str);
-    return isNaN(num) ? 0 : num;
+    return isNaN(num) ? null : num;
 };
 
 export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: any[]): any[] => {
@@ -47,7 +58,7 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
 
     // --- Histogram Logic ---
     if (chart.type === 'histogram') {
-        const values = filteredData.map(d => parseNumericValue(d[xAxis])).filter(n => !isNaN(n));
+        const values = filteredData.map(d => parseNumericValue(d[xAxis])).filter((n): n is number => n !== null);
         if (values.length === 0) return [];
         const min = Math.min(...values);
         const max = Math.max(...values);
@@ -97,15 +108,16 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
             const xNum = parseNumericValue(xRaw);
             const yNum = parseNumericValue(yRaw);
 
-            // If the raw value is a non-empty string and numeric parsing yielded 0 (likely categorical)
-            // but the original wasn't '0' or 'false', we use the original string.
-            const xFinal = (xNum === 0 && xRaw !== 0 && xRaw !== '0' && typeof xRaw === 'string') ? xRaw : xNum;
-            const yFinal = (yNum === 0 && yRaw !== 0 && yRaw !== '0' && typeof yRaw === 'string') ? yRaw : yNum;
+            // If the raw value is a non-empty string and numeric parsing yielded null (likely categorical)
+            // we use the original string.
+            const xFinal = (xNum === null && typeof xRaw === 'string') ? xRaw : (xNum ?? 0);
+            const yFinal = (yNum === null && typeof yRaw === 'string') ? yRaw : (yNum ?? 0);
+            const zVal = zAxis ? parseNumericValue(row[zAxis]) : 100;
 
             return {
                 x: xFinal,
                 y: yFinal,
-                z: zAxis ? parseNumericValue(row[zAxis]) : 100,
+                z: zVal ?? 100,
                 name: row[dataset.headers[0]]
             };
         }).slice(0, 500);

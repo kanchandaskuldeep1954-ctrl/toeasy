@@ -4,6 +4,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription, checkTierLimit } from '../middleware/subscription.js';
 import { GroqService } from '../services/groq.service.js';
 import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
+import { SafeExecutor } from '../utils/safeExecutor.js';
 
 const router = Router();
 const groqService = new GroqService();
@@ -316,8 +317,16 @@ function executeSimpleSQL(data: any[], sqlQuery: string): any[] {
           try {
             // Simple evaluation of conditions like "age > 25"
             for (const [key, value] of Object.entries(row)) {
+              // Create a sandboxed context for this row
+              const context = { ...row, [key]: value };
+              // Better approach: regex replace is brittle. 
+              // Ideally, we should parse the SQL WHERE clause properly.
+              // But preserving existing logic for now with SafeExecutor.
+
               const conditionWithValue = condition.replace(new RegExp(`\\b${key} \\b`, 'g'), JSON.stringify(value));
-              if (eval(conditionWithValue)) return true;
+
+              const res = SafeExecutor.execute(conditionWithValue);
+              if (res.success && res.result === true) return true;
             }
             return false;
           } catch {

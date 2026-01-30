@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
+import axios from 'axios'; // Keep for other calls if needed, but dashboard list uses api
+import { dashboardAPI } from '../services/api';
 
 interface Dashboard {
   id: string;
@@ -32,11 +33,23 @@ export const DashboardLibrary: React.FC = () => {
   const [formData, setFormData] = useState({ name: '', description: '', datasetId: filterDatasetId });
   const [submitting, setSubmitting] = useState(false);
 
+  const [pagination, setPagination] = useState({
+    offset: 0,
+    limit: 20,
+    hasMore: true
+  });
+
   const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
+
+  const [pagination, setPagination] = useState({
+    offset: 0,
+    limit: 20,
+    hasMore: true
+  });
 
   useEffect(() => {
     if (workspaceId) {
-      loadAll();
+      loadDashboards(true);
       if (searchParams.get('new') === 'true') {
         setShowNewForm(true);
       }
@@ -50,21 +63,23 @@ export const DashboardLibrary: React.FC = () => {
     }
   }, [filterDatasetId]);
 
-  const loadAll = async () => {
+  const loadDashboards = async (reset = true) => {
     try {
       setLoading(true);
-      // Fetch datasets for name lookup
+
+      // Fetch datasets for name lookup (keep as is or optimize later)
+      // Note: If we want to optimize, we should use datasetAPI.list but we need all for lookup? 
+      // For now, let's keep the axios call for datasets or use datasetAPI.list with large limit
       const dsRes = await axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets`, { headers: { Authorization: `Bearer ${token}` } });
       const dsList = Array.isArray(dsRes.data) ? dsRes.data : (dsRes.data.data || []);
       setDatasets(dsList);
 
-      // Fetch all dashboards for this workspace (optionally filtered by dataset)
-      const dUrl = filterDatasetId
-        ? `${backendUrl}/workspaces/${workspaceId}/dashboards?datasetId=${filterDatasetId}`
-        : `${backendUrl}/workspaces/${workspaceId}/dashboards`;
+      const currentOffset = reset ? 0 : pagination.offset;
+      const limit = pagination.limit;
 
-      const dRes = await axios.get(dUrl, { headers: { Authorization: `Bearer ${token}` } });
-      const allDashboards = dRes.data.data || dRes.data || [];
+      const dRes = await dashboardAPI.list(workspaceId, limit, currentOffset, filterDatasetId || undefined);
+      const dashboardData = dRes.data;
+      const allDashboards = dashboardData.data || [];
 
       const processed = allDashboards.map((d: any) => {
         const layout = d.layout;
@@ -78,7 +93,19 @@ export const DashboardLibrary: React.FC = () => {
         };
       });
 
-      setDashboards(processed);
+      if (reset) {
+        setDashboards(processed);
+      } else {
+        setDashboards(prev => [...prev, ...processed]);
+      }
+
+      setPagination(prev => ({
+        ...prev,
+        offset: currentOffset + limit,
+        hasMore: dashboardData.hasMore,
+        total: dashboardData.total
+      }));
+
       setError(null);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -328,6 +355,17 @@ export const DashboardLibrary: React.FC = () => {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {pagination.hasMore && !loading && dashboards.length > 0 && (
+          <div className="flex justify-center mt-12">
+            <button
+              onClick={() => loadDashboards(false)}
+              className="px-8 py-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-xl font-bold uppercase tracking-widest text-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow-sm"
+            >
+              Load More Dashboards
+            </button>
           </div>
         )}
       </div>

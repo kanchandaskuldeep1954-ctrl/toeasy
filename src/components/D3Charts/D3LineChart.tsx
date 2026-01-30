@@ -1,9 +1,10 @@
 /**
  * D3 Line Chart Component
  * Interactive line/area chart with animations, tooltips, and zoom
+ * Now with Data Guardian Layer for reliability
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import {
     DataPoint,
@@ -15,6 +16,7 @@ import {
     hideTooltip,
     createGradient
 } from './chartUtils';
+import { sanitizeForChart, getQualityBadge } from '../../utils/dataGuardian';
 
 interface LineChartProps {
     data: DataPoint[];
@@ -47,8 +49,18 @@ const D3LineChart: React.FC<LineChartProps> = ({
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: height });
 
+    // Data Guardian: Sanitize incoming data
+    const { sanitizedData, quality, hasIssues } = useMemo(() => {
+        const result = sanitizeForChart(data, 'label', 'value', { removeInvalid: true, maxItems: 100 });
+        return {
+            sanitizedData: result.data.map(d => ({ label: d.label, value: d.value, type: d.originalRow?.type })) as DataPoint[],
+            quality: result.quality,
+            hasIssues: result.hasIssues
+        };
+    }, [data]);
+
     const drawChart = useCallback(() => {
-        if (!svgRef.current || !data || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || !sanitizedData || sanitizedData.length === 0 || dimensions.width === 0) return;
 
         const svg = d3.select(svgRef.current);
         svg.selectAll('*').remove();
@@ -72,12 +84,12 @@ const D3LineChart: React.FC<LineChartProps> = ({
 
         // Scales
         const x = d3.scalePoint()
-            .domain(data.map((d: DataPoint) => d.label))
+            .domain(sanitizedData.map((d: DataPoint) => d.label))
             .range([0, dim.innerWidth])
             .padding(0.5);
 
         const y = d3.scaleLinear()
-            .domain([0, d3.max(data, (d: DataPoint) => d.value) || 0])
+            .domain([0, d3.max(sanitizedData, (d: DataPoint) => d.value) || 0])
             .nice()
             .range([dim.innerHeight, 0]);
 
@@ -108,15 +120,15 @@ const D3LineChart: React.FC<LineChartProps> = ({
 
         // Logic to split data into "Solid" (Historical) and "Dashed" (Forecast)
         // We find the transition point where type changes to 'forecast'
-        const forecastIndex = data.findIndex(d => d.type === 'forecast');
+        const forecastIndex = sanitizedData.findIndex(d => d.type === 'forecast');
 
-        let solidData = data;
+        let solidData = sanitizedData;
         let dashedData: DataPoint[] = [];
 
         if (forecastIndex > 0) {
             // Include the point *before* the forecast starts to ensure connection
-            solidData = data.slice(0, forecastIndex + 1); // Historical + 1 overlap
-            dashedData = data.slice(forecastIndex - 1);   // Overlap + Forecast
+            solidData = sanitizedData.slice(0, forecastIndex + 1); // Historical + 1 overlap
+            dashedData = sanitizedData.slice(forecastIndex - 1);   // Overlap + Forecast
         }
 
         // Line generator
@@ -141,7 +153,7 @@ const D3LineChart: React.FC<LineChartProps> = ({
         // Draw area (Full data for continuity)
         if (showArea) {
             const area = g.append('path')
-                .datum(data)
+                .datum(sanitizedData)
                 .attr('fill', 'url(#areaGradient)')
                 .attr('d', areaGenerator);
 
@@ -192,13 +204,13 @@ const D3LineChart: React.FC<LineChartProps> = ({
             drawPath(solidData, false);
             drawPath(dashedData, true);
         } else {
-            drawPath(data, false);
+            drawPath(sanitizedData, false);
         }
 
         // Draw dots
         if (showDots) {
             const dots = g.selectAll('.dot')
-                .data(data)
+                .data(sanitizedData)
                 .enter()
                 .append('circle')
                 .attr('class', 'dot')
@@ -229,7 +241,7 @@ const D3LineChart: React.FC<LineChartProps> = ({
                     hideTooltip(tooltip);
                 })
                 .on('click', function (event, d: any) {
-                    if (onPointClick) onPointClick(d, data.indexOf(d));
+                    if (onPointClick) onPointClick(d, sanitizedData.indexOf(d));
                 });
 
             // Animate dots
@@ -267,9 +279,19 @@ const D3LineChart: React.FC<LineChartProps> = ({
     }, [drawChart]);
 
     return (
-        <div ref={containerRef} className="w-full h-full">
+        <div ref={containerRef} className="w-full h-full relative">
             {title && (
-                <div className="text-sm font-bold text-slate-300 mb-2">{title}</div>
+                <div className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+                    {title}
+                    {hasIssues && (
+                        <span
+                            className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 cursor-help"
+                            title={`Data Quality: ${quality.qualityScore}% - ${quality.warnings.join(', ')}`}
+                        >
+                            {getQualityBadge(quality.qualityLevel).emoji} {quality.qualityScore}%
+                        </span>
+                    )}
+                </div>
             )}
             <svg ref={svgRef} className="w-full" style={{ height }} />
         </div>

@@ -24,7 +24,9 @@ export const WorkspacesView: React.FC = () => {
     removeWorkspace,
     isLoading: loading,
     error: contextError,
-    setError: setContextError
+    setError: setContextError,
+    hasMore,
+    loadMoreWorkspaces
   } = useWorkspace();
   const navigate = useNavigate();
   const [showNewForm, setShowNewForm] = useState(false);
