@@ -236,8 +236,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
         const quality = assessDataQuality(dataset.data || [], dataset.headers || []);
         setDataQuality(quality);
         const validations: { [id: string]: any } = {};
-        config.charts?.forEach((chart) => {
-            validations[chart.id] = validateChartSpec(chart, dataset.data || [], dataset.headers || []);
+        (config.charts || []).forEach((chart) => {
+            if (chart) validations[chart.id] = validateChartSpec(chart, dataset.data || [], dataset.headers || []);
         });
         setChartValidations(validations);
     }, [config, dataset]);
@@ -790,17 +790,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
 
                 {/* KPI Strip */}
                 <div className="flex flex-wrap gap-4">
-                    {dynamicKPIs.map((kpi) => (
-                        <div key={kpi.id} className="min-w-[180px] flex-1">
-                            <KPICard kpi={kpi} dataset={dataset} columns={dataset.headers} onUpdate={handleUpdateKPI} onDelete={handleRemoveKPI} />
-                        </div>
-                    ))}
+                    {(dynamicKPIs || []).map((kpi) => {
+                        if (!kpi) return null;
+                        return (
+                            <div key={kpi.id} className="min-w-[180px] flex-1">
+                                <KPICard kpi={kpi} dataset={dataset} columns={dataset.headers} onUpdate={handleUpdateKPI} onDelete={handleRemoveKPI} />
+                            </div>
+                        );
+                    })}
                     <button onClick={handleAddKPI} className="px-6 py-4 rounded-[24px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">+ Metric</button>
                 </div>
 
                 {/* Unified Masonry Grid */}
                 <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8 pb-32">
                     {visibleCharts.map((chart, i) => {
+                        if (!chart) return null;
                         const data = getChartData(chart);
                         const isWide = i % 3 === 0;
                         return (
@@ -810,7 +814,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                 </div>
                                 <div className="mb-8">
                                     <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{chart.title}</h3>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{chart.description || `Relational context: ${chart.xAxis} vs ${chart.yAxis}`}</p>
+                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                        {chart.description || `Relational context: ${chart.xAxis || chart.options?.xAxis || 'Analysis'} vs ${chart.yAxis || chart.options?.yAxis || 'Metric'}`}
+                                    </p>
                                 </div>
                                 <div className="flex-1 w-full relative min-h-[300px]">
                                     <PlotlyChart chart={injectChartConfig(chart)} data={data} onClick={(data) => handleChartClick(data, chart)} />

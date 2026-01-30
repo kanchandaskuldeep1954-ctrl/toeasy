@@ -109,15 +109,15 @@ export class AnalyticsEngine {
         // 1. Direct match
         if (headers.includes(target)) return target;
 
-        // 2. Case-insensitive / Space-insensitive match
-        const normalized = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
+        // 2. Case-insensitive / Extra-insensitive match (remove all non-alphanumeric)
+        const normalized = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
         const targetNorm = normalized(target);
+
         const match = headers.find(h => normalized(h) === targetNorm);
         if (match) return match;
 
         // 3. Partial match (if target is "revenue" and header is "Total Revenue")
-        const partial = headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
-        return partial;
+        return headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
     }
 
     private static parseNumeric(val: any): number {
@@ -328,8 +328,8 @@ export class AnalyticsEngine {
                     chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
                 } else if (spec.type === 'scatter') {
                     chartData = data.slice(0, 500).map(r => ({
-                        x: actualX ? this.parseNumeric(r[actualX]) : 0,
-                        y: actualY ? this.parseNumeric(r[actualY]) : 0,
+                        x: actualX && !isNaN(this.parseNumeric(r[actualX])) ? this.parseNumeric(r[actualX]) : r[actualX],
+                        y: actualY && !isNaN(this.parseNumeric(r[actualY])) ? this.parseNumeric(r[actualY]) : r[actualY],
                         name: r[profiles[0]?.column || '']
                     }));
                 } else if (spec.type === 'line' && xCol?.dataType === 'date') {
@@ -346,6 +346,8 @@ export class AnalyticsEngine {
                     size: (spec.type === 'sunburst' || spec.type === 'line') ? 'large' : 'medium',
                     description: spec.description,
                     data: chartData,
+                    xAxis: actualX, // Populate top-level for UI
+                    yAxis: actualY, // Populate top-level for UI
                     options: { xAxis: actualX, yAxis: actualY },
                     reasoning: spec.description || `Analyzing the relationship between ${actualX} and ${actualY} to identify ${spec.type} patterns.`,
                     validation: {
@@ -502,8 +504,9 @@ export class AnalyticsEngine {
             const key = row[catCol] || 'Unknown';
             let val = 1;
 
-            if (metricCol) {
-                val = this.parseNumeric(row[metricCol]);
+            if (metricCol && row[metricCol] !== undefined) {
+                const parsed = this.parseNumeric(row[metricCol]);
+                val = isNaN(parsed) ? 1 : parsed;
             }
 
             sums[key] = (sums[key] || 0) + val;
@@ -575,19 +578,21 @@ export class AnalyticsEngine {
                 break;
 
             case 'risk':
-                // Focus on potential outliers and "bad" status
                 filteredCharts = allCharts.filter(c => c.type === 'scatter' || c.type === 'heatmap');
                 break;
 
             case 'strategic':
             default:
                 // Mix of high-level KPIs and trends
-                filteredKpis = allKpis.slice(0, 10); // More KPIs
-                filteredCharts = allCharts.slice(0, 12); // Way more charts for a "Pro" feel
+                filteredKpis = allKpis.slice(0, 10);
+                filteredCharts = allCharts.slice(0, 12);
                 break;
         }
 
-        return { kpis: filteredKpis, charts: filteredCharts, forensics };
+        // 7. Generate Calculated DataFrames (First Principles)
+        const dataFrames = this.generateCalculatedDataFrames(data, forensics);
+
+        return { kpis: filteredKpis, charts: filteredCharts, forensics, dataFrames } as any;
     }
 
     private static calculateGrowth(data: any[], dateCol: string, valCol: string): { percent: number, history: number[] } | null {

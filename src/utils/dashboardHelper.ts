@@ -39,9 +39,9 @@ const parseNumericValue = (val: any): number | null => {
 
 export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: any[]): any[] => {
     const headers = dataset.headers;
-    const xAxis = findClosestColumn(chart.xAxis, headers) || chart.xAxis;
-    const yAxis = findClosestColumn(chart.yAxis, headers) || chart.yAxis;
-    const zAxis = findClosestColumn(chart.zAxis, headers) || chart.zAxis;
+    const xAxis = findClosestColumn(chart.xAxis || chart.options?.xAxis, headers) || chart.xAxis || chart.options?.xAxis;
+    const yAxis = findClosestColumn(chart.yAxis || chart.options?.yAxis, headers) || chart.yAxis || chart.options?.yAxis;
+    const zAxis = findClosestColumn(chart.zAxis || chart.options?.zAxis, headers) || chart.zAxis || chart.options?.zAxis;
 
     // PRIORITY 1: Use pre-aggregated data from backend if available
     if (chart.data && Array.isArray(chart.data) && chart.data.length > 0) {
