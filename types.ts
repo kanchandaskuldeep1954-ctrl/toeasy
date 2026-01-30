@@ -96,6 +96,12 @@ export interface KPI {
     operation: 'sum' | 'avg' | 'count' | 'min' | 'max' | 'unique' | 'quality';
     format?: 'currency' | 'percentage' | 'number';
   };
+  reasoning?: string;
+  validation?: {
+    status: 'verified' | 'unverified';
+    evidence: string;
+    sampleRows?: number;
+  };
 }
 
 export interface HistoryStep {
@@ -241,6 +247,11 @@ export interface ChartSpec {
   // AnalyticsEngine 2.0 properties
   data?: any;
   options?: any;
+  reasoning?: string;
+  validation?: {
+    status: 'verified' | 'unverified';
+    evidence: string;
+  };
 }
 
 export interface FilterSpec {
@@ -301,10 +312,21 @@ export interface ReportSection {
   }[];
 }
 
+export interface CalculatedDataFrame {
+  id: string;
+  title: string;
+  description: string;
+  logic: string; // The "First Principles" formula or reasoning
+  headers: { name: string; type: string; description: string; validationRule?: string }[];
+  rows: any[];
+  summaryInsights: string[];
+}
+
 export interface StrategicReport {
   title: string;
   executiveSummary: string;
   sections: ReportSection[];
+  dataFrames?: CalculatedDataFrame[];
   generatedAt: string;
   version: string;
 }

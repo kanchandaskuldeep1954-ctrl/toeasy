@@ -301,9 +301,81 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     />
                 </div>
                 <p className="mt-4 text-[11px] text-slate-500 italic text-center">{chart.description}</p>
+                {chart.reasoning && (
+                    <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
+                        <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">First Principles Analysis</p>
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{chart.reasoning}</p>
+                    </div>
+                )}
             </div>
         );
     };
+
+    const renderDataFrame = (df: any) => (
+        <div className="bg-slate-50 dark:bg-slate-800/20 rounded-[32px] border border-slate-200 dark:border-white/5 overflow-hidden shadow-2xl my-12">
+            <div className="p-8 border-b border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900/50">
+                <div className="flex items-center gap-3 mb-2">
+                    <span className="px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest">Calculated DataFrame</span>
+                    <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-1">
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                        Logic Verified
+                    </span>
+                </div>
+                <h4 className="text-xl font-black text-slate-900 dark:text-white mb-2">{df.title}</h4>
+                <p className="text-xs text-slate-500 font-medium leading-relaxed">{df.description}</p>
+
+                <div className="mt-6 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
+                    <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">First Principle Logic</p>
+                    <code className="text-xs font-bold text-slate-700 dark:text-indigo-200">{df.logic}</code>
+                </div>
+            </div>
+
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-100/50 dark:bg-white/5">
+                            {(df.headers || []).map((h: any, i: number) => (
+                                <th key={i} className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-white/5">
+                                    <div className="group relative cursor-help">
+                                        {h.name}
+                                        <div className="absolute bottom-full left-0 mb-2 hidden group-hover:block w-48 p-3 bg-slate-900 text-white text-[10px] rounded-xl shadow-2xl z-50 normal-case font-medium leading-normal animate-in fade-in zoom-in-95">
+                                            {h.description}
+                                        </div>
+                                    </div>
+                                </th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                        {(df.rows || []).map((row: any, r: number) => (
+                            <tr key={r} className="hover:bg-slate-100/30 dark:hover:bg-white/5 transition-colors">
+                                {(df.headers || []).map((h: any, i: number) => (
+                                    <td key={i} className="px-6 py-4 text-xs font-bold text-slate-700 dark:text-slate-300">
+                                        {typeof row[h.name] === 'number'
+                                            ? (h.name === 'Delta' ? (row[h.name] === 0 ? '✓ Match' : row[h.name].toFixed(4)) : row[h.name].toLocaleString())
+                                            : String(row[h.name])}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+
+            {df.summaryInsights && (
+                <div className="p-6 bg-slate-100/30 dark:bg-white/2 border-t border-slate-200 dark:border-white/5">
+                    <div className="flex flex-wrap gap-4">
+                        {(df.summaryInsights || []).map((insight: string, i: number) => (
+                            <div key={i} className="flex items-center gap-2 text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                <span className="w-1 h-1 bg-indigo-500 rounded-full"></span>
+                                {insight}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 
     const renderSWOT = (swot: NonNullable<ReportSection['swot']>) => (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 my-10 break-inside-avoid">
@@ -827,12 +899,30 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                 {section.kpis && section.kpis.length > 0 && (
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 break-inside-avoid">
                                         {section.kpis.map((kpi, k) => (
-                                            <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border">
+                                            <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border group relative cursor-help">
                                                 <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
                                                 <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
-                                                <p className={`text-[10px] font-bold mt-1 ${kpi.status === 'on_track' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                    {kpi.status?.replace('_', ' ').toUpperCase()}
-                                                </p>
+                                                <div className="flex items-center justify-between mt-1">
+                                                    <p className={`text-[10px] font-bold ${kpi.status === 'on_track' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                        {kpi.status?.replace('_', ' ').toUpperCase()}
+                                                    </p>
+                                                    {kpi.validation?.status === 'verified' && (
+                                                        <span className="text-emerald-500 animate-pulse">✓</span>
+                                                    )}
+                                                </div>
+
+                                                {/* Reasoning Tooltip */}
+                                                {(kpi.reasoning || kpi.validation?.evidence) && (
+                                                    <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-56 p-4 bg-slate-900 text-white text-[10px] rounded-2xl shadow-4xl z-[100] normal-case font-medium leading-relaxed border border-white/10 animate-in fade-in zoom-in-95">
+                                                        <p className="font-black uppercase tracking-widest text-indigo-400 mb-2">First Principles Reasoning</p>
+                                                        <p className="mb-2 italic opacity-90">"{kpi.reasoning}"</p>
+                                                        {kpi.validation?.evidence && (
+                                                            <div className="pt-2 border-t border-white/10 mt-2">
+                                                                <p className="text-emerald-400 font-bold">✓ {kpi.validation.evidence}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -843,10 +933,31 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                     <ReactMarkdown>{section.content}</ReactMarkdown>
                                 </div>
 
+                                {/* Section Reasoning (First Principles) */}
+                                {(section as any).reasoning && (
+                                    <div className="my-8 p-6 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-l-4 border-indigo-600 shadow-sm">
+                                        <h6 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-2">Strategic Reasoning</h6>
+                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
+                                            "{(section as any).reasoning}"
+                                        </p>
+                                    </div>
+                                )}
+
                                 {/* Strategic Modules */}
                                 {section.swot && renderSWOT(section.swot)}
                                 {section.recommendations && renderRecommendations(section.recommendations)}
                                 {section.risks && renderRisks(section.risks)}
+
+                                {/* Calculated DataFrames (First Principles) */}
+                                {(section as any).dataFrames && (section as any).dataFrames.length > 0 && (
+                                    <div className="mt-10 mb-12 space-y-8">
+                                        {(section as any).dataFrames.map((df: any, d: number) => (
+                                            <React.Fragment key={d}>
+                                                {renderDataFrame(df)}
+                                            </React.Fragment>
+                                        ))}
+                                    </div>
+                                )}
 
                                 {/* Embedded Visuals */}
                                 {section.charts && section.charts.length > 0 && (

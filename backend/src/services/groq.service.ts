@@ -652,8 +652,8 @@ Return ONLY valid JSON (no markdown, no explanation):
       const data = dataset.data || [];
       const dataSize = data.length;
 
-      // 1. Generate Real Analytics Artifacts (KPIs & Charts)
-      const { kpis, charts, forensics } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType);
+      // 1. Generate Real Analytics Artifacts (KPIs & Charts & DataFrames)
+      const { kpis, charts, forensics, dataFrames } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType) as any;
 
       // 2. Context Extraction (Cleaning & Activity Awareness)
       const cleaningContext = extraContext.cleaningHistory && extraContext.cleaningHistory.length > 0
@@ -665,12 +665,13 @@ Return ONLY valid JSON (no markdown, no explanation):
         : 'No recent activity logs available.';
 
       // Context Extraction
-      const piiColumns = forensics.profiles.filter(p => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map(p => p.column);
-      const hasPredictiveCharts = charts.some(c => c.type === 'line' && c.description?.includes('Forecast'));
+      const piiColumns = forensics.profiles.filter((p: any) => p.role === 'contact' || p.detectedPatterns.includes('email') || p.detectedPatterns.includes('phone')).map((p: any) => p.column);
+      const hasPredictiveCharts = charts.some((c: any) => c.type === 'line' && c.description?.includes('Forecast'));
 
       // Prepare context for LLM
-      const kpiSummary = kpis.map(k => `${k.label}: ${k.value} (${k.trendDirection || 'neutral'})`).join('\n');
-      const chartSummary = charts.map(c => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Desc: ${c.description || 'n/a'}`).join('\n');
+      const kpiSummary = kpis.map((k: any) => `${k.label}: ${k.value} (${k.reasoning || ''})`).join('\n');
+      const chartSummary = charts.map((c: any) => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Logic: ${c.reasoning || 'n/a'}`).join('\n');
+      const dfSummary = (dataFrames || []).map((df: any) => `- ID: "${df.id}" | Title: "${df.title}" | Logic: ${df.logic}`).join('\n');
 
       const complianceContext = piiColumns.length > 0
         ? `CRITICAL COMPLIANCE NOTICE: The following columns contain potential PII: ${piiColumns.join(', ')}. You MUST include a 'Compliance & Privacy' section with GDPR/CCPA warnings.`
@@ -702,6 +703,11 @@ Return ONLY valid JSON (no markdown, no explanation):
       ${cleaningContext}
       ${activityContext}
 
+      FIRST PRINCIPLES DIRECTIVE (CRITICAL):
+      1. Every section MUST include a 'Reasoning' paragraph explaining the business logic behind the displayed metrics.
+      2. Do NOT just state numbers; explain the "Calculated Truth" (e.g., how Margin was derived from raw units).
+      3. Use the provided Calculated DataFrames to anchor your logical arguments.
+
       TASK:
       Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.
       INTEGRATE PROCESS AWARENESS: Refer to the cleaning history specifically when discussing "Data Quality" to show how the current state was achieved. Use Activity logs to contextualize the report for the current workspace's objectives.
@@ -715,16 +721,19 @@ Return ONLY valid JSON (no markdown, no explanation):
             "id": "intro",
             "title": "Strategic Overview",
             "content": "Deep dive narrative...",
+            "reasoning": "First Principles justification for these specific metrics...",
             "keyTakeaways": ["insight 1", "insight 2"],
             "swot": { "strengths": [], "weaknesses": [], "opportunities": [], "threats": [] },
             "recommendations": [{ "action": "...", "impact": "high", "effort": "low", "rationale": "..." }],
             "risks": [{ "category": "Compliance", "description": "...", "level": "medium", "mitigation": "..." }],
             "chartIds": ["id_of_relevant_chart_1"],
-            "kpiIds": ["total_records"]
+            "kpiIds": ["total_records"],
+            "dataFrameIds": ["id_of_relevant_dataframe_1"]
           }
         ],
+        "dataFrames": [],
         "generatedAt": "${new Date().toISOString()}",
-        "version": "3.0"
+        "version": "4.0-FP"
       }`;
 
       const result = await this.callGroq(groqPrompt, 2500);
@@ -738,12 +747,16 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       const report = JSON.parse(jsonStr);
 
-      // Hydrate Charts and KPIs
+      // Hydrate Charts, KPIs, and DataFrames
       report.sections = report.sections.map((section: any) => ({
         ...section,
-        charts: (section.chartIds || []).map((id: string) => charts.find(c => c.id === id) || charts[0]).filter((c: any) => c),
-        kpis: (section.kpiIds || []).map((id: string) => kpis.find(k => k.id === id) || kpis.find(k => k.label.includes(id))).filter((k: any) => k)
+        charts: (section.chartIds || []).map((id: string) => charts.find((c: any) => c.id === id) || charts[0]).filter((c: any) => c),
+        kpis: (section.kpiIds || []).map((id: string) => kpis.find((k: any) => k.id === id) || kpis.find((k: any) => k.label.includes(id))).filter((k: any) => k),
+        dataFrames: (section.dataFrameIds || []).map((id: string) => dataFrames.find((df: any) => df.id === id)).filter((df: any) => df)
       }));
+
+      // Ensure all DataFrames are at the top level for global access if needed
+      report.dataFrames = dataFrames;
 
       // Fallback: If no charts assigned, distribute them
       const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
