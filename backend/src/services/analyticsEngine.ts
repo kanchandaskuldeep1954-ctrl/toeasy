@@ -43,6 +43,9 @@ export interface ChartSpec {
         status: 'verified' | 'unverified';
         evidence: string;
     };
+    xAxis?: string;
+    yAxis?: string;
+    zAxis?: string;
 }
 
 export interface FilterSpec {
@@ -328,8 +331,8 @@ export class AnalyticsEngine {
                     chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
                 } else if (spec.type === 'scatter') {
                     chartData = data.slice(0, 500).map(r => ({
-                        x: actualX && !isNaN(this.parseNumeric(r[actualX])) ? this.parseNumeric(r[actualX]) : r[actualX],
-                        y: actualY && !isNaN(this.parseNumeric(r[actualY])) ? this.parseNumeric(r[actualY]) : r[actualY],
+                        x: actualX && !isNaN(this.parseNumeric(r[actualX])) ? this.parseNumeric(r[actualX]) : (actualX ? r[actualX] : 0),
+                        y: actualY && !isNaN(this.parseNumeric(r[actualY])) ? this.parseNumeric(r[actualY]) : (actualY ? r[actualY] : 0),
                         name: r[profiles[0]?.column || '']
                     }));
                 } else if (spec.type === 'line' && xCol?.dataType === 'date') {
