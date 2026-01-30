@@ -131,7 +131,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     charts: (s.charts || []).map(c => ({
                         type: c.type,
                         title: c.title,
-                        data: dataset.data, // Reports usually use the base dataset
+                        data: c.data || [], // Use the pre-aggregated data from the section chart
                         spec: c
                     }))
                 }))

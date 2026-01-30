@@ -99,7 +99,14 @@ const PublicShareView: React.FC = () => {
                                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
                             )}
                         </button>
-                        <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => window.print()}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
+                            <span className="text-[10px] uppercase tracking-widest">Download PDF</span>
+                        </button>
+                        <div className="flex items-center gap-2 print:hidden">
                             <span className="px-3 py-1 bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-widest">
                                 {resourceType}
                             </span>
@@ -108,6 +115,51 @@ const PublicShareView: React.FC = () => {
                     </div>
                 </div>
             </header>
+
+            {/* Print Styling */}
+            <style dangerouslySetInnerHTML={{
+                __html: `
+                @media print {
+                    .no-print, header, footer, button, .print-hidden {
+                        display: none !important;
+                    }
+                    body {
+                        background: white !important;
+                        color: black !important;
+                    }
+                    main {
+                        margin: 0 !important;
+                        padding: 20px !important;
+                        max-width: 100% !important;
+                    }
+                    .bg-white, .dark\\:bg-slate-900 {
+                        background: white !important;
+                        border: 1px solid #eee !important;
+                        box-shadow: none !important;
+                    }
+                    .text-white, .dark\\:text-white {
+                        color: black !important;
+                    }
+                    .text-slate-400, .text-slate-500 {
+                        color: #666 !important;
+                    }
+                    .prose {
+                        max-width: none !important;
+                    }
+                    pre, code {
+                        white-space: pre-wrap !important;
+                    }
+                    .rounded-[40px], .rounded-[32px] {
+                        border-radius: 12px !important;
+                    }
+                    .shadow-sm, .shadow-lg, .shadow-2xl {
+                        box-shadow: none !important;
+                    }
+                    .animate-in {
+                        animation: none !important;
+                    }
+                }
+            `}} />
 
             {/* Content Container */}
             <main className="max-w-[1800px] mx-auto px-6 py-12 space-y-12 animate-in fade-in duration-700">
