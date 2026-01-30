@@ -12,6 +12,8 @@ import { DataPeekModal } from './Dashboard/DataPeekModal';
 import { aggregateData } from '../src/utils/dashboardHelper';
 import { sharingAPI, dashboardAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
+import { ExportModal } from '../src/components/ExportHub';
+import { ExportService } from '../src/services/exportService';
 
 interface DashboardViewProps {
     dataset: Dataset;
@@ -833,6 +835,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
             {/* Modal Components */}
             {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
             {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
+
+            <ExportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                exportType="dashboard"
+                data={config}
+                filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
+                onExport={(format) => {
+                    if (format === 'pdf') {
+                        ExportService.exportToPDF(dashboardName);
+                    } else if (format === 'csv') {
+                        ExportService.exportToCSV(dataset, 'dashboard_data');
+                    }
+                }}
+            />
 
             {/* Filter Studio Overlay */}
             {isFilterStudioOpen && (
