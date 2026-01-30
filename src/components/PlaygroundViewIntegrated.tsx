@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
+import { useDataset } from '../hooks/useDataset';
+import { Dataset } from '../context/DatasetContext';
 import {
   Play, Save, Database, Table, BarChart2, MessageSquare,
   ChevronLeft, ChevronRight, X, Download, Terminal,
@@ -42,6 +44,9 @@ const PlaygroundViewIntegrated: React.FC = () => {
   const datasetId = searchParams.get('dataset');
   const queryId = searchParams.get('query');
 
+  const { activeDataset, setActiveDataset } = useDataset();
+  const dataset = activeDataset as unknown as Dataset;
+
   const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
   // --- State ---
@@ -71,8 +76,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveForm, setSaveForm] = useState({ name: '', description: '' });
 
-  // Dataset Context
-  const [datasetData, setDatasetData] = useState<any[]>([]);
+  // No local datasetData state - use context!
 
   // --- Effects ---
 
@@ -111,11 +115,28 @@ const PlaygroundViewIntegrated: React.FC = () => {
 
   const loadDatasetPreview = async () => {
     try {
+      if (dataset && String(dataset.id) === String(datasetId)) return; // Already have it
+
       const response = await axios.get(
-        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/preview`,
+        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setDatasetData(response.data?.data || []);
+
+      const dsData = response.data;
+      const safeParse = (val: any) => {
+        if (!val) return [];
+        if (typeof val === 'string') {
+          try { return JSON.parse(val); } catch (e) { return []; }
+        }
+        return val;
+      };
+
+      const rawData = safeParse(dsData.raw_data || dsData.data);
+      setActiveDataset({
+        ...dsData,
+        data: rawData,
+        headers: safeParse(dsData.headers) || (rawData[0] ? Object.keys(rawData[0]) : [])
+      });
     } catch (err) {
       console.error('Failed to load dataset preview:', err);
     }
@@ -167,10 +188,11 @@ const PlaygroundViewIntegrated: React.FC = () => {
         // Client-side JS Execution
         try {
           // Safety check: ensure we have data
-          if (!datasetData || datasetData.length === 0) throw new Error("No data available to script against. Please wait for preview to load.");
+          const currentData = dataset?.data || [];
+          if (!currentData || currentData.length === 0) throw new Error("No data available to script against. Please wait for preview to load.");
 
           const userFunction = new Function('data', scriptCode);
-          const result = userFunction(datasetData);
+          const result = userFunction(currentData);
 
           if (!Array.isArray(result)) throw new Error("Script must return an Array of objects.");
 
@@ -190,8 +212,8 @@ const PlaygroundViewIntegrated: React.FC = () => {
             `${backendUrl}/generate-sql`,
             {
               dataset: {
-                data: datasetData.slice(0, 5),
-                columns: datasetData.length > 0 ? Object.keys(datasetData[0]) : []
+                data: (dataset?.data || []).slice(0, 5),
+                columns: dataset?.headers || []
               },
               query
             },

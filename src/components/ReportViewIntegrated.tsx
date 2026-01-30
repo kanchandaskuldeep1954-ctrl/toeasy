@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import ReportView from '../../components/ReportView';
-import { Dataset } from '../../types';
+import { Dataset } from '../context/DatasetContext';
 import { reportsAPI, datasetAPI } from '../services/api';
+import { useDataset } from '../hooks/useDataset';
 
 const ReportViewIntegrated: React.FC = () => {
+    const { activeDataset, setActiveDataset } = useDataset();
+    const dataset = activeDataset as unknown as Dataset;
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
     const workspaceId = searchParams.get('workspace') || '';
     const datasetId = searchParams.get('dataset') || '';
     const reportId = searchParams.get('id') || '';
 
-    const [dataset, setDataset] = useState<Dataset | null>(null);
     const [reportEntity, setReportEntity] = useState<any>(null);
     const [siblings, setSiblings] = useState<any[]>([]);
     const [isSwitcherOpen, setIsSwitcherOpen] = useState(false);
@@ -52,49 +54,37 @@ const ReportViewIntegrated: React.FC = () => {
 
             if (!targetDatasetId) throw new Error('No dataset linked.');
 
-            // 2. Fetch Dataset + Siblings
-            const [dsRes, siblingsRes] = await Promise.all([
-                datasetAPI.get(workspaceId, targetDatasetId),
-                reportsAPI.list(workspaceId, targetDatasetId)
-            ]);
+            // 2. Hydrate Dataset in Context if not already active
+            if (!dataset || String(dataset.id) !== String(targetDatasetId)) {
+                const dsRes = await datasetAPI.get(workspaceId, targetDatasetId);
+                const dsData = dsRes.data;
+                const safeParse = (val: any) => {
+                    if (!val) return undefined;
+                    if (typeof val === 'string') {
+                        try {
+                            const first = JSON.parse(val);
+                            return typeof first === 'string' ? JSON.parse(first) : first;
+                        } catch (e) { return undefined; }
+                    }
+                    return val;
+                };
 
-            const dsData = dsRes.data;
+                const cleanedData = safeParse(dsData.cleaned_data);
+                const rawData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
+                const headers = safeParse(dsData.headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
+
+                setActiveDataset({
+                    ...dsData,
+                    data: rawData,
+                    headers: headers,
+                    strategicReport: initialReportContent || (dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined),
+                });
+            }
+
+            // 3. Fetch Siblings
+            const siblingsRes = await reportsAPI.list(workspaceId, targetDatasetId);
             setSiblings(siblingsRes.data.data || []);
-
-            const safeParse = (val: any) => {
-                if (!val) return undefined;
-                if (typeof val === 'string') {
-                    try {
-                        const first = JSON.parse(val);
-                        return typeof first === 'string' ? JSON.parse(first) : first;
-                    } catch (e) { return undefined; }
-                }
-                return val;
-            };
-
-            const cleanedData = safeParse(dsData.cleaned_data);
-            const rawData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
-            const headers = safeParse(dsData.headers) || [];
-            const finalHeaders = headers.length > 0 ? headers : Object.keys(rawData?.[0] || {});
-
-            const transformedDataset: Dataset = {
-                id: dsData.id || targetDatasetId,
-                name: dsData.name || 'Dataset',
-                sourceType: dsData.source_type || 'csv',
-                headers: finalHeaders,
-                data: rawData,
-                dataQualitySource: cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL',
-                stats: dsData.stats || [],
-                createdAt: dsData.created_at || new Date().toISOString(),
-                rowCount: rawData.length,
-                quarantinedData: [],
-                cleaningActions: [],
-                cleaningHistory: dsData.cleaning_history || [],
-                dashboardConfig: dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined,
-                strategicReport: initialReportContent || (dsData.strategic_report ? safeParse(dsData.strategic_report) : undefined),
-            };
-
-            setDataset(transformedDataset);
+            setError(null);
             setError(null);
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load report');
@@ -106,7 +96,7 @@ const ReportViewIntegrated: React.FC = () => {
     const handleUpdate = async (updated: Dataset) => {
         if (!workspaceId) return;
         try {
-            setDataset(updated);
+            setActiveDataset(updated as any);
 
             // 1. If we are in a specific report, update its content
             if (reportId) {

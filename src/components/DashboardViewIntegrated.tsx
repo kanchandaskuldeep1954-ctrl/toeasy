@@ -3,18 +3,20 @@ import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import DashboardView from '../../components/DashboardView';
-import { Dataset } from '../../types';
+import { Dataset } from '../context/DatasetContext';
 import { dashboardAPI, datasetAPI } from '../services/api';
+import { useDataset } from '../hooks/useDataset';
 
 const DashboardViewIntegrated: React.FC = () => {
   const { token } = useAuth();
+  const { activeDataset, setActiveDataset, updateDataset: updateDatasetCtx } = useDataset();
+  const dataset = activeDataset as unknown as Dataset;
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const workspaceId = searchParams.get('workspace') || '';
   const datasetId = searchParams.get('dataset') || '';
   const initialDashboardId = searchParams.get('id') || '';
 
-  const [dataset, setDataset] = useState<Dataset | null>(null);
   const [dashboardEntity, setDashboardEntity] = useState<any>(null);
   const [siblings, setSiblings] = useState<any[]>([]);
 
@@ -51,84 +53,51 @@ const DashboardViewIntegrated: React.FC = () => {
         const dRes = await dashboardAPI.get(workspaceId, initialDashboardId);
         currentDashboard = dRes.data.data || dRes.data;
         setDashboardEntity(currentDashboard);
-        targetDatasetId = currentDashboard.dataset_id || datasetId;
-      }
 
-      if (!targetDatasetId) {
-        throw new Error('No dataset linked to this analysis.');
-      }
+        // 2. Hydrate Dataset in Context if not already active
+        if (!dataset || String(dataset.id) !== String(targetDatasetId)) {
+          const dsRes = await datasetAPI.get(workspaceId, targetDatasetId);
+          const dsData = dsRes.data;
 
-      // 2. Fetch Dataset and related data
-      const [dsRes, siblingsRes, versionsRes] = await Promise.all([
-        datasetAPI.get(workspaceId, targetDatasetId),
-        dashboardAPI.list(workspaceId),
-        axios.get(`${(import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api'}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
-      ]);
+          const safeParse = (val: any) => {
+            if (!val) return undefined;
+            if (typeof val === 'string') {
+              try {
+                const first = JSON.parse(val);
+                return typeof first === 'string' ? JSON.parse(first) : first;
+              } catch (e) { return undefined; }
+            }
+            return val;
+          };
 
-      const dsData = dsRes.data;
-      const allDashboards = siblingsRes.data.data || [];
-      setDataVersions(versionsRes.data || []);
+          const rawData = safeParse(dsData.raw_data || dsData.data) || [];
+          const headers = safeParse(dsData.headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
 
-      // Filter siblings for this dataset
-      const dashSiblings = allDashboards.filter((d: any) => String(d.dataset_id) === String(targetDatasetId));
-      setSiblings(dashSiblings);
+          setActiveDataset({
+            ...dsData,
+            data: rawData,
+            headers: headers,
+          });
+        }
 
-      // If no dashboardId but we have siblings, check for primary
-      if (!initialDashboardId && !currentDashboard) {
-        const primary = dashSiblings.find((d: any) => d.is_primary);
-        if (primary) {
-          setDashboardEntity(primary);
+        // 3. Fetch Siblings and Versions
+        const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+        const [siblingsRes, versionsRes] = await Promise.all([
+          dashboardAPI.list(workspaceId),
+          axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
+        ]);
+
+        const allDashboards = siblingsRes.data.data || [];
+        setDataVersions(versionsRes.data || []);
+
+        const dashSiblings = allDashboards.filter((d: any) => String(d.dataset_id) === String(targetDatasetId));
+        setSiblings(dashSiblings);
+
+        if (!initialDashboardId && !currentDashboard) {
+          const primary = dashSiblings.find((d: any) => d.is_primary);
+          if (primary) setDashboardEntity(primary);
         }
       }
-
-      const safeParse = (val: any) => {
-        if (!val) return undefined;
-        if (typeof val === 'string') {
-          try {
-            const first = JSON.parse(val);
-            return typeof first === 'string' ? JSON.parse(first) : first;
-          } catch (e) { return undefined; }
-        }
-        return val;
-      };
-
-      // DATA FETCHING LOGIC (Version Aware)
-      let finalData: any[] = [];
-      let finalHeaders: string[] = [];
-      let sourceName = 'RAW_ORIGINAL';
-
-      if (selectedDataVersionId && selectedDataVersionId !== 'root') {
-        const verRes = await axios.get(
-          `${(import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api'}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions/${selectedDataVersionId}`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        finalData = verRes.data.data;
-        finalHeaders = verRes.data.headers;
-        sourceName = `VERSION:${verRes.data.version_name}`;
-      } else {
-        const cleanedData = safeParse(dsData.cleaned_data);
-        finalData = cleanedData || safeParse(dsData.raw_data || dsData.data) || [];
-        const hdrs = safeParse(dsData.headers) || [];
-        finalHeaders = hdrs.length > 0 ? hdrs : Object.keys(finalData?.[0] || {});
-        sourceName = cleanedData ? 'PRO_CLEANED' : 'RAW_ORIGINAL';
-      }
-
-      const transformedDataset: Dataset = {
-        id: dsData.id || targetDatasetId,
-        name: dsData.name || 'Dataset',
-        sourceType: dsData.source_type || 'csv',
-        headers: finalHeaders,
-        data: finalData,
-        dataQualitySource: sourceName as any,
-        stats: dsData.stats || [],
-        createdAt: dsData.created_at || new Date().toISOString(),
-        rowCount: finalData.length,
-        quarantinedData: [],
-        cleaningActions: [],
-        dashboardConfig: currentDashboard?.layout || (dsData.dashboard_config ? safeParse(dsData.dashboard_config) : undefined),
-      };
-
-      setDataset(transformedDataset);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -139,8 +108,8 @@ const DashboardViewIntegrated: React.FC = () => {
   };
 
   const handleUpdate = async (updated: Dataset) => {
-    // Core saving is handled inside DashboardView via auto-save
-    setDataset(updated);
+    // Sync with global context
+    setActiveDataset(updated as any);
   };
 
   if (loading) {
