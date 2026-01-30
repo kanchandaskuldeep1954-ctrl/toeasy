@@ -51,13 +51,14 @@ export function validateChartSpec(
   }
 
   // Validate axis columns exist
-  if (!headers.includes(spec.xAxis)) {
+  const safeHeaders = headers || [];
+  if (spec.xAxis && !safeHeaders.includes(spec.xAxis)) {
     result.valid = false;
     result.errors.push(`X-axis column "${spec.xAxis}" not found in dataset`);
     result.score -= 50;
   }
 
-  if (!headers.includes(spec.yAxis) && spec.yAxis !== 'count') {
+  if (spec.yAxis && !safeHeaders.includes(spec.yAxis) && spec.yAxis !== 'count') {
     result.valid = false;
     result.errors.push(`Y-axis column "${spec.yAxis}" not found in dataset`);
     result.score -= 50;
@@ -150,8 +151,9 @@ export function assessDataQuality(
   }
 
   let issueCount = 0;
+  const safeHeaders = headers || [];
 
-  for (const header of headers) {
+  for (const header of safeHeaders) {
     // Count missing values
     const missing = data.filter(r => r[header] === null || r[header] === undefined || String(r[header]).trim() === '').length;
     const missingPercent = (missing / data.length) * 100;

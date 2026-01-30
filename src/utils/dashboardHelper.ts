@@ -3,13 +3,21 @@ import { Dataset, ChartSpec } from '../../types';
 import { GroqService } from '../../services/groqService';
 
 const findClosestColumn = (target: string | undefined, headers: string[]): string | undefined => {
-    if (!target) return undefined;
+    if (!target || !headers || !Array.isArray(headers)) return undefined;
+
+    // 1. Direct match
     if (headers.includes(target)) return target;
-    const normalized = (s: string) => s.toLowerCase().replace(/[\s_-]/g, '');
+
+    // 2. Case-insensitive / Extra-insensitive match (remove all non-alphanumeric)
+    const normalized = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
     const targetNorm = normalized(target);
-    const match = headers.find(h => normalized(h) === targetNorm);
+    if (!targetNorm) return undefined;
+
+    const match = headers.find(h => h && normalized(h) === targetNorm);
     if (match) return match;
-    return headers.find(h => normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h)));
+
+    // 3. Partial match (if target is "revenue" and header is "Total Revenue")
+    return headers.find(h => h && (normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h))));
 };
 
 /**
@@ -38,7 +46,9 @@ const parseNumericValue = (val: any): number | null => {
 };
 
 export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: any[]): any[] => {
-    const headers = dataset.headers;
+    if (!dataset || !chart) return [];
+
+    const headers = dataset.headers || [];
     const xAxis = findClosestColumn(chart.xAxis || chart.options?.xAxis, headers) || chart.xAxis || chart.options?.xAxis;
     const yAxis = findClosestColumn(chart.yAxis || chart.options?.yAxis, headers) || chart.yAxis || chart.options?.yAxis;
     const zAxis = findClosestColumn(chart.zAxis || chart.options?.zAxis, headers) || chart.zAxis || chart.options?.zAxis;
