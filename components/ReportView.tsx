@@ -2,12 +2,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
 import { GroqService } from '../services/groqService';
-import { ExportService } from '../services/exportService';
+import { ExportService } from '../src/services/exportService';
 import ReactMarkdown from 'react-markdown';
 import PlotlyChart from './Dashboard/PlotlyChart';
 import { sharingAPI, activityAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
-import { ExportModal } from '../src/components/ExportHub';
+import ExportModal from '../src/components/ExportHub/ExportModal';
 
 interface ReportViewProps {
     dataset: Dataset;

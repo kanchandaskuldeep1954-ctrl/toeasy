@@ -12,7 +12,7 @@ import { DataPeekModal } from './Dashboard/DataPeekModal';
 import { aggregateData } from '../src/utils/dashboardHelper';
 import { sharingAPI, dashboardAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
-import { ExportModal } from '../src/components/ExportHub';
+import ExportModal from '../src/components/ExportHub/ExportModal';
 import { ExportService } from '../src/services/exportService';
 
 interface DashboardViewProps {
