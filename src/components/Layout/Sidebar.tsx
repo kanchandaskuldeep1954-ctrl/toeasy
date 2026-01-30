@@ -124,7 +124,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                             <div className="space-y-1">
                                 {group.items.map(item => {
                                     // Important: Check active status against absolute path (ignoring params)
-                                    const active = location.pathname.includes(item.path.split('?')[0]);
+                                    const pathBase = (item.path || '').split('?')[0];
+                                    const active = pathBase && location.pathname.includes(pathBase);
                                     return (
                                         <NavLink
                                             key={item.name} // Use name as key since path is dynamic

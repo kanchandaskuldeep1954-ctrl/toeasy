@@ -35,8 +35,8 @@ const Sidebar: React.FC = () => {
   ];
 
   const getActiveMenuItem = () => {
-    const currentPath = location.pathname;
-    return menuItems.find(item => currentPath.includes(item.path));
+    const currentPath = location.pathname || '';
+    return menuItems.find(item => item.path && currentPath.includes(item.path));
   };
 
   const activeItem = getActiveMenuItem();
@@ -44,12 +44,11 @@ const Sidebar: React.FC = () => {
   const handleNavigate = (path: string) => {
     // Pages that require dataset context (when dataset is selected)
     const datasetDependentPaths = ['/app/clean', '/app/explore', '/app/dashboard', '/app/report', '/app/playground', '/app/dashboards', '/app/reports'];
-    // Pages that only require workspace context
     const workspaceDependentPaths = ['/app/upload', '/app/create'];
 
-    if (datasetDependentPaths.some(p => path.includes(p))) {
+    if (path && datasetDependentPaths.some(p => path.includes(p))) {
       navigate(buildDatasetPath(path));
-    } else if (workspaceDependentPaths.some(p => path.includes(p))) {
+    } else if (path && workspaceDependentPaths.some(p => path.includes(p))) {
       navigate(buildWorkspacePath(path));
     } else {
       navigate(path);
