@@ -973,6 +973,16 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
             </aside>
 
+            {/* Export Modal Integration */}
+            <ExportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                exportType="report"
+                data={report}
+                filename={`${report.title}_${new Date().toISOString().split('T')[0]}`}
+                onExport={handleExport as any}
+            />
+
             <style>{`
         @media print {
             body { background: white; color: black; }
