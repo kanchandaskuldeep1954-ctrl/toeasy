@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { ShareSnapshot } from '../../types';
 import PlotlyChart from '../../components/Dashboard/PlotlyChart';
+import ReactMarkdown from 'react-markdown';
 
 const PublicShareView: React.FC = () => {
     const { token } = useParams<{ token: string }>();
@@ -179,17 +180,84 @@ const PublicShareView: React.FC = () => {
                             <div key={idx} className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-white/5 p-12 space-y-8">
                                 <div>
                                     <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-4">{section.title}</h2>
-                                    <div className="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-400 font-medium leading-relaxed" dangerouslySetInnerHTML={{ __html: section.content }} />
+                                    <div className="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                                        <ReactMarkdown>{section.content}</ReactMarkdown>
+                                    </div>
                                 </div>
 
+                                {section.keyTakeaways && section.keyTakeaways.length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {section.keyTakeaways.map((tk: any, i: number) => (
+                                            <span key={i} className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                                                ✦ {tk}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {section.kpis && section.kpis.length > 0 && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {section.kpis.map((kpi: any, k: number) => (
+                                            <div key={k} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
+                                                <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {section.swot && (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {section.swot.strengths && section.swot.strengths.length > 0 && (
+                                            <div className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
+                                                <h4 className="text-[10px] font-black uppercase text-emerald-600 mb-3 tracking-widest">Strengths</h4>
+                                                <ul className="text-xs space-y-2 font-medium text-slate-700 dark:text-slate-300">
+                                                    {section.swot.strengths.map((s: any, i: number) => <li key={i} className="flex gap-2"><span>💪</span> {s}</li>)}
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {section.swot.weaknesses && section.swot.weaknesses.length > 0 && (
+                                            <div className="p-6 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-2xl">
+                                                <h4 className="text-[10px] font-black uppercase text-rose-600 mb-3 tracking-widest">Weaknesses</h4>
+                                                <ul className="text-xs space-y-2 font-medium text-slate-700 dark:text-slate-300">
+                                                    {section.swot.weaknesses.map((s: any, i: number) => <li key={i} className="flex gap-2"><span>⚠️</span> {s}</li>)}
+                                                </ul>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {section.recommendations && section.recommendations.length > 0 && (
+                                    <div className="space-y-4">
+                                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Actionable Intelligence</h4>
+                                        <div className="grid gap-4">
+                                            {section.recommendations.map((rec: any, i: number) => (
+                                                <div key={i} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{rec.action}</p>
+                                                        <span className="px-2 py-0.5 bg-indigo-600/10 text-indigo-600 text-[9px] font-bold rounded uppercase">Impact: {rec.impact}</span>
+                                                    </div>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{rec.rationale}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {section.charts && section.charts.length > 0 && (
-                                    <div className="grid grid-cols-1 gap-8 mt-12">
-                                        {section.charts.map((chart, cIdx) => (
-                                            <div key={cIdx} className="w-full h-[400px]">
-                                                <PlotlyChart
-                                                    chart={chart.spec || { type: chart.type } as any}
-                                                    data={chart.data}
-                                                />
+                                    <div className="grid grid-cols-1 gap-8 pt-8 border-t border-slate-100 dark:border-white/5">
+                                        {section.charts.map((chart: any, cIdx: number) => (
+                                            <div key={cIdx} className="w-full">
+                                                <div className="mb-4">
+                                                    <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{chart.type} Visualization</h5>
+                                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h4>
+                                                </div>
+                                                <div className="h-[400px]">
+                                                    <PlotlyChart
+                                                        chart={chart.spec || { type: chart.type } as any}
+                                                        data={chart.data}
+                                                    />
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
@@ -231,7 +299,7 @@ const PublicShareView: React.FC = () => {
                     </div>
                 </div>
             </footer>
-        </div>
+        </div >
     );
 };
 

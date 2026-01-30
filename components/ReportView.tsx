@@ -57,6 +57,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const workspaceId = searchParams.get('workspace') || '';
     const [shareUrl, setShareUrl] = useState<string | null>(null);
     const [isSharing, setIsSharing] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
 
     const copilotSuggestions = [
         { title: 'Add Competitor Benchmark', icon: '🏆', prompt: 'Include a section comparing our revenue growth against the S&P 500 average for 2025.' },
@@ -87,6 +89,30 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         if (onUpdate) onUpdate({ ...dataset, strategicReport: fallback });
     };
 
+    const handleCopyLink = () => {
+        if (!shareUrl) return;
+        navigator.clipboard.writeText(shareUrl);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 2000);
+    };
+
+    const handleNativeShare = async () => {
+        if (!shareUrl) return;
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: report?.title || 'Report',
+                    text: `Check out this report analysis from Toeasy: ${report?.title}`,
+                    url: shareUrl,
+                });
+            } catch (err) {
+                console.error('Error sharing:', err);
+            }
+        } else {
+            handleCopyLink();
+        }
+    };
+
     const handleShare = async () => {
         if (!report || isSharing) return;
         setIsSharing(true);
@@ -97,10 +123,15 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 sections: (report.sections || []).map(s => ({
                     title: s.title,
                     content: s.content,
+                    keyTakeaways: s.keyTakeaways,
+                    swot: s.swot,
+                    recommendations: s.recommendations,
+                    risks: s.risks,
+                    kpis: s.kpis,
                     charts: (s.charts || []).map(c => ({
                         type: c.type,
                         title: c.title,
-                        data: dataset.data, // Simplified for snapshots or use specific data if filtered
+                        data: dataset.data, // Reports usually use the base dataset
                         spec: c
                     }))
                 }))
@@ -114,7 +145,12 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 snapshot
             });
 
-            setShareUrl(response.data.publicUrl);
+            if (response.data && response.data.publicUrl) {
+                setShareUrl(response.data.publicUrl);
+                setShowShareModal(true);
+            } else {
+                throw new Error('No public URL returned');
+            }
         } catch (err) {
             console.error('Sharing failed:', err);
             alert('Failed to generate share link');
@@ -122,6 +158,27 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             setIsSharing(false);
         }
     };
+
+    const socialShares = [
+        {
+            name: 'WhatsApp',
+            icon: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.438 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.45L0 24l6.835-1.794c1.516.827 3.215 1.263 4.946 1.263h0c6.557 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.415-8.412',
+            color: '#25D366',
+            action: (url: string) => window.open(`https://wa.me/?text=${encodeURIComponent(`Check out this report analysis from Toeasy: ${url}`)}`, '_blank')
+        },
+        {
+            name: 'LinkedIn',
+            icon: 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z',
+            color: '#0077B5',
+            action: (url: string) => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank')
+        },
+        {
+            name: 'X',
+            icon: 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932 6.064-6.932zm-1.294 19.497h2.039L6.486 3.24H4.298L17.607 20.65z',
+            color: '#000000',
+            action: (url: string) => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Report analysis from Toeasy: ${url}`)}`, '_blank')
+        }
+    ];
 
     const generate = useCallback(async (forced: boolean = false) => {
         if (!dataset) return;
@@ -477,8 +534,20 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         </a>
                     ))}
                 </nav>
-                <div className="mt-auto pt-6 border-t border-slate-100 dark:border-slate-800">
-                    <button onClick={() => setShowExportModal(true)} className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+                <div className="mt-auto pt-4 space-y-3 border-t border-slate-100 dark:border-slate-800">
+                    <button
+                        onClick={handleShare}
+                        disabled={isSharing}
+                        className={`w-full py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${isSharing ? 'bg-indigo-600/20 text-indigo-400' : 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-lg shadow-indigo-500/20'}`}
+                    >
+                        {isSharing ? (
+                            <span className="w-4 h-4 border-2 border-indigo-400/30 border-t-indigo-400 rounded-full animate-spin" />
+                        ) : (
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                        )}
+                        {isSharing ? 'SHARING...' : 'SHARE REPORT'}
+                    </button>
+                    <button onClick={() => setShowExportModal(true)} className="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity flex items-center justify-center gap-2 border border-slate-700 dark:border-slate-200">
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                         Export Options
                     </button>
@@ -583,45 +652,99 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
             )}
 
-            {/* Export Modal */}
-            {showExportModal && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in print:hidden">
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-8 w-full max-w-lg shadow-2xl border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
-                        <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Export Report</h3>
-                            <button onClick={() => setShowExportModal(false)} className="text-slate-400 hover:text-slate-500">✕</button>
+            {/* Share Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-white">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Report</h3>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Global snapshot share link</p>
+                                </div>
+                            </div>
+                            <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <button onClick={() => handleExport('pdf')} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 group transition-all text-left">
-                                <span className="text-2xl mb-2 block">📄</span>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white block">PDF Document</span>
-                                <span className="text-[10px] text-slate-500">Professional print layout</span>
-                            </button>
-                            <button onClick={() => handleExport('word')} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 group transition-all text-left">
-                                <span className="text-2xl mb-2 block">📝</span>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white block">Word Document</span>
-                                <span className="text-[10px] text-slate-500">Editable .doc format</span>
-                            </button>
-                            <button onClick={() => handleExport('powerbi')} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-yellow-500 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 group transition-all text-left">
-                                <span className="text-2xl mb-2 block">📊</span>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white block">PowerBI Data</span>
-                                <span className="text-[10px] text-slate-500">Optimized CSV dataset</span>
-                            </button>
-                            <button onClick={() => handleExport('tableau')} className="p-4 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 group transition-all text-left">
-                                <span className="text-2xl mb-2 block">📉</span>
-                                <span className="text-sm font-bold text-slate-900 dark:text-white block">Tableau Data</span>
-                                <span className="text-[10px] text-slate-500">TDE-ready CSV format</span>
-                            </button>
-                            <button onClick={() => handleExport('markdown')} className="col-span-2 p-3 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <span className="text-lg">⌨️</span>
-                                    <div>
-                                        <span className="text-xs font-bold text-slate-900 dark:text-white block">Markdown / Raw Text</span>
-                                    </div>
+                        <div className="space-y-8">
+                            {/* Social Share Row */}
+                            <div className="flex justify-between gap-4">
+                                {socialShares.map((social) => (
+                                    <button
+                                        key={social.name}
+                                        onClick={() => social.action(shareUrl || '')}
+                                        className="flex-1 flex flex-col items-center gap-2 group"
+                                    >
+                                        <div className="w-14 h-14 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex items-center justify-center transition-all group-hover:scale-110 group-hover:shadow-lg" style={{ '--hover-color': social.color } as any}>
+                                            <svg className="w-6 h-6 transition-colors group-hover:text-[var(--hover-color)]" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d={social.icon} />
+                                            </svg>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-slate-900 dark:group-hover:text-white transition-colors">
+                                            {social.name}
+                                        </span>
+                                    </button>
+                                ))}
+                                {(navigator as any).share && (
+                                    <button
+                                        onClick={handleNativeShare}
+                                        className="flex-1 flex flex-col items-center gap-2 group"
+                                    >
+                                        <div className="w-14 h-14 rounded-2xl bg-indigo-600 flex items-center justify-center text-white transition-all group-hover:scale-110 group-hover:shadow-lg group-hover:bg-indigo-500">
+                                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                                        </div>
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-indigo-600 dark:text-indigo-400">More</span>
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="p-5 bg-slate-950/5 dark:bg-white/5 rounded-[24px] border border-slate-200/50 dark:border-white/5 flex flex-col gap-3">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Public View Link</p>
+                                <div className="flex items-center gap-4">
+                                    <input
+                                        readOnly
+                                        value={shareUrl || ''}
+                                        className="flex-1 bg-transparent border-none text-sm font-bold text-slate-900 dark:text-white outline-none truncate"
+                                    />
+                                    <button
+                                        onClick={handleCopyLink}
+                                        className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${copySuccess ? 'bg-emerald-500 text-white' : 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:scale-105 active:scale-95'}`}
+                                    >
+                                        {copySuccess ? '✕ COPIED' : 'COPY'}
+                                    </button>
                                 </div>
-                                <span className="text-[10px] font-bold text-slate-400 uppercase">Download</span>
-                            </button>
+                            </div>
+
+                            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-2xl border border-blue-200/50 dark:border-blue-900/20">
+                                <div className="flex gap-3">
+                                    <svg className="w-5 h-5 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <p className="text-xs text-blue-800 dark:text-blue-200/70 leading-relaxed font-medium">
+                                        Anyone with this link can view the report. This is a <strong>frozen snapshot</strong> of the current data and analysis.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <a
+                                    href={shareUrl || '#'}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex-1 px-6 py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] text-center hover:scale-[1.02] transition-all"
+                                >
+                                    Preview Share
+                                </a>
+                                <button
+                                    onClick={() => setShowShareModal(false)}
+                                    className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+                                >
+                                    Dismiss
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
