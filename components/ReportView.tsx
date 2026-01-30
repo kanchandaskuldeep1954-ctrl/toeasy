@@ -474,7 +474,10 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         }
 
         if (format === 'markdown') {
-            const content = (report.sections || []).map(s => `## ${s.title}\n\n${s.content}`).join('\n\n') || '';
+            const content = (report.sections || [])
+                .filter(s => !!s)
+                .map(s => `## ${s.title}\n\n${s.content}`)
+                .join('\n\n') || '';
             // Basic download for Markdown (not in service yet, or could add?)
             // Let's add simple inline for MD or extend service. Service is better.
             // For now, inline since it's simple string.
@@ -877,100 +880,103 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
                     {/* Sections */}
                     <div className="space-y-24 print:space-y-12">
-                        {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => (
-                            <section key={section.id} id={section.id} className="scroll-mt-12 break-after-page">
-                                <div className="flex items-baseline gap-4 mb-8">
-                                    <span className="text-6xl font-black text-slate-200 dark:text-slate-800 select-none">{idx + 1}</span>
-                                    <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{section.title}</h2>
-                                </div>
-
-                                {/* Key Takeaways */}
-                                {section.keyTakeaways && section.keyTakeaways.length > 0 && (
-                                    <div className="mb-8 flex flex-wrap gap-3">
-                                        {section.keyTakeaways.map((takeaway, k) => (
-                                            <span key={k} className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900/30">
-                                                ✦ {takeaway}
-                                            </span>
-                                        ))}
+                        {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => {
+                            if (!section) return null;
+                            return (
+                                <section key={section.id || idx} id={section.id} className="scroll-mt-12 break-after-page">
+                                    <div className="flex items-baseline gap-4 mb-8">
+                                        <span className="text-6xl font-black text-slate-200 dark:text-slate-800 select-none">{idx + 1}</span>
+                                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{section.title}</h2>
                                     </div>
-                                )}
 
-                                {/* KPIs Grid */}
-                                {section.kpis && section.kpis.length > 0 && (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 break-inside-avoid">
-                                        {section.kpis.map((kpi, k) => (
-                                            <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border group relative cursor-help">
-                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
-                                                <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
-                                                <div className="flex items-center justify-between mt-1">
-                                                    <p className={`text-[10px] font-bold ${kpi.status === 'on_track' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                        {kpi.status?.replace('_', ' ').toUpperCase()}
-                                                    </p>
-                                                    {kpi.validation?.status === 'verified' && (
-                                                        <span className="text-emerald-500 animate-pulse">✓</span>
-                                                    )}
-                                                </div>
+                                    {/* Key Takeaways */}
+                                    {section.keyTakeaways && section.keyTakeaways.length > 0 && (
+                                        <div className="mb-8 flex flex-wrap gap-3">
+                                            {(section.keyTakeaways || []).map((takeaway, k) => (
+                                                <span key={k} className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900/30">
+                                                    ✦ {takeaway}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
 
-                                                {/* Reasoning Tooltip */}
-                                                {(kpi.reasoning || kpi.validation?.evidence) && (
-                                                    <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-56 p-4 bg-slate-900 text-white text-[10px] rounded-2xl shadow-4xl z-[100] normal-case font-medium leading-relaxed border border-white/10 animate-in fade-in zoom-in-95">
-                                                        <p className="font-black uppercase tracking-widest text-indigo-400 mb-2">First Principles Reasoning</p>
-                                                        <p className="mb-2 italic opacity-90">"{kpi.reasoning}"</p>
-                                                        {kpi.validation?.evidence && (
-                                                            <div className="pt-2 border-t border-white/10 mt-2">
-                                                                <p className="text-emerald-400 font-bold">✓ {kpi.validation.evidence}</p>
-                                                            </div>
+                                    {/* KPIs Grid */}
+                                    {section.kpis && section.kpis.length > 0 && (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 break-inside-avoid">
+                                            {(section.kpis || []).map((kpi, k) => (
+                                                <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border group relative cursor-help">
+                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
+                                                    <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
+                                                    <div className="flex items-center justify-between mt-1">
+                                                        <p className={`text-[10px] font-bold ${kpi.status === 'on_track' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                            {kpi.status?.replace('_', ' ').toUpperCase()}
+                                                        </p>
+                                                        {kpi.validation?.status === 'verified' && (
+                                                            <span className="text-emerald-500 animate-pulse">✓</span>
                                                         )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        ))}
+
+                                                    {/* Reasoning Tooltip */}
+                                                    {(kpi.reasoning || kpi.validation?.evidence) && (
+                                                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-56 p-4 bg-slate-900 text-white text-[10px] rounded-2xl shadow-4xl z-[100] normal-case font-medium leading-relaxed border border-white/10 animate-in fade-in zoom-in-95">
+                                                            <p className="font-black uppercase tracking-widest text-indigo-400 mb-2">First Principles Reasoning</p>
+                                                            <p className="mb-2 italic opacity-90">"{kpi.reasoning}"</p>
+                                                            {kpi.validation?.evidence && (
+                                                                <div className="pt-2 border-t border-white/10 mt-2">
+                                                                    <p className="text-emerald-400 font-bold">✓ {kpi.validation.evidence}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Narrative Content */}
+                                    <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-p:font-medium">
+                                        <ReactMarkdown>{section.content}</ReactMarkdown>
                                     </div>
-                                )}
 
-                                {/* Narrative Content */}
-                                <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-p:font-medium">
-                                    <ReactMarkdown>{section.content}</ReactMarkdown>
-                                </div>
+                                    {/* Section Reasoning (First Principles) */}
+                                    {(section as any).reasoning && (
+                                        <div className="my-8 p-6 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-l-4 border-indigo-600 shadow-sm">
+                                            <h6 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-2">Strategic Reasoning</h6>
+                                            <p className="text-sm font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
+                                                "{(section as any).reasoning}"
+                                            </p>
+                                        </div>
+                                    )}
 
-                                {/* Section Reasoning (First Principles) */}
-                                {(section as any).reasoning && (
-                                    <div className="my-8 p-6 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-l-4 border-indigo-600 shadow-sm">
-                                        <h6 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-2">Strategic Reasoning</h6>
-                                        <p className="text-sm font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
-                                            "{(section as any).reasoning}"
-                                        </p>
-                                    </div>
-                                )}
+                                    {/* Strategic Modules */}
+                                    {section.swot && renderSWOT(section.swot)}
+                                    {section.recommendations && renderRecommendations(section.recommendations)}
+                                    {section.risks && renderRisks(section.risks)}
 
-                                {/* Strategic Modules */}
-                                {section.swot && renderSWOT(section.swot)}
-                                {section.recommendations && renderRecommendations(section.recommendations)}
-                                {section.risks && renderRisks(section.risks)}
+                                    {/* Calculated DataFrames (First Principles) */}
+                                    {(section as any).dataFrames && (section as any).dataFrames.length > 0 && (
+                                        <div className="mt-10 mb-12 space-y-8">
+                                            {((section as any).dataFrames || []).map((df: any, d: number) => (
+                                                <React.Fragment key={d}>
+                                                    {renderDataFrame(df)}
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    )}
 
-                                {/* Calculated DataFrames (First Principles) */}
-                                {(section as any).dataFrames && (section as any).dataFrames.length > 0 && (
-                                    <div className="mt-10 mb-12 space-y-8">
-                                        {(section as any).dataFrames.map((df: any, d: number) => (
-                                            <React.Fragment key={d}>
-                                                {renderDataFrame(df)}
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {/* Embedded Visuals */}
-                                {section.charts && section.charts.length > 0 && (
-                                    <div className="mt-10 grid grid-cols-1 gap-8">
-                                        {(section.charts || []).map((chart, c) => (
-                                            <React.Fragment key={c}>
-                                                {renderChart(chart)}
-                                            </React.Fragment>
-                                        ))}
-                                    </div>
-                                )}
-                            </section>
-                        ))}
+                                    {/* Embedded Visuals */}
+                                    {section.charts && section.charts.length > 0 && (
+                                        <div className="mt-10 grid grid-cols-1 gap-8">
+                                            {(section.charts || []).map((chart, c) => (
+                                                <React.Fragment key={c}>
+                                                    {renderChart(chart)}
+                                                </React.Fragment>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+                            );
+                        })}
                     </div>
 
                     <footer className="pt-20 pb-10 border-t border-slate-200 dark:border-slate-800 text-center space-y-4 print:hidden">
@@ -1042,7 +1048,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         </p>
 
                         <div className="grid gap-3">
-                            {copilotSuggestions.map((s, i) => (
+                            {(copilotSuggestions || []).map((s, i) => (
                                 <button
                                     key={i}
                                     onClick={() => handleCopilotUpdate(s.prompt)}

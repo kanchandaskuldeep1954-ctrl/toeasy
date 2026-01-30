@@ -22,8 +22,8 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
         type: 'bar',
         priority: 'high',
         size: 'medium',
-        xAxis: dataset.headers[0] || '',
-        yAxis: dataset.headers[1] || '',
+        xAxis: (dataset.headers || [])[0] || '',
+        yAxis: (dataset.headers || [])[1] || '',
         aggregation: 'sum',
         data: [],
         options: {}
@@ -221,7 +221,7 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                                         >
                                             <option value="">Select Column...</option>
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                            {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
                                         </select>
                                     </div>
 
@@ -233,7 +233,7 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                                         >
                                             <option value="">Select Column...</option>
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                            {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
                                         </select>
                                     </div>
 
@@ -270,7 +270,7 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                             className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
                                         >
                                             <option value="">None</option>
-                                            {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                            {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
                                         </select>
                                     </div>
                                 </div>

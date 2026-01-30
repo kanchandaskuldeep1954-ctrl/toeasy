@@ -101,13 +101,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [forceManual, setForceManual] = useState(false);
 
     const filteredData = useMemo(() => {
-        let data = dataset.data;
-        if (Object.keys(activeFilters).length === 0) return data;
+        let data = dataset.data || [];
+        if (!Array.isArray(data) || Object.keys(activeFilters).length === 0) return data;
 
         return data.filter(row => {
+            if (!row) return false;
             return Object.entries(activeFilters).every(([key, value]) => {
                 if (value === null || value === '') return true;
-                return String(row[key]) === String(value);
+                return String(row[key] || '') === String(value);
             });
         });
     }, [dataset.data, activeFilters]);
@@ -127,7 +128,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 return parseFloat(clean);
             };
 
-            const values = filteredData.map(r => parseSafe(r[col])).filter(n => !isNaN(n));
+            const values = (filteredData || []).map(r => parseSafe(r ? r[col] : null)).filter(n => !isNaN(n));
 
             let newVal = 0;
             if (op === 'sum') newVal = values.reduce((a, b) => a + b, 0);
@@ -135,7 +136,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
             else if (op === 'count') newVal = filteredData.length;
             else if (op === 'max') newVal = values.length ? Math.max(...values) : 0;
             else if (op === 'min') newVal = values.length ? Math.min(...values) : 0;
-            else if (op === 'unique') newVal = new Set(filteredData.map(r => r[col])).size;
+            else if (op === 'unique') newVal = new Set((filteredData || []).map(r => r ? r[col] : null)).size;
 
             let fmtVal = newVal.toLocaleString();
             if (kpi.calculation.format === 'currency') fmtVal = `$${newVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -337,7 +338,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
 
     const handleAddKPI = () => {
         if (!config) return;
-        const firstCol = dataset.headers[0];
+        const firstCol = (dataset.headers || [])[0] || '';
         const newKpi: KPI = {
             id: 'kpi-' + Date.now(),
             label: 'New KPI Metric',
@@ -375,7 +376,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
             label: column,
             column: column,
             type: 'select' as const,
-            options: Array.from(new Set(dataset.data.map(r => String(r[column] || '')))).filter(v => v !== '').slice(0, 50)
+            options: Array.from(new Set((dataset.data || []).map(r => r ? String(r[column] || '') : ''))).filter(v => v !== '').slice(0, 50)
         };
         const updatedFilters = [...(config.filters || []), newFilter];
         const newConfig = { ...config, filters: updatedFilters };
@@ -476,12 +477,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
             // Capture frozen snapshot
             const snapshot = {
                 kpis: (dynamicKPIs || []).map(k => ({ label: k.label, value: k.value, change: (k as any).change })),
-                charts: (config.charts || []).map(c => ({
-                    type: c.type,
-                    title: c.title,
-                    data: getChartData(c),
-                    spec: c
-                }))
+                charts: (config.charts || []).map(c => {
+                    if (!c) return null;
+                    return {
+                        type: c.type,
+                        title: c.title,
+                        data: getChartData(c),
+                        spec: c
+                    };
+                }).filter(Boolean)
             };
 
             const response = await sharingAPI.create({
