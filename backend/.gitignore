@@ -14,4 +14,6 @@ yarn-error.log*
 *.swp
 *.swo
 .env.production.local
-coverage/
+
+# TestSprite Secrets
+testsprite_tests/tmp/
