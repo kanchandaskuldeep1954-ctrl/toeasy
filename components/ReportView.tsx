@@ -188,6 +188,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [copySuccess, setCopySuccess] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [focusIndex, setFocusIndex] = useState(0);
+    const [chartDesigner, setChartDesigner] = useState<{ open: boolean, chartId: string | null }>({ open: false, chartId: null });
     const [chartOverrides, setChartOverrides] = useState<Record<string, Partial<ChartSpec>>>({});
     const [copilotMode, setCopilotMode] = useState<'chat' | 'update'>('chat');
     const [copilotMessages, setCopilotMessages] = useState<{ role: 'user' | 'assistant', content: string, thinking?: string }[]>([]);
