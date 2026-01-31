@@ -114,8 +114,18 @@ const ReportViewIntegrated: React.FC = () => {
             setSiblings(siblingsRes.data.data || []);
             setError(null);
             setError(null);
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to load report');
+        } catch (err: any) {
+            if (err.response?.status === 404) {
+                console.warn('Report snapshot not found, falling back to Master Draft.');
+                // Remove invalid search param without page reload
+                const params = new URLSearchParams(window.location.search);
+                params.delete('id');
+                navigate({ search: params.toString() }, { replace: true });
+                // We don't throw here, instead we'll continue to load the dataset below if possible
+                // by manually setting reportId to empty for this execution
+            } else {
+                setError(err instanceof Error ? err.message : 'Failed to load report');
+            }
         } finally {
             setLoading(false);
         }

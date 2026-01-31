@@ -66,6 +66,35 @@ export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, hei
 
     const isBubble = chart.type === 'bubble';
 
+    const trendLine = useMemo(() => {
+        if (chart.chartConfig?.trendline !== 'ols' || formattedData.length < 2) return null;
+
+        const xValues = formattedData.map(d => Number(d.x));
+        const yValues = formattedData.map(d => Number(d.y));
+        const n = formattedData.length;
+
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        formattedData.forEach(d => {
+            sumX += Number(d.x);
+            sumY += Number(d.y);
+            sumXY += Number(d.x) * Number(d.y);
+            sumXX += Number(d.x) * Number(d.x);
+        });
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        const minX = Math.min(...xValues);
+        const maxX = Math.max(...xValues);
+        const futureX = maxX + (maxX - minX) * 0.4;
+
+        return [
+            { x: minX, y: slope * minX + intercept },
+            { x: maxX, y: slope * maxX + intercept },
+            { x: futureX, y: slope * futureX + intercept, isForecast: true }
+        ];
+    }, [formattedData, chart.chartConfig?.trendline]);
+
     return (
         <div style={{ width: '100%', height: height }} className="animate-in fade-in slide-in-from-bottom-2 duration-1000">
             <ResponsiveContainer>
@@ -85,6 +114,7 @@ export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, hei
                         tickLine={false}
                         tick={{ fill: '#64748b', fontSize: 10 }}
                         tickFormatter={(val) => Number(val).toLocaleString()}
+                        domain={['auto', 'auto']}
                     />
                     <YAxis
                         type="number"
@@ -96,9 +126,28 @@ export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, hei
                         tickFormatter={(val) =>
                             new Intl.NumberFormat('en', { notation: "compact" }).format(val)
                         }
+                        domain={['auto', 'auto']}
                     />
                     <ZAxis type="number" dataKey="z" range={[20, isBubble ? 400 : 100]} />
                     <Tooltip cursor={{ strokeDasharray: '3 3', stroke: '#6366f1', strokeOpacity: 0.2 }} content={<CustomTooltip />} />
+
+                    {trendLine && (
+                        <>
+                            <Scatter
+                                data={trendLine.slice(0, 2)}
+                                line={{ stroke: '#f43f5e', strokeWidth: 2, strokeDasharray: '5 5' }}
+                                shape={() => null}
+                                tooltipType="none"
+                            />
+                            <Scatter
+                                data={trendLine.slice(1)}
+                                line={{ stroke: '#818cf8', strokeWidth: 3, strokeDasharray: '3 3' }}
+                                shape={() => null}
+                                tooltipType="none"
+                            />
+                        </>
+                    )}
+
                     <Scatter
                         name={chart.title}
                         data={formattedData}

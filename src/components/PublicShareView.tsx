@@ -21,21 +21,35 @@ mermaid.initialize({
     }
 });
 
+const sanitizeMermaid = (chart: string) => {
+    if (!chart) return '';
+    let processed = chart.trim();
+    if (!processed.startsWith('graph')) {
+        processed = 'graph LR\n' + processed;
+    }
+    return processed
+        .replace(/\[([^"\]]+)\]/g, (match, p1) => `["${p1.replace(/"/g, "'")}"]`)
+        .replace(/\(([^"\(]+)\)/g, (match, p1) => `("${p1.replace(/"/g, "'")}")`)
+        .replace(/\{([^"\}]+)\}/g, (match, p1) => `{"${p1.replace(/"/g, "'")}"}`);
+};
+
 const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
     const ref = React.useRef<HTMLDivElement>(null);
+    const [svg, setSvg] = useState<string | null>(null);
     const [hasError, setHasError] = useState(false);
 
     React.useEffect(() => {
         const renderMermaid = async () => {
-            if (ref.current && chart) {
-                try {
-                    setHasError(false);
-                    ref.current.removeAttribute('data-processed');
-                    await mermaid.contentLoaded();
-                } catch (err) {
-                    console.error('Mermaid render error:', err);
-                    setHasError(true);
-                }
+            if (!chart) return;
+            try {
+                setHasError(false);
+                const id = `mermaid-pub-${Math.random().toString(36).substr(2, 9)}`;
+                const sanitized = sanitizeMermaid(chart);
+                const { svg: svgContent } = await mermaid.render(id, sanitized);
+                setSvg(svgContent);
+            } catch (err) {
+                console.error('Mermaid render error:', err);
+                setHasError(true);
             }
         };
         renderMermaid();
@@ -45,17 +59,20 @@ const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
         return (
             <div className="bg-slate-100 dark:bg-white/5 p-8 rounded-3xl border border-dashed border-slate-300 dark:border-white/10 text-center">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
-                    Logic Mapping in Progress...<br />
-                    <span className="opacity-50">Synthesizing Complex Narrative Chains</span>
+                    Logic Mapping Refined...<br />
+                    <span className="opacity-50 text-[8px]">Resolving Complex Structural Dependencies</span>
                 </p>
             </div>
         );
     }
 
+    if (!svg) return null;
+
     return (
-        <div className="mermaid bg-white/40 dark:bg-white/5 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/50 dark:border-white/5 shadow-sm overflow-hidden flex justify-center w-full" ref={ref}>
-            {chart}
-        </div>
+        <div
+            className="mermaid-container bg-white/40 dark:bg-white/5 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/50 dark:border-white/5 shadow-sm overflow-hidden flex justify-center w-full scale-90 origin-center"
+            dangerouslySetInnerHTML={{ __html: svg }}
+        />
     );
 };
 

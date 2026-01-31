@@ -46,10 +46,42 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
         }));
     }, [data]);
 
+    const trendData = useMemo(() => {
+        if (chart.chartConfig?.trendline !== 'ols' || formattedData.length < 2) return null;
+
+        const n = formattedData.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+        formattedData.forEach((d, i) => {
+            sumX += i;
+            sumY += d.value;
+            sumXY += i * d.value;
+            sumXX += i * i;
+        });
+
+        const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const intercept = (sumY - slope * sumX) / n;
+
+        // Forecast points (future 20% of current length)
+        const forecastLength = Math.max(1, Math.floor(n * 0.2));
+        const forecastPoints = [];
+        for (let j = 1; j <= forecastLength; j++) {
+            forecastPoints.push({
+                name: `Forecast ${j}`,
+                value: null,
+                trendValue: slope * (n + j - 1) + intercept,
+                isForecast: true
+            });
+        }
+
+        return [...formattedData.map((d, i) => ({ ...d, trendValue: slope * i + intercept })), ...forecastPoints];
+    }, [formattedData, chart.chartConfig?.trendline]);
+
+    const displayData = trendData || formattedData;
+
     return (
         <div style={{ width: '100%', height: height }} className="animate-in fade-in duration-700 delay-100">
             <ResponsiveContainer>
-                <AreaChart data={formattedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <AreaChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>
                         <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5} />
@@ -86,6 +118,21 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
                         activeDot={{ r: 8, fill: '#818cf8', stroke: '#fff', strokeWidth: 2 }}
                         onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
                     />
+
+                    {chart.chartConfig?.trendline === 'ols' && (
+                        <Area
+                            type="monotone"
+                            dataKey="trendValue"
+                            stroke="#f43f5e"
+                            strokeWidth={2}
+                            strokeDasharray="5 5"
+                            fill="transparent"
+                            dot={false}
+                            activeDot={false}
+                            legendType="none"
+                            tooltipType="none"
+                        />
+                    )}
                 </AreaChart>
             </ResponsiveContainer>
         </div>

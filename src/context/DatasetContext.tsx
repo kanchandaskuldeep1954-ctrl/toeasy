@@ -13,6 +13,9 @@ export interface Dataset {
   column_count: number;
   file_size: number;
   raw_data?: any[][];
+  data?: any[];
+  headers?: string[];
+  strategicReport?: any;
   analysis_result?: any;
   created_at: string;
   updated_at: string;
