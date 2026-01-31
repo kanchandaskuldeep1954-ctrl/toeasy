@@ -866,23 +866,30 @@ Return ONLY valid JSON (no markdown, no explanation):
       const headers = dataset.headers || [];
       const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
 
-      const groqPrompt = `You are a data analyst AI assistant. Answer this question about the dataset concisely.
+      const reportContext = context?.reportContext ? `\nCURRENT REPORT STATE:\nTitle: ${context.reportContext.title}\nSections: ${context.reportContext.sections?.map((s: any) => s.title).join(', ')}` : '';
 
-Dataset columns: ${headers.join(', ')}
-Total records: ${dataset.data?.length || 0}
-${historyText ? `\nConversation History:\n${historyText}\n` : ''}
-Question: "${query}"
-${context ? `Context: ${JSON.stringify(context)}` : ''}
+      const groqPrompt = `You are a Lead Data Strategist & Agent. Answer this question about the dataset and current report.
+      
+      FIRST PRINCIPLES ANALYSIS:
+      - Dataset columns: ${headers.join(', ')}
+      - Total records: ${dataset.data?.length || 0}
+      ${reportContext}
+      ${historyText ? `\nConversation History:\n${historyText}\n` : ''}
+      
+      USER QUESTION: "${query}"
+      
+      DRIVE THE NARRATIVE:
+      1. Provide a specific, data-backed answer (lookup values if needed).
+      2. If appropriate, explain the "Thinking" or Logic (e.g., "I correlated X with Y to find Z").
+      3. Be concise (max 4 sentences) but extremely insightful.
+      
+      ACTIONS (IF REQUESTED):
+      If the user wants to DELETE or UPDATE data, return a JSON object ONLY:
+      { "action": "DELETE_COL", "target": "column_name", "reason": "..." }
+      { "action": "DELETE_ROW", "target": "row_index", "reason": "..." }
+      { "action": "UPDATE_CELL", "rowIdx": number, "col": "field", "value": "...", "reason": "..." }`;
 
-If the user explicitly asks to perform an action (delete row, delete column, or update cell/value), you MUST return a valid JSON object with no other text:
-{ "action": "DELETE_COL", "target": "column_name", "reason": "Explanation of why" }
-{ "action": "DELETE_ROW", "target": "row_index_number", "reason": "Explanation" }
-{ "action": "UPDATE_CELL", "rowIdx": number, "col": "field_name", "value": "new_value", "reason": "Explanation" }
-{ "action": "FILL_NULLS", "target": "column_name", "value": "replacement_value", "reason": "Explanation" }
-
-Otherwise, provide a helpful answer in 1-3 sentences. Be specific and data-focused.`;
-
-      return await this.callGroq(groqPrompt, 400);
+      return await this.callGroq(groqPrompt, 600);
     } catch (error) {
       console.error('Agent error:', error instanceof Error ? error.message : error);
       return 'Unable to analyze data at this moment. Please try again.';

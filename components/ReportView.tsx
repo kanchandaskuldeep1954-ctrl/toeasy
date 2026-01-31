@@ -12,8 +12,9 @@ import mermaid from 'mermaid';
 
 // Initialize mermaid
 mermaid.initialize({
-    startOnLoad: true,
+    startOnLoad: false,
     theme: 'base',
+    suppressError: true, // Prevent Mermaid from throwing bomb icons into the DOM if possible
     themeVariables: {
         primaryColor: '#6366f1',
         primaryTextColor: '#fff',
@@ -21,7 +22,9 @@ mermaid.initialize({
         lineColor: '#6366f1',
         secondaryColor: '#f8fafc',
         tertiaryColor: '#fff'
-    }
+    },
+    // New v10+ specific error handling
+    logLevel: 5 // Fatal only
 });
 
 const sanitizeMermaid = (chart: string) => {
@@ -41,7 +44,9 @@ const sanitizeMermaid = (chart: string) => {
     processed = processed.replace(/\|>/g, '-->')
         .replace(/ -+> /g, ' --> ')
         .replace(/ =+> /g, ' ==> ')
-        .replace(/ \.> /g, ' -.-> ');
+        .replace(/ \.> /g, ' -.-> ')
+        .replace(/ \+> /g, ' --> ')
+        .replace(/~+>/g, ' --> ');
 
     // 4. Ultra-Robust Node "Rescue": 
     // This regex looks for node definitions and ensures they are properly quoted.
@@ -88,6 +93,15 @@ const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
                 setHasError(false);
                 const id = `mermaid-${Math.random().toString(36).substr(2, 9)}`;
                 const sanitized = sanitizeMermaid(chart);
+
+                // Check if syntax is valid before rendering to avoid "bomb" icons
+                try {
+                    await mermaid.parse(sanitized);
+                } catch (parseErr) {
+                    console.warn('Mermaid parse failed, entering rescue mode:', parseErr);
+                    setHasError(true);
+                    return;
+                }
 
                 // Use mermaid.render which is more robust in v10+
                 const { svg: svgContent } = await mermaid.render(id, sanitized);
@@ -174,8 +188,18 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [copySuccess, setCopySuccess] = useState(false);
     const [isFocusMode, setIsFocusMode] = useState(false);
     const [focusIndex, setFocusIndex] = useState(0);
-    const [chartDesigner, setChartDesigner] = useState<{ open: boolean, chartId: string | null }>({ open: false, chartId: null });
     const [chartOverrides, setChartOverrides] = useState<Record<string, Partial<ChartSpec>>>({});
+    const [copilotMode, setCopilotMode] = useState<'chat' | 'update'>('chat');
+    const [copilotMessages, setCopilotMessages] = useState<{ role: 'user' | 'assistant', content: string, thinking?: string }[]>([]);
+    const chatEndRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    };
+
+    useEffect(() => {
+        if (copilotMode === 'chat') scrollToBottom();
+    }, [copilotMessages, copilotMode]);
 
     const copilotSuggestions = [
         { title: 'Add Competitor Benchmark', icon: '🏆', prompt: 'Include a section comparing our revenue growth against the S&P 500 average for 2025.' },
@@ -396,9 +420,35 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             setCopilotInput('');
             // Optional: Scroll to top of report to show changes
             contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+
+            // Add to chat history too!
+            setCopilotMessages(prev => [...prev,
+            { role: 'user', content: instruction },
+            { role: 'assistant', content: '✅ I have updated the report sections based on your request. You can see the changes in the main view.' }
+            ]);
         } catch (e) {
             console.error('Copilot update failed:', e);
             alert('Failed to update report. Please try again.');
+        } finally {
+            setCopilotLoading(false);
+        }
+    };
+
+    const handleCopilotChat = async () => {
+        if (!copilotInput.trim() || !dataset) return;
+
+        const input = copilotInput;
+        setCopilotInput('');
+        setCopilotMessages(prev => [...prev, { role: 'user', content: input }]);
+        setCopilotLoading(true);
+
+        try {
+            // We'll use a new consultAgent endpoint for report-specific context
+            const response = await GroqService.consultAgent(dataset, input, { reportContext: report }, copilotMessages.map(m => ({ role: m.role, text: m.content })));
+            setCopilotMessages(prev => [...prev, { role: 'assistant', content: response }]);
+        } catch (e) {
+            console.error('Chat failed:', e);
+            setCopilotMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I hit a snag while analyzing. Try again?' }]);
         } finally {
             setCopilotLoading(false);
         }
@@ -1182,54 +1232,101 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 <div className="flex flex-col h-full">
                     <div className="flex items-center gap-3 mb-8">
                         <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-indigo-500/30">✨</div>
-                        <div>
+                        <div className="flex-1">
                             <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white leading-none">Report Co-pilot</h3>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-widest font-bold">Insight Optimizer</p>
+                            <div className="flex gap-2 mt-2">
+                                <button
+                                    onClick={() => setCopilotMode('chat')}
+                                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-all ${copilotMode === 'chat' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Chat
+                                </button>
+                                <button
+                                    onClick={() => setCopilotMode('update')}
+                                    className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-md transition-all ${copilotMode === 'update' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-slate-600'}`}
+                                >
+                                    Refine
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                        <p className="text-[11px] font-medium text-slate-500 leading-relaxed italic">
-                            "I've analyzed your data and detected several high-impact narrative opportunities. How would you like to refine this report?"
-                        </p>
+                    <div className="flex-1 overflow-hidden flex flex-col">
+                        {copilotMode === 'chat' ? (
+                            <div className="flex-1 flex flex-col overflow-hidden">
+                                <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar mb-4">
+                                    {copilotMessages.length === 0 && (
+                                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800">
+                                            <p className="text-[11px] font-medium text-slate-500 leading-relaxed italic">
+                                                Ask me anything about this report or the underlying data. I can explain the logic, summarize findings, or help you find specific metrics.
+                                            </p>
+                                        </div>
+                                    )}
+                                    {copilotMessages.map((msg, i) => (
+                                        <div key={i} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                            <div className={`max-w-[90%] p-3 rounded-2xl text-[11px] font-medium leading-relaxed ${msg.role === 'user' ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-tl-none'}`}>
+                                                {msg.content}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    <div ref={chatEndRef} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="flex-1 overflow-y-auto space-y-6 pr-2 custom-scrollbar mb-4">
+                                <p className="text-[11px] font-medium text-slate-500 leading-relaxed italic">
+                                    "I've analyzed your data and detected several high-impact narrative opportunities. How would you like to refine this report?"
+                                </p>
 
-                        <div className="grid gap-3">
-                            {(copilotSuggestions || []).map((s, i) => (
-                                <button
-                                    key={i}
-                                    onClick={() => handleCopilotUpdate(s.prompt)}
-                                    disabled={copilotLoading}
-                                    className="group p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-600 rounded-2xl border border-slate-100 dark:border-slate-800 text-left transition-all disabled:opacity-50"
-                                >
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <span className="text-lg">{s.icon}</span>
-                                        <span className="text-[11px] font-black uppercase text-slate-900 dark:text-white group-hover:text-white">{s.title}</span>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 group-hover:text-indigo-100 font-medium line-clamp-2">
-                                        {s.prompt}
-                                    </p>
-                                </button>
-                            ))}
-                        </div>
+                                <div className="grid gap-3">
+                                    {(copilotSuggestions || []).map((s, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => handleCopilotUpdate(s.prompt)}
+                                            disabled={copilotLoading}
+                                            className="group p-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-indigo-600 rounded-2xl border border-slate-100 dark:border-slate-800 text-left transition-all disabled:opacity-50"
+                                        >
+                                            <div className="flex items-center gap-3 mb-2">
+                                                <span className="text-lg">{s.icon}</span>
+                                                <span className="text-[11px] font-black uppercase text-slate-900 dark:text-white group-hover:text-white">{s.title}</span>
+                                            </div>
+                                            <p className="text-[10px] text-slate-500 group-hover:text-indigo-100 font-medium line-clamp-2">
+                                                {s.prompt}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
-                        <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800">
-                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Manual Refinement</h4>
+                        <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">
+                                {copilotMode === 'chat' ? 'Ask Research Question' : 'Manual Refinement'}
+                            </h4>
                             <textarea
                                 value={copilotInput}
                                 onChange={(e) => setCopilotInput(e.target.value)}
-                                onFocus={() => setSelectionOverlay(null)} // Auto-dismiss selection popover on focus
-                                placeholder="E.g., 'Make it more technical' or 'Add a table for...'"
-                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 min-h-[100px] focus:ring-2 focus:ring-indigo-500"
+                                onFocus={() => setSelectionOverlay(null)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey) {
+                                        e.preventDefault();
+                                        if (copilotMode === 'chat') handleCopilotChat();
+                                        else handleCopilotUpdate(copilotInput);
+                                    }
+                                }}
+                                placeholder={copilotMode === 'chat' ? "Ask about the data..." : "E.g., 'Make it more technical'..."}
+                                className="w-full bg-slate-100 dark:bg-slate-800 border-none rounded-2xl p-4 text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 min-h-[80px] focus:ring-2 focus:ring-indigo-500"
                             />
                             <button
                                 onClick={() => {
-                                    handleCopilotUpdate(copilotInput);
-                                    setSelectionOverlay(null); // Ensure overlay is gone
+                                    if (copilotMode === 'chat') handleCopilotChat();
+                                    else handleCopilotUpdate(copilotInput);
+                                    setSelectionOverlay(null);
                                 }}
                                 disabled={copilotLoading || !copilotInput.trim()}
                                 className="w-full mt-4 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
                             >
-                                {copilotLoading ? 'Optimizing...' : 'Update Report'}
+                                {copilotLoading ? 'Thinking...' : (copilotMode === 'chat' ? 'Send Query' : 'Update Report')}
                             </button>
                         </div>
                     </div>

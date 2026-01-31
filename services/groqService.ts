@@ -250,6 +250,12 @@ export class GroqService {
     return dash.kpis || [];
   }
 
+  // Consult Agent (Chat)
+  static async consultAgent(dataset: any, query: string, context?: any, history?: any[]): Promise<string> {
+    const result = await this.callApi<{ result: string }>('consult-agent', 'POST', { dataset, query, context, history });
+    return result.result;
+  }
+
   // Generate SQL from natural language
   static async generateSQLFromNL(dataset: Dataset, query: string): Promise<{ sql: string; explanation: string }> {
     return await this.callApi('generate-sql', 'POST', { dataset, query });
