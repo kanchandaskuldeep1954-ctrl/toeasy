@@ -101,6 +101,7 @@ export interface KPI {
     status: 'verified' | 'unverified';
     evidence: string;
     sampleRows?: number;
+    dataSourceAnchor?: string; // Filter/Logic used for grounding
   };
 }
 
@@ -310,6 +311,9 @@ export interface ReportSection {
     level: 'critical' | 'high' | 'medium' | 'low';
     mitigation: string;
   }[];
+  reasoning?: string;
+  logicPath?: string; // Mermaid logic string
+  dataFrames?: CalculatedDataFrame[];
 }
 
 export interface CalculatedDataFrame {

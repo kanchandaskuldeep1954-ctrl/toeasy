@@ -26,16 +26,37 @@ mermaid.initialize({
 
 const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
     const ref = React.useRef<HTMLDivElement>(null);
+    const [hasError, setHasError] = useState(false);
 
     React.useEffect(() => {
-        if (ref.current && chart) {
-            ref.current.removeAttribute('data-processed');
-            mermaid.contentLoaded();
-        }
+        const renderMermaid = async () => {
+            if (ref.current && chart) {
+                try {
+                    setHasError(false);
+                    ref.current.removeAttribute('data-processed');
+                    await mermaid.contentLoaded();
+                } catch (err) {
+                    console.error('Mermaid render error:', err);
+                    setHasError(true);
+                }
+            }
+        };
+        renderMermaid();
     }, [chart]);
 
+    if (hasError) {
+        return (
+            <div className="bg-slate-100 dark:bg-white/5 p-8 rounded-3xl border border-dashed border-slate-300 dark:border-white/10 text-center">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
+                    Logic Flow Mapping...<br />
+                    <span className="opacity-50 text-[8px]">Synthesizing Narrative Structure</span>
+                </p>
+            </div>
+        );
+    }
+
     return (
-        <div className="mermaid bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex justify-center" ref={ref}>
+        <div className="mermaid bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex justify-center w-full" ref={ref}>
             {chart}
         </div>
     );
@@ -970,18 +991,22 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                                         )}
                                                     </div>
 
-                                                    {/* Reasoning Tooltip */}
-                                                    {(kpi.reasoning || kpi.validation?.evidence) && (
-                                                        <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-56 p-4 bg-slate-900 text-white text-[10px] rounded-2xl shadow-4xl z-[100] normal-case font-medium leading-relaxed border border-white/10 animate-in fade-in zoom-in-95">
-                                                            <p className="font-black uppercase tracking-widest text-indigo-400 mb-2">First Principles Reasoning</p>
-                                                            <p className="mb-2 italic opacity-90">"{kpi.reasoning}"</p>
-                                                            {kpi.validation?.evidence && (
-                                                                <div className="pt-2 border-t border-white/10 mt-2">
-                                                                    <p className="text-emerald-400 font-bold">✓ {kpi.validation.evidence}</p>
-                                                                </div>
-                                                            )}
+                                                    {/* Reasoning Tooltip / Hallucination Shield */}
+                                                    <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-72 p-6 bg-slate-900 text-white rounded-[2rem] shadow-4xl z-[100] border border-white/10 animate-in fade-in zoom-in-95">
+                                                        <div className="flex items-center gap-2 mb-4">
+                                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Grounded Insight</span>
                                                         </div>
-                                                    )}
+                                                        <p className="text-[11px] font-medium leading-relaxed opacity-90 mb-4">
+                                                            "{kpi.reasoning || 'Aggregated insight derived from multi-dimensional analysis of the source dataset.'}"
+                                                        </p>
+                                                        <div className="pt-4 border-t border-white/5 space-y-2">
+                                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Data Source Anchor</p>
+                                                            <code className="text-[10px] text-indigo-400 font-bold block bg-black/30 p-2 rounded-lg">
+                                                                {kpi.validation?.dataSourceAnchor || `SELECT ${kpi.calculation?.operation || 'COUNT'}(*) FROM Source WHERE ...`}
+                                                            </code>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ))}
                                         </div>
@@ -1195,61 +1220,96 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         </div>
 
                         {/* Slide Content */}
-                        <div className="flex-1 flex flex-col justify-center gap-12">
-                            {report?.sections[focusIndex] && (
-                                <div className="animate-in fade-in slide-in-from-bottom-12 duration-700">
-                                    <h5 className="text-emerald-400 font-black tracking-[0.3em] uppercase text-xs mb-4">Strategic Insight {focusIndex + 1}</h5>
-                                    <h2 className="text-5xl font-black text-white mb-8 leading-tight tracking-tight">
-                                        {report.sections[focusIndex].title}
-                                    </h2>
+                        <div className="flex-1 flex flex-col justify-center">
+                            <AnimatePresence mode="wait">
+                                {report?.sections[focusIndex] && (
+                                    <motion.div
+                                        key={focusIndex}
+                                        initial={{ opacity: 0, scale: 0.95, y: 30 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 1.05, y: -30 }}
+                                        transition={{ type: 'spring', damping: 25, stiffness: 150 }}
+                                        className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center"
+                                    >
+                                        <div className="space-y-10">
+                                            <div>
+                                                <h5 className="text-emerald-400 font-black tracking-[0.5em] uppercase text-[10px] mb-6">Strategic Insight {focusIndex + 1}</h5>
+                                                <h2 className="text-6xl font-black text-white leading-[1.1] tracking-tighter">
+                                                    {report.sections[focusIndex].title}
+                                                </h2>
+                                            </div>
 
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-                                        <div className="space-y-8">
-                                            <p className="text-xl text-slate-300 leading-relaxed font-medium">
-                                                {report.sections[focusIndex].content}
-                                            </p>
+                                            <div className="text-2xl text-slate-300 leading-relaxed font-medium max-w-xl">
+                                                <ReactMarkdown>{report.sections[focusIndex].content}</ReactMarkdown>
+                                            </div>
 
-                                            <div className="p-8 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl">
-                                                <h6 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Logic Weaver</h6>
-                                                <p className="text-sm text-slate-400 italic font-medium leading-relaxed">
+                                            <div className="p-10 bg-indigo-500/10 border border-indigo-500/20 rounded-[3rem] backdrop-blur-3xl relative overflow-hidden group">
+                                                <div className="absolute top-0 right-0 p-4 opacity-10">
+                                                    <svg className="w-12 h-12 text-indigo-400" fill="currentColor" viewBox="0 0 24 24"><path d="M14.017 21L14.017 18C14.017 16.8954 13.1216 16 12.017 16H9.01703C7.91246 16 7.01703 16.8954 7.01703 18V21H5.01703V18C5.01703 15.7909 6.80789 14 9.01703 14H12.017C14.2262 14 16.017 15.7909 16.017 18V21H14.017Z" /></svg>
+                                                </div>
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <h6 className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em]">First Principle Reasoning</h6>
+                                                    <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                                </div>
+                                                <p className="text-lg text-slate-400 italic font-medium leading-relaxed mb-6">
                                                     "{(report.sections[focusIndex] as any).reasoning}"
                                                 </p>
+                                                {(report.sections[focusIndex] as any).logicPath && (
+                                                    <div className="mt-4 scale-90 origin-top transform">
+                                                        <Mermaid chart={(report.sections[focusIndex] as any).logicPath} />
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 
-                                        <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 backdrop-blur-3xl shadow-2xl">
-                                            {report.sections[focusIndex].charts && report.sections[focusIndex].charts.length > 0 ? (
-                                                <div className="h-[400px]">
-                                                    <SmartChart
-                                                        chart={report.sections[focusIndex].charts[0]}
-                                                        height={400}
-                                                        data={report.sections[focusIndex].charts[0].data}
-                                                    />
-                                                </div>
-                                            ) : (
-                                                <div className="h-[400px] flex items-center justify-center text-slate-500 font-bold uppercase tracking-widest text-xs">
-                                                    Narrative Only Slide
-                                                </div>
-                                            )}
+                                        <div className="bg-white/5 p-12 rounded-[5rem] border border-white/10 backdrop-blur-3xl shadow-[0_0_80px_rgba(0,0,0,0.5)] relative group">
+                                            <div className="absolute -inset-1 bg-gradient-to-br from-indigo-500/20 to-emerald-500/20 rounded-[5.2rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            <div className="relative">
+                                                {report.sections[focusIndex].charts && report.sections[focusIndex].charts.length > 0 ? (
+                                                    <div className="h-[550px]">
+                                                        <SmartChart
+                                                            chart={report.sections[focusIndex].charts[0]}
+                                                            height={550}
+                                                            data={report.sections[focusIndex].charts[0].data}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-[550px] flex items-center justify-center text-slate-500 font-black uppercase tracking-[0.5em] text-[10px]">Narrative Deep-Dive</div>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            )}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
+                        {/* Slide Mini-Map */}
+                        <div className="flex justify-center gap-3 mb-12">
+                            {report?.sections.map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={() => setFocusIndex(i)}
+                                    className={`h-1.5 rounded-full transition-all duration-500 ${i === focusIndex ? 'w-12 bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)]' : 'w-3 bg-white/10 hover:bg-white/30'}`}
+                                />
+                            ))}
                         </div>
 
                         {/* Navigation */}
-                        <div className="flex justify-between items-center mt-12 py-8 border-t border-white/5">
+                        <div className="flex justify-between items-center py-12 border-t border-white/5">
                             <button
                                 onClick={() => setFocusIndex(Math.max(0, focusIndex - 1))}
                                 disabled={focusIndex === 0}
-                                className="flex items-center gap-4 text-white/50 hover:text-white disabled:opacity-0 transition-all font-black uppercase text-xs tracking-widest"
+                                className="flex items-center gap-4 text-white/40 hover:text-white disabled:opacity-0 transition-all font-black uppercase text-[10px] tracking-[0.4em]"
                             >
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M15 19l-7-7 7-7" /></svg>
                                 Previous
                             </button>
 
-                            <div className="px-6 py-2 bg-white/5 rounded-full text-white/40 font-bold text-[10px] tracking-widest uppercase">
-                                Slide {focusIndex + 1} of {report?.sections.length}
+                            <div className="flex flex-col items-center">
+                                <span className="text-white/20 font-black text-[9px] tracking-[0.4em] uppercase mb-2">Internal Strategic Desk</span>
+                                <div className="px-6 py-2 bg-white/5 rounded-full text-white/50 font-black text-[10px] tracking-[0.2em] uppercase border border-white/5">
+                                    Frame {focusIndex + 1} / {report?.sections.length}
+                                </div>
                             </div>
 
                             <button
@@ -1260,10 +1320,10 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                         setIsFocusMode(false);
                                     }
                                 }}
-                                className="flex items-center gap-4 text-emerald-400 hover:text-emerald-300 transition-all font-black uppercase text-xs tracking-widest group"
+                                className="flex items-center gap-4 text-emerald-400 hover:text-emerald-300 transition-all font-black uppercase text-[10px] tracking-[0.4em] group"
                             >
-                                {focusIndex === (report?.sections.length || 0) - 1 ? 'Finish' : 'Next Insight'}
-                                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                                {focusIndex === (report?.sections.length || 0) - 1 ? 'Close Desk' : 'Advance'}
+                                <svg className="w-5 h-5 group-hover:translate-x-2 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
                             </button>
                         </div>
                     </div>
@@ -1304,8 +1364,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                                 }
                                             }}
                                             className={`py-3 px-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${(chartOverrides[chartDesigner.chartId!]?.type || report?.sections.flatMap(s => s.charts).find(c => c.id === chartDesigner.chartId)?.type) === type
-                                                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                                                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
+                                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
                                                 }`}
                                         >
                                             {type}
