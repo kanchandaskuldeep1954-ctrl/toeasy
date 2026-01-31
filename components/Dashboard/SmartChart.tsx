@@ -2,6 +2,7 @@ import React from 'react';
 import { PlotlyChart } from './PlotlyChart';
 import { PremiumBar } from './Premium/PremiumBar';
 import { PremiumLine } from './Premium/PremiumLine';
+import { PremiumPie } from './Premium/PremiumPie';
 import { ChartSpec } from '../../types';
 
 interface SmartChartProps {
@@ -25,6 +26,10 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     if (type === 'line' || type === 'area') {
         return <PremiumLine {...props} />;
+    }
+
+    if (type === 'pie' || type === 'donut' || type === 'doughnut') {
+        return <PremiumPie {...props} />;
     }
 
     // Default: Return Plotly for Scientific/Complex Charts (Scatter, Heatmap, 3D, etc.)
