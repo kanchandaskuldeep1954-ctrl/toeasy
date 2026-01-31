@@ -8,6 +8,38 @@ import { SmartChart } from './Dashboard/SmartChart';
 import { sharingAPI, activityAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
 import ExportModal from '../src/components/ExportHub/ExportModal';
+import mermaid from 'mermaid';
+
+// Initialize mermaid
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+        primaryColor: '#6366f1',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4f46e5',
+        lineColor: '#6366f1',
+        secondaryColor: '#f8fafc',
+        tertiaryColor: '#fff'
+    }
+});
+
+const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (ref.current && chart) {
+            ref.current.removeAttribute('data-processed');
+            mermaid.contentLoaded();
+        }
+    }, [chart]);
+
+    return (
+        <div className="mermaid bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden flex justify-center" ref={ref}>
+            {chart}
+        </div>
+    );
+};
 
 interface ReportViewProps {
     dataset: Dataset;
@@ -60,6 +92,10 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [isSharing, setIsSharing] = useState(false);
     const [showShareModal, setShowShareModal] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
+    const [isFocusMode, setIsFocusMode] = useState(false);
+    const [focusIndex, setFocusIndex] = useState(0);
+    const [chartDesigner, setChartDesigner] = useState<{ open: boolean, chartId: string | null }>({ open: false, chartId: null });
+    const [chartOverrides, setChartOverrides] = useState<Record<string, Partial<ChartSpec>>>({});
 
     const copilotSuggestions = [
         { title: 'Add Competitor Benchmark', icon: '🏆', prompt: 'Include a section comparing our revenue growth against the S&P 500 average for 2025.' },
@@ -289,22 +325,33 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     };
 
     const renderChart = (chart: ChartSpec) => {
+        const override = chartOverrides[chart.id] || {};
+        const activeChart = { ...chart, ...override };
+
         return (
-            <div className="my-8 p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm break-inside-avoid print:border-slate-300">
-                <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{chart.type} Visualization</h5>
-                <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-6">{chart.title}</h4>
+            <div className="my-8 p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm break-inside-avoid print:border-slate-300 group/chart relative">
+                <div className="absolute top-4 right-4 opacity-0 group-hover/chart:opacity-100 transition-opacity">
+                    <button
+                        onClick={() => setChartDesigner({ open: true, chartId: chart.id })}
+                        className="p-2 bg-white dark:bg-slate-800 text-slate-500 hover:text-indigo-600 rounded-lg border border-slate-200 dark:border-slate-700 shadow-sm"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                    </button>
+                </div>
+                <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{activeChart.type} Visualization</h5>
+                <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-6">{activeChart.title}</h4>
                 <div className="h-72 w-full">
                     <SmartChart
-                        chart={chart}
+                        chart={activeChart}
                         height={288}
-                        data={chart.data} // Pass pre-calculated data
+                        data={activeChart.data} // Pass pre-calculated data
                     />
                 </div>
-                <p className="mt-4 text-[11px] text-slate-500 italic text-center">{chart.description}</p>
-                {chart.reasoning && (
+                <p className="mt-4 text-[11px] text-slate-500 italic text-center">{activeChart.description}</p>
+                {activeChart.reasoning && (
                     <div className="mt-4 p-4 bg-indigo-50/50 dark:bg-indigo-900/10 rounded-2xl border border-indigo-100/50 dark:border-indigo-900/20">
                         <p className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase tracking-widest mb-1">First Principles Analysis</p>
-                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{chart.reasoning}</p>
+                        <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 leading-relaxed">{activeChart.reasoning}</p>
                     </div>
                 )}
             </div>
@@ -627,6 +674,13 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
                         Export Options
                     </button>
+                    <button
+                        onClick={() => { setIsFocusMode(true); setFocusIndex(0); }}
+                        className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                        BOARDROOM MODE
+                    </button>
                 </div>
             </aside>
 
@@ -948,6 +1002,14 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                         </div>
                                     )}
 
+                                    {/* Mermaid Logic Path (Brain Logic) */}
+                                    {(section as any).logicPath && (
+                                        <div className="my-10 space-y-4">
+                                            <h6 className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Inferred Logic Flow</h6>
+                                            <Mermaid chart={(section as any).logicPath} />
+                                        </div>
+                                    )}
+
                                     {/* Strategic Modules */}
                                     {section.swot && renderSWOT(section.swot)}
                                     {section.recommendations && renderRecommendations(section.recommendations)}
@@ -1111,6 +1173,180 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             .dark\\:bg-slate-900 { background: white !important; }
         }
       `}</style>
+            {/* --- FOCUS MODE (BOARDROOM) --- */}
+            {isFocusMode && (
+                <div className="fixed inset-0 z-[100] bg-slate-900 flex flex-col items-center justify-center p-8 overflow-hidden">
+                    <button
+                        onClick={() => setIsFocusMode(false)}
+                        className="absolute top-8 right-8 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full transition-colors"
+                    >
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+
+                    <div className="w-full max-w-6xl flex flex-col h-full">
+                        {/* Progress Bar */}
+                        <div className="w-full h-1 bg-white/10 rounded-full mb-12 overflow-hidden flex">
+                            {report?.sections.map((_, i) => (
+                                <div
+                                    key={i}
+                                    className={`flex-1 h-full transition-all duration-500 ${i === focusIndex ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : (i < focusIndex ? 'bg-emerald-800' : 'bg-transparent')}`}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Slide Content */}
+                        <div className="flex-1 flex flex-col justify-center gap-12">
+                            {report?.sections[focusIndex] && (
+                                <div className="animate-in fade-in slide-in-from-bottom-12 duration-700">
+                                    <h5 className="text-emerald-400 font-black tracking-[0.3em] uppercase text-xs mb-4">Strategic Insight {focusIndex + 1}</h5>
+                                    <h2 className="text-5xl font-black text-white mb-8 leading-tight tracking-tight">
+                                        {report.sections[focusIndex].title}
+                                    </h2>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
+                                        <div className="space-y-8">
+                                            <p className="text-xl text-slate-300 leading-relaxed font-medium">
+                                                {report.sections[focusIndex].content}
+                                            </p>
+
+                                            <div className="p-8 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl">
+                                                <h6 className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-3">Logic Weaver</h6>
+                                                <p className="text-sm text-slate-400 italic font-medium leading-relaxed">
+                                                    "{(report.sections[focusIndex] as any).reasoning}"
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-white/5 p-8 rounded-[3rem] border border-white/10 backdrop-blur-3xl shadow-2xl">
+                                            {report.sections[focusIndex].charts && report.sections[focusIndex].charts.length > 0 ? (
+                                                <div className="h-[400px]">
+                                                    <SmartChart
+                                                        chart={report.sections[focusIndex].charts[0]}
+                                                        height={400}
+                                                        data={report.sections[focusIndex].charts[0].data}
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="h-[400px] flex items-center justify-center text-slate-500 font-bold uppercase tracking-widest text-xs">
+                                                    Narrative Only Slide
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Navigation */}
+                        <div className="flex justify-between items-center mt-12 py-8 border-t border-white/5">
+                            <button
+                                onClick={() => setFocusIndex(Math.max(0, focusIndex - 1))}
+                                disabled={focusIndex === 0}
+                                className="flex items-center gap-4 text-white/50 hover:text-white disabled:opacity-0 transition-all font-black uppercase text-xs tracking-widest"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
+                                Previous
+                            </button>
+
+                            <div className="px-6 py-2 bg-white/5 rounded-full text-white/40 font-bold text-[10px] tracking-widest uppercase">
+                                Slide {focusIndex + 1} of {report?.sections.length}
+                            </div>
+
+                            <button
+                                onClick={() => {
+                                    if (focusIndex < (report?.sections.length || 0) - 1) {
+                                        setFocusIndex(focusIndex + 1);
+                                    } else {
+                                        setIsFocusMode(false);
+                                    }
+                                }}
+                                className="flex items-center gap-4 text-emerald-400 hover:text-emerald-300 transition-all font-black uppercase text-xs tracking-widest group"
+                            >
+                                {focusIndex === (report?.sections.length || 0) - 1 ? 'Finish' : 'Next Insight'}
+                                <svg className="w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* --- CHART DESIGNER MODAL --- */}
+            {chartDesigner.open && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+                            <div>
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Chart Aesthetic Designer</h3>
+                                <p className="text-xs text-slate-500 font-medium">Fine-tune the AI's visualization choice</p>
+                            </div>
+                            <button
+                                onClick={() => setChartDesigner({ open: false, chartId: null })}
+                                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        </div>
+
+                        <div className="p-8 space-y-8">
+                            {/* Chart Type Selection */}
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Override Type</label>
+                                <div className="grid grid-cols-3 gap-3">
+                                    {['bar', 'line', 'area', 'pie', 'doughnut', 'radar'].map(type => (
+                                        <button
+                                            key={type}
+                                            onClick={() => {
+                                                if (chartDesigner.chartId) {
+                                                    setChartOverrides({
+                                                        ...chartOverrides,
+                                                        [chartDesigner.chartId]: { ...chartOverrides[chartDesigner.chartId], type: type as any }
+                                                    });
+                                                }
+                                            }}
+                                            className={`py-3 px-4 rounded-2xl border text-[10px] font-black uppercase tracking-widest transition-all ${(chartOverrides[chartDesigner.chartId!]?.type || report?.sections.flatMap(s => s.charts).find(c => c.id === chartDesigner.chartId)?.type) === type
+                                                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-500/20'
+                                                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-indigo-400'
+                                                }`}
+                                        >
+                                            {type}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Theme Selection */}
+                            <div className="space-y-4">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Visual Preset</label>
+                                <div className="grid grid-cols-2 gap-4">
+                                    {[
+                                        { id: 'indigo', color: 'bg-indigo-500', label: 'Indigo Night' },
+                                        { id: 'emerald', color: 'bg-emerald-500', label: 'Forest Green' },
+                                        { id: 'vibrant', color: 'bg-rose-500', label: 'Vibrant Insight' },
+                                        { id: 'minimal', color: 'bg-slate-900', label: 'Glass Mono' }
+                                    ].map(theme => (
+                                        <button
+                                            key={theme.id}
+                                            className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500 transition-all group"
+                                        >
+                                            <div className={`w-8 h-8 rounded-full ${theme.color} shadow-inner group-hover:scale-110 transition-transform`} />
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">{theme.label}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="p-8 bg-slate-50 dark:bg-slate-800/30">
+                            <button
+                                onClick={() => setChartDesigner({ open: false, chartId: null })}
+                                className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-xl hover:opacity-90 transition-opacity"
+                            >
+                                Apply Aesthetics
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

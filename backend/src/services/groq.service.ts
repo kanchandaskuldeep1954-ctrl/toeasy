@@ -676,14 +676,15 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
-  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic', extraContext: { cleaningHistory?: any[], activityLogs?: any[], webData?: any } = {}): Promise<any> {
+  static async generateReport(dataset: any, reportType: 'strategic' | 'operational' | 'financial' | 'quality' | 'risk' = 'strategic', extraContext: { cleaningHistory?: any[], activityLogs?: any[], webData?: any, theme?: string } = {}): Promise<any> {
     try {
       const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
       const data = dataset.data || [];
       const dataSize = data.length;
+      const theme = extraContext.theme || 'modern_corporate';
 
       // 1. Generate Real Analytics Artifacts (KPIs & Charts & DataFrames)
-      const { kpis, charts, forensics, dataFrames } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType) as any;
+      const { kpis, charts, forensics, dataFrames, correlations } = await AnalyticsEngine.generateReportArtifacts(headers, data, reportType) as any;
 
       // 2. Context Extraction (Cleaning & Activity Awareness)
       const cleaningContext = extraContext.cleaningHistory && extraContext.cleaningHistory.length > 0
@@ -699,9 +700,10 @@ Return ONLY valid JSON (no markdown, no explanation):
       const hasPredictiveCharts = charts.some((c: any) => c.type === 'line' && c.description?.includes('Forecast'));
 
       // Prepare context for LLM
-      const kpiSummary = kpis.map((k: any) => `${k.label}: ${k.value} (${k.reasoning || ''})`).join('\n');
+      const kpiSummary = kpis.map((k: any) => `${k.label}: ${k.value} (ID: ${k.id}, reasoning: ${k.reasoning || ''})`).join('\n');
       const chartSummary = charts.map((c: any) => `- ID: "${c.id}" | Title: "${c.title}" | Type: ${c.type} | Logic: ${c.reasoning || 'n/a'}`).join('\n');
       const dfSummary = (dataFrames || []).map((df: any) => `- ID: "${df.id}" | Title: "${df.title}" | Logic: ${df.logic}`).join('\n');
+      const correlationSummary = (correlations || []).map((c: any) => `${c.strength} ${c.type} correlation between ${c.colA} and ${c.colB} (r=${c.r.toFixed(2)}). Reasoning: ${c.reasoning}`).join('\n');
 
       const complianceContext = piiColumns.length > 0
         ? `CRITICAL COMPLIANCE NOTICE: The following columns contain potential PII: ${piiColumns.join(', ')}. You MUST include a 'Compliance & Privacy' section with GDPR/CCPA warnings.`
@@ -713,6 +715,8 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
       
+      VISUAL THEME: ${theme} (Adapt terminology and tone to match).
+
       DATASET CONTEXT:
       - Rows: ${dataSize}
       - Columns: ${headers.slice(0, 15).join(', ')}
@@ -722,6 +726,12 @@ Return ONLY valid JSON (no markdown, no explanation):
 
       AVAILABLE VISUALS (Real Charts):
       ${chartSummary}
+
+      CALCULATED DATAFRAMES (Logic Anchors):
+      ${dfSummary}
+
+      DISCOVERED CORRELATIONS (Storytelling Bridges):
+      ${correlationSummary}
 
       COMPLIANCE CONTEXT:
       ${complianceContext}
@@ -733,40 +743,43 @@ Return ONLY valid JSON (no markdown, no explanation):
       ${cleaningContext}
       ${activityContext}
 
-      FIRST PRINCIPLES DIRECTIVE (CRITICAL):
+      FIRST PRINCIPLES & CONCEPT WEAVER DIRECTIVE (CRITICAL):
       1. Every section MUST include a 'Reasoning' paragraph explaining the business logic behind the displayed metrics.
-      2. Do NOT just state numbers; explain the "Calculated Truth" (e.g., how Margin was derived from raw units).
-      3. Use the provided Calculated DataFrames to anchor your logical arguments.
+      2. CONCEPT WEAVER: You must explicitly explain the relationship between different charts. For example, if you assign Chart A and Chart B to a section, write a narrative bridge explaining how the trends in A influence or correlate with B.
+      3. Do NOT just state numbers; explain the "Calculated Truth" (e.g., how Margin was derived from raw units).
+      4. Use the provided Calculated DataFrames to anchor your logical arguments.
+      5. MERMAID LOGIC: For each section, provide a 'logicPath' field containing a Mermaid flowchart (graph LR) that shows the step-by-step reasoning from raw data to the primary insight of that section.
 
       TASK:
       Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.
-      INTEGRATE PROCESS AWARENESS: Refer to the cleaning history specifically when discussing "Data Quality" to show how the current state was achieved. Use Activity logs to contextualize the report for the current workspace's objectives.
+      INTEGRATE PROCESS AWARENESS: Refer to the cleaning history specifically when discussing "Data Quality" to show how the current state was achieved. 
       
       RETURN JSON STRUCTURE (No Markdown):
       {
         "title": "Professional ${reportType} Analysis",
-        "executiveSummary": "High-level executive summary referencing key metrics.",
+        "theme": "${theme}",
+        "executiveSummary": "High-level executive summary referencing key metrics and cross-chart correlations.",
         "sections": [
           {
-            "id": "intro",
-            "title": "Strategic Overview",
-            "content": "Deep dive narrative...",
+            "id": "section_id",
+            "title": "Section Title",
+            "content": "Deep dive narrative inclusive of cross-chart 'Concept Bridges'...",
             "reasoning": "First Principles justification for these specific metrics...",
+            "logicPath": "mermaid_flowchart_syntax",
             "keyTakeaways": ["insight 1", "insight 2"],
             "swot": { "strengths": [], "weaknesses": [], "opportunities": [], "threats": [] },
             "recommendations": [{ "action": "...", "impact": "high", "effort": "low", "rationale": "..." }],
             "risks": [{ "category": "Compliance", "description": "...", "level": "medium", "mitigation": "..." }],
             "chartIds": ["id_of_relevant_chart_1"],
-            "kpiIds": ["total_records"],
+            "kpiIds": ["id_of_kpi_1"],
             "dataFrameIds": ["id_of_relevant_dataframe_1"]
           }
         ],
-        "dataFrames": [],
         "generatedAt": "${new Date().toISOString()}",
-        "version": "4.0-FP"
+        "version": "5.0-ConceptWeaver"
       }`;
 
-      const result = await this.callGroq(groqPrompt, 2500);
+      const result = await this.callGroq(groqPrompt, 3000);
       let jsonStr = result.trim();
 
       if (jsonStr.includes('```json')) {

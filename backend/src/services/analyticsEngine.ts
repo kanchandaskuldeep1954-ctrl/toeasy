@@ -639,7 +639,56 @@ export class AnalyticsEngine {
         // 7. Generate Calculated DataFrames (First Principles)
         const dataFrames = this.generateCalculatedDataFrames(data, forensics);
 
-        return { kpis: filteredKpis, charts: filteredCharts, forensics, dataFrames } as any;
+        // 8. Discover Cross-Chart Correlations (Concept Weaver Input)
+        const correlations = this.discoverCorrelations(data, forensics.profiles);
+
+        return { kpis: filteredKpis, charts: filteredCharts, forensics, dataFrames, correlations } as any;
+    }
+
+    private static discoverCorrelations(data: any[], profiles: ColumnProfile[]): any[] {
+        const numericCols = profiles.filter(p => p.dataType === 'number' && p.role !== 'identifier');
+        const correlations: any[] = [];
+
+        if (numericCols.length < 2) return correlations;
+
+        for (let i = 0; i < numericCols.length; i++) {
+            for (let j = i + 1; j < numericCols.length; j++) {
+                const colA = numericCols[i].column;
+                const colB = numericCols[j].column;
+
+                const pairs = data.map(r => ({
+                    a: this.parseNumeric(r[colA]),
+                    b: this.parseNumeric(r[colB])
+                })).filter(p => !isNaN(p.a) && !isNaN(p.b));
+
+                if (pairs.length < 10) continue;
+
+                const n = pairs.length;
+                const sumA = pairs.reduce((s, p) => s + p.a, 0);
+                const sumB = pairs.reduce((s, p) => s + p.b, 0);
+                const sumAB = pairs.reduce((s, p) => s + (p.a * p.b), 0);
+                const sumA2 = pairs.reduce((s, p) => s + (p.a * p.a), 0);
+                const sumB2 = pairs.reduce((s, p) => s + (p.b * p.b), 0);
+
+                const numerator = (n * sumAB) - (sumA * sumB);
+                const denominator = Math.sqrt((n * sumA2 - sumA * sumA) * (n * sumB2 - sumB * sumB));
+
+                if (denominator === 0) continue;
+
+                const r = numerator / denominator;
+                if (Math.abs(r) > 0.6) {
+                    correlations.push({
+                        colA,
+                        colB,
+                        r,
+                        strength: Math.abs(r) > 0.85 ? 'Strong' : 'Moderate',
+                        type: r > 0 ? 'Positive' : 'Negative',
+                        reasoning: `As ${colA} ${r > 0 ? 'increases' : 'decreases'}, ${colB} tends to ${r > 0 ? 'increase' : 'decrease'} proportionally.`
+                    });
+                }
+            }
+        }
+        return correlations.slice(0, 5);
     }
 
     private static calculateGrowth(data: any[], dateCol: string, valCol: string): { percent: number, history: number[] } | null {
