@@ -522,15 +522,22 @@ export class AnalyticsEngine {
         return data;
     }
 
-    private static aggregateByCategory(data: any[], catCol: string, metricCol?: string, op: 'sum' | 'avg' | 'count' = 'sum') {
+    private static aggregateByCategory(data: any[], catCol: string, metricCol?: string, op: 'sum' | 'avg' | 'count' = 'sum', formula?: string) {
         const sums: Record<string, number> = {};
         const counts: Record<string, number> = {};
+
+        // Safe formula evaluator
+        const evaluate = formula ? new Function('row', `try { return ${formula}; } catch(e) { return 0; }`) : null;
 
         data.forEach(row => {
             const key = row[catCol] || 'Unknown';
             let val = 1;
 
-            if (metricCol && row[metricCol] !== undefined) {
+            if (evaluate) {
+                // Formula-First calculation
+                const res = evaluate(row);
+                val = isNaN(Number(res)) ? 0 : Number(res);
+            } else if (metricCol && row[metricCol] !== undefined) {
                 const parsed = this.parseNumeric(row[metricCol]);
                 val = isNaN(parsed) ? 1 : parsed;
             }
