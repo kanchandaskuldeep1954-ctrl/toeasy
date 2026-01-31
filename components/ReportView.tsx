@@ -4,7 +4,7 @@ import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
 import { GroqService } from '../services/groqService';
 import { ExportService } from '../src/services/exportService';
 import ReactMarkdown from 'react-markdown';
-import PlotlyChart from './Dashboard/PlotlyChart';
+import { SmartChart } from './Dashboard/SmartChart';
 import { sharingAPI, activityAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
 import ExportModal from '../src/components/ExportHub/ExportModal';
@@ -294,7 +294,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{chart.type} Visualization</h5>
                 <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-6">{chart.title}</h4>
                 <div className="h-72 w-full">
-                    <PlotlyChart
+                    <SmartChart
                         chart={chart}
                         height={288}
                         data={chart.data} // Pass pre-calculated data
