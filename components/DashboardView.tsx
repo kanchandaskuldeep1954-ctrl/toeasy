@@ -4,6 +4,7 @@ import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../t
 import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
 import { SmartChart } from './Dashboard/SmartChart';
+import { PremiumKPI } from './Dashboard/PremiumKPI';
 import { KPICard } from './Dashboard/KPICard';
 import { FilterPanel } from './Dashboard/FilterPanel';
 import { InsightCard } from './Dashboard/InsightCard';
@@ -95,10 +96,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [dashboardId, setDashboardId] = useState<string | null>(propDashboardId || null);
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    const [showVersionModal, setShowVersionModal] = useState(false);
     const [versionName, setVersionName] = useState('');
     const [isCommitting, setIsCommitting] = useState(false);
     const [forceManual, setForceManual] = useState(false);
+
+    // KPI Editing State
+    const [isEditingKPI, setIsEditingKPI] = useState(false);
+    const [editKPIConfig, setEditKPIConfig] = useState<KPI | null>(null);
 
     const filteredData = useMemo(() => {
         let data = dataset.data || [];
@@ -671,55 +675,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                 >
                                     Open Preview
                                 </a>
-                                <button
-                                    onClick={() => setShowShareModal(false)}
-                                    className="flex-1 px-6 py-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-                                >
-                                    Done
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ULTRA-SLIM PROFESSIONAL HEADER */}
-            <div className={`sticky top-0 z-[100] px-6 py-2.5 bg-white/60 dark:bg-slate-950/60 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 no-print transition-all`}>
-                <div className="flex items-center justify-between gap-6 max-w-[1800px] mx-auto">
-
-                    {/* Dashboard Identity */}
-                    <div className="flex items-center gap-3">
-                        {isEditingTitle ? (
-                            <input
-                                autoFocus
-                                value={dashboardName}
-                                onChange={e => setDashboardName(e.target.value)}
-                                onBlur={() => {
-                                    setIsEditingTitle(false);
-                                    if (onUpdate && config) onUpdate({ ...dataset, dashboardConfig: config });
-                                }}
-                                onKeyDown={e => e.key === 'Enter' && setIsEditingTitle(false)}
-                                className="text-sm font-black uppercase tracking-tight bg-white/20 dark:bg-slate-800/80 border-b-2 border-indigo-500 rounded px-2 outline-none w-[200px]"
-                            />
-                        ) : (
-                            <h2 onClick={() => setIsEditingTitle(true)} className="text-sm font-black uppercase tracking-tight text-slate-900 dark:text-white cursor-pointer hover:text-indigo-500 transition-all flex items-center gap-2 group">
-                                {dashboardName}
-                                <svg className="w-3.5 h-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                            </h2>
-                        )}
-                        {/* Save Status & Version Commit */}
-                        <div className="flex items-center gap-2 ml-2">
-                            {isSaving ? (
-                                <span className="text-[9px] font-bold text-indigo-400 animate-pulse flex items-center gap-1">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-ping" />
-                                    SAVING...
-                                </span>
+                                SAVING...
+                            </span>
                             ) : lastSaved ? (
-                                <span className="text-[9px] font-bold text-emerald-500 flex items-center gap-1" title={`Last saved: ${lastSaved.toLocaleString()}`}>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                    SAVED
-                                </span>
-                            ) : null}
+                            <span className="text-[9px] font-bold text-emerald-500 flex items-center gap-1" title={`Last saved: ${lastSaved.toLocaleString()}`}>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                SAVED
+                            </span>
+                ) : null}
                             {dashboardId && (
                                 <button
                                     onClick={() => setShowVersionModal(true)}
@@ -779,160 +742,181 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         </button>
                     </div>
                 </div>
+</div>
+
+{/* MAIN CONTENT CANVAS */ }
+    <div className="p-6 md:p-10 max-w-[1800px] mx-auto space-y-10 animate-in fade-in duration-700">
+
+        {/* Forensic Health Stripe */}
+        {dataQuality && (
+            <div className="flex items-center gap-3 px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
+                <div className={`w-2 h-2 rounded-full ${dataQuality.overallScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{dataQuality.overallScore}% Integrity Score • {filteredData.length.toLocaleString()} Operational Records • Active Filters: {Object.keys(activeFilters).length || 'None'}</span>
             </div>
+        )}
 
-            {/* MAIN CONTENT CANVAS */}
-            <div className="p-6 md:p-10 max-w-[1800px] mx-auto space-y-10 animate-in fade-in duration-700">
-
-                {/* Forensic Health Stripe */}
-                {dataQuality && (
-                    <div className="flex items-center gap-3 px-4 py-2 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl">
-                        <div className={`w-2 h-2 rounded-full ${dataQuality.overallScore >= 80 ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{dataQuality.overallScore}% Integrity Score • {filteredData.length.toLocaleString()} Operational Records • Active Filters: {Object.keys(activeFilters).length || 'None'}</span>
+        {/* KPI Strip */}
+        <div className="flex flex-wrap gap-4 px-2">
+            {(dynamicKPIs || []).map((kpi, idx) => {
+                if (!kpi) return null;
+                return (
+                    <div
+                        key={kpi.id}
+                        className="min-w-[200px] flex-1 animate-in slide-in-from-bottom-4 fade-in duration-700 fill-mode-both"
+                        style={{ animationDelay: `${idx * 150}ms` }}
+                    >
+                        <PremiumKPI
+                            kpi={kpi}
+                            dataset={dataset}
+                            onEdit={() => { setEditKPIConfig(kpi); setIsEditingKPI(true); }}
+                        />
                     </div>
-                )}
-
-                {/* KPI Strip */}
-                <div className="flex flex-wrap gap-4">
-                    {(dynamicKPIs || []).map((kpi) => {
-                        if (!kpi) return null;
-                        return (
-                            <div key={kpi.id} className="min-w-[180px] flex-1">
-                                <KPICard kpi={kpi} dataset={dataset} columns={dataset.headers} onUpdate={handleUpdateKPI} onDelete={handleRemoveKPI} />
-                            </div>
-                        );
-                    })}
-                    <button onClick={handleAddKPI} className="px-6 py-4 rounded-[24px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-500 transition-all text-xs font-bold uppercase tracking-widest flex items-center gap-2">+ Metric</button>
-                </div>
-
-                {/* Unified Masonry Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8 pb-32">
-                    {visibleCharts.map((chart, i) => {
-                        if (!chart) return null;
-                        const data = getChartData(chart);
-                        const isWide = i % 3 === 0;
-                        return (
-                            <div key={chart.id} className={`glass-card p-8 rounded-[32px] min-h-[480px] flex flex-col group relative ${isWide ? 'md:col-span-2' : ''} border border-slate-200 dark:border-white/5`}>
-                                <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
-                                    <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
-                                </div>
-                                <div className="mb-8">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{chart.title}</h3>
-                                        {chart.reasoning && (
-                                            <div className="group/info relative inline-flex items-center justify-center">
-                                                <svg className="w-4 h-4 text-indigo-400 opacity-60 hover:opacity-100 transition-opacity cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                <div className="absolute top-6 left-0 w-64 p-4 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl shadow-xl z-50 opacity-0 group-hover/info:opacity-100 transition-all pointer-events-none origin-top-left scale-95 group-hover/info:scale-100 backdrop-blur-xl">
-                                                    <p className="font-bold text-white mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1">
-                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
-                                                        ✨ The Story
-                                                    </p>
-                                                    {chart.reasoning}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                        {chart.description || `Relational context: ${chart.xAxis || chart.options?.xAxis || 'Analysis'} vs ${chart.yAxis || chart.options?.yAxis || 'Metric'}`}
-                                    </p>
-                                </div>
-                                <div className="flex-1 w-full relative min-h-[300px]">
-                                    <SmartChart
-                                        chart={injectChartConfig(chart)}
-                                        data={data}
-                                        activeFilter={activeFilters[chart.xAxis || chart.groupBy || '']}
-                                        onClick={(data) => handleChartClick(data, chart)}
-                                    />
-                                </div>
-                            </div>
-                        );
-                    })}
-
-                    <button onClick={() => setIsCreatingNew(true)} className="bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[480px]">
-                        <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-4xl">+</span></div>
-                        <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
-                    </button>
-                </div>
+                );
+            })}
+            <div className="flex-1 min-w-[120px] flex items-center justify-center">
+                <button onClick={handleAddKPI} className="w-full h-full py-6 rounded-[24px] border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-400 hover:border-indigo-500 hover:text-indigo-500 hover:bg-indigo-500/5 transition-all text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 group">
+                    <span className="group-hover:rotate-90 transition-transform duration-300">+</span> Metric
+                </button>
             </div>
-
-            {/* Global Perspective AI (Floating Input) */}
-            <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[200]">
-                <div className="bg-slate-900 dark:bg-white p-1.5 rounded-full shadow-3xl flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-inner">
-                        {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /> : <span className="text-lg text-slate-900 dark:text-white">✨</span>}
-                    </div>
-                    <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
-                        <input value={dashboardPrompt} onChange={e => setDashboardPrompt(e.target.value)} placeholder="Describe a chart to build..." className="w-full bg-transparent border-none outline-none text-sm font-medium text-white dark:text-slate-900 placeholder-white/30 dark:placeholder-slate-400" />
-                    </form>
-                    <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50">Draft</button>
-                </div>
-            </div>
-
-            {/* Modal Components */}
-            {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
-            {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
-
-            <ExportModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                exportType="dashboard"
-                data={config}
-                filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
-                onExport={(format) => {
-                    if (format === 'pdf') {
-                        ExportService.exportToPDF(dashboardName);
-                    } else if (format === 'csv') {
-                        ExportService.exportToCSV(dataset, 'dashboard_data');
-                    }
-                }}
-            />
-
-            {/* Filter Studio Overlay */}
-            {isFilterStudioOpen && (
-                <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-[48px] p-12 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/5 animate-in zoom-in-95">
-                        <div className="flex justify-between items-start mb-10">
-                            <div><h3 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Filter Studio</h3><p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Select dimensions for slicing</p></div>
-                            <button onClick={() => setIsFilterStudioOpen(false)} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">✕</button>
-                        </div>
-                        <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
-                            {dataset.headers.map(col => {
-                                const active = config?.filters?.some(f => f.column === col);
-                                return (
-                                    <button key={col} disabled={active} onClick={() => handleAddFilter(col)} className={`flex items-center justify-between p-5 rounded-3xl border transition-all text-left group ${active ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-50' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-indigo-500/10'}`}>
-                                        <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[11px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">{col.substring(0, 2).toUpperCase()}</div><span className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-300">{col}</span></div>
-                                        {active ? <span className="text-[10px] font-black text-slate-400">IN USE</span> : <span className="text-[10px] font-black text-indigo-500 opacity-0 group-hover:opacity-100">ENABLE +</span>}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Boardroom Overlay */}
-            {isCinematicMode && (
-                <div className="fixed inset-0 z-[400] bg-white dark:bg-[#040810] flex flex-col p-12 animate-in fade-in duration-700">
-                    <div className="flex justify-between items-center mb-16">
-                        <div className="flex items-center gap-4"><div className="w-14 h-14 rounded-3xl bg-indigo-600 flex items-center justify-center text-3xl shadow-2xl">🎬</div><div><h1 className="text-3xl font-black uppercase text-slate-900 dark:text-white leading-none">The Boardroom</h1><p className="text-[10px] text-slate-500 mt-2 uppercase tracking-[0.3em] font-black">Strategic Intelligence Series</p></div></div>
-                        <button onClick={() => setIsCinematicMode(false)} className="w-14 h-14 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
-                    </div>
-                    <div className="flex-1 flex flex-col items-center justify-center max-w-7xl mx-auto w-full">
-                        <div className="w-full glass-card !p-16 rounded-[64px] shadow-4xl flex-1 flex flex-col bg-white/50 dark:bg-slate-900/50">
-                            <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-12 text-center">{visibleCharts[activeCinematicIndex]?.title}</h2>
-                            <div className="flex-1 min-h-[400px]"><PlotlyChart chart={injectChartConfig(visibleCharts[activeCinematicIndex])} data={getChartData(visibleCharts[activeCinematicIndex])} height={600} /></div>
-                        </div>
-                    </div>
-                    <div className="flex justify-center gap-10 py-12">
-                        <button disabled={activeCinematicIndex === 0} onClick={() => setActiveCinematicIndex(prev => prev - 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
-                        <div className="flex gap-4 items-center">
-                            {visibleCharts.slice(0, 8).map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === activeCinematicIndex ? 'w-12 bg-indigo-600' : 'w-2 bg-slate-200 dark:bg-slate-800'}`} />)}
-                        </div>
-                        <button disabled={activeCinematicIndex === visibleCharts.length - 1} onClick={() => setActiveCinematicIndex(prev => prev + 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
-                    </div>
-                </div>
-            )}
         </div>
+
+        {/* Unified Masonry Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8 pb-32">
+            {visibleCharts.map((chart, i) => {
+                if (!chart) return null;
+                const data = getChartData(chart);
+                const isWide = i % 3 === 0;
+                return (
+                    <div key={chart.id} className={`glass-card p-8 rounded-[32px] min-h-[480px] flex flex-col group relative ${isWide ? 'md:col-span-2' : ''} border border-slate-200 dark:border-white/5`}>
+                        <div className="absolute top-8 right-8 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
+                            <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
+                        </div>
+                        <div className="mb-8">
+                            <div className="flex items-center gap-2 mb-2">
+                                <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{chart.title}</h3>
+                                {chart.reasoning && (
+                                    <div className="group/info relative inline-flex items-center justify-center">
+                                        <svg className="w-4 h-4 text-indigo-400 opacity-60 hover:opacity-100 transition-opacity cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        <div className="absolute top-6 left-0 w-64 p-4 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl shadow-xl z-50 opacity-0 group-hover/info:opacity-100 transition-all pointer-events-none origin-top-left scale-95 group-hover/info:scale-100 backdrop-blur-xl">
+                                            <p className="font-bold text-white mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                                ✨ The Story
+                                            </p>
+                                            {chart.reasoning}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                {chart.description || `Relational context: ${chart.xAxis || chart.options?.xAxis || 'Analysis'} vs ${chart.yAxis || chart.options?.yAxis || 'Metric'}`}
+                            </p>
+                        </div>
+                        <div className="flex-1 w-full relative min-h-[300px]">
+                            <SmartChart
+                                chart={injectChartConfig(chart)}
+                                data={data}
+                                activeFilter={activeFilters[chart.xAxis || chart.groupBy || '']}
+                                onClick={(data) => handleChartClick(data, chart)}
+                            />
+                        </div>
+                    </div>
+                );
+            })}
+
+            <button onClick={() => setIsCreatingNew(true)} className="bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[480px]">
+                <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-4xl">+</span></div>
+                <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
+            </button>
+        </div>
+    </div>
+
+    {/* Global Perspective AI (Floating Input) */ }
+    <div className="fixed bottom-10 left-1/2 -translate-x-1/2 w-full max-w-xl px-4 z-[200]">
+        <div className="bg-slate-900 dark:bg-white p-1.5 rounded-full shadow-3xl flex items-center gap-4">
+            <div className="w-10 h-10 rounded-full bg-white dark:bg-slate-900 flex items-center justify-center shadow-inner">
+                {isDashboardThinking ? <div className="w-4 h-4 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /> : <span className="text-lg text-slate-900 dark:text-white">✨</span>}
+            </div>
+            <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
+                <input value={dashboardPrompt} onChange={e => setDashboardPrompt(e.target.value)} placeholder="Describe a chart to build..." className="w-full bg-transparent border-none outline-none text-sm font-medium text-white dark:text-slate-900 placeholder-white/30 dark:placeholder-slate-400" />
+            </form>
+            <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 transition-all disabled:opacity-50">Draft</button>
+        </div>
+    </div>
+
+    {/* Modal Components */ }
+    { (editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} /> }
+    { viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} /> }
+
+    <ExportModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        exportType="dashboard"
+        data={config}
+        filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
+        onExport={(format) => {
+            if (format === 'pdf') {
+                ExportService.exportToPDF(dashboardName);
+            } else if (format === 'csv') {
+                ExportService.exportToCSV(dataset, 'dashboard_data');
+            }
+        }}
+    />
+
+    {/* Filter Studio Overlay */ }
+    {
+        isFilterStudioOpen && (
+            <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xl animate-in fade-in">
+                <div className="bg-white dark:bg-slate-900 rounded-[48px] p-12 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/5 animate-in zoom-in-95">
+                    <div className="flex justify-between items-start mb-10">
+                        <div><h3 className="text-3xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Filter Studio</h3><p className="text-xs font-bold text-slate-500 mt-1 uppercase tracking-widest">Select dimensions for slicing</p></div>
+                        <button onClick={() => setIsFilterStudioOpen(false)} className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-all">✕</button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 max-h-[400px] overflow-y-auto pr-4 custom-scrollbar">
+                        {dataset.headers.map(col => {
+                            const active = config?.filters?.some(f => f.column === col);
+                            return (
+                                <button key={col} disabled={active} onClick={() => handleAddFilter(col)} className={`flex items-center justify-between p-5 rounded-3xl border transition-all text-left group ${active ? 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 opacity-50' : 'bg-white dark:bg-slate-800/50 border-slate-200 dark:border-slate-800 hover:border-indigo-500 hover:bg-slate-50 dark:hover:bg-indigo-500/10'}`}>
+                                    <div className="flex items-center gap-4"><div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-[11px] font-black group-hover:bg-indigo-600 group-hover:text-white transition-all">{col.substring(0, 2).toUpperCase()}</div><span className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-300">{col}</span></div>
+                                    {active ? <span className="text-[10px] font-black text-slate-400">IN USE</span> : <span className="text-[10px] font-black text-indigo-500 opacity-0 group-hover:opacity-100">ENABLE +</span>}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    {/* Boardroom Overlay */ }
+    {
+        isCinematicMode && (
+            <div className="fixed inset-0 z-[400] bg-white dark:bg-[#040810] flex flex-col p-12 animate-in fade-in duration-700">
+                <div className="flex justify-between items-center mb-16">
+                    <div className="flex items-center gap-4"><div className="w-14 h-14 rounded-3xl bg-indigo-600 flex items-center justify-center text-3xl shadow-2xl">🎬</div><div><h1 className="text-3xl font-black uppercase text-slate-900 dark:text-white leading-none">The Boardroom</h1><p className="text-[10px] text-slate-500 mt-2 uppercase tracking-[0.3em] font-black">Strategic Intelligence Series</p></div></div>
+                    <button onClick={() => setIsCinematicMode(false)} className="w-14 h-14 rounded-full border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:text-rose-500 transition-all"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                </div>
+                <div className="flex-1 flex flex-col items-center justify-center max-w-7xl mx-auto w-full">
+                    <div className="w-full glass-card !p-16 rounded-[64px] shadow-4xl flex-1 flex flex-col bg-white/50 dark:bg-slate-900/50">
+                        <h2 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-12 text-center">{visibleCharts[activeCinematicIndex]?.title}</h2>
+                        <div className="flex-1 min-h-[400px]">
+                            <SmartChart
+                                chart={injectChartConfig(visibleCharts[activeCinematicIndex])}
+                                data={getChartData(visibleCharts[activeCinematicIndex])}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="flex justify-center gap-10 py-12">
+                    <button disabled={activeCinematicIndex === 0} onClick={() => setActiveCinematicIndex(prev => prev - 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8 rotate-180" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
+                    <div className="flex gap-4 items-center">
+                        {visibleCharts.slice(0, 8).map((_, i) => <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i === activeCinematicIndex ? 'w-12 bg-indigo-600' : 'w-2 bg-slate-200 dark:bg-slate-800'}`} />)}
+                    </div>
+                    <button disabled={activeCinematicIndex === visibleCharts.length - 1} onClick={() => setActiveCinematicIndex(prev => prev + 1)} className="w-16 h-16 rounded-full border-2 border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-all disabled:opacity-20"><svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={4} d="M9 5l7 7-7 7" /></svg></button>
+                </div>
+            </div>
+        )
+    }
+        </div >
     );
 
 };

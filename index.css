@@ -197,6 +197,72 @@
   .node-aura-running {
     animation: auraPulse 2s ease-in-out infinite;
   }
+
+  @keyframes mesh-move-1 {
+    0% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+      transform: translate(10%, 10%) scale(1.1);
+    }
+
+    66% {
+      transform: translate(-5%, 15%) scale(0.9);
+    }
+
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+  }
+
+  @keyframes mesh-move-2 {
+    0% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+      transform: translate(-15%, 5%) scale(0.95);
+    }
+
+    66% {
+      transform: translate(10%, -10%) scale(1.05);
+    }
+
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+  }
+
+  @keyframes mesh-move-3 {
+    0% {
+      transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+      transform: translate(5%, -15%) scale(1.02);
+    }
+
+    66% {
+      transform: translate(-10%, 10%) scale(0.98);
+    }
+
+    100% {
+      transform: translate(0, 0) scale(1);
+    }
+  }
+
+  .animate-mesh-1 {
+    animation: mesh-move-1 20s ease-in-out infinite;
+  }
+
+  .animate-mesh-2 {
+    animation: mesh-move-2 25s ease-in-out infinite;
+  }
+
+  .animate-mesh-3 {
+    animation: mesh-move-3 30s ease-in-out infinite;
+  }
 }
 
 /* Print Styles */
