@@ -26,8 +26,8 @@ export const BILLING_PLANS: PlanConfig[] = [
     {
         id: 'pro',
         name: 'Professional',
-        priceMonthly: 29,
-        priceYearly: 24,
+        priceMonthly: 5,
+        priceYearly: 4,
         description: 'Powerful tools for data analysts and consultants.',
         features: ['Up to 50,000 rows', 'Unlimited AI Queries', '5 Data Connectors', 'Custom Validation Rules', 'Executive Reports'],
         highlight: true,
@@ -37,8 +37,8 @@ export const BILLING_PLANS: PlanConfig[] = [
     {
         id: 'enterprise',
         name: 'Enterprise',
-        priceMonthly: 99,
-        priceYearly: 82,
+        priceMonthly: 19,
+        priceYearly: 15,
         description: 'The complete data OS for modern businesses.',
         features: ['Unlimited rows', 'Unlimited AI Queries', 'All Connectors (SQL, APIs)', 'Priority AI Processing', 'SSO & Advanced Security', 'API Access'],
         limitRows: 999999999,

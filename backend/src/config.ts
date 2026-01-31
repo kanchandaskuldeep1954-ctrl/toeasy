@@ -99,11 +99,11 @@ export const pricing = {
     inr: { monthly: 0, yearly: 0 }
   },
   pro: {
-    usd: { monthly: 25, yearly: 250 },
-    inr: { monthly: 499, yearly: 4990 } // Monthly Recurring vs Annual Recurring
+    usd: { monthly: 5, yearly: 48 },
+    inr: { monthly: 99, yearly: 999 } // Monthly Recurring vs Annual Recurring
   },
   enterprise: {
-    usd: { monthly: 89, yearly: 890 },
-    inr: { monthly: 2499, yearly: 24990 }
+    usd: { monthly: 19, yearly: 180 },
+    inr: { monthly: 499, yearly: 4999 }
   },
 };
