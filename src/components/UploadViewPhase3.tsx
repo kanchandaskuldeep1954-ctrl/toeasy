@@ -1,23 +1,70 @@
+/**
+ * Smart Upload View
+ * 
+ * A completely redesigned upload experience with:
+ * 1. Beautiful drag-and-drop interface
+ * 2. AI-powered source classification
+ * 3. Journey selection based on data type
+ * 4. Animated transitions and feedback
+ * 
+ * Part of Phase 1: Intelligent Core Loop
+ */
+
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import axios from 'axios';
-import { datasetAPI } from '../services/api';
+import { datasetAPI, classificationAPI } from '../services/api';
+import { getJourneyForSourceType, JOURNEYS, Journey, SourceType } from '../config/journeys';
+
+// Type definitions
+interface ClassificationResult {
+  sourceType: SourceType;
+  confidence: number;
+  reasoning: string;
+  suggestedWorkflow: string;
+  detectedEntities: { name: string; column: string; confidence: number; examples: string[] }[];
+  keyInsights: string[];
+  alternativeTypes: { type: SourceType; confidence: number }[];
+}
+
+type UploadStep = 'select' | 'parsing' | 'classifying' | 'review' | 'uploading' | 'complete';
+
+// Source type display info
+const SOURCE_TYPE_INFO: Record<string, { icon: string; label: string; color: string }> = {
+  invoice: { icon: '🧾', label: 'Invoice Data', color: 'emerald' },
+  sales_data: { icon: '📈', label: 'Sales Data', color: 'blue' },
+  financial_report: { icon: '💰', label: 'Financial Report', color: 'green' },
+  employee_roster: { icon: '👥', label: 'Employee Roster', color: 'purple' },
+  customer_list: { icon: '🎯', label: 'Customer List', color: 'orange' },
+  inventory: { icon: '📦', label: 'Inventory', color: 'amber' },
+  survey_results: { icon: '📊', label: 'Survey Results', color: 'pink' },
+  log_file: { icon: '🖥️', label: 'Log File', color: 'slate' },
+  time_series: { icon: '📉', label: 'Time Series', color: 'cyan' },
+  transaction_log: { icon: '💳', label: 'Transaction Log', color: 'indigo' },
+  product_catalog: { icon: '🛍️', label: 'Product Catalog', color: 'rose' },
+  generic_dataset: { icon: '📄', label: 'General Dataset', color: 'gray' },
+};
 
 export const UploadViewPhase3: React.FC = () => {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace') || '';
 
+  // State
   const [file, setFile] = useState<File | null>(null);
   const [datasetName, setDatasetName] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [step, setStep] = useState<UploadStep>('select');
   const [error, setError] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
 
-  const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
+  // Parsed data
+  const [parsedData, setParsedData] = useState<any[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+
+  // Classification
+  const [classification, setClassification] = useState<ClassificationResult | null>(null);
+  const [selectedJourney, setSelectedJourney] = useState<Journey | null>(null);
 
   useEffect(() => {
     if (!workspaceId) {
@@ -25,260 +72,409 @@ export const UploadViewPhase3: React.FC = () => {
     }
   }, [workspaceId]);
 
+  // Reset to start
+  const handleReset = () => {
+    setFile(null);
+    setDatasetName('');
+    setStep('select');
+    setParsedData([]);
+    setHeaders([]);
+    setClassification(null);
+    setSelectedJourney(null);
+    setError(null);
+  };
+
+  // Handle file selection
+  const handleFileSelect = async (selectedFile: File) => {
+    if (!selectedFile.type.includes('csv') && !selectedFile.type.includes('json') &&
+      !selectedFile.name.endsWith('.csv') && !selectedFile.name.endsWith('.json')) {
+      setError('Please upload a CSV or JSON file');
+      return;
+    }
+
+    setFile(selectedFile);
+    setDatasetName(selectedFile.name.replace(/\.[^.]+$/, ''));
+    setError(null);
+    setStep('parsing');
+
+    try {
+      // Parse file
+      const fileText = await selectedFile.text();
+      let data: any[] = [];
+      let hdrs: string[] = [];
+
+      if (selectedFile.type.includes('csv') || selectedFile.name.endsWith('.csv')) {
+        const lines = fileText.trim().split('\n');
+        if (lines.length === 0) throw new Error('CSV file is empty');
+
+        hdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+        data = lines.slice(1).map(line => {
+          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+          const obj: any = {};
+          hdrs.forEach((header, i) => { obj[header] = values[i] || null; });
+          return obj;
+        });
+      } else {
+        data = JSON.parse(fileText);
+        if (!Array.isArray(data)) data = [data];
+        if (data.length > 0) hdrs = Object.keys(data[0]);
+      }
+
+      if (data.length === 0) throw new Error('File contains no data');
+
+      setParsedData(data);
+      setHeaders(hdrs);
+      setStep('classifying');
+
+      // Classify with AI
+      const response = await classificationAPI.classify(hdrs, data.slice(0, 50), true);
+      const classResult = response.data.classification as ClassificationResult;
+      setClassification(classResult);
+
+      // Set suggested journey
+      const journey = getJourneyForSourceType(classResult.sourceType);
+      setSelectedJourney(journey);
+
+      setStep('review');
+    } catch (err: any) {
+      setError(err.message || 'Failed to process file');
+      setStep('select');
+    }
+  };
+
+  // Handle drag events
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
+    if (e.type === 'dragenter' || e.type === 'dragover') setDragActive(true);
+    else if (e.type === 'dragleave') setDragActive(false);
   };
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type.includes('csv') || droppedFile.type.includes('json')) {
-        setFile(droppedFile);
-        setDatasetName(droppedFile.name.replace(/\.[^.]+$/, ''));
-        setError(null);
-      } else {
-        setError('Please upload a CSV or JSON file');
-      }
-    }
+    if (e.dataTransfer.files?.[0]) handleFileSelect(e.dataTransfer.files[0]);
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.type.includes('csv') || selectedFile.type.includes('json')) {
-        setFile(selectedFile);
-        setDatasetName(selectedFile.name.replace(/\.[^.]+$/, ''));
-        setError(null);
-      } else {
-        setError('Please upload a CSV or JSON file');
-      }
-    }
+    if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Handle final upload
+  const handleUpload = async () => {
+    if (!file || !classification || !selectedJourney) return;
 
-    if (!file) {
-      setError('Please select a file');
-      return;
-    }
-
-    if (!datasetName.trim()) {
-      setError('Please enter a dataset name');
-      return;
-    }
-
-    if (!workspaceId) {
-      setError('Workspace not selected');
-      return;
-    }
+    setStep('uploading');
 
     try {
-      setUploading(true);
-      setError(null);
-
-      // Parse file based on type
-      const fileText = await file.text();
-      let data: any[] = [];
-      let headers: string[] = [];
-
-      if (file.type.includes('csv') || file.name.endsWith('.csv')) {
-        // Parse CSV
-        const lines = fileText.trim().split('\n');
-        if (lines.length === 0) {
-          setError('CSV file is empty');
-          return;
-        }
-
-        headers = lines[0].split(',').map(h => h.trim());
-        data = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim());
-          const obj: any = {};
-          headers.forEach((header, i) => {
-            obj[header] = values[i] || null;
-          });
-          return obj;
-        });
-      } else if (file.type.includes('json') || file.name.endsWith('.json')) {
-        // Parse JSON
-        data = JSON.parse(fileText);
-        if (!Array.isArray(data)) {
-          data = [data];
-        }
-        if (data.length > 0) {
-          headers = Object.keys(data[0]);
-        }
-      }
-
-      if (data.length === 0) {
-        setError('File contains no data');
-        return;
-      }
-
-      // Send parsed data as JSON
       const response = await datasetAPI.create(workspaceId, {
         name: datasetName,
-        data: data,
+        data: parsedData,
         headers: headers
       });
 
-      // Success - redirect to explore view
-      setFile(null);
-      setDatasetName('');
-      navigate(`/app/clean?workspace=${workspaceId}&dataset=${response.data.id}`);
+      const datasetId = response.data.id;
+
+      // Save classification to dataset
+      await classificationAPI.update(workspaceId, datasetId, {
+        sourceType: classification.sourceType,
+        suggestedWorkflow: selectedJourney.id,
+        confidence: classification.confidence,
+        detectedEntities: classification.detectedEntities,
+        keyInsights: classification.keyInsights,
+        classificationReasoning: classification.reasoning
+      });
+
+      setStep('complete');
+
+      // Navigate to first step of journey after a brief celebration
+      setTimeout(() => {
+        const firstStep = selectedJourney.steps[0];
+        navigate(`${firstStep.route}?workspace=${workspaceId}&dataset=${datasetId}&journey=${selectedJourney.id}`);
+      }, 1500);
+
     } catch (err: any) {
       const { getErrorMessage } = await import('../services/api');
       setError(getErrorMessage(err));
-    } finally {
-      setUploading(false);
-      setUploadProgress(0);
+      setStep('review');
     }
   };
 
+  // Get confidence color
+  const getConfidenceColor = (conf: number) => {
+    if (conf >= 80) return 'text-emerald-500';
+    if (conf >= 60) return 'text-amber-500';
+    return 'text-red-500';
+  };
+
+  // Render based on step
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-8 px-4 transition-colors">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-12 px-4">
+      <div className="max-w-3xl mx-auto">
+
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">Upload Dataset</h1>
-          <p className="text-slate-600 dark:text-slate-400">Import CSV or JSON files to your workspace</p>
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-500/20 mb-4">
+            <span className="text-3xl">🧠</span>
+          </div>
+          <h1 className="text-4xl font-bold text-white mb-2">Smart Upload</h1>
+          <p className="text-slate-400 text-lg">
+            Drop your data — AI will understand it
+          </p>
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-200">
-            {error}
+          <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-300 flex items-center gap-3">
+            <span className="text-xl">⚠️</span>
+            <span>{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-red-400 hover:text-red-300">✕</button>
           </div>
         )}
 
-        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-8 shadow-sm">
-          <form onSubmit={handleUpload} className="space-y-6">
-            {/* File Upload Area */}
-            <div
-              onDragEnter={handleDrag}
-              onDragLeave={handleDrag}
-              onDragOver={handleDrag}
-              onDrop={handleDrop}
-              className={`relative border-2 border-dashed rounded-lg p-12 text-center transition-colors ${dragActive
-                ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-600/10'
-                : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800/50'
-                }`}
-            >
-              {file ? (
-                <div className="space-y-3">
-                  <svg
-                    className="w-12 h-12 mx-auto text-green-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M5 13l4 4L19 7"
-                    />
-                  </svg>
-                  <p className="text-slate-900 dark:text-white font-semibold">{file.name}</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
+        {/* Step: Select File */}
+        {step === 'select' && (
+          <div
+            onDragEnter={handleDrag}
+            onDragLeave={handleDrag}
+            onDragOver={handleDrag}
+            onDrop={handleDrop}
+            className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all duration-300 cursor-pointer
+              ${dragActive
+                ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
+                : 'border-slate-600 hover:border-slate-500 bg-slate-800/50 hover:bg-slate-800'
+              }`}
+          >
+            <div className="space-y-4">
+              <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-white">Drop your file here</p>
+                <p className="text-slate-400 mt-1">or click to browse</p>
+              </div>
+              <div className="flex justify-center gap-3">
+                <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">CSV</span>
+                <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">JSON</span>
+                <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">Up to 500MB</span>
+              </div>
+            </div>
+            <input
+              type="file"
+              accept=".csv,.json"
+              onChange={handleFileChange}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            />
+          </div>
+        )}
+
+        {/* Step: Parsing / Classifying */}
+        {(step === 'parsing' || step === 'classifying') && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 relative">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+              <span className="absolute inset-0 flex items-center justify-center text-3xl">
+                {step === 'parsing' ? '📄' : '🧠'}
+              </span>
+            </div>
+            <p className="text-xl font-bold text-white mb-2">
+              {step === 'parsing' ? 'Reading your data...' : 'AI is analyzing...'}
+            </p>
+            <p className="text-slate-400">
+              {step === 'parsing'
+                ? `Processing ${file?.name}`
+                : 'Detecting patterns, entities, and data type'}
+            </p>
+          </div>
+        )}
+
+        {/* Step: Review Classification */}
+        {step === 'review' && classification && (
+          <div className="space-y-6">
+            {/* Classification Result Card */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
+              <div className="p-6 border-b border-slate-700">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-4xl">
+                      {SOURCE_TYPE_INFO[classification.sourceType]?.icon || '📄'}
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-400 mb-1">AI Classification</p>
+                      <h2 className="text-2xl font-bold text-white">
+                        {SOURCE_TYPE_INFO[classification.sourceType]?.label || 'Dataset'}
+                      </h2>
+                      <p className={`text-sm font-medium ${getConfidenceColor(classification.confidence)}`}>
+                        {classification.confidence}% Confidence
+                      </p>
+                    </div>
+                  </div>
                   <button
-                    type="button"
-                    onClick={() => setFile(null)}
-                    className="text-sm text-indigo-400 hover:text-indigo-300"
+                    onClick={handleReset}
+                    className="text-slate-400 hover:text-white transition-colors"
                   >
-                    Change file
+                    ✕
                   </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  <svg
-                    className="w-12 h-12 mx-auto text-slate-400 dark:text-slate-500"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M12 4v16m8-8H4"
-                    />
-                  </svg>
-                  <p className="text-slate-900 dark:text-white font-semibold">Drag and drop your file</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">or click to browse</p>
-                  <p className="text-xs text-slate-400 dark:text-slate-500">CSV or JSON files up to 500MB</p>
+              </div>
+
+              {/* AI Reasoning */}
+              <div className="p-6 bg-slate-900/50">
+                <p className="text-sm text-slate-400 mb-2">Why I think this:</p>
+                <p className="text-slate-300">{classification.reasoning}</p>
+              </div>
+
+              {/* Key Insights */}
+              {classification.keyInsights.length > 0 && (
+                <div className="p-6 border-t border-slate-700">
+                  <p className="text-sm text-slate-400 mb-3">Key Insights</p>
+                  <div className="space-y-2">
+                    {classification.keyInsights.map((insight, i) => (
+                      <div key={i} className="flex items-start gap-2 text-slate-300">
+                        <span className="text-indigo-400 mt-0.5">💡</span>
+                        <span>{insight}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
-              <input
-                type="file"
-                accept=".csv,.json"
-                onChange={handleFileChange}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-              />
+
+              {/* Detected Entities */}
+              {classification.detectedEntities.length > 0 && (
+                <div className="p-6 border-t border-slate-700">
+                  <p className="text-sm text-slate-400 mb-3">Detected Entities</p>
+                  <div className="flex flex-wrap gap-2">
+                    {classification.detectedEntities.map((entity, i) => (
+                      <span key={i} className="px-3 py-1 bg-slate-700 rounded-full text-sm text-slate-300">
+                        {entity.column}: {entity.name.replace('_', ' ')}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Dataset Name */}
-            <div>
-              <label className="text-sm text-slate-600 dark:text-slate-400 mb-2 block">Dataset Name*</label>
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <label className="text-sm text-slate-400 mb-2 block">Dataset Name</label>
               <input
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
-                placeholder="e.g., Customer Sales Q4"
-                className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-indigo-500"
-                required
+                className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-lg"
+                placeholder="Enter a name for your dataset"
               />
             </div>
 
-            {/* Progress Bar */}
-            {uploading && uploadProgress > 0 && (
-              <div>
-                <div className="flex justify-between items-center mb-2">
-                  <label className="text-sm text-slate-600 dark:text-slate-400">Upload Progress</label>
-                  <span className="text-sm text-indigo-600 dark:text-indigo-400 font-semibold">{uploadProgress}%</span>
-                </div>
-                <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-indigo-600 transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  />
-                </div>
+            {/* Journey Selection */}
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
+              <p className="text-sm text-slate-400 mb-4">Recommended Workflow</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {Object.values(JOURNEYS).map((journey) => (
+                  <button
+                    key={journey.id}
+                    onClick={() => setSelectedJourney(journey)}
+                    className={`p-4 rounded-xl text-left transition-all ${selectedJourney?.id === journey.id
+                        ? 'bg-indigo-500/20 border-2 border-indigo-500'
+                        : 'bg-slate-900/50 border-2 border-transparent hover:border-slate-600'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-2xl">{journey.icon}</span>
+                      <div>
+                        <p className="font-bold text-white">{journey.name}</p>
+                        <p className="text-xs text-slate-400">{journey.steps.length} steps</p>
+                      </div>
+                      {selectedJourney?.id === journey.id && (
+                        <span className="ml-auto text-indigo-400">✓</span>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Start Button */}
+            <button
+              onClick={handleUpload}
+              disabled={!datasetName.trim()}
+              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-600 disabled:to-slate-700 text-white text-lg font-bold rounded-xl transition-all transform hover:scale-[1.02]"
+            >
+              🚀 Start {selectedJourney?.name || 'Analysis'}
+            </button>
+          </div>
+        )}
+
+        {/* Step: Uploading */}
+        {step === 'uploading' && (
+          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 relative">
+              <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
+              <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
+              <span className="absolute inset-0 flex items-center justify-center text-3xl">☁️</span>
+            </div>
+            <p className="text-xl font-bold text-white mb-2">Uploading to cloud...</p>
+            <p className="text-slate-400">This will only take a moment</p>
+          </div>
+        )}
+
+        {/* Step: Complete */}
+        {step === 'complete' && (
+          <div className="bg-slate-800/50 border border-emerald-500/30 rounded-2xl p-12 text-center">
+            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
+              <span className="text-5xl">✨</span>
+            </div>
+            <p className="text-2xl font-bold text-white mb-2">Data Ready!</p>
+            <p className="text-slate-400">Redirecting to your {selectedJourney?.name}...</p>
+          </div>
+        )}
+
+        {/* Data Preview */}
+        {step === 'review' && parsedData.length > 0 && (
+          <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
+              <p className="text-sm text-slate-400">Data Preview</p>
+              <span className="text-xs text-slate-500">{parsedData.length.toLocaleString()} rows × {headers.length} columns</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-slate-900">
+                    {headers.slice(0, 6).map((h, i) => (
+                      <th key={i} className="px-4 py-2 text-left text-slate-400 font-medium">{h}</th>
+                    ))}
+                    {headers.length > 6 && (
+                      <th className="px-4 py-2 text-left text-slate-500">+{headers.length - 6} more</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {parsedData.slice(0, 5).map((row, i) => (
+                    <tr key={i} className="border-t border-slate-800">
+                      {headers.slice(0, 6).map((h, j) => (
+                        <td key={j} className="px-4 py-2 text-slate-300 truncate max-w-[150px]">
+                          {row[h] || <span className="text-slate-600">null</span>}
+                        </td>
+                      ))}
+                      {headers.length > 6 && <td className="px-4 py-2 text-slate-600">...</td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {parsedData.length > 5 && (
+              <div className="p-3 text-center text-xs text-slate-500 border-t border-slate-800">
+                Showing first 5 of {parsedData.length.toLocaleString()} rows
               </div>
             )}
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={!file || uploading}
-              className="w-full px-4 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded-lg font-semibold transition-colors"
-            >
-              {uploading ? `Uploading... ${uploadProgress}%` : 'Upload Dataset'}
-            </button>
-          </form>
-
-          {/* Info Box */}
-          <div className="mt-8 pt-8 border-t border-slate-200 dark:border-slate-800 space-y-3">
-            <p className="text-sm text-slate-700 dark:text-slate-300 font-semibold">Supported Formats:</p>
-            <ul className="text-sm text-slate-600 dark:text-slate-400 space-y-1">
-              <li>• CSV with headers in first row</li>
-              <li>• JSON with array of objects</li>
-              <li>• Maximum file size: 500MB</li>
-              <li>• Maximum rows: {user?.tier === 'pro' ? '100,000' : (user?.tier === 'enterprise' ? '10,000,000' : '500')}</li>
-            </ul>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
 };
+
+export default UploadViewPhase3;
