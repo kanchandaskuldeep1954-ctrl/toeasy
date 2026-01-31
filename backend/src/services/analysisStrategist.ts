@@ -26,6 +26,7 @@ export interface BlueprintChart {
     title: string;
     type: string;
     xAxis: string;
+    yAxis: string;
     formula?: string; // Optional mathematical expression for calculated metrics
     aggregation: 'sum' | 'avg' | 'count' | 'none' | 'formula';
     description: string;
@@ -68,7 +69,7 @@ Profiles: ${JSON.stringify(metadata)}
 ${strategyContext}
 
 ### YOUR MISSION:
-3. **Dynamic Logic**: Don't settle for raw columns. If a metric like "Net Profit" is missing but "Revenue" and "Cost" exist, suggest a chart with a FORMULA: `row.Revenue - row.Cost`.
+3. **Dynamic Logic**: Don't settle for raw columns. If a metric like "Net Profit" is missing but "Revenue" and "Cost" exist, suggest a chart with a FORMULA: \`row.Revenue - row.Cost\`.
 4. **Relationship Discovery**: Look for patterns nobody asked for. Outliers? Weird correlations? Pareto distributions?
 5. **First Principles**: Ignore "Standard Practices" if they are boring. What is the *fundamental truth* of this dataset?
 
@@ -76,7 +77,7 @@ ${strategyContext}
 1. Identify the INDUSTRY and OBJECTIVE.
 2. Define 3-5 CRITICAL KPIs.
 3. Recommend 4-6 CHARTS. Use varied types (Sunburst, Heatmap, Scatter) to make it visually stunning.
-4. **Formula Injection**: If a chart requires a calculation across multiple columns, provide a valid JavaScript-like expression in the "formula" field (e.g., `row["Total Sales"] * 0.2`).
+4. **Formula Injection**: If a chart requires a calculation across multiple columns, provide a valid JavaScript-like expression in the "formula" field (e.g., \`row["Total Sales"] * 0.2\`).
 5. **Reasoning**: For every chart, write a 1-sentence "Hook" that explains why this chart is interesting.
 
 ### OUTPUT FORMAT (JSON ONLY):
