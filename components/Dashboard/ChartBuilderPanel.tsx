@@ -169,7 +169,7 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
 
                         <div className="flex-1 w-full bg-white dark:bg-slate-900 rounded-[24px] p-6 shadow-inner border border-slate-100 dark:border-slate-800 relative z-0">
                             {previewData.length > 0 ? (
-                                <PlotlyChart chart={chart} data={previewData} />
+                                <SmartChart chart={chart} data={previewData} />
                             ) : (
                                 <div className="flex items-center justify-center h-full text-slate-400 font-medium">
                                     No data to display. Check axes configuration.
