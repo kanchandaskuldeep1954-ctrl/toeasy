@@ -86,8 +86,27 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
         });
     }
 
-    // PRIORITY 2: Manual aggregation from raw data (for user-edited charts)
+    // PRIORITY 2: Manual aggregation from raw data (for user-edited charts or formulas)
     if (!filteredData || filteredData.length === 0) return [];
+
+    // --- FORMULA-FIRST LOGIC ---
+    if (chart.formula || chart.aggregation === 'formula') {
+        const formula = chart.formula;
+        if (formula) {
+            try {
+                const evaluate = new Function('row', `try { return ${formula}; } catch(e) { return 0; }`);
+                const grouped: Record<string, number> = {};
+                filteredData.forEach(row => {
+                    const key = String(row[xAxis] || 'Total');
+                    const val = Number(evaluate(row)) || 0;
+                    grouped[key] = (grouped[key] || 0) + val;
+                });
+                return Object.entries(grouped).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 20);
+            } catch (e) {
+                console.error('[DashboardHelper] Formula evaluation failed:', e);
+            }
+        }
+    }
 
     // --- Histogram Logic ---
     if (chart.type === 'histogram') {

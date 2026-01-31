@@ -46,6 +46,8 @@ export interface ChartSpec {
     xAxis?: string;
     yAxis?: string;
     zAxis?: string;
+    formula?: string;
+    aggregation?: string;
 }
 
 export interface FilterSpec {
@@ -351,7 +353,7 @@ export class AnalyticsEngine {
                 if (!actualX) return;
 
                 if (spec.type === 'sunburst') {
-                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
+                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any, spec.formula);
                 } else if (spec.type === 'scatter') {
                     chartData = data.slice(0, 500).map(r => ({
                         x: actualX && !isNaN(this.parseNumeric(r[actualX])) ? this.parseNumeric(r[actualX]) : (actualX ? r[actualX] : 0),
@@ -361,8 +363,18 @@ export class AnalyticsEngine {
                 } else if (spec.type === 'line' && xCol?.dataType === 'date') {
                     chartData = this.aggregateByTime(data, actualX, actualY || '');
                 } else {
-                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any);
+                    chartData = this.aggregateByCategory(data, actualX, actualY, spec.aggregation as any, spec.formula);
                 }
+
+                // --- DATA FIDELITY VERIFICATION LOOP ---
+                const hasValue = chartData.some((d: any) => d.value !== 0 && d.value !== null && d.value !== undefined);
+                const isNonsense = chartData.length < 2 && spec.type !== 'gauge';
+
+                if (!hasValue || isNonsense) {
+                    console.log(`[Analytics] Discarding chart "${spec.title}" - No meaningful data clusters found.`);
+                    return;
+                }
+                // --- END VERIFICATION LOOP ---
 
                 charts.push({
                     id: spec.id,
@@ -374,6 +386,8 @@ export class AnalyticsEngine {
                     data: chartData,
                     xAxis: actualX, // Populate top-level for UI
                     yAxis: actualY, // Populate top-level for UI
+                    formula: spec.formula,
+                    aggregation: spec.aggregation,
                     options: { xAxis: actualX, yAxis: actualY },
                     reasoning: spec.description || `Analyzing the relationship between ${actualX} and ${actualY} to identify ${spec.type} patterns.`,
                     validation: {

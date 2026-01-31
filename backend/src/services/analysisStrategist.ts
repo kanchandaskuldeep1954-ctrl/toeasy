@@ -26,8 +26,8 @@ export interface BlueprintChart {
     title: string;
     type: string;
     xAxis: string;
-    yAxis: string;
-    aggregation: 'sum' | 'avg' | 'count' | 'none';
+    formula?: string; // Optional mathematical expression for calculated metrics
+    aggregation: 'sum' | 'avg' | 'count' | 'none' | 'formula';
     description: string;
     priority: 'high' | 'medium';
 }
@@ -68,16 +68,16 @@ Profiles: ${JSON.stringify(metadata)}
 ${strategyContext}
 
 ### YOUR MISSION:
-1. **Simplify Integration**: Don't just show "Sum of X". Show "Why X matters".
-2. **Be Dynamic**: Look for patterns nobody asked for. Outliers? Weird correlations? Pareto distributions?
-3. **Be Fun**: If the data allows, suggest a chart that tells a cool story.
-4. **First Principles**: Ignore "Standard Practices" if they are boring. What is the *fundamental truth* of this dataset?
+3. **Dynamic Logic**: Don't settle for raw columns. If a metric like "Net Profit" is missing but "Revenue" and "Cost" exist, suggest a chart with a FORMULA: `row.Revenue - row.Cost`.
+4. **Relationship Discovery**: Look for patterns nobody asked for. Outliers? Weird correlations? Pareto distributions?
+5. **First Principles**: Ignore "Standard Practices" if they are boring. What is the *fundamental truth* of this dataset?
 
 ### TASK:
 1. Identify the INDUSTRY and OBJECTIVE.
 2. Define 3-5 CRITICAL KPIs.
 3. Recommend 4-6 CHARTS. Use varied types (Sunburst, Heatmap, Scatter) to make it visually stunning.
-4. **Reasoning**: For every chart, write a 1-sentence "Hook" that explains why this chart is interesting.
+4. **Formula Injection**: If a chart requires a calculation across multiple columns, provide a valid JavaScript-like expression in the "formula" field (e.g., `row["Total Sales"] * 0.2`).
+5. **Reasoning**: For every chart, write a 1-sentence "Hook" that explains why this chart is interesting.
 
 ### OUTPUT FORMAT (JSON ONLY):
 {
@@ -89,7 +89,7 @@ ${strategyContext}
     { "id": "slug", "label": "Human Label", "column": "col_name", "operation": "sum", "format": "currency", "category": "efficiency", "importance": "critical" }
   ],
   "recommendedCharts": [
-    { "id": "slug", "title": "Chart Title", "type": "bar", "xAxis": "col1", "yAxis": "col2", "aggregation": "sum", "description": "why this matters", "priority": "high", "reasoning": "The Hook: explaining the fun/value of this chart." }
+    { "id": "slug", "title": "Chart Title", "type": "bar", "xAxis": "col1", "yAxis": "col2", "aggregation": "formula", "formula": "row.col2 - row.col3", "description": "why this matters", "priority": "high", "reasoning": "The Hook: explaining the fun/value of this chart." }
   ]
 }`;
 
