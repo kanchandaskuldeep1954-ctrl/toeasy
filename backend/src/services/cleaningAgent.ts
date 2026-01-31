@@ -68,6 +68,17 @@ export class ProCleaningAgent {
 
         logger.info(`[ProCleaningAgent] Rules generated: ${forensicRules.length} (Forensic) + ${aiRules.length} (AI)`);
 
+        // Stage 3.5: Feature Engineering Suggestions (Pivot to Value)
+        let transformations: any[] = [];
+        try {
+            // Use dataset category from semantics if available, or just generic
+            const context = semanticInsights?.category || 'General';
+            transformations = await GroqService.generateTransformations(headers, data.slice(0, 10), context);
+            logger.info(`[ProCleaningAgent] Generated ${transformations.length} transformation suggestions`);
+        } catch (transError) {
+            logger.warn('[ProCleaningAgent] Transformation generation failed:', transError);
+        }
+
         // Stage 4: Deduplicate and Merge Rules
         const masterRules = this.mergeRules(forensicRules, aiRules);
 
@@ -77,6 +88,7 @@ export class ProCleaningAgent {
             forensics: forensics.summary,
             profiles: forensics.profiles,
             rules: masterRules,
+            transformations,
             meta: {
                 analyzedAt: new Date().toISOString(),
                 datasetCategory: semanticInsights.category || 'Unknown',

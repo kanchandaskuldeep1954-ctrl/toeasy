@@ -610,6 +610,36 @@ Return ONLY valid JSON (no markdown, no explanation):
     }
   }
 
+  static async generateTransformations(headers: string[], sample: any[], sourceType?: string): Promise<any[]> {
+    try {
+      const prompt = `You are an expert Data Engineer.
+Given this dataset, suggest 3-5 "Feature Engineering" transformations to create NEW valuable columns.
+Focus on enriching the data, not just cleaning it.
+
+Source Type: ${sourceType || 'General'}
+Headers: ${headers.join(', ')}
+Sample: ${JSON.stringify(sample.slice(0, 2))}
+
+Examples of High-Value Transformations:
+- "Extract Domain" from Email -> Analyze company distribution
+- "Day of Week" from Date -> Analyze weekly patterns
+- "Lead Score" from multiple factors -> Prioritize sales
+- "Profit Margin" -> (Price - Cost) / Price
+
+Return JSON Array ONLY:
+[
+  { "name": "New Column Name", "type": "string|number|date", "logic": "Explain logic (e.g. Extract domain from email)", "reasoning": "Why this is useful." }
+]`;
+
+      const result = await this.callGroq(prompt, 1500);
+      const suggestions = this.cleanAndParseJSON(result);
+      return Array.isArray(suggestions) ? suggestions : [];
+    } catch (error) {
+      console.error('Transformation generation error:', error);
+      return [];
+    }
+  }
+
   static async modifyKPIWithAI(dataset: any, kpi: any, prompt: string): Promise<any> {
     try {
       const headers = dataset.headers || [];

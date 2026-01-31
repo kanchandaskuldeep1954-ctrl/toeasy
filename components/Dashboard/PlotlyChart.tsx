@@ -6,6 +6,7 @@ interface PlotlyChartProps {
     chart: ChartSpec;
     data?: any[];
     height?: number;
+    activeFilter?: string | null;
     onClick?: (data: any) => void;
 }
 
@@ -55,7 +56,7 @@ const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => (
     }
 });
 
-export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, onClick }) => {
+export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
     const isDark = useMemo(() => {
         if (typeof document === 'undefined') return false;
         return document.documentElement.classList.contains('dark') ||
@@ -166,25 +167,36 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 }];
 
             // ===== BAR CHARTS =====
-            case 'bar':
+            case 'bar': {
+                // Interactive Opacity: Dim unselected bars
+                const colors = activeFilter
+                    ? labels.map((l: any) => String(l) === String(activeFilter) ? COLORS[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
+                    : COLORS[0];
+
                 return [{
                     x: labels,
                     y: values,
                     type: 'bar',
-                    marker: { color: COLORS[0], opacity: 0.9 },
+                    marker: { color: colors, opacity: 1, line: { width: 0 } },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
+            }
 
             case 'bar-horizontal':
-            case 'bar_horizontal':
+            case 'bar_horizontal': {
+                const colors = activeFilter
+                    ? labels.map((l: any) => String(l) === String(activeFilter) ? COLORS[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
+                    : COLORS[0];
+
                 return [{
                     x: values,
                     y: labels,
                     type: 'bar',
                     orientation: 'h',
-                    marker: { color: COLORS[0], opacity: 0.9 },
+                    marker: { color: colors, opacity: 1, line: { width: 0 } },
                     hovertemplate: '<b>%{y}</b><br>Value: %{x:,.2f}<extra></extra>'
                 }];
+            }
 
             // ===== LINE / AREA =====
             case 'line':

@@ -837,7 +837,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                     </p>
                                 </div>
                                 <div className="flex-1 w-full relative min-h-[300px]">
-                                    <PlotlyChart chart={injectChartConfig(chart)} data={data} onClick={(data) => handleChartClick(data, chart)} />
+                                    <PlotlyChart
+                                        chart={injectChartConfig(chart)}
+                                        data={data}
+                                        activeFilter={activeFilters[chart.xAxis || chart.groupBy || '']}
+                                        onClick={(data) => handleChartClick(data, chart)}
+                                    />
                                 </div>
                             </div>
                         );
