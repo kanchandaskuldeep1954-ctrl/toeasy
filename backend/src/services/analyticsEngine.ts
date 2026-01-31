@@ -60,8 +60,8 @@ export interface FilterSpec {
 
 export class AnalyticsEngine {
 
-    static async analyze(headers: string[], data: any[]): Promise<DashboardConfig> {
-        console.log(`[Analytics] Analyzing ${data.length} rows for AI-First dashboard generation...`);
+    static async analyze(headers: string[], data: any[], sourceType?: string): Promise<DashboardConfig> {
+        console.log(`[Analytics] Analyzing ${data.length} rows for AI-First dashboard generation (Source: ${sourceType || 'Unknown'})...`);
 
         // 1. Leverage Forensics Engine for deep profiling
         const sampleSize = Math.min(data.length, 2000);

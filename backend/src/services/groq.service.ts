@@ -132,12 +132,12 @@ Generate fields:`;
     }
   }
 
-  static async generateDashboard(headers: string[], sample: any): Promise<any> {
+  static async generateDashboard(headers: string[], sample: any, sourceType?: string): Promise<any> {
     try {
       // Use the Universal Analytics Engine for professional-grade dashboard generation
       // Ensure data is array
       const data = Array.isArray(sample) ? sample : [sample];
-      return await AnalyticsEngine.analyze(headers, data);
+      return await AnalyticsEngine.analyze(headers, data, sourceType);
     } catch (e) {
       console.error('Analytics Engine failed, falling back to basic AI:', e);
       // Fallback to basic AI if engine fails

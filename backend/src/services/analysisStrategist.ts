@@ -32,9 +32,21 @@ export interface BlueprintChart {
     priority: 'high' | 'medium';
 }
 
+
 export class AnalysisStrategist {
 
-    static async generateBlueprint(headers: string[], profiles: ColumnProfile[], sample: any[]): Promise<DashboardBlueprint> {
+    private static readonly STRATEGY_TEMPLATES: Record<string, string> = {
+        sales_data: "STRATEGY: SALES INTELLIGENCE. Focus on Revenue Growth, Customer Acquisition Cost (CAC), and Lifetime Value (LTV). Critical charts: Revenue over Time (Line), Top Products (Bar), Sales by Region (Map/Bar).",
+        financial_report: "STRATEGY: FINANCIAL HEALTH. Focus on Profit Margins, OpEx vs CapEx, and Liquidity. Critical charts: P&L Waterfalls, Expense Breakdown (Treemap), Cash Flow Trends.",
+        employee_roster: "STRATEGY: WORKFORCE ANALYTICS. Focus on Headcount, Diversity, and Salary bands. Critical charts: Dept Distribution, Salary vs Experience, Retention/Turnover rates.",
+        inventory: "STRATEGY: INVENTORY OPTIMIZATION. Focus on Stock turnover, Days Sales of Inventory (DSI), and Dead stock. Critical charts: Stock Levels by Category, Value Distribution.",
+        customer_list: "STRATEGY: CUSTOMER SEGMENTATION. Focus on Demographics, Purchasing Power, and Churn Risk. Critical charts: Age/Location distribution, RFM Analysis.",
+        transaction_log: "STRATEGY: TRANSACTION FORENSICS. Focus on Anomaly Detection, Volume Trends, and Avg Transaction Value.",
+        time_series: "STRATEGY: TREND ANALYSIS. Focus on Seasonality, Cyclical patterns, and Forecasting.",
+        survey_results: "STRATEGY: SENTIMENT & PREFERENCE. Focus on Top choice distribution, Satisfaction scores (NPS), and keyword frequency."
+    };
+
+    static async generateBlueprint(headers: string[], profiles: ColumnProfile[], sample: any[], sourceType?: string): Promise<DashboardBlueprint> {
         // Prepare metadata for LLM
         const metadata = profiles.map(p => ({
             column: p.column,
@@ -43,36 +55,41 @@ export class AnalysisStrategist {
             sample: p.sampleValues.slice(0, 3)
         }));
 
-        const prompt = `You are a World-Class Data Strategy Consultant and Chief Analytics Officer.
-Analyze this dataset metadata and provide a Strategic Dashboard Blueprint.
+        const strategyContext = sourceType && this.STRATEGY_TEMPLATES[sourceType]
+            ? `\n### DETECTED CONTEXT: ${sourceType.toUpperCase()}\n${this.STRATEGY_TEMPLATES[sourceType]}\n\nBUT DO NOT BE RIGID. Use this only as a starting point. Your true goal is to find the "Hidden Story" in the data.`
+            : "\n### CONTEXT: General Data Analysis. The user wants to find the 'Story' hidden in this data.";
+
+        const prompt = `You are Toeasy AI, a brilliant, fun, and first-principles Data Scientist.
+Your goal is to make the user's life easier by INSTANTLY finding the most valuable and interesting patterns in their data.
+We are NOT building a boring corporate report. We are building a "Data Experience".
 
 Headers: ${headers.join(', ')}
 Profiles: ${JSON.stringify(metadata)}
-Sample Rows: ${JSON.stringify(sample.slice(0, 3))}
+${strategyContext}
+
+### YOUR MISSION:
+1. **Simplify Integration**: Don't just show "Sum of X". Show "Why X matters".
+2. **Be Dynamic**: Look for patterns nobody asked for. Outliers? Weird correlations? Pareto distributions?
+3. **Be Fun**: If the data allows, suggest a chart that tells a cool story.
+4. **First Principles**: Ignore "Standard Practices" if they are boring. What is the *fundamental truth* of this dataset?
 
 ### TASK:
-1. Identify the specific INDUSTRY and the PRIMARY BUSINESS OBJECTIVE (e.g., "SaaS Revenue Growth", "Hospital Operational Efficiency", "Logistics Fuel Optimization").
-2. Define 3-5 CRITICAL KPIs that a CEO or Manager in this industry would care about most.
-3. Recommend 4-6 HIGH-VALUE CHARTS including at least one hierarchical discovery chart (sunburst) and one correlation analysis (scatter).
-4. Provide semantic context: What does each column ACTUALLY represent in the real world?
+1. Identify the INDUSTRY and OBJECTIVE.
+2. Define 3-5 CRITICAL KPIs.
+3. Recommend 4-6 CHARTS. Use varied types (Sunburst, Heatmap, Scatter) to make it visually stunning.
+4. **Reasoning**: For every chart, write a 1-sentence "Hook" that explains why this chart is interesting.
 
-### SYNTAX RULES:
-- Use correct Column Names from the list.
-- KPIs must have an operation: sum, avg, count, unique, min, or max.
-- Charts must have a type: bar, line, pie, funnel, heatmap, scatter, sunburst, or box.
-- Output ONLY valid JSON.
-
-### OUTPUT FORMAT:
+### OUTPUT FORMAT (JSON ONLY):
 {
   "industry": "string",
   "objective": "string",
   "targetAudience": "string",
   "semanticContext": { "col_name": "real world meaning" },
   "recommendedKPIs": [
-    { "id": "slug", "label": "Human Label", "column": "col_name", "operation": "avg", "format": "number", "category": "efficiency", "importance": "critical" }
+    { "id": "slug", "label": "Human Label", "column": "col_name", "operation": "sum", "format": "currency", "category": "efficiency", "importance": "critical" }
   ],
   "recommendedCharts": [
-    { "id": "slug", "title": "Chart Title", "type": "bar", "xAxis": "col1", "yAxis": "col2", "aggregation": "avg", "description": "why this matters", "priority": "high" }
+    { "id": "slug", "title": "Chart Title", "type": "bar", "xAxis": "col1", "yAxis": "col2", "aggregation": "sum", "description": "why this matters", "priority": "high", "reasoning": "The Hook: explaining the fun/value of this chart." }
   ]
 }`;
 
@@ -101,7 +118,9 @@ Sample Rows: ${JSON.stringify(sample.slice(0, 3))}
             recommendedKPIs: [
                 { id: 'total_records', label: 'Total Records', operation: 'count', format: 'number', category: 'volume', importance: 'critical' }
             ],
-            recommendedCharts: []
+            recommendedCharts: [],
+            // @ts-ignore
+            semanticContext: {}
         };
     }
 }

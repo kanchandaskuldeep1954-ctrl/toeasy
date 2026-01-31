@@ -217,7 +217,7 @@ router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthReq
     const { datasetId } = req.body;
 
     const datasetResult = await query(
-      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      'SELECT raw_data, source_type FROM datasets WHERE id = $1 AND workspace_id = $2',
       [datasetId, req.params.workspaceId]
     );
 
@@ -229,7 +229,7 @@ router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthReq
     const headers = Object.keys(data[0] || {});
     const sample = data.slice(0, 2000);
 
-    const dashboard = await GroqService.generateDashboard(headers, sample);
+    const dashboard = await GroqService.generateDashboard(headers, sample, datasetResult.rows[0].source_type);
 
     res.json({ dashboard });
   } catch (err) {

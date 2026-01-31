@@ -817,7 +817,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                     <button onClick={() => setEditingChartId(chart.id)} className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-indigo-500 transition-all"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg></button>
                                 </div>
                                 <div className="mb-8">
-                                    <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{chart.title}</h3>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{chart.title}</h3>
+                                        {chart.reasoning && (
+                                            <div className="group/info relative inline-flex items-center justify-center">
+                                                <svg className="w-4 h-4 text-indigo-400 opacity-60 hover:opacity-100 transition-opacity cursor-help" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                                <div className="absolute top-6 left-0 w-64 p-4 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded-xl shadow-xl z-50 opacity-0 group-hover/info:opacity-100 transition-all pointer-events-none origin-top-left scale-95 group-hover/info:scale-100 backdrop-blur-xl">
+                                                    <p className="font-bold text-white mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                                                        ✨ The Story
+                                                    </p>
+                                                    {chart.reasoning}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                         {chart.description || `Relational context: ${chart.xAxis || chart.options?.xAxis || 'Analysis'} vs ${chart.yAxis || chart.options?.yAxis || 'Metric'}`}
                                     </p>

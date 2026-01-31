@@ -1,14 +1,16 @@
 /**
- * WorkspaceTabs Component
+ * WorkspaceTabs - Premium Visual Overhaul
  * 
- * Persistent tab bar for quick access to datasets, dashboards, and reports.
- * Users can "pin" views as tabs within a workspace context.
+ * Consistent tab bar matching the new MainLayout premium theme.
+ * Removes the "cringe" white/gray look and replaces it with
+ * sleek glassmorphism and smooth interactions.
  */
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { tabsAPI } from '../services/api';
+import { X, Plus, LayoutDashboard, FileText, Database, Sparkles } from 'lucide-react';
 
 interface Tab {
     id: string;
@@ -108,48 +110,68 @@ const WorkspaceTabs: React.FC = () => {
         );
     };
 
+    const getIcon = (type: string) => {
+        switch (type) {
+            case 'dashboard': return <LayoutDashboard className="w-3.5 h-3.5" />;
+            case 'report': return <FileText className="w-3.5 h-3.5" />;
+            case 'dataset': return <Database className="w-3.5 h-3.5" />;
+            default: return <Sparkles className="w-3.5 h-3.5" />;
+        }
+    };
+
     if (!workspaceId) return null;
 
     return (
-        <div className="bg-white dark:bg-[#080c14] border-b border-slate-200 dark:border-white/5 px-4 flex items-center gap-1 overflow-x-auto no-scrollbar h-10 shrink-0 select-none">
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-10 px-2 select-none">
             {/* All Tabs */}
             <div className="flex items-center gap-1">
-                {tabs.map((tab) => (
-                    <div
-                        key={tab.id}
-                        onClick={() => navigateToTab(tab)}
-                        className={`group flex items-center gap-2 h-8 px-3 rounded-t-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer border-x border-t border-transparent relative
-                            ${isTabActive(tab)
-                                ? 'bg-slate-50 dark:bg-slate-900 text-indigo-600 border-slate-200 dark:border-white/10 z-10'
-                                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
-                            }`}
-                    >
-                        <span className="truncate max-w-[100px]">{tab.tab_name}</span>
-                        <button
-                            onClick={(e) => handleRemoveTab(e, tab.id)}
-                            className="opacity-0 group-hover:opacity-100 hover:text-rose-500 transition-opacity"
+                {tabs.map((tab) => {
+                    const active = isTabActive(tab);
+                    return (
+                        <div
+                            key={tab.id}
+                            onClick={() => navigateToTab(tab)}
+                            className={`
+                                group relative flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-all duration-200 border
+                                ${active
+                                    ? 'bg-slate-800 border-white/10 text-white shadow-lg shadow-black/20'
+                                    : 'bg-transparent border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                }
+                            `}
                         >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                        </button>
-                        {isTabActive(tab) && (
-                            <div className="absolute -bottom-[1px] left-0 right-0 h-[2px] bg-slate-50 dark:bg-slate-900 z-20"></div>
-                        )}
-                    </div>
-                ))}
+                            <span className={`${active ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-400'}`}>
+                                {getIcon(tab.tab_type)}
+                            </span>
+                            <span className="truncate max-w-[120px]">{tab.tab_name}</span>
+
+                            <button
+                                onClick={(e) => handleRemoveTab(e, tab.id)}
+                                className={`
+                                    ml-1 p-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-all
+                                    ${active ? 'hover:bg-slate-700 text-slate-400' : 'hover:bg-slate-700/50 text-slate-500'}
+                                `}
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+
+                            {active && (
+                                <div className="absolute -bottom-[9px] left-0 right-0 h-[1px] bg-indigo-500/50" />
+                            )}
+                        </div>
+                    );
+                })}
             </div>
 
             {/* Add Tab Button */}
-            <button
-                onClick={handleAddTab}
-                className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-indigo-600 transition-all ml-2"
-                title="Pin Current View as Tab"
-            >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-            </button>
+            {currentDatasetId && (
+                <button
+                    onClick={handleAddTab}
+                    className="ml-1 p-1.5 rounded-lg text-slate-500 hover:bg-slate-800/50 hover:text-indigo-400 transition-colors"
+                    title="Pin current view as tab"
+                >
+                    <Plus className="w-4 h-4" />
+                </button>
+            )}
         </div>
     );
 };
