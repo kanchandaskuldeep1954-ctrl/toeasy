@@ -81,7 +81,7 @@ const sanitizeMermaid = (chart: string) => {
     return sanitizedLines.join('\n');
 };
 
-const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
+const Mermaid: React.FC<{ chart: string, fallbackLogic?: string }> = ({ chart, fallbackLogic }) => {
     const ref = React.useRef<HTMLDivElement>(null);
     const [svg, setSvg] = useState<string | null>(null);
     const [hasError, setHasError] = useState(false);
@@ -117,10 +117,18 @@ const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
     if (hasError) {
         return (
             <div className="bg-slate-100 dark:bg-white/5 p-8 rounded-3xl border border-dashed border-slate-300 dark:border-white/10 text-center">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed">
-                    Logic Mapping Refined...<br />
-                    <span className="opacity-50 text-[8px]">Resolving Complex Structural Dependencies</span>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-relaxed mb-4">
+                    Logic Visualization Offline
                 </p>
+                <div className="bg-white/40 dark:bg-black/20 p-5 rounded-2xl border border-slate-200/50 dark:border-white/5 text-left max-w-xl mx-auto">
+                    <p className="text-[9px] font-black text-indigo-500 dark:text-indigo-400 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+                        Analytical Chain of Thought
+                    </p>
+                    <p className="text-[11px] font-medium text-slate-600 dark:text-slate-400 leading-relaxed italic">
+                        {fallbackLogic || "Resolving complex structural dependencies and establishing cross-metric correlations for this analysis segment."}
+                    </p>
+                </div>
             </div>
         );
     }
@@ -414,22 +422,28 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         if (!instruction.trim() || !report || !dataset) return;
 
         setCopilotLoading(true);
+        // Optimistic UI for chat
+        const userMsg = { role: 'user' as const, content: instruction };
+        setCopilotMessages(prev => [...prev, userMsg]);
+        setCopilotInput('');
+
         try {
             const updatedReport = await GroqService.modifyReport(dataset, report, instruction);
             setReport(updatedReport);
             if (onUpdate) onUpdate({ ...dataset, strategicReport: updatedReport });
-            setCopilotInput('');
-            // Optional: Scroll to top of report to show changes
-            contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
 
-            // Add to chat history too!
+            // Add a proper explanatory message instead of hardcoded generic one
             setCopilotMessages(prev => [...prev,
-            { role: 'user', content: instruction },
-            { role: 'assistant', content: '✅ I have updated the report sections based on your request. You can see the changes in the main view.' }
+            {
+                role: 'assistant',
+                content: `Report updated successfully. I've restructured the analysis focusing on "${instruction}". You can see the new insights in the report view.`
+            }
             ]);
+
+            contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (e) {
             console.error('Copilot update failed:', e);
-            alert('Failed to update report. Please try again.');
+            setCopilotMessages(prev => [...prev, { role: 'assistant', content: '⚠️ I encountered an error while trying to update the report. Please try a more specific instruction.' }]);
         } finally {
             setCopilotLoading(false);
         }
@@ -1138,10 +1152,10 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                     )}
 
                                     {/* Mermaid Logic Path (Brain Logic) */}
-                                    {(section as any).logicPath && (
-                                        <div className="my-10 space-y-4">
-                                            <h6 className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-center">Inferred Logic Flow</h6>
-                                            <Mermaid chart={(section as any).logicPath} />
+                                    {section.logicPath && (
+                                        <div className="my-10">
+                                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 px-1">Analytical Logic Flow</h5>
+                                            <Mermaid chart={section.logicPath} fallbackLogic={section.reasoning} />
                                         </div>
                                     )}
 

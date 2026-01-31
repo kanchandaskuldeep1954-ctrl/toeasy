@@ -713,7 +713,7 @@ Return ONLY valid JSON (no markdown, no explanation):
         ? `PREDICTIVE INSIGHTS: Predictive models have generated forecasts. You MUST include a 'Future Outlook' section analyzing these trends.`
         : '';
 
-      const groqPrompt = `You are a Chief Data Officer generating a PROESSIONAL ${reportType.toUpperCase()} REPORT.
+      const groqPrompt = `You are a Chief Data Officer generating a PROFESSIONAL ${reportType.toUpperCase()} REPORT.
       
       VISUAL THEME: ${theme} (Adapt terminology and tone to match).
 
@@ -866,30 +866,27 @@ Return ONLY valid JSON (no markdown, no explanation):
       const headers = dataset.headers || [];
       const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
 
-      const reportContext = context?.reportContext ? `\nCURRENT REPORT STATE:\nTitle: ${context.reportContext.title}\nSections: ${context.reportContext.sections?.map((s: any) => s.title).join(', ')}` : '';
+      const reportContext = context?.reportContext
+        ? `\nCURRENT REPORT STATE:\nTitle: ${context.reportContext.title}\nActive Sections: ${context.reportContext.sections?.map((s: any) => `${s.title} (Reasoning: ${s.reasoning?.substring(0, 100)}...)`).join('; ')}`
+        : '';
 
-      const groqPrompt = `You are a Lead Data Strategist & Agent. Answer this question about the dataset and current report.
+      const groqPrompt = `You are the ToEasy Strategy Agent. Your goal is to explain the "Analytical Chain of Thought" behind the report and answer data questions.
       
-      FIRST PRINCIPLES ANALYSIS:
-      - Dataset columns: ${headers.join(', ')}
-      - Total records: ${dataset.data?.length || 0}
+      CONTEXT:
+      - Dataset: ${headers.join(', ')}
+      - Records: ${dataset.data?.length || 0}
       ${reportContext}
       ${historyText ? `\nConversation History:\n${historyText}\n` : ''}
       
-      USER QUESTION: "${query}"
+      USER QUERY: "${query}"
       
-      DRIVE THE NARRATIVE:
-      1. Provide a specific, data-backed answer (lookup values if needed).
-      2. If appropriate, explain the "Thinking" or Logic (e.g., "I correlated X with Y to find Z").
-      3. Be concise (max 4 sentences) but extremely insightful.
-      
-      ACTIONS (IF REQUESTED):
-      If the user wants to DELETE or UPDATE data, return a JSON object ONLY:
-      { "action": "DELETE_COL", "target": "column_name", "reason": "..." }
-      { "action": "DELETE_ROW", "target": "row_index", "reason": "..." }
-      { "action": "UPDATE_CELL", "rowIdx": number, "col": "field", "value": "...", "reason": "..." }`;
+      GUIDELINES:
+      1. If the user asks "What is this?" or "What did you do?", explain the analysis logic used in the report sections (refer to the Reasonings provided).
+      2. If the user asks for data points, provide them specifically.
+      3. Use a professional, "First Principles" tone. Be concise (max 3-4 sentences).
+      4. If the user wants to ADD/CHANGE something, explain: "I can help with that! Switch to the 'Refine' tab to apply structural changes to the report."`;
 
-      return await this.callGroq(groqPrompt, 600);
+      return await this.callGroq(groqPrompt, 700);
     } catch (error) {
       console.error('Agent error:', error instanceof Error ? error.message : error);
       return 'Unable to analyze data at this moment. Please try again.';
