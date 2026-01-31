@@ -2,8 +2,41 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useTheme } from '../hooks/useTheme';
 import { ShareSnapshot } from '../../types';
-import PlotlyChart from '../../components/Dashboard/PlotlyChart';
+import { SmartChart } from '../../components/Dashboard/SmartChart';
 import ReactMarkdown from 'react-markdown';
+import { motion, AnimatePresence } from 'framer-motion';
+import mermaid from 'mermaid';
+
+// Initialize mermaid
+mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+        primaryColor: '#6366f1',
+        primaryTextColor: '#fff',
+        primaryBorderColor: '#4f46e5',
+        lineColor: '#6366f1',
+        secondaryColor: '#f8fafc',
+        tertiaryColor: '#fff'
+    }
+});
+
+const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (ref.current && chart) {
+            ref.current.removeAttribute('data-processed');
+            mermaid.contentLoaded();
+        }
+    }, [chart]);
+
+    return (
+        <div className="mermaid bg-white/40 dark:bg-white/5 backdrop-blur-xl p-6 rounded-3xl border border-slate-200/50 dark:border-white/5 shadow-sm overflow-hidden flex justify-center" ref={ref}>
+            {chart}
+        </div>
+    );
+};
 
 const PublicShareView: React.FC = () => {
     const { token } = useParams<{ token: string }>();
@@ -11,6 +44,8 @@ const PublicShareView: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [shareData, setShareData] = useState<ShareSnapshot | null>(null);
     const { theme, toggleTheme } = useTheme();
+    const [isFocusMode, setIsFocusMode] = useState(false);
+    const [focusIndex, setFocusIndex] = useState(0);
 
     const backendUrl = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
@@ -78,40 +113,45 @@ const PublicShareView: React.FC = () => {
     const { resourceType, title, snapshot } = shareData;
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-[#080c14] transition-colors duration-300 no-scrollbar">
+        <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-[#030711]' : 'bg-slate-50'} transition-colors duration-500 overflow-x-hidden relative`}>
+            {/* Ambient Mesh Background */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none no-print">
+                <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full animate-pulse" />
+                <div className="absolute top-[20%] -right-[5%] w-[35%] h-[35%] bg-blue-500/10 blur-[100px] rounded-full animate-pulse delay-700" />
+                <div className="absolute -bottom-[10%] left-[20%] w-[20%] h-[30%] bg-emerald-500/5 blur-[80px] rounded-full animate-pulse delay-1000" />
+            </div>
+
             {/* Ultra-Slim Header */}
-            <header className="bg-white/60 dark:bg-slate-950/60 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 sticky top-0 z-50">
-                <div className="max-w-[1800px] mx-auto px-6 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/20">
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            <header className="bg-white/40 dark:bg-slate-950/40 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 sticky top-0 z-[60]">
+                <div className="max-w-[1800px] mx-auto px-8 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-xl shadow-indigo-600/20 rotate-3 hover:rotate-0 transition-transform cursor-pointer">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                         </div>
-                        <span className="font-black text-lg uppercase tracking-tight text-slate-900 dark:text-white">Toeasy</span>
+                        <div>
+                            <span className="font-black text-xl uppercase tracking-tighter text-slate-900 dark:text-white leading-none block">Toeasy</span>
+                            <span className="text-[9px] font-black text-indigo-500 uppercase tracking-widest leading-none">Intelligence Hub</span>
+                        </div>
                     </div>
                     <div className="flex items-center gap-4">
+                        <div className="hidden md:flex items-center gap-3 mr-4">
+                            <div className="flex -space-x-2">
+                                {[1, 2, 3].map(i => (
+                                    <div key={i} className="w-7 h-7 rounded-full border-2 border-white dark:border-slate-950 bg-slate-200 dark:bg-slate-800" />
+                                ))}
+                            </div>
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest underline decoration-indigo-500/30">Shared by Enterprise Workspace</span>
+                        </div>
                         <button
                             onClick={toggleTheme}
-                            className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-900 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-slate-200 dark:border-slate-800"
+                            className="p-2.5 rounded-xl bg-white/50 dark:bg-white/5 text-slate-500 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all border border-slate-200 dark:border-white/5 shadow-sm active:scale-90"
                         >
                             {theme === 'dark' ? (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" /></svg>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" /></svg>
                             ) : (
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" /></svg>
                             )}
                         </button>
-                        <button
-                            onClick={() => window.print()}
-                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl font-bold hover:scale-105 active:scale-95 transition-all shadow-lg"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
-                            <span className="text-[10px] uppercase tracking-widest">Download PDF</span>
-                        </button>
-                        <div className="flex items-center gap-2 print:hidden">
-                            <span className="px-3 py-1 bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-widest">
-                                {resourceType}
-                            </span>
-                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Read-only</span>
-                        </div>
                     </div>
                 </div>
             </header>
@@ -132,44 +172,39 @@ const PublicShareView: React.FC = () => {
                         padding: 20px !important;
                         max-width: 100% !important;
                     }
-                    .bg-white, .dark\\:bg-slate-900 {
-                        background: white !important;
-                        border: 1px solid #eee !important;
-                        box-shadow: none !important;
-                    }
-                    .text-white, .dark\\:text-white {
-                        color: black !important;
-                    }
-                    .text-slate-400, .text-slate-500 {
-                        color: #666 !important;
-                    }
-                    .prose {
-                        max-width: none !important;
-                    }
-                    pre, code {
-                        white-space: pre-wrap !important;
-                    }
-                    .rounded-[40px], .rounded-[32px] {
-                        border-radius: 12px !important;
-                    }
-                    .shadow-sm, .shadow-lg, .shadow-2xl {
-                        box-shadow: none !important;
-                    }
-                    .animate-in {
-                        animation: none !important;
-                    }
                 }
             `}} />
 
             {/* Content Container */}
-            <main className="max-w-[1800px] mx-auto px-6 py-12 space-y-12 animate-in fade-in duration-700">
+            <main className="max-w-[1800px] mx-auto px-6 py-12 space-y-12 animate-in fade-in duration-1000 relative z-10">
                 {/* Dashboard Meta */}
-                <div className="space-y-2">
-                    <h1 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{title}</h1>
-                    <div className="flex items-center gap-3">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Verified Strategic Snapshot • Generated via AI Forensics</span>
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-8 border-b border-slate-200/50 dark:border-white/5">
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-3">
+                            <span className="px-3 py-1 bg-indigo-600/10 text-indigo-600 dark:text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-[0.2em] border border-indigo-500/10">
+                                {resourceType}
+                            </span>
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Live Strategic Snapshot</span>
+                        </div>
+                        <h1 className="text-5xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">{title}</h1>
+                        <p className="text-xs text-slate-500 font-medium">Verified by Toeasy AI Forensics Engine • {new Date().toLocaleDateString()} </p>
                     </div>
+
+                    {resourceType === 'report' && (
+                        <button
+                            onClick={() => setIsFocusMode(true)}
+                            className="group flex items-center gap-3 px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl shadow-2xl shadow-indigo-600/20 transition-all active:scale-95"
+                        >
+                            <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                            </div>
+                            <div className="text-left">
+                                <p className="text-[10px] font-black uppercase tracking-widest opacity-70 leading-none">Presentation</p>
+                                <p className="text-sm font-black uppercase tracking-tight leading-none mt-1">Boardroom Mode</p>
+                            </div>
+                        </button>
+                    )}
                 </div>
 
                 {/* Dashboard Elements */}
@@ -177,18 +212,23 @@ const PublicShareView: React.FC = () => {
                     <div className="space-y-12">
                         {/* KPIs */}
                         {snapshot.kpis && snapshot.kpis.length > 0 && (
-                            <div className="flex flex-wrap gap-4">
-                                {snapshot.kpis.map((kpi, idx) => (
-                                    <div key={idx} className="min-w-[200px] flex-1 bg-white dark:bg-slate-900 rounded-[32px] border border-slate-200 dark:border-white/5 p-8 shadow-sm">
-                                        <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 mb-2 tracking-widest">{kpi.label}</p>
-                                        <p className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{kpi.value}</p>
-                                        {kpi.change && (
-                                            <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[10px] font-bold mt-3 ${kpi.change.startsWith('+') ? 'bg-emerald-500/10 text-emerald-600' : 'bg-rose-500/10 text-rose-600'}`}>
-                                                <span>{kpi.change.startsWith('+') ? '↑' : '↓'}</span>
-                                                {kpi.change}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                                {snapshot.kpis.map((kpi: any, idx: number) => (
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: idx * 0.1 }}
+                                        key={idx}
+                                        className="bg-white/40 dark:bg-white/5 backdrop-blur-3xl rounded-[2.5rem] border border-slate-200/50 dark:border-white/5 p-8 shadow-sm group hover:border-indigo-500/30 transition-all cursor-default"
+                                    >
+                                        <div className="flex justify-between items-start mb-4">
+                                            <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-[0.2em]">{kpi.label}</p>
+                                            <div className="w-8 h-8 rounded-full bg-indigo-500/10 dark:bg-white/5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <svg className="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
                                             </div>
-                                        )}
-                                    </div>
+                                        </div>
+                                        <p className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{kpi.value}</p>
+                                    </motion.div>
                                 ))}
                             </div>
                         )}
@@ -196,21 +236,29 @@ const PublicShareView: React.FC = () => {
                         {/* Chart Grid */}
                         {snapshot.charts && snapshot.charts.length > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
-                                {snapshot.charts.map((chart, idx) => {
-                                    const isWide = idx % 3 === 0;
+                                {snapshot.charts.map((chart: any, idx: number) => {
+                                    const isWide = idx % 4 === 0;
                                     return (
-                                        <div key={idx} className={`bg-white dark:bg-slate-900/50 backdrop-blur-md rounded-[40px] border border-slate-200 dark:border-white/5 p-10 flex flex-col min-h-[500px] shadow-sm transition-all hover:border-indigo-500/30 ${isWide ? 'md:col-span-2' : ''}`}>
-                                            <div className="mb-10">
-                                                <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight mb-2">{chart.title}</h3>
-                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{chart.spec?.description || 'Snapshot data analysis'}</p>
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            whileInView={{ opacity: 1, scale: 1 }}
+                                            viewport={{ once: true }}
+                                            key={idx}
+                                            className={`bg-white/40 dark:bg-[#0d121f]/50 backdrop-blur-3xl rounded-[3rem] border border-slate-200/50 dark:border-white/5 p-10 flex flex-col min-h-[550px] shadow-sm transition-all hover:border-indigo-500/30 ${isWide ? 'md:col-span-2' : ''}`}
+                                        >
+                                            <div className="flex justify-between items-start mb-10">
+                                                <div>
+                                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2">{chart.title}</h3>
+                                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{chart.spec?.description || 'Strategic Data Analysis'}</p>
+                                                </div>
                                             </div>
                                             <div className="flex-1 w-full min-h-[350px]">
-                                                <PlotlyChart
+                                                <SmartChart
                                                     chart={chart.spec || { type: chart.type, title: chart.title } as any}
                                                     data={chart.data}
                                                 />
                                             </div>
-                                        </div>
+                                        </motion.div>
                                     );
                                 })}
                             </div>
@@ -218,94 +266,55 @@ const PublicShareView: React.FC = () => {
                     </div>
                 )}
 
-                {/* Report View (Also Stylized) */}
+                {/* Report View */}
                 {resourceType === 'report' && (
                     <div className="max-w-4xl mx-auto space-y-12 pb-20">
                         {snapshot.summary && (
-                            <div className="bg-indigo-600 rounded-[40px] p-12 text-white shadow-2xl shadow-indigo-600/20">
-                                <h3 className="text-[10px] font-black uppercase tracking-[0.3em] opacity-60 mb-4 text-indigo-100">Executive Summary</h3>
-                                <p className="text-2xl font-bold leading-tight">{snapshot.summary}</p>
+                            <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] p-12 text-white shadow-2xl shadow-indigo-600/30 relative overflow-hidden">
+                                <h3 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60 mb-6 text-indigo-100 relative z-10">Strategic Executive Summary</h3>
+                                <p className="text-3xl font-bold leading-tight tracking-tight relative z-10">{snapshot.summary}</p>
                             </div>
                         )}
 
-                        {snapshot.sections && snapshot.sections.map((section, idx) => (
-                            <div key={idx} className="bg-white dark:bg-slate-900 rounded-[40px] border border-slate-200 dark:border-white/5 p-12 space-y-8">
-                                <div>
-                                    <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-4">{section.title}</h2>
-                                    <div className="prose dark:prose-invert max-w-none text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
+                        {snapshot.sections && snapshot.sections.map((section: any, idx: number) => (
+                            <motion.div
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                key={idx}
+                                className="bg-white/40 dark:bg-white/5 backdrop-blur-3xl rounded-[3rem] border border-slate-200/50 dark:border-white/5 p-12 space-y-10 shadow-sm"
+                            >
+                                <div className="space-y-6">
+                                    <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leading-none">{section.title}</h2>
+
+                                    {section.logicPath && (
+                                        <div className="my-10 space-y-4">
+                                            <h6 className="text-[9px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-[0.3em] text-center">Inferred Decision Logic</h6>
+                                            <Mermaid chart={section.logicPath} />
+                                        </div>
+                                    )}
+
+                                    <div className="prose dark:prose-invert max-w-none text-lg text-slate-600 dark:text-slate-400 font-medium leading-relaxed">
                                         <ReactMarkdown>{section.content}</ReactMarkdown>
                                     </div>
+
+                                    {section.reasoning && (
+                                        <div className="p-8 bg-indigo-500/5 border border-indigo-500/10 rounded-3xl">
+                                            <h6 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-3">Logic Weaver Reasoning</h6>
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 italic font-medium leading-relaxed">
+                                                "{section.reasoning}"
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
 
-                                {section.keyTakeaways && section.keyTakeaways.length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                        {section.keyTakeaways.map((tk: any, i: number) => (
-                                            <span key={i} className="px-3 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-bold rounded-lg border border-indigo-100 dark:border-indigo-900/30">
-                                                ✦ {tk}
-                                            </span>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {section.kpis && section.kpis.length > 0 && (
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        {section.kpis.map((kpi: any, k: number) => (
-                                            <div key={k} className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800">
-                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
-                                                <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                {section.swot && (
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {section.swot.strengths && section.swot.strengths.length > 0 && (
-                                            <div className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-2xl">
-                                                <h4 className="text-[10px] font-black uppercase text-emerald-600 mb-3 tracking-widest">Strengths</h4>
-                                                <ul className="text-xs space-y-2 font-medium text-slate-700 dark:text-slate-300">
-                                                    {section.swot.strengths.map((s: any, i: number) => <li key={i} className="flex gap-2"><span>💪</span> {s}</li>)}
-                                                </ul>
-                                            </div>
-                                        )}
-                                        {section.swot.weaknesses && section.swot.weaknesses.length > 0 && (
-                                            <div className="p-6 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-2xl">
-                                                <h4 className="text-[10px] font-black uppercase text-rose-600 mb-3 tracking-widest">Weaknesses</h4>
-                                                <ul className="text-xs space-y-2 font-medium text-slate-700 dark:text-slate-300">
-                                                    {section.swot.weaknesses.map((s: any, i: number) => <li key={i} className="flex gap-2"><span>⚠️</span> {s}</li>)}
-                                                </ul>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {section.recommendations && section.recommendations.length > 0 && (
-                                    <div className="space-y-4">
-                                        <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Actionable Intelligence</h4>
-                                        <div className="grid gap-4">
-                                            {section.recommendations.map((rec: any, i: number) => (
-                                                <div key={i} className="p-6 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <p className="text-sm font-bold text-slate-900 dark:text-white">{rec.action}</p>
-                                                        <span className="px-2 py-0.5 bg-indigo-600/10 text-indigo-600 text-[9px] font-bold rounded uppercase">Impact: {rec.impact}</span>
-                                                    </div>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">{rec.rationale}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
                                 {section.charts && section.charts.length > 0 && (
-                                    <div className="grid grid-cols-1 gap-8 pt-8 border-t border-slate-100 dark:border-white/5">
+                                    <div className="space-y-12 pt-12 border-t border-slate-100 dark:border-white/5">
                                         {section.charts.map((chart: any, cIdx: number) => (
-                                            <div key={cIdx} className="w-full">
-                                                <div className="mb-4">
-                                                    <h5 className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-1">{chart.type} Visualization</h5>
-                                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h4>
-                                                </div>
-                                                <div className="h-[400px]">
-                                                    <PlotlyChart
+                                            <div key={cIdx} className="space-y-6">
+                                                <h4 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">{chart.title}</h4>
+                                                <div className="h-[450px] bg-white/30 dark:bg-black/20 rounded-[2.5rem] border border-slate-100 dark:border-white/5 p-8">
+                                                    <SmartChart
                                                         chart={chart.spec || { type: chart.type } as any}
                                                         data={chart.data}
                                                     />
@@ -314,44 +323,112 @@ const PublicShareView: React.FC = () => {
                                         ))}
                                     </div>
                                 )}
-                            </div>
+                            </motion.div>
                         ))}
                     </div>
                 )}
+
+                {/* Boardroom Mode Overlay */}
+                <AnimatePresence>
+                    {isFocusMode && (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-8 overflow-hidden"
+                        >
+                            <button
+                                onClick={() => setIsFocusMode(false)}
+                                className="absolute top-8 right-8 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all z-20"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+
+                            <div className="w-full max-w-7xl flex flex-col h-full relative z-10">
+                                <div className="w-full h-1.5 bg-white/10 rounded-full mb-16 overflow-hidden flex gap-1">
+                                    {snapshot.sections?.map((_: any, i: number) => (
+                                        <div
+                                            key={i}
+                                            className={`flex-1 h-full transition-all duration-700 ${i === focusIndex ? 'bg-indigo-500' : (i < focusIndex ? 'bg-indigo-900' : 'bg-transparent')}`}
+                                        />
+                                    ))}
+                                </div>
+
+                                <div className="flex-1 flex flex-col justify-center">
+                                    <AnimatePresence mode="wait">
+                                        {snapshot.sections?.[focusIndex] && (
+                                            <motion.div
+                                                key={focusIndex}
+                                                initial={{ opacity: 0, x: 50 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: -50 }}
+                                                className="grid grid-cols-1 lg:grid-cols-2 gap-20 items-center"
+                                            >
+                                                <div className="space-y-10">
+                                                    <h2 className="text-6xl font-black text-white leading-tight tracking-tighter">
+                                                        {snapshot.sections[focusIndex].title}
+                                                    </h2>
+                                                    <div className="text-2xl text-slate-300 leading-relaxed font-medium">
+                                                        <ReactMarkdown>{snapshot.sections[focusIndex].content}</ReactMarkdown>
+                                                    </div>
+                                                </div>
+
+                                                <div className="bg-white/5 p-12 rounded-[4rem] border border-white/10 backdrop-blur-3xl shadow-2xl">
+                                                    {snapshot.sections[focusIndex].charts?.[0] && (
+                                                        <div className="h-[500px]">
+                                                            <SmartChart
+                                                                chart={snapshot.sections[focusIndex].charts[0].spec || { type: snapshot.sections[focusIndex].charts[0].type }}
+                                                                data={snapshot.sections[focusIndex].charts[0].data}
+                                                            />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+
+                                <div className="flex justify-between items-center py-12 mt-8 border-t border-white/5">
+                                    <button
+                                        onClick={() => setFocusIndex(Math.max(0, focusIndex - 1))}
+                                        disabled={focusIndex === 0}
+                                        className="text-white/40 hover:text-white disabled:opacity-0 font-black uppercase text-[10px] tracking-[0.3em]"
+                                    >
+                                        Previous
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (focusIndex < (snapshot.sections?.length || 0) - 1) {
+                                                setFocusIndex(focusIndex + 1);
+                                            } else {
+                                                setIsFocusMode(false);
+                                            }
+                                        }}
+                                        className="text-indigo-400 hover:text-indigo-300 font-black uppercase text-[10px] tracking-[0.3em]"
+                                    >
+                                        {focusIndex === (snapshot.sections?.length || 0) - 1 ? 'Finish' : 'Next'}
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
             </main>
 
-            {/* Footer - Branding & Premium CTA */}
-            <footer className="bg-white dark:bg-[#040810] border-t border-slate-200/50 dark:border-white/5 py-20">
+            <footer className="bg-white dark:bg-[#040810] border-t border-slate-200/50 dark:border-white/5 py-20 relative z-10">
                 <div className="max-w-7xl mx-auto px-6 text-center">
-                    <div className="inline-flex items-center gap-3 px-4 py-2 bg-slate-100 dark:bg-slate-900 rounded-2xl mb-10 border border-slate-200 dark:border-slate-800">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Shared via Toeasy AI Platform</span>
-                    </div>
-
                     <h2 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-8 max-w-lg mx-auto leading-none">
                         Draft your own strategic analysis in seconds.
                     </h2>
-
                     <Link
                         to="/signup"
-                        className="inline-flex items-center gap-4 px-10 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/20 transition-all active:scale-95 group"
+                        className="inline-flex items-center gap-4 px-10 py-5 bg-indigo-600 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl group"
                     >
-                        <span>✨ Create Your Dashboard</span>
-                        <svg className="w-4 h-4 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-                        </svg>
+                        <span>Create Your Dashboard</span>
                     </Link>
-
-                    <div className="mt-20 pt-8 border-t border-slate-100 dark:border-white/5 flex flex-col md:flex-row justify-between items-center gap-6">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">© 2026 Toeasy. Data Privacy Verified.</p>
-                        <div className="flex gap-8">
-                            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-500">Terms</a>
-                            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-500">Security</a>
-                            <a href="#" className="text-[10px] font-bold text-slate-400 uppercase tracking-widest hover:text-indigo-500">API Documentation</a>
-                        </div>
-                    </div>
                 </div>
             </footer>
-        </div >
+        </div>
     );
 };
 
