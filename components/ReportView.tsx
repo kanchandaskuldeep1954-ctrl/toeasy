@@ -27,18 +27,45 @@ mermaid.initialize({
 const sanitizeMermaid = (chart: string) => {
     if (!chart) return '';
 
-    // 1. Ensure it starts with graph LR if missing
     let processed = chart.trim();
+
+    // 1. Force graph LR if missing
     if (!processed.startsWith('graph')) {
         processed = 'graph LR\n' + processed;
     }
 
-    // 2. Escape special characters in labels and wrap in quotes
-    // Matches patterns like A[text], A(text), A{text}
-    return processed
-        .replace(/\[([^"\]]+)\]/g, (match, p1) => `["${p1.replace(/"/g, "'")}"]`)
-        .replace(/\(([^"\(]+)\)/g, (match, p1) => `("${p1.replace(/"/g, "'")}")`)
-        .replace(/\{([^"\}]+)\}/g, (match, p1) => `{"${p1.replace(/"/g, "'")}"}`);
+    // 2. Clear out any markdown code blocks if the AI accidentally included them
+    processed = processed.replace(/```mermaid/g, '').replace(/```/g, '');
+
+    // 3. Ultra-Robust Node "Rescue": 
+    // This regex looks for node definitions and ensures they are properly quoted.
+    // It captures: id[text], id(text), id{text} or just plain UNQUOTED_ID
+    // We split by lines and reconnects to avoid multiline confusion
+    const lines = processed.split('\n');
+    const sanitizedLines = lines.map(line => {
+        if (!line.includes('-->') && !line.includes('---')) return line;
+
+        // Split by arrows but preserve flags like |label|
+        // Group 1: Source Node, Group 2: Arrow, Group 3: Optional Label, Group 4: Target Node
+        return line.replace(/([^-\n>|]+)([-]{2,}>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
+            const cleanNode = (n: string) => {
+                let node = n.trim();
+                // If it already has brackets/quotes, just ensure internal quotes are safe
+                if (node.includes('[') || node.includes('(') || node.includes('{')) {
+                    return node.replace(/"/g, "'");
+                }
+                // If it's a plain string with spaces or special chars, wrap it
+                if (/[^a-zA-Z0-9]/.test(node)) {
+                    return `node_${Math.random().toString(36).substr(2, 4)}["${node.replace(/"/g, "'")}"]`;
+                }
+                return node;
+            };
+            const labelContent = label ? `|${label.trim()}|` : '';
+            return `${cleanNode(n1)} ${arrow}${labelContent} ${cleanNode(n2)}`;
+        });
+    });
+
+    return sanitizedLines.join('\n');
 };
 
 const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {

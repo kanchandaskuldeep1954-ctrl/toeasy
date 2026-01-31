@@ -748,7 +748,10 @@ Return ONLY valid JSON (no markdown, no explanation):
       2. CONCEPT WEAVER: You must explicitly explain the relationship between different charts. For example, if you assign Chart A and Chart B to a section, write a narrative bridge explaining how the trends in A influence or correlate with B.
       3. Do NOT just state numbers; explain the "Calculated Truth" (e.g., how Margin was derived from raw units).
       4. Use the provided Calculated DataFrames to anchor your logical arguments.
-      5. MERMAID LOGIC: For each section, provide a 'logicPath' field containing a Mermaid flowchart (graph LR) that shows the step-by-step reasoning from raw data to the primary insight of that section.
+      5. MERMAID LOGIC: For each section, provide a 'logicPath' field containing a Mermaid flowchart (graph LR). 
+         - CRITICAL: Use IDs and Labels correctly: NodeID["Label Text"]. 
+         - Example: A["Raw Data"] --> B["Analysis"] --> C["Strategic Insight"]. 
+         - Avoid spaces or special characters outside of brackets/quotes.
 
       TASK:
       Generate a comprehensive, structural report. You MUST assign the available charts to the most relevant sections.

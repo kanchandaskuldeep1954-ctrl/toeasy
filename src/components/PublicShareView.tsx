@@ -27,10 +27,26 @@ const sanitizeMermaid = (chart: string) => {
     if (!processed.startsWith('graph')) {
         processed = 'graph LR\n' + processed;
     }
-    return processed
-        .replace(/\[([^"\]]+)\]/g, (match, p1) => `["${p1.replace(/"/g, "'")}"]`)
-        .replace(/\(([^"\(]+)\)/g, (match, p1) => `("${p1.replace(/"/g, "'")}")`)
-        .replace(/\{([^"\}]+)\}/g, (match, p1) => `{"${p1.replace(/"/g, "'")}"}`);
+    processed = processed.replace(/```mermaid/g, '').replace(/```/g, '');
+    const lines = processed.split('\n');
+    const sanitizedLines = lines.map(line => {
+        if (!line.includes('-->') && !line.includes('---')) return line;
+        return line.replace(/([^-\n>|]+)([-]{2,}>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
+            const cleanNode = (n: string) => {
+                let node = n.trim();
+                if (node.includes('[') || node.includes('(') || node.includes('{')) {
+                    return node.replace(/"/g, "'");
+                }
+                if (/[^a-zA-Z0-9]/.test(node)) {
+                    return `node_${Math.random().toString(36).substr(2, 4)}["${node.replace(/"/g, "'")}"]`;
+                }
+                return node;
+            };
+            const labelContent = label ? `|${label.trim()}|` : '';
+            return `${cleanNode(n1)} ${arrow}${labelContent} ${cleanNode(n2)}`;
+        });
+    });
+    return sanitizedLines.join('\n');
 };
 
 const Mermaid: React.FC<{ chart: string }> = ({ chart }) => {
