@@ -98,6 +98,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [lastSaved, setLastSaved] = useState<Date | null>(null);
     const [versionName, setVersionName] = useState('');
     const [isCommitting, setIsCommitting] = useState(false);
+    const [showVersionModal, setShowVersionModal] = useState(false);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
     const [forceManual, setForceManual] = useState(false);
 
     // KPI Editing State
@@ -426,8 +429,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
         }
     };
 
-    const [showShareModal, setShowShareModal] = useState(false);
-    const [copySuccess, setCopySuccess] = useState(false);
 
     const handleCopyLink = () => {
         if (!shareUrl) return;
