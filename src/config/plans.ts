@@ -5,6 +5,8 @@ export interface PlanConfig {
     name: string;
     priceMonthly: number;
     priceYearly: number;
+    priceINRMonthly: number;
+    priceINRYearly: number;
     description: string;
     features: string[];
     limitRows: number;
@@ -18,6 +20,8 @@ export const BILLING_PLANS: PlanConfig[] = [
         name: 'Starter',
         priceMonthly: 0,
         priceYearly: 0,
+        priceINRMonthly: 0,
+        priceINRYearly: 0,
         description: 'Ideal for small scale personal data projects.',
         features: ['Up to 500 rows', '10 AI Queries / day', '1 Data Connector', 'Basic Audit'],
         limitRows: 500,
@@ -28,6 +32,8 @@ export const BILLING_PLANS: PlanConfig[] = [
         name: 'Professional',
         priceMonthly: 5,
         priceYearly: 4,
+        priceINRMonthly: 99,
+        priceINRYearly: 79,
         description: 'Powerful tools for data analysts and consultants.',
         features: ['Up to 50,000 rows', 'Unlimited AI Queries', '5 Data Connectors', 'Custom Validation Rules', 'Executive Reports'],
         highlight: true,
@@ -39,6 +45,8 @@ export const BILLING_PLANS: PlanConfig[] = [
         name: 'Enterprise',
         priceMonthly: 19,
         priceYearly: 15,
+        priceINRMonthly: 499,
+        priceINRYearly: 399,
         description: 'The complete data OS for modern businesses.',
         features: ['Unlimited rows', 'Unlimited AI Queries', 'All Connectors (SQL, APIs)', 'Priority AI Processing', 'SSO & Advanced Security', 'API Access'],
         limitRows: 999999999,

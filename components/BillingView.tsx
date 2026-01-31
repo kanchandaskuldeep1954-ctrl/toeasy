@@ -16,69 +16,79 @@ interface BillingViewProps {
   onUpgrade: (tier: PlanTier, interval: 'month' | 'year') => void;
 }
 
-const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrade }) => {
-  const [billingCycle, setBillingCycle] = useState<'month' | 'year'>(subscription.interval);
-  const [processingTier, setProcessingTier] = useState<PlanTier | null>(null);
+const [billingCycle, setBillingCycle] = useState<'month' | 'year'>(subscription.interval);
+const [currency, setCurrency] = useState<'USD' | 'INR'>('INR');
+const [processingTier, setProcessingTier] = useState<PlanTier | null>(null);
 
-  const plans = BILLING_PLANS.map(p => ({
+const plans = BILLING_PLANS.map(p => {
+  let price = 0;
+  if (currency === 'USD') {
+    price = billingCycle === 'month' ? p.priceMonthly : p.priceYearly;
+  } else {
+    price = billingCycle === 'month' ? p.priceINRMonthly : p.priceINRYearly;
+  }
+
+  return {
     ...p,
-    price: billingCycle === 'month' ? p.priceMonthly : p.priceYearly,
+    price,
     buttonText: subscription.tier === p.id ? 'Current Plan' : (p.priceMonthly === 0 ? 'Downgrade to Free' : (p.id === 'enterprise' ? 'Contact Sales' : `Upgrade to ${p.name}`))
-  }));
-
-  const handleSubscription = async (planId: PlanTier, price: number) => {
-    // If downgrading to basic (free), process immediately
-    if (price === 0) {
-      if (confirm("Are you sure you want to downgrade? Some premium features will be locked.")) {
-        onUpgrade(planId, billingCycle);
-      }
-      return;
-    }
-
-    setProcessingTier(planId);
-
-    try {
-      // Call your backend API to create payment session
-      const totalAmount = billingCycle === 'year' ? price * 12 : price;
-
-      const response = await fetch('/api/payments/create-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
-        },
-        body: JSON.stringify({
-          planId,
-          interval: billingCycle,
-          currency: 'USD'
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.key) {
-        // Since this is a standalone view, we'll assume Razorpay is handled or redirect
-        // But the best approach is to match the integrated view's logic.
-        // For now, I'll just fix the hardcoded data in the request.
-        alert('Payment initiated. Please use the integrated billing view for the full checkout experience.');
-      } else {
-        alert('Failed to initiate payment. Please try again.');
-      }
-      setProcessingTier(null);
-    } catch (error: any) {
-      alert(`Payment Error: ${error.message}`);
-      setProcessingTier(null);
-    }
   };
+});
 
-  return (
-    <div className="max-w-7xl mx-auto space-y-12 pb-20 animate-in fade-in duration-700">
-      <div className="text-center space-y-6">
-        <h2 className="text-5xl font-extrabold text-white tracking-tight">Flexible <span className="text-indigo-500">Plans</span> for Every Data Need</h2>
-        <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-          Choose the plan that fits your analysis scale. Save 20% on yearly billing.
-        </p>
+const handleSubscription = async (planId: PlanTier, price: number) => {
+  // If downgrading to basic (free), process immediately
+  if (price === 0) {
+    if (confirm("Are you sure you want to downgrade? Some premium features will be locked.")) {
+      onUpgrade(planId, billingCycle);
+    }
+    return;
+  }
 
+  setProcessingTier(planId);
+
+  try {
+    // Call your backend API to create payment session
+    const totalAmount = billingCycle === 'year' ? price * 12 : price;
+
+    const response = await fetch('/api/payments/create-order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+      },
+      body: JSON.stringify({
+        planId,
+        interval: billingCycle,
+        currency: currency
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.key) {
+      // Since this is a standalone view, we'll assume Razorpay is handled or redirect
+      // But the best approach is to match the integrated view's logic.
+      // For now, I'll just fix the hardcoded data in the request.
+      alert('Payment initiated. Please use the integrated billing view for the full checkout experience.');
+    } else {
+      alert('Failed to initiate payment. Please try again.');
+    }
+    setProcessingTier(null);
+  } catch (error: any) {
+    alert(`Payment Error: ${error.message}`);
+    setProcessingTier(null);
+  }
+};
+
+return (
+  <div className="max-w-7xl mx-auto space-y-12 pb-20 animate-in fade-in duration-700">
+    <div className="text-center space-y-6">
+      <h2 className="text-5xl font-extrabold text-white tracking-tight">Flexible <span className="text-indigo-500">Plans</span> for Every Data Need</h2>
+      <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+        Choose the plan that fits your analysis scale. Save 20% on yearly billing.
+      </p>
+
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
         <div className="inline-flex items-center p-1 bg-white/5 border border-white/10 rounded-2xl">
           <button
             onClick={() => setBillingCycle('month')}
@@ -93,122 +103,138 @@ const BillingView: React.FC<BillingViewProps> = ({ subscription, usage, onUpgrad
             Yearly (Save 20%)
           </button>
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {plans.map((plan) => (
-          <div
-            key={plan.id}
-            className={`relative flex flex-col p-8 glass-morphism rounded-[40px] border transition-all ${plan.highlight
-              ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10'
-              : 'border-white/10 hover:border-white/20'
+        <div className="inline-flex items-center p-1 bg-white/5 border border-white/10 rounded-2xl">
+          <button
+            onClick={() => setCurrency('USD')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${currency === 'USD' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+          >
+            USD ($)
+          </button>
+          <button
+            onClick={() => setCurrency('INR')}
+            className={`px-6 py-2 rounded-xl text-sm font-bold transition-all ${currency === 'INR' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
+          >
+            INR (₹)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      {plans.map((plan) => (
+        <div
+          key={plan.id}
+          className={`relative flex flex-col p-8 glass-morphism rounded-[40px] border transition-all ${plan.highlight
+            ? 'border-indigo-500/50 bg-indigo-500/[0.03] scale-105 z-10'
+            : 'border-white/10 hover:border-white/20'
+            }`}
+        >
+          {plan.highlight && (
+            <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-xl">
+              Recommended
+            </div>
+          )}
+
+          <div className="mb-8">
+            <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
+            <div className="flex items-baseline gap-1 mb-4">
+              <span className="text-4xl font-black text-white">{currency === 'USD' ? '$' : '₹'}{plan.price}</span>
+              <span className="text-slate-500 text-sm font-medium">/{billingCycle === 'month' ? 'mo' : 'mo (billed yearly)'}</span>
+            </div>
+            <p className="text-slate-400 text-sm leading-relaxed">{plan.description}</p>
+          </div>
+
+          <div className="flex-1 space-y-4 mb-8">
+            {plan.features.map((feature, i) => (
+              <div key={i} className="flex items-start gap-3 text-sm">
+                <svg className="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                <span className="text-slate-300">{feature}</span>
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={() => plan.id !== subscription.tier && handleSubscription(plan.id, plan.price)}
+            disabled={plan.id === subscription.tier || processingTier !== null}
+            className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${plan.id === subscription.tier
+              ? 'bg-white/5 text-slate-500 cursor-default'
+              : plan.highlight
+                ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30'
+                : 'bg-white/10 hover:bg-white/20 text-white'
               }`}
           >
-            {plan.highlight && (
-              <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest px-4 py-1.5 rounded-full shadow-xl">
-                Recommended
-              </div>
+            {processingTier === plan.id ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                Processing...
+              </>
+            ) : (
+              plan.buttonText
             )}
+          </button>
+        </div>
+      ))}
+    </div>
 
-            <div className="mb-8">
-              <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
-              <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-4xl font-black text-white">${plan.price}</span>
-                <span className="text-slate-500 text-sm font-medium">/{billingCycle === 'month' ? 'mo' : 'mo (billed yearly)'}</span>
-              </div>
-              <p className="text-slate-400 text-sm leading-relaxed">{plan.description}</p>
+    <div className="pt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="glass-morphism rounded-[32px] border border-white/10 p-8 space-y-6">
+        <h4 className="text-xl font-bold text-white flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">📊</div>
+          Real-Time Usage Tracking
+        </h4>
+        <div className="space-y-4">
+          <div>
+            <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+              <span>Rows Processed</span>
+              <span>{usage.rowsProcessed.toLocaleString()} / {subscription.tier === 'basic' ? '500' : '50k+'}</span>
             </div>
-
-            <div className="flex-1 space-y-4 mb-8">
-              {plan.features.map((feature, i) => (
-                <div key={i} className="flex items-start gap-3 text-sm">
-                  <svg className="w-5 h-5 text-indigo-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                  <span className="text-slate-300">{feature}</span>
-                </div>
-              ))}
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 transition-all duration-1000"
+                style={{ width: `${Math.min(100, (usage.rowsProcessed / (subscription.tier === 'basic' ? 500 : 50000)) * 100)}%` }}
+              ></div>
             </div>
-
-            <button
-              onClick={() => plan.id !== subscription.tier && handleSubscription(plan.id, plan.price)}
-              disabled={plan.id === subscription.tier || processingTier !== null}
-              className={`w-full py-4 rounded-2xl font-bold transition-all flex items-center justify-center gap-2 ${plan.id === subscription.tier
-                ? 'bg-white/5 text-slate-500 cursor-default'
-                : plan.highlight
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-xl shadow-indigo-600/30'
-                  : 'bg-white/10 hover:bg-white/20 text-white'
-                }`}
-            >
-              {processingTier === plan.id ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Processing...
-                </>
-              ) : (
-                plan.buttonText
-              )}
-            </button>
           </div>
-        ))}
-      </div>
-
-      <div className="pt-12 grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="glass-morphism rounded-[32px] border border-white/10 p-8 space-y-6">
-          <h4 className="text-xl font-bold text-white flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">📊</div>
-            Real-Time Usage Tracking
-          </h4>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-                <span>Rows Processed</span>
-                <span>{usage.rowsProcessed.toLocaleString()} / {subscription.tier === 'basic' ? '500' : '50k+'}</span>
-              </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-indigo-500 transition-all duration-1000"
-                  style={{ width: `${Math.min(100, (usage.rowsProcessed / (subscription.tier === 'basic' ? 500 : 50000)) * 100)}%` }}
-                ></div>
-              </div>
+          <div>
+            <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
+              <span>AI Queries Used</span>
+              <span>{usage.aiQueriesUsed} / {subscription.tier === 'basic' ? '10' : 'Unlimited'}</span>
             </div>
-            <div>
-              <div className="flex justify-between text-xs font-bold uppercase tracking-widest text-slate-500 mb-2">
-                <span>AI Queries Used</span>
-                <span>{usage.aiQueriesUsed} / {subscription.tier === 'basic' ? '10' : 'Unlimited'}</span>
-              </div>
-              <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-indigo-500 transition-all duration-1000"
-                  style={{ width: `${Math.min(100, (usage.aiQueriesUsed / (subscription.tier === 'basic' ? 10 : 100)) * 100)}%` }}
-                ></div>
-              </div>
+            <div className="h-2 bg-white/5 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-indigo-500 transition-all duration-1000"
+                style={{ width: `${Math.min(100, (usage.aiQueriesUsed / (subscription.tier === 'basic' ? 10 : 100)) * 100)}%` }}
+              ></div>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="glass-morphism rounded-[32px] border border-white/10 p-8 flex flex-col justify-center space-y-4 bg-emerald-500/[0.02]">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl">⚡</div>
-            <div>
-              <p className="text-white font-bold">Secure Payment via Razorpay</p>
-              <p className="text-sm text-slate-400">Your transaction is processed securely. We never store your card details.</p>
-            </div>
+      <div className="glass-morphism rounded-[32px] border border-white/10 p-8 flex flex-col justify-center space-y-4 bg-emerald-500/[0.02]">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-2xl">⚡</div>
+          <div>
+            <p className="text-white font-bold">Secure Payment via Razorpay</p>
+            <p className="text-sm text-slate-400">Your transaction is processed securely. We never store your card details.</p>
           </div>
-          <div className="pt-4 flex gap-3">
-            <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Next Invoice</p>
-              <p className="text-lg font-mono text-white">${plans.find(p => p.id === subscription.tier)?.price || 0}.00</p>
-            </div>
-            <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
-              <p className="text-[10px] text-slate-500 font-bold uppercase">Period Ends</p>
-              <p className="text-lg font-mono text-white">{subscription.expiresAt.toLocaleDateString()}</p>
-            </div>
+        </div>
+        <div className="pt-4 flex gap-3">
+          <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+            <p className="text-[10px] text-slate-500 font-bold uppercase">Next Invoice</p>
+            <p className="text-lg font-mono text-white">{currency === 'USD' ? '$' : '₹'}{plans.find(p => p.id === subscription.tier)?.price || 0}.00</p>
+          </div>
+          <div className="flex-1 p-4 bg-white/5 rounded-2xl border border-white/5 text-center">
+            <p className="text-[10px] text-slate-500 font-bold uppercase">Period Ends</p>
+            <p className="text-lg font-mono text-white">{subscription.expiresAt.toLocaleDateString()}</p>
           </div>
         </div>
       </div>
     </div>
-  );
+  </div>
+);
 };
 
 export default BillingView;
