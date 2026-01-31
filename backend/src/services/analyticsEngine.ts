@@ -803,6 +803,41 @@ export class AnalyticsEngine {
             }
         });
 
+        // 3. Segment Performance DataFrame (Fallback for when no math is found)
+        if (dataFrames.length < 2) {
+            const catCols = forensics.profiles.filter(p => p.dataType === 'string' && p.uniqueCount > 1 && p.uniqueCount < 15);
+            const numCols = forensics.profiles.filter(p => p.dataType === 'number');
+
+            if (catCols.length > 0 && numCols.length > 0) {
+                const cat = catCols[0].column;
+                const num = numCols[0].column;
+
+                const aggregated = this.aggregateByCategory(data, cat, num, 'sum').slice(0, 5);
+                const totalVal = aggregated.reduce((s, a) => s + a.value, 0);
+
+                dataFrames.push({
+                    id: `df_segment_${cat}`,
+                    title: `Strategic Segment Analysis: ${cat}`,
+                    description: `Top performing segments by ${num}.`,
+                    logic: `First Principle: Identifying the Pareto distribution of ${num} across ${cat} reveals high-leverage business areas.`,
+                    headers: [
+                        { name: cat, type: 'string', description: 'Business Segment' },
+                        { name: num, type: 'number', description: `Aggregated ${num}` },
+                        { name: 'Share %', type: 'number', description: 'Percentage of total volume' }
+                    ],
+                    rows: aggregated.map(a => ({
+                        [cat]: a.name,
+                        [num]: numCols[0].role === 'currency' ? this.formatCurrency(a.value) : a.value.toLocaleString(),
+                        'Share %': totalVal > 0 ? `${((a.value / totalVal) * 100).toFixed(1)}%` : '0.0%'
+                    })),
+                    summaryInsights: [
+                        `${aggregated[0]?.name || 'Top segment'} accounts for ${totalVal > 0 ? ((aggregated[0]?.value / totalVal) * 100).toFixed(1) : 0}% of selected output.`,
+                        `Consolidation of ${num} identifies priority focus areas.`
+                    ]
+                });
+            }
+        }
+
         return dataFrames;
     }
 

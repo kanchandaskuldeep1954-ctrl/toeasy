@@ -242,27 +242,36 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 }];
 
             // ===== SCATTER / BUBBLE =====
-            case 'scatter': {
+            case 'scatter':
+            case 'bubble': {
                 const xValues = normalizedData.map(d => d.x ?? d.value);
                 const yValues = normalizedData.map(d => d.y ?? d.value);
-                const isBinaryY = yValues.every(v => [0, 1].includes(v));
+
+                // Detect if axes are categorical
+                const isCategoricalX = xValues.some(v => typeof v === 'string' && isNaN(Number(v)));
+                const isCategoricalY = yValues.some(v => typeof v === 'string' && isNaN(Number(v)));
+
+                const isBinaryY = !isCategoricalY && yValues.every(v => [0, 1].includes(v));
 
                 const traces: Plotly.Data[] = [{
                     x: xValues,
-                    y: yValues.map(val => isBinaryY ? val + (Math.random() - 0.5) * 0.05 : val),
+                    y: isBinaryY ? yValues.map(val => Number(val) + (Math.random() - 0.5) * 0.05) : yValues,
                     mode: 'markers',
                     type: 'scatter',
                     marker: {
-                        size: 10,
+                        size: chart.type === 'bubble' ? normalizedData.map(d => d.size ?? 20) : 10,
                         color: COLORS[0],
                         opacity: 0.6,
                         line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }
                     },
                     text: labels,
-                    hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<extra></extra>'
+                    hovertemplate: `<b>%{text}</b><br>${chart.xAxis || 'X'}: ${isCategoricalX ? '%{x}' : '%{x:.2f}'}<br>${chart.yAxis || 'Y'}: ${isCategoricalY ? '%{y}' : '%{y:.2f}'}<extra></extra>`
                 }];
 
-                // Scientific Overlay: OLS Trendline
+                // Update layout for categorical axes
+                const layoutUpdate: any = {};
+                if (isCategoricalX) layoutUpdate.xaxis = { ...getLayout(height, isDark).xaxis, type: 'category' };
+                if (isCategoricalY) layoutUpdate.yaxis = { ...getLayout(height, isDark).yaxis, type: 'category' };
                 if (chart.chartConfig?.trendline === 'ols' && xValues.length > 1) {
                     const n = xValues.length;
                     const sumX = xValues.reduce((a, b) => a + b, 0);
@@ -482,6 +491,17 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
     const layout = useMemo((): Partial<Plotly.Layout> => {
         const base = getLayout(height, isDark);
 
+        // Categorical Detection for Scatter/Bubble/Box/Violin
+        const xValues = normalizedData.map(d => d.x ?? d.value);
+        const yValues = normalizedData.map(d => d.y ?? d.value);
+        const isCategoricalX = xValues.some(v => typeof v === 'string' && isNaN(Number(v)));
+        const isCategoricalY = yValues.some(v => typeof v === 'string' && isNaN(Number(v)));
+
+        if (chart.type === 'scatter' || chart.type === 'bubble' || chart.type === 'box' || chart.type === 'violin') {
+            if (isCategoricalX) base.xaxis = { ...base.xaxis, type: 'category' };
+            if (isCategoricalY) base.yaxis = { ...base.yaxis, type: 'category' };
+        }
+
         // Special layouts for certain chart types
         if (chart.type === 'choropleth' || chart.type === 'scattergeo' || chart.type === 'map' || chart.type === 'bubble_map') {
             return {
@@ -510,7 +530,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 polar: {
                     radialaxis: {
                         visible: true,
-                        range: [0, Math.max(...normalizedData.map(d => d.value)) * 1.1],
+                        range: [0, Math.max(...normalizedData.map(d => d.value), 1) * 1.1],
                         gridcolor: isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.4)',
                         tickfont: { color: isDark ? '#94a3b8' : '#64748b' }
                     },
@@ -532,7 +552,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
         }
 
         return base;
-    }, [chart.type, height, normalizedData, isDark]);
+    }, [chart.type, chart.xAxis, chart.yAxis, height, normalizedData, isDark]);
 
     // Handle empty data
     if (normalizedData.length === 0) {

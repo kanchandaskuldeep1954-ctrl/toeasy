@@ -8,16 +8,36 @@ const findClosestColumn = (target: string | undefined, headers: string[]): strin
     // 1. Direct match
     if (headers.includes(target)) return target;
 
-    // 2. Case-insensitive / Extra-insensitive match (remove all non-alphanumeric)
+    // 2. Case-insensitive / Extra-insensitive match (remove all non-alphanumeric and underscores)
     const normalized = (s: string) => s ? s.toLowerCase().replace(/[^a-z0-9]/g, '') : '';
     const targetNorm = normalized(target);
     if (!targetNorm) return undefined;
 
+    // First try normalized exact match
     const match = headers.find(h => h && normalized(h) === targetNorm);
     if (match) return match;
 
-    // 3. Partial match (if target is "revenue" and header is "Total Revenue")
-    return headers.find(h => h && (normalized(h).includes(targetNorm) || targetNorm.includes(normalized(h))));
+    // 3. Score-based matching for minor typos or partials
+    let bestMatch: string | undefined = undefined;
+    let bestScore = 0;
+
+    headers.forEach(h => {
+        if (!h) return;
+        const hn = normalized(h);
+        const tn = targetNorm;
+
+        // Jaro-Winkler or similar would be overkill, but basic inclusion scoring:
+        let score = 0;
+        if (hn.includes(tn) || tn.includes(hn)) score += 0.5;
+        if (hn.startsWith(tn) || tn.startsWith(hn)) score += 0.3;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestMatch = h;
+        }
+    });
+
+    return bestMatch || undefined;
 };
 
 /**
@@ -49,18 +69,21 @@ export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: 
     if (!dataset || !chart) return [];
 
     const headers = dataset.headers || [];
-    const xAxis = findClosestColumn(chart.xAxis || chart.options?.xAxis, headers) || chart.xAxis || chart.options?.xAxis;
-    const yAxis = findClosestColumn(chart.yAxis || chart.options?.yAxis, headers) || chart.yAxis || chart.options?.yAxis;
-    const zAxis = findClosestColumn(chart.zAxis || chart.options?.zAxis, headers) || chart.zAxis || chart.options?.zAxis;
+    const xAxis = findClosestColumn(chart.xAxis || chart.options?.xAxis, headers) || headers[0]; // Fallback to first header instead of raw string
+    const yAxis = findClosestColumn(chart.yAxis || chart.options?.yAxis, headers) || headers[1] || headers[0];
+    const zAxis = findClosestColumn(chart.zAxis || chart.options?.zAxis, headers);
 
     // PRIORITY 1: Use pre-aggregated data from backend if available
     if (chart.data && Array.isArray(chart.data) && chart.data.length > 0) {
-        return chart.data.map((d: any) => ({
-            name: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
-            value: Number(d.value ?? d.y ?? d.count ?? 0),
-            label: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
-            ...d
-        }));
+        return (chart.data || []).map((d: any) => {
+            if (!d) return { label: 'Unknown', value: 0 };
+            return {
+                name: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
+                value: Number(d.value ?? d.y ?? d.count ?? 0),
+                label: d.name ?? d.label ?? d.x ?? d.category ?? 'Unknown',
+                ...d
+            };
+        });
     }
 
     // PRIORITY 2: Manual aggregation from raw data (for user-edited charts)
