@@ -39,7 +39,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 300, onClick }) => {
 
     const formattedData = useMemo(() => {
-        if (!data || data.length === 0) return [];
+        if (!Array.isArray(data) || data.length === 0) return [];
         return data.map(d => ({
             name: d.name || d.label || d.x,
             value: Number(d.value || d.y || d.count || 0),

@@ -794,18 +794,20 @@ Return ONLY valid JSON (no markdown, no explanation):
       const report = JSON.parse(jsonStr);
 
       // Hydrate Charts, KPIs, and DataFrames
-      report.sections = report.sections.map((section: any) => ({
-        ...section,
-        charts: (section.chartIds || []).map((id: string) => charts.find((c: any) => c.id === id) || charts[0]).filter((c: any) => c),
-        kpis: (section.kpiIds || []).map((id: string) => kpis.find((k: any) => k.id === id) || kpis.find((k: any) => k.label.includes(id))).filter((k: any) => k),
-        dataFrames: (section.dataFrameIds || []).map((id: string) => dataFrames.find((df: any) => df.id === id)).filter((df: any) => df)
-      }));
+      if (report && report.sections && Array.isArray(report.sections)) {
+        report.sections = report.sections.map((section: any) => ({
+          ...section,
+          charts: (Array.isArray(section.chartIds) ? section.chartIds : []).map((id: string) => charts.find((c: any) => c.id === id) || charts[0]).filter((c: any) => c),
+          kpis: (Array.isArray(section.kpiIds) ? section.kpiIds : []).map((id: string) => kpis.find((k: any) => k.id === id) || kpis.find((k: any) => k.label.includes(id))).filter((k: any) => k),
+          dataFrames: (Array.isArray(section.dataFrameIds) ? section.dataFrameIds : []).map((id: string) => dataFrames.find((df: any) => df.id === id)).filter((df: any) => df)
+        }));
+      }
 
       // Ensure all DataFrames are at the top level for global access if needed
       report.dataFrames = dataFrames;
 
       // Fallback: If no charts assigned, distribute them
-      const usedChartIds = new Set(report.sections.flatMap((s: any) => s.charts.map((c: any) => c.id)));
+      const usedChartIds = new Set((report.sections || []).flatMap((s: any) => (s.charts || []).map((c: any) => c.id)));
       const unusedCharts = charts.filter((c: any) => !usedChartIds.has(c.id));
 
       if (unusedCharts.length > 0) {

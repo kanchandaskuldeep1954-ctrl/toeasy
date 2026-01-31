@@ -41,7 +41,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
 
     const formattedData = useMemo(() => {
-        if (!data || data.length === 0) return [];
+        if (!Array.isArray(data) || data.length === 0) return [];
         // Normalize logic similar to PlotlyChart if needed, or assume pre-normalized
         return data.map(d => ({
             name: d.name || d.label || d.x,

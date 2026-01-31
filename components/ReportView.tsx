@@ -37,17 +37,23 @@ const sanitizeMermaid = (chart: string) => {
     // 2. Clear out any markdown code blocks if the AI accidentally included them
     processed = processed.replace(/```mermaid/g, '').replace(/```/g, '');
 
-    // 3. Ultra-Robust Node "Rescue": 
+    // 3. Fix hallucinated arrows (e.g., |>, ->, =>, etc. to standard -->)
+    processed = processed.replace(/\|>/g, '-->')
+        .replace(/ -+> /g, ' --> ')
+        .replace(/ =+> /g, ' ==> ')
+        .replace(/ \.> /g, ' -.-> ');
+
+    // 4. Ultra-Robust Node "Rescue": 
     // This regex looks for node definitions and ensures they are properly quoted.
     // It captures: id[text], id(text), id{text} or just plain UNQUOTED_ID
     // We split by lines and reconnects to avoid multiline confusion
     const lines = processed.split('\n');
     const sanitizedLines = lines.map(line => {
-        if (!line.includes('-->') && !line.includes('---')) return line;
+        if (!line.includes('-->') && !line.includes('---') && !line.includes('==>') && !line.includes('-.->')) return line;
 
         // Split by arrows but preserve flags like |label|
         // Group 1: Source Node, Group 2: Arrow, Group 3: Optional Label, Group 4: Target Node
-        return line.replace(/([^-\n>|]+)([-]{2,}>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
+        return line.replace(/([^-\n>|]+)([-=]{2,}>|-\.\.>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
             const cleanNode = (n: string) => {
                 let node = n.trim();
                 // If it already has brackets/quotes, just ensure internal quotes are safe
@@ -56,6 +62,8 @@ const sanitizeMermaid = (chart: string) => {
                 }
                 // If it's a plain string with spaces or special chars, wrap it
                 if (/[^a-zA-Z0-9]/.test(node)) {
+                    // Avoid double-wrapping if already rescued
+                    if (node.startsWith('node_')) return node;
                     return `node_${Math.random().toString(36).substr(2, 4)}["${node.replace(/"/g, "'")}"]`;
                 }
                 return node;
@@ -501,25 +509,25 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             <div className="p-6 bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-100 dark:border-emerald-900/30 rounded-3xl">
                 <h6 className="text-[10px] font-black uppercase text-emerald-600 tracking-widest mb-3">Strengths</h6>
                 <ul className="space-y-2">
-                    {(swot.strengths || []).map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>💪</span> {s}</li>)}
+                    {swot.strengths && Array.isArray(swot.strengths) && swot.strengths.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>💪</span> {s}</li>)}
                 </ul>
             </div>
             <div className="p-6 bg-rose-50/50 dark:bg-rose-950/20 border border-rose-100 dark:border-rose-900/30 rounded-3xl">
                 <h6 className="text-[10px] font-black uppercase text-rose-600 tracking-widest mb-3">Weaknesses</h6>
                 <ul className="space-y-2">
-                    {(swot.weaknesses || []).map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>⚠️</span> {s}</li>)}
+                    {swot.weaknesses && Array.isArray(swot.weaknesses) && swot.weaknesses.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>⚠️</span> {s}</li>)}
                 </ul>
             </div>
             <div className="p-6 bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900/30 rounded-3xl">
                 <h6 className="text-[10px] font-black uppercase text-blue-600 tracking-widest mb-3">Opportunities</h6>
                 <ul className="space-y-2">
-                    {(swot.opportunities || []).map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🚀</span> {s}</li>)}
+                    {swot.opportunities && Array.isArray(swot.opportunities) && swot.opportunities.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🚀</span> {s}</li>)}
                 </ul>
             </div>
             <div className="p-6 bg-amber-50/50 dark:bg-amber-950/20 border border-amber-100 dark:border-amber-900/30 rounded-3xl">
                 <h6 className="text-[10px] font-black uppercase text-amber-600 tracking-widest mb-3">Threats</h6>
                 <ul className="space-y-2">
-                    {(swot.threats || []).map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🛡️</span> {s}</li>)}
+                    {swot.threats && Array.isArray(swot.threats) && swot.threats.map((s, i) => <li key={i} className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex gap-2"><span>🛡️</span> {s}</li>)}
                 </ul>
             </div>
         </div>
@@ -529,7 +537,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         <div className="my-10 space-y-4">
             <h4 className="text-sm font-black uppercase text-slate-400 tracking-widest">Actionable Intelligence</h4>
             <div className="grid gap-4">
-                {(recs || []).map((rec, i) => (
+                {recs && Array.isArray(recs) && recs.map((rec, i) => (
                     <div key={i} className="p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl shadow-sm hover:shadow-md transition-shadow">
                         <div className="flex justify-between items-start mb-3">
                             <h5 className="font-bold text-slate-900 dark:text-white">{rec.action}</h5>
@@ -561,7 +569,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                        {(risks || []).map((risk, i) => (
+                        {risks && Array.isArray(risks) && risks.map((risk, i) => (
                             <tr key={i} className="bg-white dark:bg-slate-900 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/30">
                                 <td className="px-6 py-4 font-bold text-slate-900 dark:text-white uppercase tracking-tighter">{risk.category}</td>
                                 <td className="px-6 py-4 text-slate-600 dark:text-slate-400 leading-relaxed">{risk.description}</td>
@@ -1262,7 +1270,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     <div className="w-full max-w-6xl flex flex-col h-full">
                         {/* Progress Bar */}
                         <div className="w-full h-1 bg-white/10 rounded-full mb-12 overflow-hidden flex">
-                            {report?.sections.map((_, i) => (
+                            {report?.sections && Array.isArray(report.sections) && report.sections.map((_, i) => (
                                 <div
                                     key={i}
                                     className={`flex-1 h-full transition-all duration-500 ${i === focusIndex ? 'bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : (i < focusIndex ? 'bg-emerald-800' : 'bg-transparent')}`}
@@ -1336,7 +1344,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
                         {/* Slide Mini-Map */}
                         <div className="flex justify-center gap-3 mb-12">
-                            {report?.sections.map((_, i) => (
+                            {report?.sections && Array.isArray(report.sections) && report.sections.map((_, i) => (
                                 <button
                                     key={i}
                                     onClick={() => setFocusIndex(i)}

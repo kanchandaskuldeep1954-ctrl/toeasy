@@ -28,16 +28,23 @@ const sanitizeMermaid = (chart: string) => {
         processed = 'graph LR\n' + processed;
     }
     processed = processed.replace(/```mermaid/g, '').replace(/```/g, '');
+
+    processed = processed.replace(/\|>/g, '-->')
+        .replace(/ -+> /g, ' --> ')
+        .replace(/ =+> /g, ' ==> ')
+        .replace(/ \.> /g, ' -.-> ');
+
     const lines = processed.split('\n');
     const sanitizedLines = lines.map(line => {
-        if (!line.includes('-->') && !line.includes('---')) return line;
-        return line.replace(/([^-\n>|]+)([-]{2,}>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
+        if (!line.includes('-->') && !line.includes('---') && !line.includes('==>') && !line.includes('-.->')) return line;
+        return line.replace(/([^-\n>|]+)([-=]{2,}>|-\.\.>)(?:\|([^|]+)\|)?([^-\n>|]+)/g, (match, n1, arrow, label, n2) => {
             const cleanNode = (n: string) => {
                 let node = n.trim();
                 if (node.includes('[') || node.includes('(') || node.includes('{')) {
                     return node.replace(/"/g, "'");
                 }
                 if (/[^a-zA-Z0-9]/.test(node)) {
+                    if (node.startsWith('node_')) return node;
                     return `node_${Math.random().toString(36).substr(2, 4)}["${node.replace(/"/g, "'")}"]`;
                 }
                 return node;

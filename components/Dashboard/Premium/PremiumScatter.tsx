@@ -55,7 +55,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
 
     const formattedData = useMemo(() => {
-        if (!data || data.length === 0) return [];
+        if (!Array.isArray(data) || data.length === 0) return [];
         return data.map((d, idx) => ({
             name: d.name || d.label || `Point ${idx + 1}`,
             x: d.x ?? d.value,
