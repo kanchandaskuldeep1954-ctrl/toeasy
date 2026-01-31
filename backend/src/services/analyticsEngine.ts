@@ -323,6 +323,29 @@ export class AnalyticsEngine {
                 const actualX = this.findClosestColumn(spec.xAxis, profiles.map(p => p.column));
                 const actualY = this.findClosestColumn(spec.yAxis, profiles.map(p => p.column));
 
+                // --- DATA SAFETY LAYER ---
+                if (!actualX && !actualY) return;
+
+                const xProf = profiles.find(p => p.column === actualX);
+                const yProf = profiles.find(p => p.column === actualY);
+
+                // 1. Repair Scatter: String vs String -> Heatmap
+                if (spec.type === 'scatter' && xProf?.dataType === 'string' && yProf?.dataType === 'string') {
+                    spec.type = 'heatmap';
+                    spec.description = `Heatmap showing density between ${actualX} and ${actualY}`;
+                }
+
+                // 2. Repair Line/Area: X MUST be Date or Numeric. If String -> Bar
+                if ((spec.type === 'line' || spec.type === 'area') && xProf?.dataType === 'string' && xProf?.role !== 'timestamp') {
+                    spec.type = 'bar';
+                }
+
+                // 3. Repair Aggregation: If Y is String -> Count
+                if (yProf?.dataType === 'string' && !spec.aggregation) {
+                    spec.aggregation = 'count';
+                }
+                // --- END SAFETY LAYER ---
+
                 const xCol = profiles.find(p => p.column === actualX);
 
                 if (!actualX) return;
