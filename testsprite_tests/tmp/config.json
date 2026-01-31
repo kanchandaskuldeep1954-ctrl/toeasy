@@ -1,0 +1,18 @@
+{
+  "status": "commited",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:5173",
+  "loginUser": "kanchandaskuldeep1954@gmail.com",
+  "loginPassword": "12345678",
+  "executionArgs": {
+    "projectName": "toeasy-frontend",
+    "projectPath": "e:\\toeasy-main-demo",
+    "testIds": [],
+    "additionalInstruction": "Target the remote application at https://toeasy.vercel.app. Verify that charts render correctly with categorical data (e.g., Payment Method labels on scatter plots) and that reports accurately display the 'Reasoning' and 'Calculated DataFrames' from the backend. Ensure no generic 'Widget' placeholders appear when real data is loaded. Use login credentials provided in config.json.",
+    "envs": {
+      "API_KEY": "sk-user-DO4ibL95BVa9LtWcVfEQLJKq3WDYwkc_Fwz7Ez_WXrla40Ll02nQtz9nWYIDUdtEaA7b143eO1ptHYZqDs96oTPloJ6cVtY9xE2VUuw7C_z639bm-Y_wigXBILdupVnNOIo"
+    }
+  },
+  "proxy": "http://ec797b58-6909-41c3-8bde-af457ba3d5cb:8p9JTNzOOaeh8y7OWk7CsdiohLvoFraJ@tun.testsprite.com:8080"
+}

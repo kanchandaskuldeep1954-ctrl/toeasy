@@ -5,12 +5,12 @@
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
-    "dev": "ts-node-esm src/index.ts",
+    "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "knex migrate:latest",
     "migrate:rollback": "knex migrate:rollback",
-    "migrate:indexes": "ts-node-esm src/scripts/add-indexes.ts",
+    "migrate:indexes": "tsx src/scripts/add-indexes.ts",
     "seed": "knex seed:run",
     "setup": "npm run build && npm run migrate && npm run migrate:indexes && npm run seed"
   },

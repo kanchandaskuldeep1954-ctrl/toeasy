@@ -1,0 +1,279 @@
+[
+  {
+    "id": "TC001",
+    "title": "JWT Authentication Success",
+    "description": "Verify that a user can successfully authenticate using valid JWT tokens and access personal, workspace, and admin resources according to their tier-based permissions.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send authentication request with valid JWT token."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify authentication is successful and access is granted according to user tier."
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "JWT Authentication Failure with Invalid Token",
+    "description": "Verify that authentication fails when an invalid or expired JWT token is provided and the system denies access.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send authentication request with invalid/expired JWT token."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify authentication is denied and appropriate error is returned."
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Tiered Access Control Enforcement",
+    "description": "Verify that users only have access to personal, workspace, and administrative resources according to their assigned tier permissions.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Authenticate as different tier users (personal, workspace member, admin)."
+      },
+      {
+        "type": "action",
+        "description": "Attempt to access resources restricted to higher tiers."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify access is restricted appropriately based on tier."
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Dataset Upload and Automatic Cleaning",
+    "description": "Verify that users can upload or connect datasets which trigger automatic data forensics and cleaning engines detecting anomalies, null values, and validating integrity.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Upload or connect a dataset containing valid and invalid data including nulls and anomalies."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify automatic cleaning engine detects anomalies and null values and performs first-principles validation."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify cleaning changes are irreversible and audit trails are created."
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Data Cleaning Audit Trail Integrity",
+    "description": "Verify that all data cleaning operations generate irreversible backups and full audit trails are maintained for traceability.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform dataset cleaning operation."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that irreversible backup is created before cleaning."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify audit trail records all cleaning actions with timestamps and user details."
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "AI-Generated Strategic Report Accuracy",
+    "description": "Verify that AI-generated strategic reports accurately synthesize real enterprise data, highlight key metrics, identify anomalies, and provide actionable insights without restating trivial information.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Request AI to generate a strategic report from a given dataset."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify report contains synthesized narrative with key metrics."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify anomalies and root causes are highlighted."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify report does not restate obvious or trivial metrics."
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Dynamic AI-Suggested Dashboard Generation",
+    "description": "Verify that AI-suggested dashboards dynamically generate appropriate visualizations based on dataset semantics and business goals, strictly avoiding placeholder data.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Provide datasets with different semantics: temporal, correlation, compositional."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify temporal data is shown as line charts."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify correlation data is shown as scatter plots."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify compositional data uses appropriate charts like pie or stacked bar."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no placeholder or dummy data appears in any visualization."
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Conversational Analyst NL-to-Insight Query Handling",
+    "description": "Verify that the Conversational Analyst copilot correctly interprets natural language queries to explore datasets and modify reports, backed by real data and semantic validation.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Submit a natural language query to explore dataset insights or request report modifications."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the copilot returns relevant, semantically valid insights or report changes based on underlying data."
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Synthetic Data Generation Realism and Security",
+    "description": "Verify that AI-powered synthetic data generation produces realistic mock datasets for testing and simulation without compromising the integrity or security of real source data.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Request synthetic dataset generation based on real enterprise data schema."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify generated synthetic data mimics real data distribution and characteristics."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no real or sensitive user data is leaked or present in synthetic data."
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Fraud-Proof Data and Dashboard Modification Audit Trails",
+    "description": "Verify that all modifications to datasets and dashboards are version controlled, auditable, and maintain fraud-proof connection layers with secure credential handling.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Modify datasets and dashboards with various user accounts."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify all changes are versioned with detailed audit trails."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify audit trails record user identity, timestamp, and change details."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that unauthorized changes are rejected based on security rules."
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Predictive Scheduling Reduces Unnecessary Meetings",
+    "description": "Verify that AI-driven predictive scheduling and automated report generation minimize unnecessary meetings and interruptions while allowing meetings for necessary human ethical decision-making.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate task assignments and reporting scenarios requiring coordination."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify meetings are only automatically scheduled when human intervention or ethical judgment is required."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify proactive notifications and voice-narrated reports reduce scheduling load."
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "System Response Stability Under High Concurrency",
+    "description": "Verify system maintains low-latency, stable, and resilient responses under high load and concurrent usage of AI coordination engine without race conditions or errors.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate multiple concurrent users interacting with AI coordination engine and generating reports/dashboards."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system maintains low response latency below SLA thresholds."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no race conditions, data corruption, or errors occur."
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Graceful Failure Handling of External Services",
+    "description": "Verify that the system tolerates failures or unavailability of external services gracefully without disrupting core user workflows or data integrity.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Simulate failure or timeout in external AI service or data source."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify user workflows continue to operate with fallback behavior or informative error messages."
+      },
+      {
+        "type": "assertion",
+        "description": "Verify no data corruption or loss occurs."
+      }
+    ]
+  }
+]

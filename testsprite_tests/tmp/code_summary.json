@@ -1,0 +1,69 @@
+{
+    "tech_stack": [
+        "TypeScript",
+        "React",
+        "Node.js",
+        "Express",
+        "PostgreSQL",
+        "Redis",
+        "Vite",
+        "Tailwind CSS",
+        "Groq AI",
+        "Plotly.js",
+        "Knex"
+    ],
+    "features": [
+        {
+            "name": "Authentication",
+            "description": "JWT-based security for users, workspaces, and administrative routes.",
+            "files": [
+                "backend/src/routes/auth.ts",
+                "backend/src/middleware/auth.ts",
+                "src/hooks/useAuth.tsx"
+            ]
+        },
+        {
+            "name": "Strategic Reports",
+            "description": "AI-driven synthesis of data into strategic narratives, featuring calculated DataFrames and multi-dimensional analysis.",
+            "files": [
+                "backend/src/services/groq.service.ts",
+                "backend/src/services/analyticsEngine.ts",
+                "components/ReportView.tsx"
+            ]
+        },
+        {
+            "name": "Data Forensics & Cleaning",
+            "description": "Automated anomaly detection, null handling, and first-principles data validation.",
+            "files": [
+                "backend/src/services/dataForensicsEngine.ts",
+                "backend/src/services/cleaningService.ts",
+                "components/CleaningPanel.tsx"
+            ]
+        },
+        {
+            "name": "AI-Suggested Dashboards",
+            "description": "Dynamic visualization generation based on dataset semantics and business goals.",
+            "files": [
+                "backend/src/services/dashboardService.ts",
+                "components/DashboardView.tsx",
+                "components/Dashboard/PlotlyChart.tsx"
+            ]
+        },
+        {
+            "name": "Synthetic Data Generation",
+            "description": "AI-powered generation of mock datasets for testing and simulation.",
+            "files": [
+                "backend/src/services/groq.service.ts",
+                "components/GenerateSyntheticModal.tsx"
+            ]
+        },
+        {
+            "name": "Conversational Analyst (Copilot)",
+            "description": "NL-to-Insight chat interface for dataset exploration and report modification.",
+            "files": [
+                "backend/src/services/groq.service.ts",
+                "components/ConsultAgent.tsx"
+            ]
+        }
+    ]
+}

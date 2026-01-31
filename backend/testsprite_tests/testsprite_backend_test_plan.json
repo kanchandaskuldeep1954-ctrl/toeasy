@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "jwt authentication and tiered access control",
+    "description": "Verify that the JWT-based authentication system correctly authenticates users and enforces tiered access control across personal, workspace, and administrative routes."
+  },
+  {
+    "id": "TC002",
+    "title": "ai driven strategic report generation",
+    "description": "Test the AI-driven strategic report generation to ensure it synthesizes enterprise data into insightful narratives highlighting anomalies and root causes without restating obvious metrics."
+  },
+  {
+    "id": "TC003",
+    "title": "automated data forensics and cleaning",
+    "description": "Validate the automated data forensics and cleaning engine for anomaly detection, null handling, and first-principles validation with full audit trails and irreversible backups."
+  },
+  {
+    "id": "TC004",
+    "title": "dynamic ai suggested dashboard generation",
+    "description": "Ensure AI-suggested dashboards dynamically generate visualizations based on dataset semantics and business goals, adhering to visualization best practices without placeholder data."
+  },
+  {
+    "id": "TC005",
+    "title": "synthetic data generation with ai assistance",
+    "description": "Test the AI-powered synthetic data generation feature to produce realistic mock datasets that do not compromise real data integrity or security."
+  },
+  {
+    "id": "TC006",
+    "title": "conversational analyst natural language queries",
+    "description": "Verify the Conversational Analyst copilot supports natural language queries for dataset exploration and report modification without requiring SQL expertise."
+  },
+  {
+    "id": "TC007",
+    "title": "fraud proof data and dashboard modification tracking",
+    "description": "Validate that all changes to data, dashboards, and reports are tracked with audit trails and version control to ensure traceability and fraud prevention."
+  },
+  {
+    "id": "TC008",
+    "title": "predictive scheduling and automated reporting",
+    "description": "Test the predictive scheduling and automated reporting system to ensure meetings are only created when necessary, with AI-generated voice-narrated video reports and proactive notification intercepts."
+  },
+  {
+    "id": "TC009",
+    "title": "system resilience under high concurrency",
+    "description": "Verify the system maintains low latency and stable, resilient operations under high concurrency and load, supporting organizational flow without race conditions or errors."
+  },
+  {
+    "id": "TC010",
+    "title": "strict security enforcement across all routes",
+    "description": "Ensure strict security enforcement via JWT authentication and tiered access control across all user, workspace, and admin routes without regressions."
+  }
+]
