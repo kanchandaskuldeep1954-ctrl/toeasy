@@ -867,10 +867,14 @@ Return ONLY valid JSON (no markdown, no explanation):
       const historyText = history?.map((msg: any) => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.text}`).join('\n') || '';
 
       const reportContext = context?.reportContext
-        ? `\nCURRENT REPORT STATE:\nTitle: ${context.reportContext.title}\nActive Sections: ${context.reportContext.sections?.map((s: any) => `${s.title} (Reasoning: ${s.reasoning?.substring(0, 100)}...)`).join('; ')}`
+        ? `\nCURRENT REPORT STATE:\nTitle: ${context.reportContext.title}\nActive Sections: ${context.reportContext.sections?.map((s: any) => `${s.title} (Logic: ${s.reasoning?.substring(0, 100)}...)`).join('; ')}`
         : '';
 
-      const groqPrompt = `You are the ToEasy Strategy Agent. Your goal is to explain the "Analytical Chain of Thought" behind the report and answer data questions.
+      const groqPrompt = `You are the ToEasy Strategy Agent. Your absolute priority is to distinguish between a QUESTION and an ACTION.
+      
+      INTENT DETECTION RULES:
+      1. IF the user asks "What is this?", "Why?", "Explain", or asks for data points (e.g. "What is total sales?") -> This is an ASKING intent. Provide a natural language answer.
+      2. IF the user asks "Change", "Update", "Delete", "Add", "Fix", "Modify" -> This is an ACTION intent. Explain: "I understand you want to change the report. Please switch to the 'Refine' tab to apply structural updates."
       
       CONTEXT:
       - Dataset: ${headers.join(', ')}
@@ -880,11 +884,10 @@ Return ONLY valid JSON (no markdown, no explanation):
       
       USER QUERY: "${query}"
       
-      GUIDELINES:
-      1. If the user asks "What is this?" or "What did you do?", explain the analysis logic used in the report sections (refer to the Reasonings provided).
-      2. If the user asks for data points, provide them specifically.
-      3. Use a professional, "First Principles" tone. Be concise (max 3-4 sentences).
-      4. If the user wants to ADD/CHANGE something, explain: "I can help with that! Switch to the 'Refine' tab to apply structural changes to the report."`;
+      RESPONSE FORMAT:
+      - Be direct and data-backed.
+      - If explaining the report, refer to the "Logic" provided in the context for each section.
+      - Max 3 sentences. No fluff.`;
 
       return await this.callGroq(groqPrompt, 700);
     } catch (error) {

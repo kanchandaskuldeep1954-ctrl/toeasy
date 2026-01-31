@@ -20,7 +20,12 @@ interface PremiumScatterProps {
     onClick?: (data: any) => void;
 }
 
-const COLORS = ['#6366f1', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e', '#f97316', '#eab308', '#84cc16', '#10b981', '#06b6d4'];
+const THEME_PALETTES: any = {
+    indigo: ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe'],
+    emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+    vibrant: ['#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3'],
+    minimal: ['#0f172a', '#1e293b', '#334155', '#475569', '#64748b']
+};
 
 const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -53,6 +58,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
+    const palette = THEME_PALETTES[chart.colorScheme as any] || THEME_PALETTES.indigo;
 
     const formattedData = useMemo(() => {
         if (!Array.isArray(data) || data.length === 0) return [];
@@ -159,7 +165,7 @@ export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, hei
                             return (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={COLORS[index % COLORS.length]}
+                                    fill={palette[index % palette.length]}
                                     fillOpacity={isActive ? 0.8 : 0.1}
                                     stroke={isActive ? '#fff' : 'transparent'}
                                     strokeWidth={isActive ? 2 : 0}

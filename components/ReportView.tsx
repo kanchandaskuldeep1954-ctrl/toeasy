@@ -1427,7 +1427,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                                 </p>
                                                 {(report.sections[focusIndex] as any).logicPath && (
                                                     <div className="mt-4 scale-90 origin-top transform">
-                                                        <Mermaid chart={(report.sections[focusIndex] as any).logicPath} />
+                                                        <Mermaid chart={(report.sections[focusIndex] as any).logicPath} fallbackLogic={(report.sections[focusIndex] as any).reasoning} />
                                                     </div>
                                                 )}
                                             </div>
@@ -1557,7 +1557,18 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                     ].map(theme => (
                                         <button
                                             key={theme.id}
-                                            className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-indigo-500 transition-all group"
+                                            onClick={() => {
+                                                if (chartDesigner.chartId) {
+                                                    setChartOverrides({
+                                                        ...chartOverrides,
+                                                        [chartDesigner.chartId]: { ...chartOverrides[chartDesigner.chartId], colorScheme: theme.id }
+                                                    });
+                                                }
+                                            }}
+                                            className={`flex items-center gap-3 p-4 rounded-2xl border transition-all group ${(chartOverrides[chartDesigner.chartId!]?.colorScheme || 'indigo') === theme.id
+                                                    ? 'bg-indigo-600/10 border-indigo-600 dark:bg-indigo-600/20'
+                                                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 hover:border-indigo-500'
+                                                }`}
                                         >
                                             <div className={`w-8 h-8 rounded-full ${theme.color} shadow-inner group-hover:scale-110 transition-transform`} />
                                             <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300">{theme.label}</span>

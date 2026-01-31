@@ -36,7 +36,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
+const THEME_CONFIG: any = {
+    indigo: { primary: '#6366f1', secondary: '#818cf8', active: '#4f46e5' },
+    emerald: { primary: '#10b981', secondary: '#34d399', active: '#059669' },
+    vibrant: { primary: '#f43f5e', secondary: '#fb7185', active: '#e11d48' },
+    minimal: { primary: '#1e293b', secondary: '#475569', active: '#0f172a' }
+};
+
 export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 300, onClick }) => {
+    const theme = THEME_CONFIG[chart.colorScheme as any] || THEME_CONFIG.indigo;
 
     const formattedData = useMemo(() => {
         if (!Array.isArray(data) || data.length === 0) return [];
@@ -84,8 +92,8 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
                 <AreaChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>
                         <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5} />
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                            <stop offset="5%" stopColor={theme.primary} stopOpacity={0.5} />
+                            <stop offset="95%" stopColor={theme.primary} stopOpacity={0.0} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.1)" />
@@ -109,13 +117,13 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
                     <Area
                         type="monotone"
                         dataKey="value"
-                        stroke="#818cf8"
+                        stroke={theme.secondary}
                         strokeWidth={4}
                         fillOpacity={1}
                         fill="url(#colorValue)"
                         animationDuration={2000}
-                        dot={{ r: 4, fill: '#1e1b4b', stroke: '#818cf8', strokeWidth: 2 }}
-                        activeDot={{ r: 8, fill: '#818cf8', stroke: '#fff', strokeWidth: 2 }}
+                        dot={{ r: 4, fill: '#1e1b4b', stroke: theme.secondary, strokeWidth: 2 }}
+                        activeDot={{ r: 8, fill: theme.secondary, stroke: '#fff', strokeWidth: 2 }}
                         onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
                     />
 

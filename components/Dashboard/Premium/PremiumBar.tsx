@@ -38,7 +38,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
+const THEME_CONFIG: any = {
+    indigo: { primary: '#6366f1', secondary: '#818cf8', active: '#4f46e5' },
+    emerald: { primary: '#10b981', secondary: '#34d399', active: '#059669' },
+    vibrant: { primary: '#f43f5e', secondary: '#fb7185', active: '#e11d48' },
+    minimal: { primary: '#1e293b', secondary: '#475569', active: '#0f172a' }
+};
+
 export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
+    const theme = THEME_CONFIG[chart.colorScheme as any] || THEME_CONFIG.indigo;
 
     const formattedData = useMemo(() => {
         if (!Array.isArray(data) || data.length === 0) return [];
@@ -87,12 +95,12 @@ export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 30
                 <BarChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>
                         <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.9} />
-                            <stop offset="95%" stopColor="#818cf8" stopOpacity={0.6} />
+                            <stop offset="5%" stopColor={theme.primary} stopOpacity={0.9} />
+                            <stop offset="95%" stopColor={theme.secondary} stopOpacity={0.6} />
                         </linearGradient>
                         <linearGradient id="colorBarActive" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#8b5cf6" stopOpacity={1} />
-                            <stop offset="95%" stopColor="#d946ef" stopOpacity={0.9} />
+                            <stop offset="5%" stopColor={theme.active} stopOpacity={1} />
+                            <stop offset="95%" stopColor={theme.primary} stopOpacity={0.9} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.1)" />

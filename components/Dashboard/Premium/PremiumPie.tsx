@@ -18,12 +18,12 @@ interface PremiumPieProps {
     onClick?: (data: any) => void;
 }
 
-// Professional Palette
-const COLORS = [
-    '#6366f1', '#8b5cf6', '#d946ef', '#ec4899',
-    '#f43f5e', '#f97316', '#eab308', '#84cc16',
-    '#10b981', '#06b6d4', '#0ea5e9', '#3b82f6'
-];
+const THEME_PALETTES: any = {
+    indigo: ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe', '#e0e7ff'],
+    emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0', '#d1fae5'],
+    vibrant: ['#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3', '#fff1f2'],
+    minimal: ['#0f172a', '#1e293b', '#334155', '#475569', '#64748b', '#94a3b8']
+};
 
 const renderActiveShape = (props: any) => {
     const { cx, cy, midAngle, innerRadius, outerRadius, startAngle, endAngle, fill, payload, percent, value } = props;
@@ -79,6 +79,7 @@ const RADIAN = Math.PI / 180;
 
 export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
     const [activeIndex, setActiveIndex] = useState(0);
+    const palette = THEME_PALETTES[chart.colorScheme as any] || THEME_PALETTES.indigo;
 
     const formattedData = useMemo(() => {
         if (!data || data.length === 0) return [];
@@ -160,7 +161,7 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
                             return (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={COLORS[index % COLORS.length]}
+                                    fill={palette[index % palette.length]}
                                     opacity={isActive ? 1 : 0.2}
                                     className="transition-all duration-300 hover:scale-105"
                                 />
