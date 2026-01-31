@@ -1,0 +1,93 @@
+import React, { useMemo } from 'react';
+import {
+    AreaChart,
+    Area,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    ResponsiveContainer,
+    ReferenceLine
+} from 'recharts';
+import { ChartSpec } from '../../../types';
+
+interface PremiumLineProps {
+    chart: ChartSpec;
+    data: any[];
+    height?: number;
+    activeFilter?: string | null;
+    onClick?: (data: any) => void;
+}
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-slate-900/90 backdrop-blur-xl border border-slate-700/50 p-4 rounded-2xl shadow-2xl min-w-[150px]">
+                <p className="text-slate-400 text-xs uppercase tracking-widest font-bold mb-1">{label}</p>
+                <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"></span>
+                    <p className="text-2xl font-black text-white">
+                        {Number(payload[0].value).toLocaleString()}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
+
+export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 300, onClick }) => {
+
+    const formattedData = useMemo(() => {
+        if (!data || data.length === 0) return [];
+        return data.map(d => ({
+            name: d.name || d.label || d.x,
+            value: Number(d.value || d.y || d.count || 0),
+        }));
+    }, [data]);
+
+    return (
+        <div style={{ width: '100%', height: height }} className="animate-in fade-in duration-700 delay-100">
+            <ResponsiveContainer>
+                <AreaChart data={formattedData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <defs>
+                        <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.5} />
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
+                        </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148, 163, 184, 0.1)" />
+                    <XAxis
+                        dataKey="name"
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }}
+                        dy={10}
+                    />
+                    <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{ fill: '#64748b', fontSize: 10 }}
+                        tickFormatter={(value) =>
+                            new Intl.NumberFormat('en', { notation: "compact", compactDisplay: "short" }).format(value)
+                        }
+                    />
+                    <Tooltip cursor={{ stroke: 'rgba(99, 102, 241, 0.2)', strokeWidth: 2 }} content={<CustomTooltip />} />
+
+                    <Area
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#818cf8"
+                        strokeWidth={4}
+                        fillOpacity={1}
+                        fill="url(#colorValue)"
+                        animationDuration={2000}
+                        dot={{ r: 4, fill: '#1e1b4b', stroke: '#818cf8', strokeWidth: 2 }}
+                        activeDot={{ r: 8, fill: '#818cf8', stroke: '#fff', strokeWidth: 2 }}
+                        onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
+                    />
+                </AreaChart>
+            </ResponsiveContainer>
+        </div>
+    );
+};

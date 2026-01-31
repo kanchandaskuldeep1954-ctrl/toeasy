@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
 import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
-import { PlotlyChart } from './Dashboard/PlotlyChart';
+import { SmartChart } from './Dashboard/SmartChart';
 import { KPICard } from './Dashboard/KPICard';
 import { FilterPanel } from './Dashboard/FilterPanel';
 import { InsightCard } from './Dashboard/InsightCard';
@@ -837,7 +837,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                     </p>
                                 </div>
                                 <div className="flex-1 w-full relative min-h-[300px]">
-                                    <PlotlyChart
+                                    <SmartChart
                                         chart={injectChartConfig(chart)}
                                         data={data}
                                         activeFilter={activeFilters[chart.xAxis || chart.groupBy || '']}
