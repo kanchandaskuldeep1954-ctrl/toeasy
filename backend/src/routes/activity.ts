@@ -12,7 +12,7 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
 
         // Base query
         let sql = `
-            SELECT a.*, u.email as user_email, u.name as user_name
+            SELECT a.*, u.email as user_email, u.full_name as user_name
             FROM activity_log a
             JOIN users u ON a.user_id = u.id
             WHERE a.workspace_id = $1

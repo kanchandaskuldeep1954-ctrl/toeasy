@@ -661,7 +661,7 @@ router.get('/:workspaceId/datasets/:datasetId/cleaning-history', async (req: Aut
         const offset = parseInt(req.query.offset as string) || 0;
 
         const result = await query(
-            `SELECT ch.*, u.name as user_name, u.email as user_email
+            `SELECT ch.*, u.full_name as user_name, u.email as user_email
        FROM cleaning_history ch
        LEFT JOIN users u ON ch.user_id = u.id
        WHERE ch.dataset_id = $1

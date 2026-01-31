@@ -288,7 +288,7 @@ router.get('/:workspaceId/dataflows/:dataflowId/runs', async (req: AuthRequest, 
         const offset = parseInt(req.query.offset as string) || 0;
 
         const result = await query(
-            `SELECT dr.*, u.name as user_name, u.email as user_email
+            `SELECT dr.*, u.full_name as user_name, u.email as user_email
              FROM dataflow_runs dr
              LEFT JOIN users u ON dr.user_id = u.id
              WHERE dr.dataflow_id = $1
@@ -320,7 +320,7 @@ router.get('/:workspaceId/dataflows/:dataflowId/runs/:runId', async (req: AuthRe
         const { runId } = req.params;
 
         const result = await query(
-            `SELECT dr.*, u.name as user_name, u.email as user_email
+            `SELECT dr.*, u.full_name as user_name, u.email as user_email
              FROM dataflow_runs dr
              LEFT JOIN users u ON dr.user_id = u.id
              WHERE dr.id = $1`,
