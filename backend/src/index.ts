@@ -32,6 +32,7 @@ import tabsRoutes from './routes/tabs.js';
 import activityRoutes from './routes/activity.js';
 import metricsRoutes from './routes/metrics.js';
 import reportRoutes from './routes/reports.js';
+import classificationRoutes from './routes/classification.js';
 
 const app = express();
 
@@ -115,6 +116,7 @@ app.use('/api/sharing', sharingRoutes); // Public share links (some routes requi
 app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 app.use('/api/activity', authenticateToken, activityRoutes); // Activity Log
 app.use('/api', metricsRoutes); // Metrics Library
+app.use('/api', classificationRoutes); // Source Classification (Phase 1: Intelligent Core Loop)
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

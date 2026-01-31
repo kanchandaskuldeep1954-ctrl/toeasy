@@ -1,0 +1,212 @@
+/**
+ * JourneyProgressBar Component
+ * 
+ * A horizontal stepper that shows the user where they are in their data journey.
+ * Part of Phase 1: Intelligent Core Loop
+ * 
+ * Features:
+ * - Shows all steps in the current journey
+ * - Highlights completed, current, and upcoming steps
+ * - Allows navigation to completed steps
+ * - Shows step descriptions on hover
+ */
+
+import React from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+    Journey,
+    JourneyStep,
+    JourneyStepId,
+    isStepAccessible,
+    calculateJourneyProgress
+} from '../config/journeys';
+
+interface JourneyProgressBarProps {
+    journey: Journey;
+    currentStep: JourneyStepId;
+    completedSteps: JourneyStepId[];
+    datasetId: string;
+    workspaceId: string;
+    onStepClick?: (step: JourneyStep) => void;
+}
+
+export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
+    journey,
+    currentStep,
+    completedSteps,
+    datasetId,
+    workspaceId,
+    onStepClick
+}) => {
+    const navigate = useNavigate();
+    const location = useLocation();
+
+    const progress = calculateJourneyProgress(journey, completedSteps);
+    const currentIndex = journey.steps.findIndex(s => s.id === currentStep);
+
+    const handleStepClick = (step: JourneyStep) => {
+        if (onStepClick) {
+            onStepClick(step);
+            return;
+        }
+
+        // Check if step is accessible
+        if (!isStepAccessible(journey, step.id, completedSteps)) {
+            return;
+        }
+
+        // Navigate to the step's route with query params
+        const url = `${step.route}?workspace=${workspaceId}&dataset=${datasetId}`;
+        navigate(url);
+    };
+
+    const getStepStatus = (step: JourneyStep, index: number): 'completed' | 'current' | 'upcoming' | 'locked' => {
+        if (completedSteps.includes(step.id)) return 'completed';
+        if (step.id === currentStep) return 'current';
+        if (!isStepAccessible(journey, step.id, completedSteps)) return 'locked';
+        return 'upcoming';
+    };
+
+    return (
+        <div className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+            {/* Journey Header */}
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                    <span className="text-2xl">{journey.icon}</span>
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900 dark:text-white">
+                            {journey.name}
+                        </h2>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                            {journey.description}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    <div className="text-xs font-bold text-slate-500 dark:text-slate-400">
+                        {progress}% Complete
+                    </div>
+                    <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                            className={`h-full bg-${journey.color}-500 transition-all duration-500`}
+                            style={{ width: `${progress}%` }}
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Step Progress */}
+            <div className="flex items-center justify-between relative">
+                {/* Connecting line */}
+                <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 dark:bg-slate-700 -z-10" />
+                <div
+                    className={`absolute top-5 left-0 h-0.5 bg-${journey.color}-500 transition-all duration-500 -z-10`}
+                    style={{ width: `${(currentIndex / (journey.steps.length - 1)) * 100}%` }}
+                />
+
+                {journey.steps.map((step, index) => {
+                    const status = getStepStatus(step, index);
+                    const isClickable = status === 'completed' || status === 'current';
+
+                    return (
+                        <div
+                            key={step.id}
+                            className="flex flex-col items-center group"
+                        >
+                            {/* Step Circle */}
+                            <button
+                                onClick={() => handleStepClick(step)}
+                                disabled={!isClickable}
+                                className={`
+                  w-10 h-10 rounded-full flex items-center justify-center text-lg
+                  transition-all duration-300 relative
+                  ${status === 'completed'
+                                        ? `bg-${journey.color}-500 text-white shadow-lg shadow-${journey.color}-500/30`
+                                        : status === 'current'
+                                            ? `bg-white dark:bg-slate-800 border-2 border-${journey.color}-500 text-${journey.color}-500 shadow-lg animate-pulse`
+                                            : status === 'locked'
+                                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer'
+                                    }
+                `}
+                            >
+                                {status === 'completed' ? (
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                ) : (
+                                    <span>{step.icon}</span>
+                                )}
+
+                                {/* Tooltip */}
+                                <div className={`
+                  absolute -bottom-16 left-1/2 transform -translate-x-1/2
+                  bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg
+                  px-3 py-2 whitespace-nowrap opacity-0 group-hover:opacity-100
+                  transition-opacity pointer-events-none z-20
+                  ${status === 'locked' ? 'text-slate-400' : ''}
+                `}>
+                                    <div className="font-bold">{step.label}</div>
+                                    <div className="text-slate-300 text-[10px]">{step.description}</div>
+                                    {status === 'locked' && (
+                                        <div className="text-amber-400 text-[10px] mt-1">Complete previous steps first</div>
+                                    )}
+                                    {step.isOptional && (
+                                        <div className="text-slate-400 text-[10px] mt-1">Optional</div>
+                                    )}
+                                    <div className="absolute -top-1 left-1/2 transform -translate-x-1/2 
+                    border-4 border-transparent border-b-slate-900 dark:border-b-slate-700" />
+                                </div>
+                            </button>
+
+                            {/* Step Label */}
+                            <span className={`
+                mt-2 text-xs font-medium text-center max-w-[80px]
+                ${status === 'completed'
+                                    ? `text-${journey.color}-600 dark:text-${journey.color}-400`
+                                    : status === 'current'
+                                        ? 'text-slate-900 dark:text-white font-bold'
+                                        : 'text-slate-400 dark:text-slate-500'
+                                }
+              `}>
+                                {step.label}
+                            </span>
+                        </div>
+                    );
+                })}
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Minimal version for sidebar or compact views
+ */
+export const JourneyProgressMini: React.FC<{
+    journey: Journey;
+    completedSteps: JourneyStepId[];
+}> = ({ journey, completedSteps }) => {
+    const progress = calculateJourneyProgress(journey, completedSteps);
+
+    return (
+        <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+            <span className="text-lg">{journey.icon}</span>
+            <div className="flex-1">
+                <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        {journey.name}
+                    </span>
+                    <span className="text-xs text-slate-500">{progress}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div
+                        className={`h-full bg-${journey.color}-500`}
+                        style={{ width: `${progress}%` }}
+                    />
+                </div>
+            </div>
+        </div>
+    );
+};
+
+export default JourneyProgressBar;

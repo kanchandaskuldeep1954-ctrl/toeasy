@@ -455,6 +455,36 @@ export const activityAPI = {
     getClient().post('/activity', data)
 };
 
+// ============================================
+// Classification Endpoints (Phase 1: Intelligent Core Loop)
+// ============================================
+
+export const classificationAPI = {
+  // Classify uploaded data to determine type and suggest workflow
+  classify: (headers: string[], sampleData: any[], useAI: boolean = true) =>
+    getClient().post('/classify-source', { headers, sampleData, useAI }),
+
+  // Get classification for a dataset
+  get: (workspaceId: string, datasetId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/datasets/${datasetId}/classification`),
+
+  // Update or override classification
+  update: (workspaceId: string, datasetId: string, data: {
+    sourceType?: string;
+    suggestedWorkflow?: string;
+    userOverride?: string;
+    detectedEntities?: any[];
+    keyInsights?: string[];
+    classificationReasoning?: string;
+    confidence?: number;
+  }) =>
+    getClient().put(`/workspaces/${workspaceId}/datasets/${datasetId}/classification`, data),
+
+  // Update journey progress
+  updateProgress: (workspaceId: string, datasetId: string, currentStep: string, progress: Record<string, any>) =>
+    getClient().put(`/workspaces/${workspaceId}/datasets/${datasetId}/journey-progress`, { currentStep, progress })
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -473,5 +503,6 @@ export default {
   sharing: sharingAPI,
   tabs: tabsAPI,
   activity: activityAPI,
+  classification: classificationAPI,
   initializeAPIClient
 };
