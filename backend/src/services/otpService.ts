@@ -49,7 +49,7 @@ class OTPService {
                 throw new Error(errorData.message || 'Failed to send email via Resend');
             }
 
-            throw new Error(`Email delivery failed: ${error.message}`);
+            return true;
         } catch (error: any) {
             console.error('Failed to send OTP email via Resend:', error);
             // CRITICAL FALLBACK: Log to terminal so owner can still verify users manually
