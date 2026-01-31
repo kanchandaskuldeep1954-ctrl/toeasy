@@ -54,14 +54,16 @@ export const ReportLibrary: React.FC = () => {
                 datasetAPI.list(workspaceId, limit, currentOffset)
             ]);
 
-            const reportData = rRes.data;
-            const reportEntities = reportData.data || [];
+            const reportData = rRes.data || {};
+            const reportEntities = Array.isArray(reportData.data) ? reportData.data : [];
 
-            const dsData = dsRes.data;
-            const dsList = dsData.data || [];
+            const dsData = dsRes.data || {};
+            const dsList = Array.isArray(dsData.data) ? dsData.data : [];
 
             // Synthesis: Primary Strategic Report for every dataset
-            const primaryReports = dsList.filter((ds: any) => !reportEntities.some((r: any) => String(r.dataset_id) === String(ds.id))).map((ds: any) => ({
+            const primaryReports = dsList.filter((ds: any) =>
+                !reportEntities.some((r: any) => String(r.dataset_id) === String(ds.id))
+            ).map((ds: any) => ({
                 id: `primary-${ds.id}`,
                 dataset_id: ds.id,
                 name: `${ds.name} Master`,
