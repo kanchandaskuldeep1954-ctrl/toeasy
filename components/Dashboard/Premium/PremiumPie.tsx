@@ -5,7 +5,8 @@ import {
     Sector,
     Cell,
     ResponsiveContainer,
-    Tooltip
+    Tooltip,
+    Legend
 } from 'recharts';
 import { ChartSpec } from '../../../types';
 
@@ -38,33 +39,37 @@ const renderActiveShape = (props: any) => {
 
     return (
         <g>
-            <text x={cx} y={cy} dy={8} textAnchor="middle" fill={fill} className="text-xl font-bold">
-                {payload.name}
-            </text>
             <Sector
                 cx={cx}
                 cy={cy}
                 innerRadius={innerRadius}
-                outerRadius={outerRadius + 6}
+                outerRadius={outerRadius + 8}
                 startAngle={startAngle}
                 endAngle={endAngle}
                 fill={fill}
                 filter="url(#shadow)"
+                className="transition-all duration-500"
             />
             <Sector
                 cx={cx}
                 cy={cy}
                 startAngle={startAngle}
                 endAngle={endAngle}
-                innerRadius={outerRadius + 6}
-                outerRadius={outerRadius + 10}
+                innerRadius={outerRadius + 8}
+                outerRadius={outerRadius + 12}
                 fill={fill}
+                opacity={0.5}
             />
-            <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} fill="none" />
-            <circle cx={ex} cy={ey} r={2} fill={fill} stroke="none" />
-            <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} textAnchor={textAnchor} fill="#94a3b8" fontSize={12} >{`Value ${value.toLocaleString()}`}</text>
-            <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={18} textAnchor={textAnchor} fill="#999" fontSize={10}>
-                {`(Rate ${(percent * 100).toFixed(1)}%)`}
+            <path d={`M${sx},${sy}L${mx},${my}L${ex},${ey}`} stroke={fill} strokeWidth={2} fill="none" />
+            <circle cx={ex} cy={ey} r={3} fill={fill} stroke="none" />
+            <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={-10} textAnchor={textAnchor} fill="#94a3b8" fontSize={11} fontWeight="bold" transform={`translate(0, 0)`}>
+                {payload.name}
+            </text>
+            <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={10} textAnchor={textAnchor} fill="#eee" fontSize={14} fontWeight="900" >
+                {value.toLocaleString()}
+            </text>
+            <text x={ex + (cos >= 0 ? 1 : -1) * 12} y={ey} dy={26} textAnchor={textAnchor} fill="#6366f1" fontSize={10} fontWeight="bold">
+                {`(${(percent * 100).toFixed(1)}%)`}
             </text>
         </g>
     );
@@ -77,10 +82,28 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
 
     const formattedData = useMemo(() => {
         if (!data || data.length === 0) return [];
-        return data.map((d) => ({
-            name: d.name || d.label || d.x,
+
+        // 1. Initial Map & Sort
+        const raw = data.map((d) => ({
+            name: String(d.name || d.label || d.x || 'Unknown'),
             value: Number(d.value || d.y || d.count || 0),
-        })).sort((a, b) => b.value - a.value); // Sort for better pie viz
+        })).sort((a, b) => b.value - a.value);
+
+        // 2. Grouping Logic: Consolidate tiny slices (< 3%) or beyond top 8
+        const total = raw.reduce((sum, item) => sum + item.value, 0);
+        const threshold = total * 0.03;
+
+        const top = raw.filter((item, index) => (item.value >= threshold && index < 8));
+        const others = raw.filter(item => !top.includes(item));
+
+        if (others.length > 0) {
+            top.push({
+                name: 'Others',
+                value: others.reduce((sum, item) => sum + item.value, 0)
+            });
+        }
+
+        return top.filter(i => i.value > 0);
     }, [data]);
 
     const isDonut = chart.type === 'donut' || chart.type === 'doughnut';
@@ -90,27 +113,47 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
     };
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in zoom-in-95 duration-700">
+        <div style={{ width: '100%', height: height }} className="animate-in fade-in zoom-in-95 duration-1000">
             <ResponsiveContainer>
                 <PieChart>
                     <defs>
                         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="4" stdDeviation="4" floodColor="rgba(0,0,0,0.3)" />
+                            <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="rgba(0,0,0,0.4)" />
                         </filter>
                     </defs>
+                    <Tooltip
+                        content={({ active, payload }: any) => {
+                            if (active && payload && payload.length) {
+                                return (
+                                    <div className="bg-slate-900/95 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-xl">
+                                        <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{payload[0].name}</p>
+                                        <p className="text-xl font-black text-white">{payload[0].value.toLocaleString()}</p>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        }}
+                    />
+                    <Legend
+                        verticalAlign="bottom"
+                        height={36}
+                        iconType="circle"
+                        formatter={(value) => <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{value}</span>}
+                    />
                     <Pie
                         activeIndex={activeIndex}
                         activeShape={renderActiveShape}
                         data={formattedData}
                         cx="50%"
-                        cy="50%"
-                        innerRadius={isDonut ? 60 : 0}
-                        outerRadius={isDonut ? 80 : 80}
-                        fill="#8884d8"
+                        cy="45%"
+                        innerRadius={isDonut ? 75 : 0}
+                        outerRadius={isDonut ? 90 : 90}
+                        stroke="none"
                         dataKey="value"
                         onMouseEnter={onPieEnter}
                         onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
                         animationDuration={1500}
+                        paddingAngle={isDonut ? 4 : 0}
                     >
                         {formattedData.map((entry, index) => {
                             const isActive = !activeFilter || String(entry.name) === String(activeFilter);
@@ -119,7 +162,7 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
                                     key={`cell-${index}`}
                                     fill={COLORS[index % COLORS.length]}
                                     opacity={isActive ? 1 : 0.2}
-                                    stroke={isActive ? 'rgba(255,255,255,0.1)' : 'transparent'}
+                                    className="transition-all duration-300 hover:scale-105"
                                 />
                             );
                         })}
