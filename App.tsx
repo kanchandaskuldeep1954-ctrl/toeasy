@@ -44,6 +44,14 @@ import UsageMetrics from './src/components/UsageMetrics';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 import MetricsLibrary from './src/components/MetricsLibrary';
 
+// Unified Work OS Modules
+const HomeView = React.lazy(() => import('./src/components/Home/HomeView'));
+const ChatView = React.lazy(() => import('./src/components/Chat/ChatView'));
+const TasksView = React.lazy(() => import('./src/components/Tasks/TasksView'));
+const DocsView = React.lazy(() => import('./src/components/Docs/DocsView'));
+const FormsView = React.lazy(() => import('./src/components/Forms/FormsView'));
+const FilesView = React.lazy(() => import('./src/components/Files/FilesView'));
+
 // Legal & Public Pages
 import PublicLayout from './src/components/Layout/PublicLayout';
 import LandingPage from './src/components/LandingPage';
@@ -65,6 +73,17 @@ const AppLayout: React.FC = () => {
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
+
+          {/* Unified Work OS Routes */}
+          <Route path="home" element={<HomeView />} />
+          <Route path="chat" element={<ChatView />} />
+          <Route path="chat/:channelId" element={<ChatView />} />
+          <Route path="tasks" element={<TasksView />} />
+          <Route path="docs" element={<DocsView />} />
+          <Route path="docs/:id" element={<DocsView />} />
+          <Route path="forms" element={<FormsView />} />
+          <Route path="forms/:id" element={<FormsView />} />
+          <Route path="files" element={<FilesView />} />
 
           {/* Data Operations */}
           <Route path="upload" element={<SourceHubView />} />
