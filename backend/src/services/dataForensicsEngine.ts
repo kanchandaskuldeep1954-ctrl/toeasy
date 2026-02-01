@@ -62,6 +62,8 @@ export interface ColumnProfile {
     metaRole?: string;                // AI suggested role (e.g., "Primary Metric", "Key Breakout")
     semanticDescription?: string;     // AI generated description of what this column really is
     stats?: {
+        mean: number;
+        stdDev: number;
         skewness: number;
         kurtosis: number;
         zScores?: number[];          // Sample z-scores for outlier detection
@@ -441,8 +443,8 @@ export class DataForensicsEngine {
     /**
      * Calculate advanced statistical markers (Skewness, Kurtosis)
      */
-    private static calculateStats(values: number[]): { skewness: number; kurtosis: number } {
-        if (values.length < 3) return { skewness: 0, kurtosis: 0 };
+    private static calculateStats(values: number[]): { mean: number; stdDev: number; skewness: number; kurtosis: number } {
+        if (values.length < 3) return { mean: 0, stdDev: 0, skewness: 0, kurtosis: 0 };
 
         const n = values.length;
         const mean = values.reduce((a, b) => a + b, 0) / n;
@@ -461,6 +463,8 @@ export class DataForensicsEngine {
         const kurtosis = (m4 / Math.pow(m2, 2)) - 3;
 
         return {
+            mean: parseFloat(mean.toFixed(3)),
+            stdDev: parseFloat(std.toFixed(3)),
             skewness: parseFloat(skewness.toFixed(3)),
             kurtosis: parseFloat(kurtosis.toFixed(3))
         };

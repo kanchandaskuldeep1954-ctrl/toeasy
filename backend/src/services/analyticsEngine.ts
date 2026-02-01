@@ -864,12 +864,18 @@ export class AnalyticsEngine {
         });
 
         // 2. High-Variance Analysis (Outlier Reasoning)
-        const numericCols = forensics.profiles.filter(p => p.dataType === 'number' && p.stats && Math.abs(p.stats.skewness) > 1.5);
-        numericCols.slice(0, 1).forEach(col => {
+        const numericCols = forensics.profiles.filter(p => p.dataType === 'number' && p.stats && Math.abs(p.stats.skewness) > 1.2);
+        numericCols.slice(0, 2).forEach(col => {
+            const stats = col.stats!;
+            const mean = stats.mean || 0;
+            const stdDev = stats.stdDev || 1;
+
             const outliers = data.filter(r => {
                 const val = Number(r[col.column]);
-                const mean = col.stats!.skewness; // Placeholder for real mean logic
-                return Math.abs(val) > 1000; // Placeholder
+                if (isNaN(val)) return false;
+                // Z-Score detection (robust for any distribution)
+                const z = Math.abs((val - mean) / stdDev);
+                return z > 2.5; // High confidence outliers
             }).slice(0, 5);
 
             if (outliers.length > 0) {
@@ -877,20 +883,29 @@ export class AnalyticsEngine {
                     id: `df_outlier_${col.column}`,
                     title: `${col.column} Anomaly Audit`,
                     description: `Detailed reasoning for high-variance entries in ${col.column}.`,
-                    logic: `First Principle: Statistical outliers require individual validation to ensure they aren't data quality artifacts.`,
+                    logic: `First Principle: Statistical outliers (Z-Score > 2.5) require individual validation to ensure they aren't data quality artifacts or unique high-growth signals.`,
                     headers: [
                         { name: col.column, type: 'number', description: 'Observed extreme value' },
+                        { name: 'Z-Score', type: 'number', description: 'Standard deviations from mean' },
                         { name: 'Reasoning', type: 'string', description: 'AI-inferred contextual justification' },
                         { name: 'Validation', type: 'string', description: 'Data forensics status' }
                     ],
-                    rows: outliers.map(r => ({
-                        [col.column]: r[col.column],
-                        'Reasoning': 'Value significantly exceeds standard deviation. Verified against adjacent transaction records.',
-                        'Validation': '✓ Plausible Context'
-                    })),
+                    rows: outliers.map(r => {
+                        const val = Number(r[col.column]);
+                        const z = Math.abs((val - mean) / stdDev).toFixed(2);
+                        return {
+                            [col.column]: val,
+                            'Z-Score': z,
+                            'Reasoning': val > mean
+                                ? 'Value significantly exceeds the upper standard deviation. Potentially a high-performance peak or extreme transaction.'
+                                : 'Value is significantly below the population mean. Potentially a partial return, discount, or data entry anomaly.',
+                            'Validation': '✓ Plausible Context'
+                        };
+                    }),
                     summaryInsights: [
-                        `${col.column} shows high positive skewness (${col.stats!.skewness}).`,
-                        'Detected entries are contextually consistent with high-growth patterns.'
+                        `${col.column} shows high skewness (${stats.skewness}).`,
+                        `Population Mean: ${mean.toLocaleString()} | StdDev: ${stdDev.toLocaleString()}`,
+                        `Detected ${outliers.length} samples that deviate over 2.5σ from the mean.`
                     ]
                 });
             }

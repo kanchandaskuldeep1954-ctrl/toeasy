@@ -367,14 +367,14 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-3">Color Palette</label>
                                         <div className="grid grid-cols-4 gap-3">
                                             {[
-                                                { id: 'indigo', color: '#6366f1', label: 'Indigo' },
-                                                { id: 'emerald', color: '#10b981', label: 'Emerald' },
-                                                { id: 'vibrant', color: '#f43f5e', label: 'Vibrant' },
-                                                { id: 'ocean', color: '#0ea5e9', label: 'Ocean' },
-                                                { id: 'sunset', color: '#f59e0b', label: 'Sunset' },
-                                                { id: 'forest', color: '#22c55e', label: 'Forest' },
-                                                { id: 'royal', color: '#8b5cf6', label: 'Royal' },
-                                                { id: 'minimal', color: '#64748b', label: 'Minimal' }
+                                                { id: 'indigo', color: '#4f46e5', label: 'Indigo' },
+                                                { id: 'emerald', color: '#059669', label: 'Emerald' },
+                                                { id: 'vibrant', color: '#e11d48', label: 'Vibrant' },
+                                                { id: 'ocean', color: '#0284c7', label: 'Ocean' },
+                                                { id: 'sunset', color: '#d97706', label: 'Sunset' },
+                                                { id: 'forest', color: '#16a34a', label: 'Forest' },
+                                                { id: 'royal', color: '#7c3aed', label: 'Royal' },
+                                                { id: 'minimal', color: '#0f172a', label: 'Minimal' }
                                             ].map(p => (
                                                 <button
                                                     key={p.id}

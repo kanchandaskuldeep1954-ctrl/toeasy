@@ -151,10 +151,10 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
         if (['line', 'area'].includes(type)) return <PremiumLine {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
         if (['pie', 'donut', 'doughnut'].includes(type)) return <PremiumPie {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
         if (['scatter', 'bubble'].includes(type)) return <PremiumScatter {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
-        if (type === 'radar') return <PremiumRadar {...props} data={data} />;
-        if (type === 'treemap') return <PremiumTreemap {...props} data={data} />;
-        if (type === 'funnel') return <PremiumFunnel {...props} data={data} />;
-        if (type === 'sunburst') return <PremiumSunburst {...props} data={data} />;
+        if (type === 'radar') return <PremiumRadar {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
+        if (type === 'treemap') return <PremiumTreemap {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
+        if (type === 'funnel') return <PremiumFunnel {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
+        if (type === 'sunburst') return <PremiumSunburst {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} />;
         return <PlotlyChart {...props} data={data} />;
     })();
 

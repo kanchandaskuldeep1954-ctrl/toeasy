@@ -31,15 +31,14 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 const THEME_CONFIG: any = {
-    indigo: { primary: '#6366f1' },
-    emerald: { primary: '#10b981' },
-    rose: { primary: '#f43f5e' },
-    ocean: { primary: '#0ea5e9' },
-    sunset: { primary: '#f59e0b' },
-    amber: { primary: '#fbbf24' },
-    sky: { primary: '#0ea5e9' },
-    violet: { primary: '#8b5cf6' },
-    minimal: { primary: '#1e293b' }
+    indigo: { primary: '#4f46e5' },
+    emerald: { primary: '#059669' },
+    vibrant: { primary: '#e11d48' },
+    ocean: { primary: '#0284c7' },
+    sunset: { primary: '#d97706' },
+    forest: { primary: '#16a34a' },
+    royal: { primary: '#7c3aed' },
+    minimal: { primary: '#0f172a' }
 };
 
 export const PremiumRadar: React.FC<PremiumRadarProps> = ({ chart, data, height = 300, onClick }) => {
