@@ -15,10 +15,36 @@ interface SmartChartProps {
     height?: number;
     activeFilter?: string | null;
     onClick?: (data: any) => void;
+    editMode?: boolean;
+    onResize?: (w: number, h: number) => void;
+    onDelete?: () => void;
+    onPeek?: () => void;
 }
 
 export const SmartChart: React.FC<SmartChartProps> = (props) => {
-    const { chart, data = [] } = props;
+    const { chart, data = [], editMode, onResize, onDelete, onPeek } = props;
+
+    // --- EDIT MODE OVERLAY ---
+    const EditOverlay = () => (
+        <div className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20 z-50 border-2 border-indigo-500 rounded-3xl grid items-center justify-center opacity-0 hover:opacity-100 transition-opacity backdrop-blur-[2px]">
+            <div className="flex gap-2">
+                <button onClick={onPeek} className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-500" title="Inspect Data">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                </button>
+                <button onClick={onDelete} className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-red-500" title="Remove Chart">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                </button>
+                <div className="flex flex-col gap-1 ml-4 bg-white dark:bg-slate-800 p-1 rounded-lg shadow-xl">
+                    <button onClick={() => onResize && onResize(1, 1)} className="w-6 h-6 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-[10px] font-bold">1x</button>
+                    <button onClick={() => onResize && onResize(2, 1)} className="w-6 h-6 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-[10px] font-bold">2x</button>
+                    <button onClick={() => onResize && onResize(2, 2)} className="w-6 h-6 hover:bg-slate-100 dark:hover:bg-slate-700 rounded text-[10px] font-bold">Full</button>
+                </div>
+            </div>
+            <div className="absolute top-2 left-3 bg-indigo-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg pointer-events-none">
+                EDIT MODE
+            </div>
+        </div>
+    );
 
     // --- EMPTY STATE UI ---
     if (!data || !Array.isArray(data) || data.length === 0) {
@@ -42,19 +68,19 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     // Route to Premium Engine (Recharts) for Standard BI Charts
     if (type === 'bar' || type === 'bar-horizontal' || type === 'bar_horizontal') {
-        return <PremiumBar {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumBar {...props} data={data} /></div>;
     }
 
     if (type === 'line' || type === 'area') {
-        return <PremiumLine {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumLine {...props} data={data} /></div>;
     }
 
     if (type === 'pie' || type === 'donut' || type === 'doughnut') {
-        return <PremiumPie {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumPie {...props} data={data} /></div>;
     }
 
     if (type === 'scatter' || type === 'bubble') {
-        return <PremiumScatter {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumScatter {...props} data={data} /></div>;
     }
 
     if (type === 'radar') {

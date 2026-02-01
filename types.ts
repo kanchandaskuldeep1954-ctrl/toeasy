@@ -253,6 +253,12 @@ export interface ChartSpec {
     status: 'verified' | 'unverified';
     evidence: string;
   };
+  layout?: {
+    w: number; // width in grid units (1-4)
+    h: number; // height in grid units (1-4)
+    x?: number;
+    y?: number;
+  };
 }
 
 export interface FilterSpec {
@@ -283,7 +289,9 @@ export interface DashboardConfig {
   filters?: FilterSpec[];
   insights?: string[];
   layout?: any;
+  layout?: any;
   metadata?: any;
+  theme?: 'indigo' | 'emerald' | 'vibrant' | 'minimal' | 'dark' | 'light';
 }
 
 export interface ReportSection {
