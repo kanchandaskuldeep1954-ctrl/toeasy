@@ -99,11 +99,11 @@ export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 30
             <ResponsiveContainer>
                 <BarChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>
-                        <linearGradient id="colorBar" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={`colorBar-${chart.id}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={theme.primary} stopOpacity={0.9} />
                             <stop offset="95%" stopColor={theme.secondary} stopOpacity={0.6} />
                         </linearGradient>
-                        <linearGradient id="colorBarActive" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={`colorBarActive-${chart.id}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={theme.active} stopOpacity={1} />
                             <stop offset="95%" stopColor={theme.primary} stopOpacity={0.9} />
                         </linearGradient>
@@ -136,7 +136,7 @@ export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 30
                             return (
                                 <Cell
                                     key={`cell-${index}`}
-                                    fill={isActive ? "url(#colorBar)" : "#e2e8f0"}
+                                    fill={isActive ? `url(#colorBar-${chart.id})` : "#e2e8f0"}
                                     opacity={isActive ? 1 : 0.3}
                                     className="transition-all duration-300 cursor-pointer hover:opacity-100"
                                 />

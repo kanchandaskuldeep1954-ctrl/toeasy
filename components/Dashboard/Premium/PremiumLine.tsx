@@ -96,7 +96,7 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
             <ResponsiveContainer>
                 <AreaChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>
-                        <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                        <linearGradient id={`colorValue-${chart.id}`} x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={theme.primary} stopOpacity={0.5} />
                             <stop offset="95%" stopColor={theme.primary} stopOpacity={0.0} />
                         </linearGradient>
@@ -125,7 +125,7 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
                         stroke={theme.secondary}
                         strokeWidth={4}
                         fillOpacity={1}
-                        fill="url(#colorValue)"
+                        fill={`url(#colorValue-${chart.id})`}
                         animationDuration={2000}
                         dot={{ r: 4, fill: '#1e1b4b', stroke: theme.secondary, strokeWidth: 2 }}
                         activeDot={{ r: 8, fill: theme.secondary, stroke: '#fff', strokeWidth: 2 }}

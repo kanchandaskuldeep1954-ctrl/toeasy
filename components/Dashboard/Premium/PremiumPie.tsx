@@ -142,7 +142,7 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
                     />
                     <Legend
                         verticalAlign="bottom"
-                        height={36}
+                        height={40}
                         iconType="circle"
                         formatter={(value) => <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{value}</span>}
                     />
@@ -151,15 +151,15 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
                         activeShape={renderActiveShape}
                         data={formattedData}
                         cx="50%"
-                        cy="45%"
-                        innerRadius={isDonut ? 75 : 0}
-                        outerRadius={isDonut ? 90 : 90}
+                        cy="42%"
+                        innerRadius={isDonut ? "65%" : 0}
+                        outerRadius="82%"
                         stroke="none"
                         dataKey="value"
                         onMouseEnter={onPieEnter}
                         onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
-                        animationDuration={1500}
-                        paddingAngle={isDonut ? 4 : 0}
+                        animationDuration={1200}
+                        paddingAngle={isDonut ? 3 : 0}
                     >
                         {formattedData.map((entry, index) => {
                             const isActive = !activeFilter || String(entry.name) === String(activeFilter);

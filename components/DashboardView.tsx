@@ -911,14 +911,17 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         if (chart.size === 'large' && !chart.layout?.w) w = 9;
                         if (chart.size === 'full' && !chart.layout?.w) w = 12;
 
+                        const x = chart.layout?.x !== undefined ? chart.layout.x + 1 : 'auto';
+                        const y = chart.layout?.y !== undefined ? chart.layout.y + 1 : 'auto';
+
                         return (
                             <motion.div
                                 layout
                                 key={chart.id}
                                 className="bg-white dark:bg-[#0f141f] rounded-[24px] border border-slate-200/60 dark:border-white/5 shadow-sm hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
                                 style={{
-                                    gridColumn: `span ${w}`,
-                                    gridRow: `span ${h}`
+                                    gridColumn: `${x} / span ${w}`,
+                                    gridRow: `${y} / span ${h}`
                                 }}
                                 transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                             >

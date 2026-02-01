@@ -29,10 +29,12 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     // --- EDIT MODE OVERLAY ---
     const EditOverlay = () => {
+        const [isMoving, setIsMoving] = React.useState(false);
         const [isDraggingHandle, setIsDraggingHandle] = React.useState<string | null>(null);
         const [showPalette, setShowPalette] = React.useState(false);
         const [startPos, setStartPos] = React.useState({ x: 0, y: 0 });
         const [startSize, setStartSize] = React.useState({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
+        const [startCoords, setStartCoords] = React.useState({ x: chart.layout?.x || 0, y: chart.layout?.y || 0 });
 
         const PALETTES = [
             { id: 'indigo', class: 'bg-indigo-500' },
@@ -52,46 +54,70 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
             setShowPalette(false);
         };
 
-        const handleMouseDown = (e: React.MouseEvent, direction: string) => {
+        const handleMouseDown = (e: React.MouseEvent, direction: string | 'move') => {
             e.preventDefault();
             e.stopPropagation();
-            setIsDraggingHandle(direction);
             setStartPos({ x: e.clientX, y: e.clientY });
-            setStartSize({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
+
+            if (direction === 'move') {
+                setIsMoving(true);
+                setStartCoords({ x: chart.layout?.x || 0, y: chart.layout?.y || 0 });
+            } else {
+                setIsDraggingHandle(direction);
+                setStartSize({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
+            }
         };
 
         React.useEffect(() => {
-            if (!isDraggingHandle) return;
+            if (!isDraggingHandle && !isMoving) return;
 
+            let frameId: number;
             const handleMouseMove = (e: MouseEvent) => {
-                const deltaX = e.clientX - startPos.x;
-                const deltaY = e.clientY - startPos.y;
+                cancelAnimationFrame(frameId);
+                frameId = requestAnimationFrame(() => {
+                    const deltaX = e.clientX - startPos.x;
+                    const deltaY = e.clientY - startPos.y;
 
-                const gridStepX = 80;
-                const gridStepY = 40;
+                    const gridStepX = 80;
+                    const gridStepY = 40;
 
-                let newW = startSize.w;
-                let newH = startSize.h;
+                    if (isMoving) {
+                        const newX = Math.round(startCoords.x + deltaX / gridStepX);
+                        const newY = Math.round(startCoords.y + deltaY / gridStepY);
+                        // We need a separate callback for moving
+                        if (newX !== chart.layout?.x || newY !== chart.layout?.y) {
+                            onUpdateChart && onUpdateChart({
+                                ...chart,
+                                layout: { ...chart.layout, x: newX, y: newY, w: chart.layout?.w || 6, h: chart.layout?.h || 6 }
+                            } as any);
+                        }
+                    } else if (isDraggingHandle) {
+                        let newW = startSize.w;
+                        let newH = startSize.h;
 
-                if (isDraggingHandle.includes('right')) {
-                    newW = Math.min(12, Math.max(2, startSize.w + Math.round(deltaX / gridStepX)));
-                } else if (isDraggingHandle.includes('left')) {
-                    newW = Math.min(12, Math.max(2, startSize.w - Math.round(deltaX / gridStepX)));
-                }
+                        if (isDraggingHandle.includes('right')) {
+                            newW = Math.min(12, Math.max(2, startSize.w + Math.round(deltaX / gridStepX)));
+                        } else if (isDraggingHandle.includes('left')) {
+                            newW = Math.min(12, Math.max(2, startSize.w - Math.round(deltaX / gridStepX)));
+                        }
 
-                if (isDraggingHandle.includes('bottom')) {
-                    newH = Math.max(2, startSize.h + Math.round(deltaY / gridStepY));
-                } else if (isDraggingHandle.includes('top')) {
-                    newH = Math.max(2, startSize.h - Math.round(deltaY / gridStepY));
-                }
+                        if (isDraggingHandle.includes('bottom')) {
+                            newH = Math.max(2, startSize.h + Math.round(deltaY / gridStepY));
+                        } else if (isDraggingHandle.includes('top')) {
+                            newH = Math.max(2, startSize.h - Math.round(deltaY / gridStepY));
+                        }
 
-                if (newW !== chart.layout?.w || newH !== chart.layout?.h) {
-                    onResize && onResize(newW, newH);
-                }
+                        if (newW !== chart.layout?.w || newH !== chart.layout?.h) {
+                            onResize && onResize(newW, newH);
+                        }
+                    }
+                });
             };
 
             const handleMouseUp = () => {
                 setIsDraggingHandle(null);
+                setIsMoving(false);
+                cancelAnimationFrame(frameId);
             };
 
             window.addEventListener('mousemove', handleMouseMove);
@@ -99,11 +125,15 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
             return () => {
                 window.removeEventListener('mousemove', handleMouseMove);
                 window.removeEventListener('mouseup', handleMouseUp);
+                cancelAnimationFrame(frameId);
             };
-        }, [isDraggingHandle, startPos, startSize, onResize]);
+        }, [isDraggingHandle, isMoving, startPos, startSize, startCoords, onResize, chart, onUpdateChart]);
 
         return (
-            <div className={`absolute inset-0 bg-slate-900/5 dark:bg-slate-900/40 z-[40] border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500/20 group-hover:border-indigo-500/50'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px] overflow-hidden`}>
+            <div
+                onMouseDown={(e) => handleMouseDown(e, 'move')}
+                className={`absolute inset-0 bg-slate-900/5 dark:bg-slate-900/40 z-[40] border-2 ${isDraggingHandle || isMoving ? 'border-indigo-400 border-dashed' : 'border-indigo-500/20 group-hover:border-indigo-500/40'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[1px] overflow-hidden cursor-move`}
+            >
                 <div className="flex gap-3 pointer-events-auto scale-100 group-hover:scale-110 transition-transform duration-500">
                     <div className="relative">
                         <button
@@ -139,9 +169,9 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 </div>
 
                 <div className="absolute top-0 left-0 p-4">
-                    <div className="bg-indigo-600/90 backdrop-blur-md text-white text-[8px] font-black tracking-[0.2em] px-3 py-1.5 rounded-br-2xl rounded-tl-3xl shadow-2xl pointer-events-none uppercase flex items-center gap-2 border-b border-r border-white/20">
+                    <div className="bg-indigo-600 shadow-xl text-white text-[8px] font-black tracking-[0.2em] px-3 py-1.5 rounded-br-2xl rounded-tl-3xl pointer-events-none uppercase flex items-center gap-2 border-b border-r border-white/20">
                         <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        Studio Active
+                        {isMoving ? 'Moving Analysis' : 'Studio Active'}
                     </div>
                 </div>
 
