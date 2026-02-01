@@ -347,18 +347,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
         }
     };
 
-    const handleSaveChart = (newChart: ChartSpec) => {
-        if (!config) return;
-        const currentCharts = Array.isArray(config.charts) ? config.charts : [];
-        const exists = currentCharts.find(c => c.id === newChart.id);
-        const updatedCharts = exists ? currentCharts.map(c => c.id === newChart.id ? newChart : c) : [newChart, ...currentCharts];
-        const newConfig = { ...config, charts: updatedCharts };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-        setEditingChartId(null);
-        setIsCreatingNew(false);
-    };
-
     const handleUpdateKPI = (updatedKpi: KPI) => {
         if (!config || !config.kpis) return;
         const updatedKPIs = config.kpis.map(k => k.id === updatedKpi.id ? updatedKpi : k);
@@ -583,7 +571,21 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
         );
     }
 
-    const visibleCharts = config.charts || [];
+    const [dragGhost, setDragGhost] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+    const [draggingChartId, setDraggingChartId] = useState<string | null>(null);
+
+    const handleSaveChart = useCallback((newChart: ChartSpec) => {
+        if (!config) return;
+        const updatedCharts = (config.charts || []).map(c => c.id === newChart.id ? newChart : c);
+        if (!updatedCharts.find(c => c.id === newChart.id)) updatedCharts.unshift(newChart);
+
+        const newConfig = { ...config, charts: updatedCharts };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+        setEditingChartId(null); setIsCreatingNew(false);
+    }, [config, dataset, onUpdate]);
+
+    const visibleCharts = config?.charts || [];
 
     return (
         <div className={`h-full overflow-y-auto bg-slate-50 dark:bg-[#080c14] pb-40 relative no-scrollbar ${isCinematicMode ? 'overflow-hidden' : ''} ${globalTheme}`}>
@@ -837,7 +839,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                             disabled={loading}
                             className="px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 bg-slate-900 dark:bg-white dark:text-slate-900 text-white shadow-lg hover:scale-105 active:scale-95 disabled:opacity-50"
                         >
-                            <span>{loading ? 'REBUILDING...' : 'REBUILD AI'}</span>
+                            {loading ? 'REBUILDING...' : 'REBUILD AI'}
                         </button>
                         <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all">BOARDROOM</button>
                         <button
@@ -847,8 +849,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                             title="Share Dashboard Link"
                         >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                            </svg>
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
                         </button>
                         <button onClick={() => setShowExportModal(true)} className="p-1.5 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors">
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -947,11 +948,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                             editMode={editMode}
                                             onResize={(w, h) => handleResizeChart(chart.id, w, h)}
                                             onDelete={() => handleDeleteChart(chart.id)}
-                                            onPeek={() => {
-                                                setViewingDataChart(chart);
-                                            }}
+                                            onPeek={() => setViewingDataChart(chart)}
                                             onEdit={() => setEditingChartId(chart.id)}
                                             onUpdateChart={handleSaveChart}
+                                            onDragUpdate={(layout) => {
+                                                setDragGhost(layout);
+                                                setDraggingChartId(layout ? chart.id : null);
+                                            }}
                                         />
                                     </div>
                                 </div>
