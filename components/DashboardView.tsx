@@ -114,6 +114,20 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [isEditingKPI, setIsEditingKPI] = useState(false);
     const [editKPIConfig, setEditKPIConfig] = useState<KPI | null>(null);
 
+    const [dragGhost, setDragGhost] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+    const [draggingChartId, setDraggingChartId] = useState<string | null>(null);
+
+    const handleSaveChart = useCallback((newChart: ChartSpec) => {
+        if (!config) return;
+        const updatedCharts = (config.charts || []).map(c => c.id === newChart.id ? newChart : c);
+        if (!updatedCharts.find(c => c.id === newChart.id)) updatedCharts.unshift(newChart);
+
+        const newConfig = { ...config, charts: updatedCharts };
+        setConfig(newConfig);
+        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+        setEditingChartId(null); setIsCreatingNew(false);
+    }, [config, dataset, onUpdate]);
+
     const filteredData = useMemo(() => {
         let data = dataset.data || [];
         if (!Array.isArray(data) || Object.keys(activeFilters).length === 0) return data;
@@ -570,20 +584,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
             </div>
         );
     }
-
-    const [dragGhost, setDragGhost] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
-    const [draggingChartId, setDraggingChartId] = useState<string | null>(null);
-
-    const handleSaveChart = useCallback((newChart: ChartSpec) => {
-        if (!config) return;
-        const updatedCharts = (config.charts || []).map(c => c.id === newChart.id ? newChart : c);
-        if (!updatedCharts.find(c => c.id === newChart.id)) updatedCharts.unshift(newChart);
-
-        const newConfig = { ...config, charts: updatedCharts };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-        setEditingChartId(null); setIsCreatingNew(false);
-    }, [config, dataset, onUpdate]);
 
     const visibleCharts = config?.charts || [];
 
