@@ -10,11 +10,12 @@ interface PremiumSunburstProps {
 const COLOR_WAYS: any = {
     indigo: ["#4f46e5", "#6366f1", "#818cf8", "#a5b4fc"],
     emerald: ["#059669", "#10b981", "#34d399", "#6ee7b7"],
-    vibrant: ["#e11d48", "#f43f5e", "#fb7185", "#fda4af"],
+    rose: ["#e11d48", "#f43f5e", "#fb7185", "#fda4af"],
     ocean: ["#0284c7", "#0ea5e9", "#38bdf8", "#7dd3fc"],
     sunset: ["#d97706", "#f59e0b", "#fbbf24", "#fcd34d"],
-    forest: ["#16a34a", "#22c55e", "#4ade80", "#86efac"],
-    royal: ["#7c3aed", "#8b5cf6", "#a78bfa", "#c4b5fd"],
+    amber: ["#fbbf24", "#fcd34d", "#fde68a", "#fffbeb"],
+    sky: ["#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd"],
+    violet: ["#7c3aed", "#8b5cf6", "#a78bfa", "#c4b5fd"],
     minimal: ["#0f172a", "#1e293b", "#334155", "#475569"]
 };
 

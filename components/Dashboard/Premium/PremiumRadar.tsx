@@ -33,11 +33,12 @@ const CustomTooltip = ({ active, payload }: any) => {
 const THEME_CONFIG: any = {
     indigo: { primary: '#6366f1' },
     emerald: { primary: '#10b981' },
-    vibrant: { primary: '#f43f5e' },
+    rose: { primary: '#f43f5e' },
     ocean: { primary: '#0ea5e9' },
     sunset: { primary: '#f59e0b' },
-    forest: { primary: '#22c55e' },
-    royal: { primary: '#8b5cf6' },
+    amber: { primary: '#fbbf24' },
+    sky: { primary: '#0ea5e9' },
+    violet: { primary: '#8b5cf6' },
     minimal: { primary: '#1e293b' }
 };
 

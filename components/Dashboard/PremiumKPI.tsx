@@ -11,8 +11,34 @@ interface PremiumKPIProps {
 export const PremiumKPI: React.FC<PremiumKPIProps> = ({ kpi, onEdit }) => {
     const { label, value, trend, trendDirection, status, sparklineData } = kpi;
 
-    // Premium Color Logic (HSL for better saturation control)
+    // Premium Color Logic (Standardized palettes with semantic fallbacks)
     const theme = useMemo(() => {
+        const scheme = (kpi as any).colorScheme;
+
+        const PALETTE_MAP: any = {
+            emerald: { hex: '#10b981', base: 'emerald' },
+            rose: { hex: '#f43f5e', base: 'rose' },
+            amber: { hex: '#f59e0b', base: 'amber' },
+            indigo: { hex: '#6366f1', base: 'indigo' },
+            sky: { hex: '#0ea5e9', base: 'sky' },
+            violet: { hex: '#8b5cf6', base: 'violet' },
+            ocean: { hex: '#06b6d4', base: 'cyan' },
+            sunset: { hex: '#f97316', base: 'orange' }
+        };
+
+        if (scheme && PALETTE_MAP[scheme]) {
+            const p = PALETTE_MAP[scheme];
+            return {
+                base: p.base,
+                hex: p.hex,
+                bg: `bg-${p.base}-500/5`,
+                border: `border-${p.base}-500/20`,
+                text: `text-${p.base}-500`,
+                glow: `shadow-${p.base}-500/20`
+            };
+        }
+
+        // Semantic Fallbacks
         if (status === 'on_track' || trendDirection === 'up') {
             return {
                 base: 'emerald',
@@ -51,7 +77,7 @@ export const PremiumKPI: React.FC<PremiumKPIProps> = ({ kpi, onEdit }) => {
             text: 'text-indigo-500',
             glow: 'shadow-indigo-500/20'
         };
-    }, [status, trendDirection]);
+    }, [status, trendDirection, (kpi as any).colorScheme]);
 
     const chartData = useMemo(() =>
         sparklineData?.map((v, i) => ({ i, v })) || [],

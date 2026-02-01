@@ -67,9 +67,8 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 const deltaX = e.clientX - startPos.x;
                 const deltaY = e.clientY - startPos.y;
 
-                // Estimate grid unit size (12 columns on large screens)
-                const gridStepX = 80; // adjusted pixels per column
-                const gridStepY = 40; // adjusted pixels per row
+                const gridStepX = 80;
+                const gridStepY = 40;
 
                 let newW = startSize.w;
                 let newH = startSize.h;
@@ -101,43 +100,49 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 window.removeEventListener('mousemove', handleMouseMove);
                 window.removeEventListener('mouseup', handleMouseUp);
             };
-        }, [isDraggingHandle, startPos, startSize]);
+        }, [isDraggingHandle, startPos, startSize, onResize]);
 
         return (
-            <div className={`absolute inset-0 bg-indigo-500/5 dark:bg-indigo-500/10 z-50 border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500/50 group-hover:border-indigo-500'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]`}>
-                <div className="flex gap-2 pointer-events-auto">
-                    {/* Palette Switcher */}
+            <div className={`absolute inset-0 bg-slate-900/5 dark:bg-slate-900/40 z-[40] border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500/20 group-hover:border-indigo-500/50'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 backdrop-blur-[2px] overflow-hidden`}>
+                <div className="flex gap-3 pointer-events-auto scale-100 group-hover:scale-110 transition-transform duration-500">
                     <div className="relative">
-                        <button onClick={() => setShowPalette(!showPalette)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-amber-500 active:scale-90" title="Quick Palette">
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setShowPalette(!showPalette); }}
+                            className={`p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl hover:scale-110 transition-all ${showPalette ? 'ring-2 ring-indigo-500' : ''} text-amber-500 active:scale-95`}
+                            title="Quick Palette"
+                        >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
                         </button>
 
                         {showPalette && (
-                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-2xl shadow-2xl flex gap-1 animate-in slide-in-from-bottom-2 zoom-in-95">
+                            <div className="absolute bottom-full mb-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 p-2.5 rounded-2xl shadow-2xl flex gap-1.5 animate-in slide-in-from-bottom-2 zoom-in-95 z-[100]">
                                 {PALETTES.map(p => (
                                     <button
                                         key={p.id}
-                                        onClick={() => handleQuickTheme(p.id)}
-                                        className={`w-6 h-6 rounded-full ${p.class} border-2 ${chart.colorScheme === p.id ? 'border-black dark:border-white scale-110' : 'border-transparent'} hover:scale-125 transition-transform`}
+                                        onClick={(e) => { e.stopPropagation(); handleQuickTheme(p.id); }}
+                                        className={`w-7 h-7 rounded-xl ${p.class} border-2 ${chart.colorScheme === p.id ? 'border-white ring-2 ring-indigo-500 scale-110' : 'border-transparent'} hover:scale-125 transition-all shadow-sm`}
                                     />
                                 ))}
                             </div>
                         )}
                     </div>
 
-                    <button onClick={onEdit} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-600 active:scale-90" title="Edit Configuration">
+                    <button onClick={(e) => { e.stopPropagation(); onEdit && onEdit(); }} className="p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl hover:scale-110 transition-all text-indigo-600 active:scale-95" title="Edit Configuration">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
-                    <button onClick={onPeek} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-500 active:scale-90" title="Inspect Data">
+                    <button onClick={(e) => { e.stopPropagation(); onPeek && onPeek(); }} className="p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl hover:scale-110 transition-all text-cyan-500 active:scale-95" title="Inspect Data">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     </button>
-                    <button onClick={onDelete} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-red-500 active:scale-90" title="Remove Chart">
+                    <button onClick={(e) => { e.stopPropagation(); onDelete && onDelete(); }} className="p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-xl hover:scale-110 transition-all text-rose-500 active:scale-95" title="Remove Chart">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </button>
                 </div>
 
-                <div className="absolute top-2 left-3 bg-indigo-600/90 text-white text-[9px] font-black tracking-widest px-2.5 py-1 rounded-full shadow-lg pointer-events-none uppercase">
-                    Studio Active
+                <div className="absolute top-0 left-0 p-4">
+                    <div className="bg-indigo-600/90 backdrop-blur-md text-white text-[8px] font-black tracking-[0.2em] px-3 py-1.5 rounded-br-2xl rounded-tl-3xl shadow-2xl pointer-events-none uppercase flex items-center gap-2 border-b border-r border-white/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                        Studio Active
+                    </div>
                 </div>
 
                 {/* --- 8-Point Resizing System --- */}

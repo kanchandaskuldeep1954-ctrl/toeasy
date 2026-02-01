@@ -896,13 +896,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 </div>
 
                 {/* Dynamic Grid Layout */}
-                <div className={`p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0 ${editMode ? 'bg-[radial-gradient(#6366f1_1px,transparent_1px)] dark:bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:40px_40px]' : ''}`}>
+                <div className={`p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0 ${editMode ? 'bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] [background-size:40px_40px]' : ''}`}>
                     {editMode && (
-                        <div className="absolute inset-0 pointer-events-none border-x border-slate-200/20 dark:border-white/5 flex justify-between z-[-1]">
-                            {Array.from({ length: 13 }).map((_, i) => (
-                                <div key={i} className="h-full w-[1px] bg-slate-200/20 dark:bg-white/5" />
-                            ))}
-                        </div>
+                        <div className="absolute inset-0 pointer-events-none opacity-20 dark:opacity-40" style={{ background: 'radial-gradient(circle, #6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
                     )}
                     {visibleCharts.map((chart) => {
                         // Migration logic: if size is categorical, map it to numbers
