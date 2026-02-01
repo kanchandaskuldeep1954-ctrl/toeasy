@@ -30,7 +30,19 @@ const CustomTooltip = ({ active, payload }: any) => {
     return null;
 };
 
+const THEME_CONFIG: any = {
+    indigo: { primary: '#6366f1' },
+    emerald: { primary: '#10b981' },
+    vibrant: { primary: '#f43f5e' },
+    ocean: { primary: '#0ea5e9' },
+    sunset: { primary: '#f59e0b' },
+    forest: { primary: '#22c55e' },
+    royal: { primary: '#8b5cf6' },
+    minimal: { primary: '#1e293b' }
+};
+
 export const PremiumRadar: React.FC<PremiumRadarProps> = ({ chart, data, height = 300, onClick }) => {
+    const theme = THEME_CONFIG[chart.colorScheme as any] || THEME_CONFIG.indigo;
 
     const formattedData = useMemo(() => {
         if (!data || data.length === 0) return [];
@@ -59,9 +71,9 @@ export const PremiumRadar: React.FC<PremiumRadarProps> = ({ chart, data, height 
                     <Radar
                         name={chart.title}
                         dataKey="value"
-                        stroke="#6366f1"
+                        stroke={theme.primary}
                         strokeWidth={3}
-                        fill="#6366f1"
+                        fill={theme.primary}
                         fillOpacity={0.3}
                         animationDuration={1500}
                         onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}

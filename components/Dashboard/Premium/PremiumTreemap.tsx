@@ -14,10 +14,19 @@ interface PremiumTreemapProps {
     onClick?: (data: any) => void;
 }
 
-const COLORS = ['#6366f1', '#4338ca', '#3730a3', '#312e81', '#1e1b4b'];
+const THEME_PALETTES: any = {
+    indigo: ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe'],
+    emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+    vibrant: ['#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3'],
+    ocean: ['#0284c7', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'],
+    sunset: ['#d97706', '#f59e0b', '#fbbf24', '#fcd34d', '#fde68a'],
+    forest: ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0'],
+    royal: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'],
+    minimal: ['#0f172a', '#1e293b', '#334155', '#475569', '#64748b']
+};
 
 const CustomizedContent = (props: any) => {
-    const { depth, x, y, width, height, index, name, value } = props;
+    const { depth, x, y, width, height, index, name, value, palette } = props;
 
     return (
         <g>
@@ -27,7 +36,7 @@ const CustomizedContent = (props: any) => {
                 width={width}
                 height={height}
                 style={{
-                    fill: COLORS[index % COLORS.length],
+                    fill: palette[index % palette.length],
                     stroke: '#fff',
                     strokeWidth: 2 / (depth + 1),
                     strokeOpacity: 1 / (depth + 1),
@@ -61,6 +70,7 @@ const CustomizedContent = (props: any) => {
 };
 
 export const PremiumTreemap: React.FC<PremiumTreemapProps> = ({ chart, data, height = 300, onClick }) => {
+    const palette = THEME_PALETTES[chart.colorScheme as any] || THEME_PALETTES.indigo;
 
     const formattedData = useMemo(() => {
         if (!data || data.length === 0) return [];
@@ -78,7 +88,7 @@ export const PremiumTreemap: React.FC<PremiumTreemapProps> = ({ chart, data, hei
                     dataKey="value"
                     stroke="#fff"
                     fill="#8884d8"
-                    content={<CustomizedContent />}
+                    content={<CustomizedContent palette={palette} />}
                     onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
                 />
             </ResponsiveContainer>

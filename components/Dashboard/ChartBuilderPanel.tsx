@@ -363,6 +363,34 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                     </div>
 
                                     <div className="space-y-3">
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-3">Color Palette</label>
+                                        <div className="grid grid-cols-4 gap-3">
+                                            {[
+                                                { id: 'indigo', color: '#6366f1', label: 'Indigo' },
+                                                { id: 'emerald', color: '#10b981', label: 'Emerald' },
+                                                { id: 'vibrant', color: '#f43f5e', label: 'Vibrant' },
+                                                { id: 'ocean', color: '#0ea5e9', label: 'Ocean' },
+                                                { id: 'sunset', color: '#f59e0b', label: 'Sunset' },
+                                                { id: 'forest', color: '#22c55e', label: 'Forest' },
+                                                { id: 'royal', color: '#8b5cf6', label: 'Royal' },
+                                                { id: 'minimal', color: '#64748b', label: 'Minimal' }
+                                            ].map(p => (
+                                                <button
+                                                    key={p.id}
+                                                    onClick={() => setChart({ ...chart, colorScheme: p.id })}
+                                                    className={`group flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${chart.colorScheme === p.id
+                                                        ? 'border-slate-900 dark:border-white'
+                                                        : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'
+                                                        }`}
+                                                >
+                                                    <div className="w-8 h-8 rounded-full shadow-lg transition-transform group-hover:scale-110" style={{ backgroundColor: p.color }} />
+                                                    <span className="text-[8px] font-black uppercase tracking-tighter text-slate-500">{p.label}</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3">
                                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Legend & Labels</label>
                                         <div className="flex gap-4">
                                             <label className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">

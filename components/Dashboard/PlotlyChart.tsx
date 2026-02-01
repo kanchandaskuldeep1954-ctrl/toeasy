@@ -10,17 +10,19 @@ interface PlotlyChartProps {
     onClick?: (data: any) => void;
 }
 
-// Professional BI color palette - Inspired by PowerBI/Tableau
-const COLORS = [
-    '#2563eb', // Steel Blue
-    '#64748b', // Slate
-    '#0f172a', // Deep Navy
-    '#3b82f6', // Bright Blue
-    '#6366f1', // Indigo
-    '#94a3b8', // Light Slate
-    '#1e293b', // Subdued Navy
-    '#475569'  // Mid Slate
-];
+// Professional BI color palettes
+const THEME_PALETTES: any = {
+    indigo: ['#4f46e5', '#6366f1', '#818cf8', '#a5b4fc', '#c7d2fe'],
+    emerald: ['#059669', '#10b981', '#34d399', '#6ee7b7', '#a7f3d0'],
+    vibrant: ['#e11d48', '#f43f5e', '#fb7185', '#fda4af', '#fecdd3'],
+    ocean: ['#0284c7', '#0ea5e9', '#38bdf8', '#7dd3fc', '#bae6fd'],
+    sunset: ['#d97706', '#f59e0b', '#fbbf24', '#fcd34d', '#fde68a'],
+    forest: ['#16a34a', '#22c55e', '#4ade80', '#86efac', '#bbf7d0'],
+    royal: ['#7c3aed', '#8b5cf6', '#a78bfa', '#c4b5fd', '#ddd6fe'],
+    minimal: ['#0f172a', '#1e293b', '#334155', '#475569', '#64748b']
+};
+
+const DEFAULT_colors = THEME_PALETTES.indigo;
 
 // Modern theme-responsive professional layout
 const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => ({
@@ -57,6 +59,8 @@ const getLayout = (height: number, isDark: boolean): Partial<Plotly.Layout> => (
 });
 
 export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 300, activeFilter, onClick }) => {
+    const colors = THEME_PALETTES[chart.colorScheme as any] || DEFAULT_colors;
+
     const isDark = useMemo(() => {
         if (typeof document === 'undefined') return false;
         return document.documentElement.classList.contains('dark') ||
@@ -152,7 +156,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     y: values,
                     type: 'box',
                     name: chart.title || 'Distribution',
-                    marker: { color: COLORS[0] },
+                    marker: { color: colors[0] },
                     boxpoints: 'outliers'
                 }];
 
@@ -161,7 +165,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     y: values,
                     type: 'violin',
                     name: chart.title || 'Distribution',
-                    marker: { color: COLORS[1] },
+                    marker: { color: colors[1] },
                     box: { visible: true },
                     meanline: { visible: true }
                 }];
@@ -170,8 +174,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
             case 'bar': {
                 // Interactive Opacity: Dim unselected bars
                 const colors = activeFilter
-                    ? labels.map((l: any) => String(l) === String(activeFilter) ? COLORS[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
-                    : COLORS[0];
+                    ? labels.map((l: any) => String(l) === String(activeFilter) ? colors[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
+                    : colors[0];
 
                 return [{
                     x: labels,
@@ -185,8 +189,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
             case 'bar-horizontal':
             case 'bar_horizontal': {
                 const colors = activeFilter
-                    ? labels.map((l: any) => String(l) === String(activeFilter) ? COLORS[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
-                    : COLORS[0];
+                    ? labels.map((l: any) => String(l) === String(activeFilter) ? colors[0] : (isDark ? 'rgba(148, 163, 184, 0.1)' : 'rgba(203, 213, 225, 0.3)'))
+                    : colors[0];
 
                 return [{
                     x: values,
@@ -223,7 +227,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     mode: 'lines',
                     fill: 'tozeroy',
                     fillcolor: isDark ? 'rgba(37, 99, 235, 0.15)' : 'rgba(37, 99, 235, 0.1)',
-                    line: { color: COLORS[0], width: 2, shape: 'spline' },
+                    line: { color: colors[0], width: 2, shape: 'spline' },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
 
@@ -234,7 +238,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     values,
                     type: 'pie',
                     hole: 0,
-                    marker: { colors: COLORS },
+                    marker: { colors: colors },
                     textinfo: 'percent+label',
                     textposition: 'inside',
                     hovertemplate: '<b>%{label}</b><br>%{value:,.2f} (%{percent})<extra></extra>'
@@ -247,7 +251,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     values,
                     type: 'pie',
                     hole: 0.5,
-                    marker: { colors: COLORS },
+                    marker: { colors: colors },
                     textinfo: 'percent',
                     textposition: 'inside',
                     hovertemplate: '<b>%{label}</b><br>%{value:,.2f} (%{percent})<extra></extra>'
@@ -272,7 +276,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'scatter',
                     marker: {
                         size: chart.type === 'bubble' ? normalizedData.map(d => d.size ?? 20) : 10,
-                        color: COLORS[0],
+                        color: colors[0],
                         opacity: 0.6,
                         line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }
                     },
@@ -313,7 +317,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                         mode: 'lines',
                         type: 'scatter',
                         name: 'AI Forecast',
-                        line: { color: isDark ? '#818cf8' : COLORS[0], width: 3, dash: 'dot' },
+                        line: { color: isDark ? '#818cf8' : colors[0], width: 3, dash: 'dot' },
                         opacity: 0.6,
                         hoverinfo: 'none'
                     });
@@ -330,7 +334,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'scatter',
                     marker: {
                         size: normalizedData.map(d => Math.min(Math.max(d.size * 1.5, 12), 80)),
-                        color: normalizedData.map((_, i) => COLORS[i % COLORS.length]),
+                        color: normalizedData.map((_, i) => colors[i % colors.length]),
                         opacity: 0.7,
                         line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' },
                         colorscale: 'Viridis',
@@ -346,7 +350,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     y: labels,
                     x: values,
                     type: 'funnel',
-                    marker: { color: COLORS },
+                    marker: { color: colors },
                     textinfo: 'value+percent total',
                     hovertemplate: '<b>%{y}</b><br>%{x:,.2f}<extra></extra>'
                 } as any];
@@ -362,7 +366,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     title: { text: labels[0] || 'Value', font: { size: 14, color: '#94a3b8' } },
                     gauge: {
                         axis: { range: [0, maxVal], tickcolor: '#475569' },
-                        bar: { color: COLORS[0] },
+                        bar: { color: colors[0] },
                         bgcolor: '#1e293b',
                         borderwidth: 0,
                         steps: [
@@ -387,8 +391,8 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     type: 'scatterpolar',
                     fill: 'toself',
                     fillcolor: 'rgba(99, 102, 241, 0.3)',
-                    line: { color: COLORS[0], width: 2 },
-                    marker: { size: 6, color: COLORS[0] }
+                    line: { color: colors[0], width: 2 },
+                    marker: { size: 6, color: colors[0] }
                 }];
 
             // ===== TREEMAP =====
@@ -474,7 +478,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     connector: { line: { color: '#475569' } },
                     increasing: { marker: { color: '#22c55e' } },
                     decreasing: { marker: { color: '#f43f5e' } },
-                    totals: { marker: { color: COLORS[0] } },
+                    totals: { marker: { color: colors[0] } },
                     hovertemplate: '<b>%{x}</b><br>%{y:,.2f}<extra></extra>'
                 } as any];
 
@@ -483,7 +487,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 return [{
                     x: values,
                     type: 'histogram',
-                    marker: { color: COLORS[0], opacity: 0.8 },
+                    marker: { color: colors[0], opacity: 0.8 },
                     nbinsx: 15
                 } as any];
 
@@ -493,7 +497,7 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                     x: labels,
                     y: values,
                     type: 'bar',
-                    marker: { color: COLORS[0], opacity: 0.9 },
+                    marker: { color: colors[0], opacity: 0.9 },
                     hovertemplate: '<b>%{x}</b><br>Value: %{y:,.2f}<extra></extra>'
                 }];
         }

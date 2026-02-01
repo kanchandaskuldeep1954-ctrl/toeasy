@@ -42,6 +42,10 @@ const THEME_CONFIG: any = {
     indigo: { primary: '#6366f1', secondary: '#818cf8', active: '#4f46e5' },
     emerald: { primary: '#10b981', secondary: '#34d399', active: '#059669' },
     vibrant: { primary: '#f43f5e', secondary: '#fb7185', active: '#e11d48' },
+    ocean: { primary: '#0ea5e9', secondary: '#38bdf8', active: '#0284c7' },
+    sunset: { primary: '#f59e0b', secondary: '#fbbf24', active: '#d97706' },
+    forest: { primary: '#22c55e', secondary: '#4ade80', active: '#16a34a' },
+    royal: { primary: '#8b5cf6', secondary: '#a78bfa', active: '#7c3aed' },
     minimal: { primary: '#1e293b', secondary: '#475569', active: '#0f172a' }
 };
 
