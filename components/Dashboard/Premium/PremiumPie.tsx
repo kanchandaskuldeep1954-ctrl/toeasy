@@ -177,5 +177,6 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
                     </PieChart>
                 </ResponsiveContainer>
             </div>
-            );
+        </div>
+    );
 };

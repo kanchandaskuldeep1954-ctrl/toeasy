@@ -326,23 +326,6 @@ export const PlotlyChart: React.FC<PlotlyChartProps> = ({ chart, data, height = 
                 return traces;
             }
 
-            case 'bubble':
-                return [{
-                    x: normalizedData.map(d => d.x ?? d.value),
-                    y: normalizedData.map(d => d.y ?? d.value * 0.5),
-                    mode: 'markers',
-                    type: 'scatter',
-                    marker: {
-                        size: normalizedData.map(d => Math.min(Math.max(d.size * 1.5, 12), 80)),
-                        color: normalizedData.map((_, i) => colors[i % colors.length]),
-                        opacity: 0.7,
-                        line: { width: 1.5, color: isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.1)' },
-                        colorscale: 'Viridis',
-                        showscale: false
-                    },
-                    text: labels,
-                    hovertemplate: '<b>%{text}</b><br>X: %{x:.2f}<br>Y: %{y:.2f}<br>Size: %{marker.size}<extra></extra>'
-                }];
 
             // ===== FUNNEL =====
             case 'funnel':
