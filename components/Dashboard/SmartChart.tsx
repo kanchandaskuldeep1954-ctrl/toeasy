@@ -7,6 +7,7 @@ import { PremiumScatter } from './Premium/PremiumScatter';
 import { PremiumRadar } from './Premium/PremiumRadar';
 import { PremiumTreemap } from './Premium/PremiumTreemap';
 import { PremiumFunnel } from './Premium/PremiumFunnel';
+import { PremiumSunburst } from './Premium/PremiumSunburst';
 import { ChartSpec } from '../../types';
 
 interface SmartChartProps {
@@ -19,15 +20,19 @@ interface SmartChartProps {
     onResize?: (w: number, h: number) => void;
     onDelete?: () => void;
     onPeek?: () => void;
+    onEdit?: () => void;
 }
 
 export const SmartChart: React.FC<SmartChartProps> = (props) => {
-    const { chart, data = [], editMode, onResize, onDelete, onPeek } = props;
+    const { chart, data = [], editMode, onResize, onDelete, onPeek, onEdit } = props;
 
     // --- EDIT MODE OVERLAY ---
     const EditOverlay = () => (
         <div className="absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20 z-50 border-2 border-indigo-500 rounded-3xl grid items-center justify-center opacity-0 hover:opacity-100 transition-opacity backdrop-blur-[2px]">
             <div className="flex gap-2">
+                <button onClick={onEdit} className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-600" title="Edit Configuration">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
+                </button>
                 <button onClick={onPeek} className="p-2 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-500" title="Inspect Data">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                 </button>
@@ -68,19 +73,19 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     // Route to Premium Engine (Recharts) for Standard BI Charts
     if (type === 'bar' || type === 'bar-horizontal' || type === 'bar_horizontal') {
-        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumBar {...props} data={data} /></div>;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumBar {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} /></div>;
     }
 
     if (type === 'line' || type === 'area') {
-        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumLine {...props} data={data} /></div>;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumLine {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} /></div>;
     }
 
     if (type === 'pie' || type === 'donut' || type === 'doughnut') {
-        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumPie {...props} data={data} /></div>;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumPie {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} /></div>;
     }
 
     if (type === 'scatter' || type === 'bubble') {
-        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumScatter {...props} data={data} /></div>;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumScatter {...props} data={data} chart={{ ...chart, colorScheme: chart.colorScheme || 'indigo' }} /></div>;
     }
 
     if (type === 'radar') {
@@ -93,6 +98,10 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     if (type === 'funnel') {
         return <PremiumFunnel {...props} data={data} />;
+    }
+
+    if (type === 'sunburst') {
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumSunburst {...props} data={data} /></div>;
     }
 
     // Default: Return Plotly for Scientific/Complex Charts (Heatmap, Maps, 3D, etc.)

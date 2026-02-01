@@ -10,6 +10,7 @@ import { FilterPanel } from './Dashboard/FilterPanel';
 import { InsightCard } from './Dashboard/InsightCard';
 import { ChartBuilderPanel } from './Dashboard/ChartBuilderPanel';
 import { DataPeekModal } from './Dashboard/DataPeekModal';
+import { DataEditorModal } from './Dashboard/DataEditorModal';
 import { aggregateData } from '../src/utils/dashboardHelper';
 import { sharingAPI, dashboardAPI } from '../src/services/api';
 import { useSearchParams } from 'react-router-dom';
@@ -105,6 +106,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [showShareModal, setShowShareModal] = useState(false);
     const [copySuccess, setCopySuccess] = useState(false);
     const [forceManual, setForceManual] = useState(false);
+
+    // Chart/Data Editing State
+    const [editingChartId, setEditingChartId] = useState<string | null>(null);
+    const [isCreatingNew, setIsCreatingNew] = useState(false);
+    const [isEditingRawData, setIsEditingRawData] = useState(false);
+    const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
 
     // KPI Editing State
     const [isEditingKPI, setIsEditingKPI] = useState(false);
@@ -612,6 +619,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         >
                             {editMode ? 'Done Editing' : 'Edit Layout'}
                         </button>
+                        <button
+                            onClick={() => setIsEditingRawData(true)}
+                            className="px-4 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] shadow-xl hover:scale-105 transition-all flex items-center gap-2"
+                        >
+                            <span>📊 Data Studio</span>
+                        </button>
                     </div>
                 </div>
             )}
@@ -921,6 +934,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                             onPeek={() => {
                                                 setViewingDataChart(chart);
                                             }}
+                                            onEdit={() => setEditingChartId(chart.id)}
                                         />
                                     </div>
                                 </div>
@@ -949,6 +963,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 {/* Modal Components */}
                 {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
                 {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
+                {isEditingRawData && <DataEditorModal dataset={dataset} onSave={(newData) => { onUpdate?.({ ...dataset, data: newData }); setIsEditingRawData(false); }} onClose={() => setIsEditingRawData(false)} />}
 
                 <ExportModal
                     isOpen={showExportModal}

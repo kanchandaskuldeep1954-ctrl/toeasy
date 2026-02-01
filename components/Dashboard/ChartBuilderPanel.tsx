@@ -213,28 +213,49 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                             {/* DATA TAB */}
                             {activeTab === 'data' && (
                                 <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">X-Axis (Dimension)</label>
-                                        <select
-                                            value={chart.xAxis}
-                                            onChange={(e) => setChart({ ...chart, xAxis: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                                        >
-                                            <option value="">Select Column...</option>
-                                            {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
-                                        </select>
-                                    </div>
+                                    <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-indigo-500 tracking-widest">Dimension (X-Axis / Group By)</label>
+                                            <select
+                                                value={chart.xAxis || chart.groupBy}
+                                                onChange={(e) => setChart({ ...chart, xAxis: e.target.value, groupBy: e.target.value })}
+                                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                            >
+                                                <option value="">Select Category...</option>
+                                                {(dataset.headers || []).map(h => {
+                                                    const sample = dataset.data?.[0]?.[h];
+                                                    if (typeof sample === 'number') return null; // Simple filter for dimensions
+                                                    return <option key={h} value={h}>{h}</option>;
+                                                })}
+                                                <optgroup label="Other Columns">
+                                                    {(dataset.headers || []).map(h => {
+                                                        const sample = dataset.data?.[0]?.[h];
+                                                        if (typeof sample !== 'number') return null;
+                                                        return <option key={h} value={h}>{h}</option>;
+                                                    })}
+                                                </optgroup>
+                                            </select>
+                                        </div>
 
-                                    <div className="space-y-3">
-                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Y-Axis (Measure)</label>
-                                        <select
-                                            value={chart.yAxis}
-                                            onChange={(e) => setChart({ ...chart, yAxis: e.target.value })}
-                                            className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                                        >
-                                            <option value="">Select Column...</option>
-                                            {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
-                                        </select>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-black uppercase text-rose-500 tracking-widest">Measure (Y-Axis / Value)</label>
+                                            <select
+                                                value={chart.yAxis}
+                                                onChange={(e) => setChart({ ...chart, yAxis: e.target.value, aggregation: chart.aggregation || 'sum' })}
+                                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-rose-500/20"
+                                            >
+                                                <option value="">Select Numeric Field...</option>
+                                                <option value="count">-- Count of Records --</option>
+                                                {(dataset.headers || []).map(h => {
+                                                    const sample = dataset.data?.[0]?.[h];
+                                                    if (typeof sample !== 'number') return null;
+                                                    return <option key={h} value={h}>{h}</option>;
+                                                })}
+                                                <optgroup label="All Columns">
+                                                    {(dataset.headers || []).map(h => <option key={h} value={h}>{h}</option>)}
+                                                </optgroup>
+                                            </select>
+                                        </div>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-4">
@@ -250,6 +271,8 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                                 <option value="count">Count</option>
                                                 <option value="max">Maximum</option>
                                                 <option value="min">Minimum</option>
+                                                <option value="unique">Unique Count</option>
+                                                <option value="formula">Custom Formula</option>
                                             </select>
                                         </div>
                                         <div className="space-y-3">
@@ -262,6 +285,21 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
                                             />
                                         </div>
                                     </div>
+
+                                    {chart.aggregation === 'formula' && (
+                                        <div className="space-y-3 p-4 bg-indigo-50/50 dark:bg-indigo-500/5 rounded-2xl border border-indigo-100 dark:border-indigo-500/20 animate-in fade-in slide-in-from-top-2">
+                                            <div className="flex justify-between items-center">
+                                                <label className="text-[10px] font-black uppercase text-indigo-600 tracking-widest">JS Formula Logic</label>
+                                                <span className="text-[9px] text-slate-400 font-mono">row['Column'] * 1.5</span>
+                                            </div>
+                                            <textarea
+                                                value={chart.formula || ''}
+                                                onChange={(e) => setChart({ ...chart, formula: e.target.value })}
+                                                placeholder="e.g. row['Revenue'] - row['Cost']"
+                                                className="w-full p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-mono outline-none focus:ring-2 focus:ring-indigo-500/20 h-24"
+                                            />
+                                        </div>
+                                    )}
                                     <div className="space-y-3">
                                         <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Z-Axis / Size (Optional)</label>
                                         <select
