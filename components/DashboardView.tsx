@@ -71,10 +71,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [chartValidations, setChartValidations] = useState<{ [id: string]: any }>({});
     const [dataQuality, setDataQuality] = useState<any>(null);
 
-    const [editingChartId, setEditingChartId] = useState<string | null>(null);
-    const [isCreatingNew, setIsCreatingNew] = useState(false);
-
-    const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
     const [aiExplainingId, setAiExplainingId] = useState<string | null>(null);
     const [deepDiveResult, setDeepDiveResult] = useState<{ id: string, text: string } | null>(null);
     const [isForecastMode, setIsForecastMode] = useState(false);
