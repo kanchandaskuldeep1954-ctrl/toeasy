@@ -107,7 +107,7 @@ export const PremiumScatter: React.FC<PremiumScatterProps> = ({ chart, data, hei
     }, [formattedData, chart.chartConfig?.trendline]);
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in slide-in-from-bottom-2 duration-1000">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in slide-in-from-bottom-2 duration-1000">
             <ResponsiveContainer>
                 <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                     <defs>

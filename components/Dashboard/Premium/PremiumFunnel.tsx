@@ -53,7 +53,7 @@ export const PremiumFunnel: React.FC<PremiumFunnelProps> = ({ chart, data, heigh
     }, [data]);
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in slide-in-from-top-4 duration-700">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in slide-in-from-top-4 duration-700">
             <ResponsiveContainer>
                 <FunnelChart>
                     <Tooltip content={<CustomTooltip />} />

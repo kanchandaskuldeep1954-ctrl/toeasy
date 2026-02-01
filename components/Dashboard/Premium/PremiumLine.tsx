@@ -92,7 +92,7 @@ export const PremiumLine: React.FC<PremiumLineProps> = ({ chart, data, height = 
     const displayData = trendData || formattedData;
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in duration-700 delay-100">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in duration-700 delay-100">
             <ResponsiveContainer>
                 <AreaChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>

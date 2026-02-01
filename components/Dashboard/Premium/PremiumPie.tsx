@@ -119,62 +119,63 @@ export const PremiumPie: React.FC<PremiumPieProps> = ({ chart, data, height = 30
     };
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in zoom-in-95 duration-1000">
-            <ResponsiveContainer>
-                <PieChart>
-                    <defs>
-                        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                            <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="rgba(0,0,0,0.4)" />
-                        </filter>
-                    </defs>
-                    <Tooltip
-                        content={({ active, payload }: any) => {
-                            if (active && payload && payload.length) {
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in zoom-in-95 duration-1000 flex flex-col justify-center overflow-hidden">
+            <div style={{ width: '100%', height: '100%', minHeight: 180 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                        <defs>
+                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="0" dy="8" stdDeviation="12" floodColor="rgba(0,0,0,0.4)" />
+                            </filter>
+                        </defs>
+                        <Tooltip
+                            content={({ active, payload }: any) => {
+                                if (active && payload && payload.length) {
+                                    return (
+                                        <div className="bg-slate-900/95 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-xl">
+                                            <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{payload[0].name}</p>
+                                            <p className="text-xl font-black text-white">{payload[0].value.toLocaleString()}</p>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            }}
+                        />
+                        <Legend
+                            verticalAlign="bottom"
+                            height={40}
+                            iconType="circle"
+                            formatter={(value) => <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{value}</span>}
+                        />
+                        <Pie
+                            activeIndex={activeIndex}
+                            activeShape={renderActiveShape}
+                            data={formattedData}
+                            cx="50%"
+                            cy="42%"
+                            innerRadius={isDonut ? "65%" : 0}
+                            outerRadius="82%"
+                            stroke="none"
+                            dataKey="value"
+                            onMouseEnter={onPieEnter}
+                            onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
+                            animationDuration={1200}
+                            paddingAngle={isDonut ? 3 : 0}
+                        >
+                            {formattedData.map((entry, index) => {
+                                const isActive = !activeFilter || String(entry.name) === String(activeFilter);
                                 return (
-                                    <div className="bg-slate-900/95 border border-slate-700 p-3 rounded-xl shadow-2xl backdrop-blur-xl">
-                                        <p className="text-[10px] font-black uppercase text-slate-500 mb-1">{payload[0].name}</p>
-                                        <p className="text-xl font-black text-white">{payload[0].value.toLocaleString()}</p>
-                                    </div>
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={palette[index % palette.length]}
+                                        opacity={isActive ? 1 : 0.2}
+                                        className="transition-all duration-300 hover:scale-105"
+                                    />
                                 );
-                            }
-                            return null;
-                        }}
-                    />
-                    <Legend
-                        verticalAlign="bottom"
-                        height={40}
-                        iconType="circle"
-                        formatter={(value) => <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">{value}</span>}
-                    />
-                    <Pie
-                        activeIndex={activeIndex}
-                        activeShape={renderActiveShape}
-                        data={formattedData}
-                        cx="50%"
-                        cy="42%"
-                        innerRadius={isDonut ? "65%" : 0}
-                        outerRadius="82%"
-                        stroke="none"
-                        dataKey="value"
-                        onMouseEnter={onPieEnter}
-                        onClick={(data) => onClick && onClick({ activePayload: [{ payload: data }] })}
-                        animationDuration={1200}
-                        paddingAngle={isDonut ? 3 : 0}
-                    >
-                        {formattedData.map((entry, index) => {
-                            const isActive = !activeFilter || String(entry.name) === String(activeFilter);
-                            return (
-                                <Cell
-                                    key={`cell-${index}`}
-                                    fill={palette[index % palette.length]}
-                                    opacity={isActive ? 1 : 0.2}
-                                    className="transition-all duration-300 hover:scale-105"
-                                />
-                            );
-                        })}
-                    </Pie>
-                </PieChart>
-            </ResponsiveContainer>
-        </div>
-    );
+                            })}
+                        </Pie>
+                    </PieChart>
+                </ResponsiveContainer>
+            </div>
+            );
 };

@@ -116,6 +116,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
 
     const [dragGhost, setDragGhost] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
     const [draggingChartId, setDraggingChartId] = useState<string | null>(null);
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
     const handleSaveChart = useCallback((newChart: ChartSpec) => {
         if (!config) return;
@@ -173,7 +174,85 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
 
             return { ...kpi, value: fmtVal };
         });
-    }, [config, filteredData]);
+    }, [config?.kpis, filteredData]);
+
+    const normalizedCharts = useMemo(() => {
+        const rawCharts = config?.charts || [];
+        const grid: Set<string> = new Set();
+
+        // Helper to check if a rect is occupied
+        const isOccupied = (x: number, y: number, w: number, h: number) => {
+            for (let i = x; i < x + w; i++)
+                for (let j = y; j < y + h; j++)
+                    if (grid.has(`${i},${j}`)) return true;
+            return false;
+        };
+
+        // Helper to mark a rect as occupied
+        const occupy = (x: number, y: number, w: number, h: number) => {
+            for (let i = x; i < x + w; i++)
+                for (let j = y; j < y + h; j++)
+                    grid.add(`${i},${j}`);
+        };
+
+        const findGap = (w: number, h: number) => {
+            let ry = 0;
+            while (true) {
+                for (let rx = 0; rx <= 12 - w; rx++) {
+                    if (!isOccupied(rx, ry, w, h)) return { x: rx, y: ry };
+                }
+                ry++;
+                if (ry > 1000) return { x: 0, y: 0 };
+            }
+        };
+
+        // Separate dragging chart from others for priority
+        const activeChart = draggingChartId && dragGhost ? rawCharts.find(c => c.id === draggingChartId) : null;
+        const otherCharts = rawCharts.filter(c => c.id !== draggingChartId);
+
+        const results: any[] = [];
+
+        // 1. Priority: Place the dragging chart exactly at its ghost position
+        if (activeChart && dragGhost) {
+            const { x, y, w, h } = dragGhost;
+            occupy(x, y, w, h);
+            results.push({ ...activeChart, layout: { ...activeChart.layout, x, y, w, h } });
+        }
+
+        // 2. Secondary: Place charts that have valid, non-colliding positions
+        otherCharts.forEach(chart => {
+            let w = chart.layout?.w || 6;
+            let h = chart.layout?.h || 6;
+
+            // Sync with legacy sizes if necessary
+            if (!chart.layout?.w) {
+                if (chart.size === 'small') w = 3;
+                else if (chart.size === 'medium') w = 6;
+                else if (chart.size === 'large') w = 9;
+                else if (chart.size === 'full') w = 12;
+            }
+            w = Math.max(2, Math.min(12, w));
+            h = Math.max(2, h);
+
+            let x = chart.layout?.x;
+            let y = chart.layout?.y;
+
+            // If it fits where it is, keep it
+            if (x !== undefined && y !== undefined && !isOccupied(x, y, w, h)) {
+                occupy(x, y, w, h);
+                results.push({ ...chart, layout: { ...chart.layout, x, y, w, h } });
+            } else {
+                // Otherwise find a new gap
+                const gap = findGap(w, h);
+                occupy(gap.x, gap.y, w, h);
+                results.push({ ...chart, layout: { ...chart.layout, x: gap.x, y: gap.y, w, h } });
+            }
+        });
+
+        // Ensure order matches original to prevent component unmounting
+        return rawCharts.map(rc => results.find(res => res.id === rc.id) || rc);
+
+    }, [config?.charts, draggingChartId, dragGhost]);
 
     const isMounted = React.useRef(true);
     useEffect(() => {
@@ -318,11 +397,6 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     }, [filteredData, dataset]);
 
     const injectChartConfig = useCallback((chart: ChartSpec): ChartSpec => {
-        if (!isForecastMode) return chart;
-        return {
-            ...chart,
-            chartConfig: { ...chart.chartConfig, trendline: 'ols' }
-        };
         if (!isForecastMode) return chart;
         return {
             ...chart,
@@ -585,7 +659,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
         );
     }
 
-    const visibleCharts = config?.charts || [];
+    const visibleCharts = normalizedCharts;
 
     return (
         <div className={`h-full overflow-y-auto bg-slate-50 dark:bg-[#080c14] pb-40 relative no-scrollbar ${isCinematicMode ? 'overflow-hidden' : ''} ${globalTheme}`}>
@@ -841,7 +915,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         >
                             {loading ? 'REBUILDING...' : 'REBUILD AI'}
                         </button>
-                        <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all">BOARDROOM</button>
+                        <button onClick={() => setIsCinematicMode(true)} className="px-2.5 py-1.5 rounded-lg bg-indigo-600 text-white text-[9px] font-black uppercase tracking-wider shadow-lg shadow-indigo-500/20 hover:bg-indigo-500 transition-all flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" /></svg>
+                            FULL BOARDROOM
+                        </button>
                         <button
                             onClick={handleShare}
                             disabled={isSharing}
@@ -897,67 +974,73 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 </div>
 
                 {/* Dynamic Grid Layout */}
-                <div className={`p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0 ${editMode ? 'bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] [background-size:40px_40px]' : ''}`}>
+                <div className="relative grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0" style={{ gridAutoRows: '40px' }}>
+
+                    {/* Grid Overlay for Edit Mode */}
                     {editMode && (
-                        <div className="absolute inset-0 pointer-events-none opacity-20 dark:opacity-40" style={{ background: 'radial-gradient(circle, #6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+                        <div className="absolute inset-0 pointer-events-none z-0 opacity-[0.03] dark:opacity-[0.05]"
+                            style={{
+                                backgroundImage: `
+                                    linear-gradient(to right, currentColor 1px, transparent 1px),
+                                    linear-gradient(to bottom, currentColor 1px, transparent 1px)
+                                `,
+                                backgroundSize: `8.333333% 40px`
+                            }}
+                        />
                     )}
-                    {visibleCharts.map((chart) => {
-                        // Migration logic: if size is categorical, map it to numbers
-                        let w = chart.layout?.w || 6;
-                        let h = chart.layout?.h || 6;
 
-                        // Support legacy 1/2/Full sizes
-                        if (chart.size === 'small' && !chart.layout?.w) w = 3;
-                        if (chart.size === 'medium' && !chart.layout?.w) w = 6;
-                        if (chart.size === 'large' && !chart.layout?.w) w = 9;
-                        if (chart.size === 'full' && !chart.layout?.w) w = 12;
+                    {/* Drag Ghost (Highest Z, Perfectly Synced with Grid) */}
+                    {dragGhost && (
+                        <div
+                            className="bg-indigo-500/10 border-2 border-dashed border-indigo-500/30 rounded-[24px] pointer-events-none z-10 animate-in fade-in duration-200"
+                            style={{
+                                gridColumn: `${dragGhost.x + 1} / span ${dragGhost.w}`,
+                                gridRow: `${dragGhost.y + 1} / span ${dragGhost.h}`
+                            }}
+                        />
+                    )}
 
-                        const x = chart.layout?.x !== undefined ? chart.layout.x + 1 : 'auto';
-                        const y = chart.layout?.y !== undefined ? chart.layout.y + 1 : 'auto';
+                    {normalizedCharts.map((chart) => {
+                        const { x, y, w, h } = chart.layout!;
+                        // Calculate specific height in pixels to avoid stretching
+                        const chartHeight = h * 40 + (h - 1) * 24 - 40; // Subtract padding/header overhead approx
+                        const isDraggingThis = draggingChartId === chart.id;
 
                         return (
                             <motion.div
                                 layout
                                 key={chart.id}
-                                className="bg-white dark:bg-[#0f141f] rounded-[24px] border border-slate-200/60 dark:border-white/5 shadow-sm hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
+                                className={`bg-white dark:bg-[#0f141f] rounded-[24px] border border-slate-200/60 dark:border-white/5 shadow-sm hover:shadow-xl transition-all duration-300 group relative overflow-hidden ${isDraggingThis ? 'z-[100] opacity-50 ring-4 ring-indigo-500/50 shadow-2xl' : 'z-1'}`}
                                 style={{
-                                    gridColumn: `${x} / span ${w}`,
-                                    gridRow: `${y} / span ${h}`
+                                    gridColumn: `${x + 1} / span ${w}`,
+                                    gridRow: `${y + 1} / span ${h}`,
+                                    minHeight: h * 40 + (h - 1) * 24,
+                                    transform: isDraggingThis ? `translate3d(${dragOffset.x}px, ${dragOffset.y}px, 0)` : undefined,
+                                    pointerEvents: draggingChartId && !isDraggingThis ? 'none' : 'auto'
                                 }}
                                 transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                             >
-                                <div className="p-5 flex flex-col h-full">
-                                    <div className="flex justify-between items-start mb-4">
-                                        <div>
-                                            <h3 className="text-sm font-bold text-slate-800 dark:text-white leading-tight mb-1 line-clamp-1">{chart.title}</h3>
-                                            <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{chart.type}</p>
-                                        </div>
-                                        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleAiExplain(chart)} className="p-1.5 text-slate-400 hover:text-indigo-500 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 min-h-0 relative">
-                                        <SmartChart
-                                            chart={{ ...chart, colorScheme: chart.colorScheme || globalTheme }}
-                                            data={getChartData(chart)}
-                                            activeFilter={activeFilters[chart.xAxis || chart.groupBy || ''] || null}
-                                            onClick={(d) => handleChartClick(d, chart)}
-                                            editMode={editMode}
-                                            onResize={(w, h) => handleResizeChart(chart.id, w, h)}
-                                            onDelete={() => handleDeleteChart(chart.id)}
-                                            onPeek={() => setViewingDataChart(chart)}
-                                            onEdit={() => setEditingChartId(chart.id)}
-                                            onUpdateChart={handleSaveChart}
-                                            onDragUpdate={(layout) => {
-                                                setDragGhost(layout);
-                                                setDraggingChartId(layout ? chart.id : null);
-                                            }}
-                                        />
-                                    </div>
-                                </div>
+                                <SmartChart
+                                    chart={{ ...chart, colorScheme: chart.colorScheme || globalTheme }}
+                                    title={chart.title}
+                                    chartType={chart.type}
+                                    data={getChartData(chart)}
+                                    activeFilter={activeFilters[chart.xAxis || chart.groupBy || ''] || null}
+                                    onClick={(d) => handleChartClick(d, chart)}
+                                    onAiExplain={() => handleAiExplain(chart)}
+                                    editMode={editMode}
+                                    onResize={(w, h) => handleResizeChart(chart.id, w, h)}
+                                    onDelete={() => handleDeleteChart(chart.id)}
+                                    onPeek={() => setViewingDataChart(chart)}
+                                    onEdit={() => setEditingChartId(chart.id)}
+                                    onUpdateChart={handleSaveChart}
+                                    onDragUpdate={(layout, offset) => {
+                                        setDragGhost(layout);
+                                        setDraggingChartId(layout ? chart.id : null);
+                                        if (offset) setDragOffset(offset);
+                                        else setDragOffset({ x: 0, y: 0 });
+                                    }}
+                                />
                             </motion.div>
                         );
                     })}
@@ -1042,6 +1125,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                         <SmartChart
                                             chart={injectChartConfig(visibleCharts[activeCinematicIndex])}
                                             data={getChartData(visibleCharts[activeCinematicIndex])}
+                                            hideHeader
+                                            hidePadding
                                         />
                                     </div>
                                 </div>

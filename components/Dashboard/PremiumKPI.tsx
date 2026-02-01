@@ -16,14 +16,14 @@ export const PremiumKPI: React.FC<PremiumKPIProps> = ({ kpi, onEdit }) => {
         const scheme = (kpi as any).colorScheme;
 
         const PALETTE_MAP: any = {
-            emerald: { hex: '#10b981', base: 'emerald' },
-            rose: { hex: '#f43f5e', base: 'rose' },
-            amber: { hex: '#f59e0b', base: 'amber' },
             indigo: { hex: '#6366f1', base: 'indigo' },
-            sky: { hex: '#0ea5e9', base: 'sky' },
-            violet: { hex: '#8b5cf6', base: 'violet' },
-            ocean: { hex: '#06b6d4', base: 'cyan' },
-            sunset: { hex: '#f97316', base: 'orange' }
+            emerald: { hex: '#10b981', base: 'emerald' },
+            vibrant: { hex: '#f43f5e', base: 'rose' },
+            ocean: { hex: '#0ea5e9', base: 'sky' },
+            sunset: { hex: '#f59e0b', base: 'amber' },
+            forest: { hex: '#16a34a', base: 'green' },
+            royal: { hex: '#7c3aed', base: 'violet' },
+            minimal: { hex: '#475569', base: 'slate' }
         };
 
         if (scheme && PALETTE_MAP[scheme]) {

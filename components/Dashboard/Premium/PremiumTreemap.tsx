@@ -82,7 +82,7 @@ export const PremiumTreemap: React.FC<PremiumTreemapProps> = ({ chart, data, hei
     }, [data]);
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in duration-1000">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in duration-1000">
             <ResponsiveContainer>
                 <Treemap
                     data={formattedData}

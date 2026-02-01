@@ -54,7 +54,7 @@ export const PremiumRadar: React.FC<PremiumRadarProps> = ({ chart, data, height 
     }, [data]);
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in zoom-in-95 duration-700">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in zoom-in-95 duration-700">
             <ResponsiveContainer>
                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={formattedData}>
                     <PolarGrid stroke="rgba(148, 163, 184, 0.1)" />

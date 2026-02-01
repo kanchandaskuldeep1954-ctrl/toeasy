@@ -95,7 +95,7 @@ export const PremiumBar: React.FC<PremiumBarProps> = ({ chart, data, height = 30
     const displayData = trendData || formattedData;
 
     return (
-        <div style={{ width: '100%', height: height }} className="animate-in fade-in duration-700">
+        <div style={{ width: '100%', height: '100%' }} className="animate-in fade-in duration-700">
             <ResponsiveContainer>
                 <BarChart data={displayData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <defs>

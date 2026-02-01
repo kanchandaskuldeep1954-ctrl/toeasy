@@ -27,7 +27,7 @@ export const PremiumSunburst: React.FC<PremiumSunburstProps> = ({ chart, data })
     const colorway = COLOR_WAYS[chart.colorScheme as any] || COLOR_WAYS.indigo;
 
     return (
-        <div className="w-full h-full min-h-[300px]">
+        <div className="w-full h-full">
             <Plotly
                 data={[
                     {
