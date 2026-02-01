@@ -454,7 +454,7 @@ export class DataForensicsEngine {
         const m4 = values.reduce((sum, v) => sum + Math.pow(v - mean, 4), 0) / n;
 
         const std = Math.sqrt(m2);
-        if (std === 0) return { skewness: 0, kurtosis: 0 };
+        if (std === 0) return { mean, stdDev: 0, skewness: 0, kurtosis: 0 };
 
         // Fisher-Pearson coefficient of skewness
         const skewness = m3 / Math.pow(std, 3);
