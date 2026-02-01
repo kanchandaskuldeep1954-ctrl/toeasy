@@ -28,14 +28,14 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
     // --- EDIT MODE OVERLAY ---
     const EditOverlay = () => {
-        const [isDraggingHandle, setIsDraggingHandle] = React.useState(false);
+        const [isDraggingHandle, setIsDraggingHandle] = React.useState<string | null>(null);
         const [startPos, setStartPos] = React.useState({ x: 0, y: 0 });
         const [startSize, setStartSize] = React.useState({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
 
-        const handleMouseDown = (e: React.MouseEvent) => {
+        const handleMouseDown = (e: React.MouseEvent, direction: string) => {
             e.preventDefault();
             e.stopPropagation();
-            setIsDraggingHandle(true);
+            setIsDraggingHandle(direction);
             setStartPos({ x: e.clientX, y: e.clientY });
             setStartSize({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
         };
@@ -48,11 +48,23 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 const deltaY = e.clientY - startPos.y;
 
                 // Estimate grid unit size (12 columns on large screens)
-                const gridStepX = 100; // rough pixels per column
-                const gridStepY = 50;  // rough pixels per row
+                const gridStepX = 80; // adjusted pixels per column
+                const gridStepY = 40; // adjusted pixels per row
 
-                const newW = Math.min(12, Math.max(1, startSize.w + Math.round(deltaX / gridStepX)));
-                const newH = Math.max(1, startSize.h + Math.round(deltaY / gridStepY));
+                let newW = startSize.w;
+                let newH = startSize.h;
+
+                if (isDraggingHandle.includes('right')) {
+                    newW = Math.min(12, Math.max(1, startSize.w + Math.round(deltaX / gridStepX)));
+                } else if (isDraggingHandle.includes('left')) {
+                    newW = Math.min(12, Math.max(1, startSize.w - Math.round(deltaX / gridStepX)));
+                }
+
+                if (isDraggingHandle.includes('bottom')) {
+                    newH = Math.max(1, startSize.h + Math.round(deltaY / gridStepY));
+                } else if (isDraggingHandle.includes('top')) {
+                    newH = Math.max(1, startSize.h - Math.round(deltaY / gridStepY));
+                }
 
                 if (newW !== chart.layout?.w || newH !== chart.layout?.h) {
                     onResize && onResize(newW, newH);
@@ -60,7 +72,7 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
             };
 
             const handleMouseUp = () => {
-                setIsDraggingHandle(false);
+                setIsDraggingHandle(null);
             };
 
             window.addEventListener('mousemove', handleMouseMove);
@@ -72,7 +84,7 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
         }, [isDraggingHandle, startPos, startSize]);
 
         return (
-            <div className={`absolute inset-0 bg-indigo-500/10 dark:bg-indigo-500/20 z-50 border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]`}>
+            <div className={`absolute inset-0 bg-indigo-500/5 dark:bg-indigo-500/10 z-50 border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500/50 group-hover:border-indigo-500'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]`}>
                 <div className="flex gap-2">
                     <button onClick={onEdit} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-600 active:scale-90" title="Edit Configuration">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
@@ -86,16 +98,27 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 </div>
 
                 <div className="absolute top-2 left-3 bg-indigo-600/90 text-white text-[9px] font-black tracking-widest px-2.5 py-1 rounded-full shadow-lg pointer-events-none uppercase">
-                    Layout Layer
+                    Layout Mode
                 </div>
 
-                {/* Granular Resize Handle */}
-                <div
-                    onMouseDown={handleMouseDown}
-                    className="absolute bottom-2 right-2 w-10 h-10 cursor-nwse-resize flex items-center justify-center group/handle pointer-events-auto"
-                >
-                    <div className="w-4 h-4 border-r-4 border-b-4 border-indigo-500 rounded-br-[4px] group-hover/handle:scale-125 transition-transform shadow-[4px_4px_0_rgba(100,100,255,0.2)]" />
-                </div>
+                {/* --- 8-Point Resizing System --- */}
+                {/* Corners */}
+                <div onMouseDown={(e) => handleMouseDown(e, 'top-left')} className="absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'top-right')} className="absolute top-0 right-0 w-6 h-6 cursor-ne-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-left')} className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-right')} className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-[60]" />
+
+                {/* Edges */}
+                <div onMouseDown={(e) => handleMouseDown(e, 'top')} className="absolute top-0 left-6 right-6 h-3 cursor-n-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom')} className="absolute bottom-0 left-6 right-6 h-3 cursor-s-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'left')} className="absolute left-0 top-6 bottom-6 w-3 cursor-w-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'right')} className="absolute right-0 top-6 bottom-6 w-3 cursor-e-resize z-[60]" />
+
+                {/* Visual Indicators (Corners) */}
+                <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-indigo-500 rounded-br-[4px] pointer-events-none opacity-40" />
+                <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-indigo-500 rounded-tl-[4px] pointer-events-none opacity-40" />
+                <div className="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-indigo-500 rounded-tr-[4px] pointer-events-none opacity-40" />
+                <div className="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-indigo-500 rounded-bl-[4px] pointer-events-none opacity-40" />
             </div>
         );
     };
