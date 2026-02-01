@@ -21,16 +21,36 @@ interface SmartChartProps {
     onDelete?: () => void;
     onPeek?: () => void;
     onEdit?: () => void;
+    onUpdateChart?: (chart: ChartSpec) => void;
 }
 
 export const SmartChart: React.FC<SmartChartProps> = (props) => {
-    const { chart, data = [], editMode, onResize, onDelete, onPeek, onEdit } = props;
+    const { chart, data = [], editMode, onResize, onDelete, onPeek, onEdit, onUpdateChart } = props;
 
     // --- EDIT MODE OVERLAY ---
     const EditOverlay = () => {
         const [isDraggingHandle, setIsDraggingHandle] = React.useState<string | null>(null);
+        const [showPalette, setShowPalette] = React.useState(false);
         const [startPos, setStartPos] = React.useState({ x: 0, y: 0 });
         const [startSize, setStartSize] = React.useState({ w: chart.layout?.w || 6, h: chart.layout?.h || 6 });
+
+        const PALETTES = [
+            { id: 'indigo', class: 'bg-indigo-500' },
+            { id: 'rose', class: 'bg-rose-500' },
+            { id: 'emerald', class: 'bg-emerald-500' },
+            { id: 'amber', class: 'bg-amber-500' },
+            { id: 'sky', class: 'bg-sky-500' },
+            { id: 'violet', class: 'bg-violet-500' },
+            { id: 'ocean', class: 'bg-cyan-600' },
+            { id: 'sunset', class: 'bg-orange-600' }
+        ];
+
+        const handleQuickTheme = (paletteId: string) => {
+            if (onUpdateChart) {
+                onUpdateChart({ ...chart, colorScheme: paletteId });
+            }
+            setShowPalette(false);
+        };
 
         const handleMouseDown = (e: React.MouseEvent, direction: string) => {
             e.preventDefault();
@@ -55,15 +75,15 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 let newH = startSize.h;
 
                 if (isDraggingHandle.includes('right')) {
-                    newW = Math.min(12, Math.max(1, startSize.w + Math.round(deltaX / gridStepX)));
+                    newW = Math.min(12, Math.max(2, startSize.w + Math.round(deltaX / gridStepX)));
                 } else if (isDraggingHandle.includes('left')) {
-                    newW = Math.min(12, Math.max(1, startSize.w - Math.round(deltaX / gridStepX)));
+                    newW = Math.min(12, Math.max(2, startSize.w - Math.round(deltaX / gridStepX)));
                 }
 
                 if (isDraggingHandle.includes('bottom')) {
-                    newH = Math.max(1, startSize.h + Math.round(deltaY / gridStepY));
+                    newH = Math.max(2, startSize.h + Math.round(deltaY / gridStepY));
                 } else if (isDraggingHandle.includes('top')) {
-                    newH = Math.max(1, startSize.h - Math.round(deltaY / gridStepY));
+                    newH = Math.max(2, startSize.h - Math.round(deltaY / gridStepY));
                 }
 
                 if (newW !== chart.layout?.w || newH !== chart.layout?.h) {
@@ -85,7 +105,26 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
 
         return (
             <div className={`absolute inset-0 bg-indigo-500/5 dark:bg-indigo-500/10 z-50 border-2 ${isDraggingHandle ? 'border-indigo-400 border-dashed' : 'border-indigo-500/50 group-hover:border-indigo-500'} rounded-3xl grid items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-[1px]`}>
-                <div className="flex gap-2">
+                <div className="flex gap-2 pointer-events-auto">
+                    {/* Palette Switcher */}
+                    <div className="relative">
+                        <button onClick={() => setShowPalette(!showPalette)} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-amber-500 active:scale-90" title="Quick Palette">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" /></svg>
+                        </button>
+
+                        {showPalette && (
+                            <div className="absolute bottom-full mb-3 left-1/2 -translate-x-1/2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-2xl shadow-2xl flex gap-1 animate-in slide-in-from-bottom-2 zoom-in-95">
+                                {PALETTES.map(p => (
+                                    <button
+                                        key={p.id}
+                                        onClick={() => handleQuickTheme(p.id)}
+                                        className={`w-6 h-6 rounded-full ${p.class} border-2 ${chart.colorScheme === p.id ? 'border-black dark:border-white scale-110' : 'border-transparent'} hover:scale-125 transition-transform`}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
                     <button onClick={onEdit} className="p-2.5 bg-white dark:bg-slate-800 rounded-full shadow-lg hover:scale-110 transition text-indigo-600 active:scale-90" title="Edit Configuration">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" /></svg>
                     </button>
@@ -98,27 +137,27 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
                 </div>
 
                 <div className="absolute top-2 left-3 bg-indigo-600/90 text-white text-[9px] font-black tracking-widest px-2.5 py-1 rounded-full shadow-lg pointer-events-none uppercase">
-                    Layout Mode
+                    Studio Active
                 </div>
 
                 {/* --- 8-Point Resizing System --- */}
                 {/* Corners */}
-                <div onMouseDown={(e) => handleMouseDown(e, 'top-left')} className="absolute top-0 left-0 w-6 h-6 cursor-nw-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'top-right')} className="absolute top-0 right-0 w-6 h-6 cursor-ne-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-left')} className="absolute bottom-0 left-0 w-6 h-6 cursor-sw-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-right')} className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'top-left')} className="absolute top-0 left-0 w-10 h-10 cursor-nw-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'top-right')} className="absolute top-0 right-0 w-10 h-10 cursor-ne-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-left')} className="absolute bottom-0 left-0 w-10 h-10 cursor-sw-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom-right')} className="absolute bottom-0 right-0 w-10 h-10 cursor-se-resize z-[60] pointer-events-auto" />
 
                 {/* Edges */}
-                <div onMouseDown={(e) => handleMouseDown(e, 'top')} className="absolute top-0 left-6 right-6 h-3 cursor-n-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'bottom')} className="absolute bottom-0 left-6 right-6 h-3 cursor-s-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'left')} className="absolute left-0 top-6 bottom-6 w-3 cursor-w-resize z-[60]" />
-                <div onMouseDown={(e) => handleMouseDown(e, 'right')} className="absolute right-0 top-6 bottom-6 w-3 cursor-e-resize z-[60]" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'top')} className="absolute top-0 left-10 right-10 h-5 cursor-n-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'bottom')} className="absolute bottom-0 left-10 right-10 h-5 cursor-s-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'left')} className="absolute left-0 top-10 bottom-10 w-5 cursor-w-resize z-[60] pointer-events-auto" />
+                <div onMouseDown={(e) => handleMouseDown(e, 'right')} className="absolute right-0 top-10 bottom-10 w-5 cursor-e-resize z-[60] pointer-events-auto" />
 
                 {/* Visual Indicators (Corners) */}
-                <div className="absolute bottom-2 right-2 w-4 h-4 border-r-2 border-b-2 border-indigo-500 rounded-br-[4px] pointer-events-none opacity-40" />
-                <div className="absolute top-2 left-2 w-4 h-4 border-l-2 border-t-2 border-indigo-500 rounded-tl-[4px] pointer-events-none opacity-40" />
-                <div className="absolute top-2 right-2 w-4 h-4 border-r-2 border-t-2 border-indigo-500 rounded-tr-[4px] pointer-events-none opacity-40" />
-                <div className="absolute bottom-2 left-2 w-4 h-4 border-l-2 border-b-2 border-indigo-500 rounded-bl-[4px] pointer-events-none opacity-40" />
+                <div className="absolute bottom-1.5 right-1.5 w-6 h-6 border-r-[3px] border-b-[3px] border-indigo-500 rounded-br-[6px] pointer-events-none opacity-80" />
+                <div className="absolute top-1.5 left-1.5 w-6 h-6 border-l-[3px] border-t-[3px] border-indigo-500 rounded-tl-[6px] pointer-events-none opacity-20" />
+                <div className="absolute top-1.5 right-1.5 w-6 h-6 border-r-[3px] border-t-[3px] border-indigo-500 rounded-tr-[6px] pointer-events-none opacity-20" />
+                <div className="absolute bottom-1.5 left-1.5 w-6 h-6 border-l-[3px] border-b-[3px] border-indigo-500 rounded-bl-[6px] pointer-events-none opacity-20" />
             </div>
         );
     };
@@ -126,7 +165,8 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
     // --- EMPTY STATE UI ---
     if (!data || !Array.isArray(data) || data.length === 0) {
         return (
-            <div className="h-full min-h-[250px] flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 dark:bg-white/5 rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10 animate-in fade-in duration-500">
+            <div className="h-full min-h-[250px] flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 dark:bg-white/5 rounded-3xl border-2 border-dashed border-slate-200 dark:border-white/10 animate-in fade-in duration-500 relative overflow-hidden group">
+                {editMode && <EditOverlay />}
                 <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                     <svg className="w-8 h-8 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -161,15 +201,15 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
     }
 
     if (type === 'radar') {
-        return <PremiumRadar {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumRadar {...props} data={data} /></div>;
     }
 
     if (type === 'treemap') {
-        return <PremiumTreemap {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumTreemap {...props} data={data} /></div>;
     }
 
     if (type === 'funnel') {
-        return <PremiumFunnel {...props} data={data} />;
+        return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PremiumFunnel {...props} data={data} /></div>;
     }
 
     if (type === 'sunburst') {
@@ -177,5 +217,5 @@ export const SmartChart: React.FC<SmartChartProps> = (props) => {
     }
 
     // Default: Return Plotly for Scientific/Complex Charts (Heatmap, Maps, 3D, etc.)
-    return <PlotlyChart {...props} data={data} />;
+    return <div className="relative h-full w-full">{editMode && <EditOverlay />}<PlotlyChart {...props} data={data} /></div>;
 };

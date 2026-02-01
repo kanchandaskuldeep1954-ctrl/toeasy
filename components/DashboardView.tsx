@@ -896,7 +896,14 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 </div>
 
                 {/* Dynamic Grid Layout */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0">
+                <div className={`p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0 ${editMode ? 'bg-[radial-gradient(#6366f1_1px,transparent_1px)] dark:bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:40px_40px]' : ''}`}>
+                    {editMode && (
+                        <div className="absolute inset-0 pointer-events-none border-x border-slate-200/20 dark:border-white/5 flex justify-between z-[-1]">
+                            {Array.from({ length: 13 }).map((_, i) => (
+                                <div key={i} className="h-full w-[1px] bg-slate-200/20 dark:bg-white/5" />
+                            ))}
+                        </div>
+                    )}
                     {visibleCharts.map((chart) => {
                         // Migration logic: if size is categorical, map it to numbers
                         let w = chart.layout?.w || 6;
@@ -945,6 +952,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                                 setViewingDataChart(chart);
                                             }}
                                             onEdit={() => setEditingChartId(chart.id)}
+                                            onUpdateChart={handleSaveChart}
                                         />
                                     </div>
                                 </div>
