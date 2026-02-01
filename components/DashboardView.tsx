@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
 import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
@@ -895,15 +896,28 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                 </div>
 
                 {/* Dynamic Grid Layout */}
-                <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 auto-rows-min pb-20 relative z-0">
+                <div className="p-6 grid grid-cols-1 md:grid-cols-6 lg:grid-cols-12 gap-6 auto-rows-min pb-20 relative z-0">
                     {visibleCharts.map((chart) => {
-                        const colSpan = chart.layout?.w ? `col-span-${chart.layout.w}` : 'col-span-1 md:col-span-2';
-                        const rowSpan = chart.layout?.h ? `row-span-${chart.layout.h}` : 'row-span-1';
+                        // Migration logic: if size is categorical, map it to numbers
+                        let w = chart.layout?.w || 6;
+                        let h = chart.layout?.h || 6;
+
+                        // Support legacy 1/2/Full sizes
+                        if (chart.size === 'small' && !chart.layout?.w) w = 3;
+                        if (chart.size === 'medium' && !chart.layout?.w) w = 6;
+                        if (chart.size === 'large' && !chart.layout?.w) w = 9;
+                        if (chart.size === 'full' && !chart.layout?.w) w = 12;
 
                         return (
-                            <div
+                            <motion.div
+                                layout
                                 key={chart.id}
-                                className={`${colSpan} ${rowSpan} bg-white dark:bg-[#0f141f] rounded-[24px] border border-slate-200/60 dark:border-white/5 shadow-sm hover:shadow-xl transition-all duration-300 group relative overflow-hidden`}
+                                className="bg-white dark:bg-[#0f141f] rounded-[24px] border border-slate-200/60 dark:border-white/5 shadow-sm hover:shadow-xl transition-all duration-300 group relative overflow-hidden"
+                                style={{
+                                    gridColumn: `span ${w}`,
+                                    gridRow: `span ${h}`
+                                }}
+                                transition={{ type: 'spring', stiffness: 350, damping: 30 }}
                             >
                                 <div className="p-5 flex flex-col h-full">
                                     <div className="flex justify-between items-start mb-4">
@@ -934,13 +948,15 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                                         />
                                     </div>
                                 </div>
-                            </div>
+                            </motion.div>
                         );
                     })}
-                    <button onClick={() => setIsCreatingNew(true)} className="bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[480px]">
-                        <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-4xl">+</span></div>
-                        <h3 className="text-xl font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
-                    </button>
+                    <motion.div layout className="lg:col-span-12 md:col-span-6 col-span-1">
+                        <button onClick={() => setIsCreatingNew(true)} className="w-full bg-slate-50 dark:bg-slate-950/30 border-4 border-dashed border-slate-100 dark:border-slate-800/50 rounded-[40px] flex flex-col items-center justify-center p-12 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group min-h-[300px]">
+                            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform group-hover:bg-indigo-600 group-hover:text-white"><span className="text-3xl">+</span></div>
+                            <h3 className="text-lg font-black text-slate-400 uppercase tracking-widest group-hover:text-indigo-500">Add Analysis</h3>
+                        </button>
+                    </motion.div>
                 </div>
 
                 {/* Global Perspective AI (Floating Input) */}

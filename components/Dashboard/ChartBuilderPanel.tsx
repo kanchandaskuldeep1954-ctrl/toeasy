@@ -26,7 +26,8 @@ export const ChartBuilderPanel: React.FC<ChartBuilderPanelProps> = ({ dataset, i
         yAxis: (dataset.headers || [])[1] || '',
         aggregation: 'sum',
         data: [],
-        options: {}
+        options: {},
+        layout: { w: 6, h: 6 }
     });
 
     const [activeTab, setActiveTab] = useState<Tab>('data');
