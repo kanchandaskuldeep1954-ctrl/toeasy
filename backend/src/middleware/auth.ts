@@ -3,7 +3,12 @@ import { Request, Response, NextFunction } from 'express';
 import { config } from '../config.js';
 
 export interface AuthRequest extends Request {
-  user?: { id: string; email: string; tier: string };
+  user?: {
+    id: string;
+    email: string;
+    tier: string;
+    active_workspace_id?: string;
+  };
 }
 
 export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
@@ -16,7 +21,12 @@ export function authenticateToken(req: AuthRequest, res: Response, next: NextFun
 
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as any;
-    req.user = { id: decoded.userId, email: decoded.email, tier: decoded.tier };
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+      tier: decoded.tier,
+      active_workspace_id: decoded.activeWorkspaceId || decoded.active_workspace_id
+    };
     next();
   } catch (err) {
     return res.status(403).json({ error: 'Invalid or expired token' });
