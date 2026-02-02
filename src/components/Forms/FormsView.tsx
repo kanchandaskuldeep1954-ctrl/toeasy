@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -13,11 +13,14 @@ import {
     Users,
     Copy,
     Trash2,
-    ExternalLink
+    ExternalLink,
+    Loader2
 } from 'lucide-react';
 import { FormBuilder, FormRenderer } from './FormBuilder';
 import { FormField } from './FormFieldInput';
 import { Button, Input, Badge, Card, Modal } from '../UI';
+import { formsService } from '../../../services/workOsService';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Form {
     id: string;
@@ -30,90 +33,151 @@ interface Form {
     status: 'draft' | 'published' | 'closed';
 }
 
-const MOCK_FORMS: Form[] = [
-    {
-        id: '1',
-        title: 'Customer Feedback Survey',
-        description: 'Collect feedback from our customers',
-        fields: [
-            { id: '1', type: 'text', label: 'Name', required: true },
-            { id: '2', type: 'email', label: 'Email', required: true },
-            { id: '3', type: 'rating', label: 'How satisfied are you?', required: true },
-            { id: '4', type: 'textarea', label: 'Additional feedback', required: false }
-        ],
-        responses: 47,
-        createdAt: new Date(Date.now() - 604800000),
-        updatedAt: new Date(Date.now() - 86400000),
-        status: 'published'
-    },
-    {
-        id: '2',
-        title: 'Employee Onboarding',
-        description: 'New hire information form',
-        fields: [
-            { id: '1', type: 'text', label: 'Full Name', required: true },
-            { id: '2', type: 'email', label: 'Personal Email', required: true },
-            { id: '3', type: 'phone', label: 'Phone Number', required: true },
-            { id: '4', type: 'date', label: 'Start Date', required: true }
-        ],
-        responses: 12,
-        createdAt: new Date(Date.now() - 1209600000),
-        updatedAt: new Date(Date.now() - 172800000),
-        status: 'published'
-    },
-    {
-        id: '3',
-        title: 'Event Registration',
-        fields: [],
-        responses: 0,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        status: 'draft'
-    }
-];
-
 export const FormsView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { currentWorkspace } = useWorkspace();
+    const workspaceId = currentWorkspace?.id;
 
-    const [forms, setForms] = useState<Form[]>(MOCK_FORMS);
-    const [activeForm, setActiveForm] = useState<Form | null>(
-        id ? MOCK_FORMS.find(f => f.id === id) || null : null
-    );
+    const [forms, setForms] = useState<Form[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeForm, setActiveForm] = useState<Form | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showResponses, setShowResponses] = useState(false);
+
+    // Fetch forms on mount
+    useEffect(() => {
+        const fetchForms = async () => {
+            if (!workspaceId) return;
+            setLoading(true);
+            try {
+                const data = await formsService.getAll(workspaceId);
+                const transformedForms: Form[] = (data || []).map((f: any) => ({
+                    id: f.id,
+                    title: f.title,
+                    description: f.description,
+                    fields: [],
+                    responses: f.response_count || 0,
+                    createdAt: new Date(f.created_at),
+                    updatedAt: new Date(f.updated_at),
+                    status: f.status || 'draft'
+                }));
+                setForms(transformedForms);
+            } catch (error) {
+                console.error('Failed to fetch forms:', error);
+                setForms([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchForms();
+    }, [workspaceId]);
+
+    // Fetch form fields when selecting a form
+    useEffect(() => {
+        const fetchFormDetails = async () => {
+            if (!id) {
+                setActiveForm(null);
+                return;
+            }
+
+            try {
+                const data = await formsService.getById(id);
+                const form: Form = {
+                    id: data.id,
+                    title: data.title,
+                    description: data.description,
+                    fields: (data.fields || []).map((f: any) => ({
+                        id: f.id,
+                        type: f.type,
+                        label: f.label,
+                        placeholder: f.placeholder,
+                        required: f.required,
+                        options: f.options
+                    })),
+                    responses: data.response_count || 0,
+                    createdAt: new Date(data.created_at),
+                    updatedAt: new Date(data.updated_at),
+                    status: data.status || 'draft'
+                };
+                setActiveForm(form);
+            } catch (error) {
+                console.error('Failed to fetch form:', error);
+                setActiveForm(null);
+            }
+        };
+        fetchFormDetails();
+    }, [id]);
 
     const filteredForms = forms.filter(f =>
         f.title.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    const handleCreateForm = () => {
-        const newForm: Form = {
-            id: `form-${Date.now()}`,
-            title: 'Untitled Form',
-            fields: [],
-            responses: 0,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            status: 'draft'
-        };
-        setForms([newForm, ...forms]);
-        setActiveForm(newForm);
-        navigate(`/app/forms/${newForm.id}`);
+    const handleCreateForm = async () => {
+        if (!workspaceId) return;
+        try {
+            const newForm = await formsService.create({
+                title: 'Untitled Form',
+                workspace_id: workspaceId,
+                status: 'draft'
+            });
+
+            const transformedForm: Form = {
+                id: newForm.id,
+                title: newForm.title,
+                description: newForm.description,
+                fields: [],
+                responses: 0,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                status: 'draft'
+            };
+
+            setForms([transformedForm, ...forms]);
+            setActiveForm(transformedForm);
+            navigate(`/app/forms/${newForm.id}`);
+        } catch (error) {
+            console.error('Failed to create form:', error);
+        }
     };
 
-    const handleUpdateForm = (updates: Partial<Form>) => {
+    const handleUpdateForm = useCallback(async (updates: Partial<Form>) => {
         if (!activeForm) return;
+
         const updatedForm = { ...activeForm, ...updates, updatedAt: new Date() };
         setActiveForm(updatedForm);
         setForms(fs => fs.map(f => f.id === activeForm.id ? updatedForm : f));
-    };
 
-    const handleDeleteForm = (formId: string) => {
-        setForms(fs => fs.filter(f => f.id !== formId));
-        if (activeForm?.id === formId) {
-            setActiveForm(null);
-            navigate('/app/forms');
+        try {
+            if (updates.title !== undefined) {
+                await formsService.update(activeForm.id, { title: updates.title });
+            }
+            if (updates.fields !== undefined) {
+                await formsService.updateFields(activeForm.id, updates.fields.map((f, i) => ({
+                    id: f.id,
+                    type: f.type,
+                    label: f.label,
+                    placeholder: f.placeholder,
+                    required: f.required,
+                    options: f.options,
+                    position: i
+                })));
+            }
+        } catch (error) {
+            console.error('Failed to update form:', error);
+        }
+    }, [activeForm]);
+
+    const handleDeleteForm = async (formId: string) => {
+        try {
+            await formsService.delete(formId);
+            setForms(fs => fs.filter(f => f.id !== formId));
+            if (activeForm?.id === formId) {
+                setActiveForm(null);
+                navigate('/app/forms');
+            }
+        } catch (error) {
+            console.error('Failed to delete form:', error);
         }
     };
 
@@ -122,6 +186,17 @@ export const FormsView: React.FC = () => {
         published: 'success',
         closed: 'warning'
     } as const;
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+                    <p className="text-slate-400">Loading forms...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Form List View
     if (!activeForm) {
@@ -195,7 +270,7 @@ export const FormsView: React.FC = () => {
                                         <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                // Copy share link
+                                                navigator.clipboard.writeText(`${window.location.origin}/forms/${form.id}`);
                                             }}
                                             className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-white"
                                         >

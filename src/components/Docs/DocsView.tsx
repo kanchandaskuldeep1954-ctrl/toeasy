@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -17,10 +17,13 @@ import {
     Share2,
     Download,
     Trash2,
-    Copy
+    Copy,
+    Loader2
 } from 'lucide-react';
 import { BlockEditor, Block } from './BlockEditor';
 import { Button, Input, Modal, Badge, Avatar, Card } from '../UI';
+import { docsService } from '../../../services/workOsService';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface Document {
     id: string;
@@ -34,56 +37,83 @@ interface Document {
     blocks: Block[];
 }
 
-const MOCK_DOCS: Document[] = [
-    {
-        id: '1',
-        title: 'Project Roadmap 2024',
-        icon: '🚀',
-        starred: true,
-        updatedAt: new Date(Date.now() - 3600000),
-        author: { id: '1', name: 'John Doe' },
-        blocks: [
-            { id: '1', type: 'heading1', content: 'Q1 Goals' },
-            { id: '2', type: 'paragraph', content: 'Our primary focus for Q1 is to launch the unified Work OS platform.' },
-            { id: '3', type: 'todo', content: 'Complete Chat module', checked: true },
-            { id: '4', type: 'todo', content: 'Complete Tasks module', checked: true },
-            { id: '5', type: 'todo', content: 'Complete Docs module', checked: false }
-        ]
-    },
-    {
-        id: '2',
-        title: 'Meeting Notes - Team Sync',
-        icon: '📝',
-        updatedAt: new Date(Date.now() - 86400000),
-        author: { id: '2', name: 'Sarah Smith' },
-        blocks: [
-            { id: '1', type: 'heading1', content: 'Team Sync - Jan 30' },
-            { id: '2', type: 'heading2', content: 'Attendees' },
-            { id: '3', type: 'bulletList', content: 'John, Sarah, Mike, Emily' }
-        ]
-    },
-    {
-        id: '3',
-        title: 'API Documentation',
-        icon: '📚',
-        shared: true,
-        updatedAt: new Date(Date.now() - 172800000),
-        author: { id: '1', name: 'John Doe' },
-        blocks: []
-    }
-];
-
 export const DocsView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const { currentWorkspace } = useWorkspace();
+    const workspaceId = currentWorkspace?.id;
 
-    const [documents, setDocuments] = useState<Document[]>(MOCK_DOCS);
-    const [activeDoc, setActiveDoc] = useState<Document | null>(
-        id ? MOCK_DOCS.find(d => d.id === id) || null : null
-    );
+    const [documents, setDocuments] = useState<Document[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [activeDoc, setActiveDoc] = useState<Document | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [showAIPanel, setShowAIPanel] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
+    const [saveLoading, setSaveLoading] = useState(false);
+
+    // Fetch documents on mount
+    useEffect(() => {
+        const fetchDocuments = async () => {
+            if (!workspaceId) return;
+            setLoading(true);
+            try {
+                const data = await docsService.getAll(workspaceId);
+                const transformedDocs: Document[] = (data || []).map((d: any) => ({
+                    id: d.id,
+                    title: d.title,
+                    icon: d.icon || '📄',
+                    cover: d.cover_image,
+                    starred: d.is_starred,
+                    shared: false,
+                    updatedAt: new Date(d.updated_at),
+                    author: { id: d.created_by || '', name: 'User' },
+                    blocks: []
+                }));
+                setDocuments(transformedDocs);
+            } catch (error) {
+                console.error('Failed to fetch documents:', error);
+                setDocuments([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDocuments();
+    }, [workspaceId]);
+
+    // Fetch document blocks when selecting a document
+    useEffect(() => {
+        const fetchDocBlocks = async () => {
+            if (!id) {
+                setActiveDoc(null);
+                return;
+            }
+
+            try {
+                const data = await docsService.getById(id);
+                const doc: Document = {
+                    id: data.id,
+                    title: data.title,
+                    icon: data.icon || '📄',
+                    cover: data.cover_image,
+                    starred: data.is_starred,
+                    shared: false,
+                    updatedAt: new Date(data.updated_at),
+                    author: { id: data.created_by || '', name: 'User' },
+                    blocks: (data.blocks || []).map((b: any) => ({
+                        id: b.id,
+                        type: b.type,
+                        content: b.content,
+                        checked: b.properties?.checked
+                    }))
+                };
+                setActiveDoc(doc);
+            } catch (error) {
+                console.error('Failed to fetch document:', error);
+                setActiveDoc(null);
+            }
+        };
+        fetchDocBlocks();
+    }, [id]);
 
     const filteredDocs = documents.filter(doc =>
         doc.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -92,37 +122,81 @@ export const DocsView: React.FC = () => {
     const starredDocs = filteredDocs.filter(d => d.starred);
     const recentDocs = filteredDocs.filter(d => !d.starred);
 
-    const handleCreateDoc = () => {
-        const newDoc: Document = {
-            id: `doc-${Date.now()}`,
-            title: 'Untitled',
-            icon: '📄',
-            updatedAt: new Date(),
-            author: { id: '1', name: 'User' },
-            blocks: [{ id: '1', type: 'paragraph', content: '' }]
-        };
-        setDocuments([newDoc, ...documents]);
-        setActiveDoc(newDoc);
-        navigate(`/app/docs/${newDoc.id}`);
+    const handleCreateDoc = async () => {
+        if (!workspaceId) return;
+        try {
+            const newDoc = await docsService.create({
+                title: 'Untitled',
+                icon: '📄',
+                workspace_id: workspaceId
+            });
+
+            const transformedDoc: Document = {
+                id: newDoc.id,
+                title: newDoc.title,
+                icon: newDoc.icon || '📄',
+                updatedAt: new Date(),
+                author: { id: '', name: 'User' },
+                blocks: []
+            };
+
+            setDocuments([transformedDoc, ...documents]);
+            setActiveDoc(transformedDoc);
+            navigate(`/app/docs/${newDoc.id}`);
+        } catch (error) {
+            console.error('Failed to create document:', error);
+        }
     };
 
-    const handleUpdateBlocks = (blocks: Block[]) => {
+    const handleUpdateBlocks = useCallback(async (blocks: Block[]) => {
         if (!activeDoc) return;
+
+        // Optimistic update
         const updatedDoc = { ...activeDoc, blocks, updatedAt: new Date() };
         setActiveDoc(updatedDoc);
         setDocuments(docs => docs.map(d => d.id === activeDoc.id ? updatedDoc : d));
-    };
 
-    const handleToggleStar = (docId: string) => {
+        // Save to backend (debounced in production)
+        setSaveLoading(true);
+        try {
+            await docsService.updateBlocks(activeDoc.id, blocks.map(b => ({
+                id: b.id,
+                type: b.type,
+                content: b.content,
+                properties: b.checked !== undefined ? { checked: b.checked } : {},
+                position: blocks.indexOf(b)
+            })));
+        } catch (error) {
+            console.error('Failed to save blocks:', error);
+        } finally {
+            setSaveLoading(false);
+        }
+    }, [activeDoc]);
+
+    const handleToggleStar = async (docId: string) => {
+        const doc = documents.find(d => d.id === docId);
+        if (!doc) return;
+
+        // Optimistic update
         setDocuments(docs => docs.map(d =>
             d.id === docId ? { ...d, starred: !d.starred } : d
         ));
+
+        try {
+            await docsService.update(docId, { is_starred: !doc.starred });
+        } catch (error) {
+            console.error('Failed to toggle star:', error);
+            // Revert
+            setDocuments(docs => docs.map(d =>
+                d.id === docId ? { ...d, starred: doc.starred } : d
+            ));
+        }
     };
 
     const handleAIWrite = async () => {
         if (!aiPrompt.trim()) return;
 
-        // Simulate AI response
+        // Simulate AI response (would call AI service in production)
         const aiBlock: Block = {
             id: `block-${Date.now()}`,
             type: 'paragraph',
@@ -136,6 +210,17 @@ export const DocsView: React.FC = () => {
         setAiPrompt('');
         setShowAIPanel(false);
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+                    <p className="text-slate-400">Loading documents...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Document List View
     if (!activeDoc) {
@@ -247,14 +332,23 @@ export const DocsView: React.FC = () => {
                         <input
                             type="text"
                             value={activeDoc.title}
-                            onChange={(e) => {
+                            onChange={async (e) => {
                                 const updated = { ...activeDoc, title: e.target.value };
                                 setActiveDoc(updated);
                                 setDocuments(docs => docs.map(d => d.id === activeDoc.id ? updated : d));
+                                try {
+                                    await docsService.update(activeDoc.id, { title: e.target.value });
+                                } catch (error) {
+                                    console.error('Failed to update title:', error);
+                                }
                             }}
                             className="text-xl font-semibold text-white bg-transparent border-none outline-none"
                             placeholder="Untitled"
                         />
+
+                        {saveLoading && (
+                            <span className="text-xs text-slate-500">Saving...</span>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Folder,
@@ -24,9 +24,12 @@ import {
     Star,
     StarOff,
     Clock,
-    SortAsc
+    SortAsc,
+    Loader2
 } from 'lucide-react';
 import { Button, Input, Modal, Badge, Card } from '../UI';
+import { filesService } from '../../../services/workOsService';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 // File Types
 export interface FileItem {
@@ -78,75 +81,12 @@ const formatFileSize = (bytes?: number): string => {
     return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
 };
 
-const MOCK_FILES: FileItem[] = [
-    {
-        id: 'folder-1',
-        name: 'Documents',
-        type: 'folder',
-        parentId: null,
-        starred: true,
-        createdAt: new Date(Date.now() - 2592000000),
-        updatedAt: new Date(Date.now() - 86400000),
-        owner: { id: '1', name: 'John Doe' }
-    },
-    {
-        id: 'folder-2',
-        name: 'Images',
-        type: 'folder',
-        parentId: null,
-        createdAt: new Date(Date.now() - 1728000000),
-        updatedAt: new Date(Date.now() - 172800000),
-        owner: { id: '1', name: 'John Doe' }
-    },
-    {
-        id: 'file-1',
-        name: 'Q1 Report.pdf',
-        type: 'file',
-        mimeType: 'application/pdf',
-        size: 2456789,
-        parentId: null,
-        starred: true,
-        createdAt: new Date(Date.now() - 604800000),
-        updatedAt: new Date(Date.now() - 86400000),
-        owner: { id: '1', name: 'John Doe' }
-    },
-    {
-        id: 'file-2',
-        name: 'Sales Data.xlsx',
-        type: 'file',
-        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        size: 1234567,
-        parentId: null,
-        createdAt: new Date(Date.now() - 259200000),
-        updatedAt: new Date(Date.now() - 43200000),
-        owner: { id: '2', name: 'Sarah Smith' }
-    },
-    {
-        id: 'file-3',
-        name: 'Logo.png',
-        type: 'file',
-        mimeType: 'image/png',
-        size: 456789,
-        parentId: 'folder-2',
-        createdAt: new Date(Date.now() - 172800000),
-        updatedAt: new Date(Date.now() - 172800000),
-        owner: { id: '1', name: 'John Doe' }
-    },
-    {
-        id: 'file-4',
-        name: 'config.json',
-        type: 'file',
-        mimeType: 'application/json',
-        size: 2345,
-        parentId: null,
-        createdAt: new Date(Date.now() - 86400000),
-        updatedAt: new Date(Date.now() - 3600000),
-        owner: { id: '1', name: 'John Doe' }
-    }
-];
-
 export const FilesView: React.FC = () => {
-    const [files, setFiles] = useState<FileItem[]>(MOCK_FILES);
+    const { currentWorkspace } = useWorkspace();
+    const workspaceId = currentWorkspace?.id;
+
+    const [files, setFiles] = useState<FileItem[]>([]);
+    const [loading, setLoading] = useState(true);
     const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
     const [view, setView] = useState<'grid' | 'list'>('grid');
     const [searchQuery, setSearchQuery] = useState('');
@@ -154,6 +94,55 @@ export const FilesView: React.FC = () => {
     const [showNewFolder, setShowNewFolder] = useState(false);
     const [newFolderName, setNewFolderName] = useState('');
     const [dragOver, setDragOver] = useState(false);
+    const [createLoading, setCreateLoading] = useState(false);
+    const [uploadLoading, setUploadLoading] = useState(false);
+
+    // Fetch files on mount
+    useEffect(() => {
+        const fetchFiles = async () => {
+            if (!workspaceId) return;
+            setLoading(true);
+            try {
+                const [filesData, foldersData] = await Promise.all([
+                    filesService.getAll(workspaceId),
+                    filesService.getFolders(workspaceId)
+                ]);
+
+                const transformedFiles: FileItem[] = [
+                    ...(foldersData || []).map((f: any) => ({
+                        id: f.id,
+                        name: f.name,
+                        type: 'folder' as const,
+                        parentId: f.parent_id || null,
+                        starred: f.is_starred,
+                        createdAt: new Date(f.created_at),
+                        updatedAt: new Date(f.updated_at),
+                        owner: { id: f.created_by || '', name: 'User' }
+                    })),
+                    ...(filesData || []).map((f: any) => ({
+                        id: f.id,
+                        name: f.name,
+                        type: 'file' as const,
+                        mimeType: f.mime_type,
+                        size: f.size,
+                        parentId: f.folder_id || null,
+                        starred: f.is_starred,
+                        createdAt: new Date(f.created_at),
+                        updatedAt: new Date(f.updated_at),
+                        owner: { id: f.uploaded_by || '', name: 'User' }
+                    }))
+                ];
+
+                setFiles(transformedFiles);
+            } catch (error) {
+                console.error('Failed to fetch files:', error);
+                setFiles([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchFiles();
+    }, [workspaceId]);
 
     // Get breadcrumb path
     const breadcrumbs = useMemo(() => {
@@ -185,33 +174,75 @@ export const FilesView: React.FC = () => {
             });
     }, [files, currentFolderId, searchQuery]);
 
-    const handleCreateFolder = () => {
-        if (!newFolderName.trim()) return;
+    const handleCreateFolder = async () => {
+        if (!newFolderName.trim() || !workspaceId) return;
+        setCreateLoading(true);
 
-        const newFolder: FileItem = {
-            id: `folder-${Date.now()}`,
-            name: newFolderName.trim(),
-            type: 'folder',
-            parentId: currentFolderId,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            owner: { id: '1', name: 'User' }
-        };
+        try {
+            const newFolder = await filesService.createFolder({
+                name: newFolderName.trim(),
+                parent_id: currentFolderId,
+                workspace_id: workspaceId
+            });
 
-        setFiles([...files, newFolder]);
-        setNewFolderName('');
-        setShowNewFolder(false);
+            const transformedFolder: FileItem = {
+                id: newFolder.id,
+                name: newFolder.name,
+                type: 'folder',
+                parentId: newFolder.parent_id || null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                owner: { id: '', name: 'User' }
+            };
+
+            setFiles([...files, transformedFolder]);
+            setNewFolderName('');
+            setShowNewFolder(false);
+        } catch (error) {
+            console.error('Failed to create folder:', error);
+        } finally {
+            setCreateLoading(false);
+        }
     };
 
-    const handleDelete = (ids: string[]) => {
-        setFiles(files.filter(f => !ids.includes(f.id)));
-        setSelectedIds(new Set());
+    const handleDelete = async (ids: string[]) => {
+        try {
+            await Promise.all(ids.map(id => {
+                const item = files.find(f => f.id === id);
+                if (item?.type === 'folder') {
+                    return filesService.deleteFolder(id);
+                }
+                return filesService.delete(id);
+            }));
+            setFiles(files.filter(f => !ids.includes(f.id)));
+            setSelectedIds(new Set());
+        } catch (error) {
+            console.error('Failed to delete:', error);
+        }
     };
 
-    const handleToggleStar = (id: string) => {
+    const handleToggleStar = async (id: string) => {
+        const item = files.find(f => f.id === id);
+        if (!item) return;
+
+        // Optimistic update
         setFiles(files.map(f =>
             f.id === id ? { ...f, starred: !f.starred } : f
         ));
+
+        try {
+            if (item.type === 'folder') {
+                await filesService.updateFolder(id, { is_starred: !item.starred });
+            } else {
+                await filesService.update(id, { is_starred: !item.starred });
+            }
+        } catch (error) {
+            console.error('Failed to toggle star:', error);
+            // Revert
+            setFiles(files.map(f =>
+                f.id === id ? { ...f, starred: item.starred } : f
+            ));
+        }
     };
 
     const handleNavigate = (item: FileItem) => {
@@ -224,21 +255,39 @@ export const FilesView: React.FC = () => {
         }
     };
 
-    const handleUpload = (fileList: FileList) => {
-        Array.from(fileList).forEach(file => {
-            const newFile: FileItem = {
-                id: `file-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                name: file.name,
-                type: 'file',
-                mimeType: file.type,
-                size: file.size,
-                parentId: currentFolderId,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-                owner: { id: '1', name: 'User' }
-            };
-            setFiles(prev => [...prev, newFile]);
-        });
+    const handleUpload = async (fileList: FileList) => {
+        if (!workspaceId) return;
+        setUploadLoading(true);
+
+        try {
+            for (const file of Array.from(fileList)) {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('workspace_id', workspaceId);
+                if (currentFolderId) {
+                    formData.append('folder_id', currentFolderId);
+                }
+
+                const uploaded = await filesService.upload(formData);
+
+                const newFile: FileItem = {
+                    id: uploaded.id,
+                    name: uploaded.name || file.name,
+                    type: 'file',
+                    mimeType: uploaded.mime_type || file.type,
+                    size: uploaded.size || file.size,
+                    parentId: currentFolderId,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                    owner: { id: '', name: 'User' }
+                };
+                setFiles(prev => [...prev, newFile]);
+            }
+        } catch (error) {
+            console.error('Failed to upload:', error);
+        } finally {
+            setUploadLoading(false);
+        }
     };
 
     const handleDrop = (e: React.DragEvent) => {
@@ -249,6 +298,17 @@ export const FilesView: React.FC = () => {
             handleUpload(e.dataTransfer.files);
         }
     };
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+                    <p className="text-slate-400">Loading files...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div
@@ -281,8 +341,8 @@ export const FilesView: React.FC = () => {
                         <button
                             onClick={() => setView('grid')}
                             className={`p-2 transition-colors ${view === 'grid'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
                             <Grid className="w-4 h-4" />
@@ -290,8 +350,8 @@ export const FilesView: React.FC = () => {
                         <button
                             onClick={() => setView('list')}
                             className={`p-2 transition-colors ${view === 'list'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
                             <List className="w-4 h-4" />
@@ -308,10 +368,11 @@ export const FilesView: React.FC = () => {
                     </Button>
 
                     <Button
-                        leftIcon={<Upload className="w-4 h-4" />}
+                        leftIcon={uploadLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
                         onClick={() => document.getElementById('file-upload')?.click()}
+                        disabled={uploadLoading}
                     >
-                        Upload
+                        {uploadLoading ? 'Uploading...' : 'Upload'}
                     </Button>
                     <input
                         id="file-upload"
@@ -397,8 +458,8 @@ export const FilesView: React.FC = () => {
                                         }
                                     }}
                                     className={`group relative p-4 rounded-xl border cursor-pointer transition-all ${isSelected
-                                            ? 'bg-indigo-600/20 border-indigo-500'
-                                            : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
+                                        ? 'bg-indigo-600/20 border-indigo-500'
+                                        : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
                                         }`}
                                 >
                                     {/* Star */}
@@ -457,8 +518,8 @@ export const FilesView: React.FC = () => {
                                         }
                                     }}
                                     className={`group flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${isSelected
-                                            ? 'bg-indigo-600/20 border border-indigo-500'
-                                            : 'hover:bg-slate-800/50'
+                                        ? 'bg-indigo-600/20 border border-indigo-500'
+                                        : 'hover:bg-slate-800/50'
                                         }`}
                                 >
                                     <Icon className={`w-6 h-6 flex-shrink-0 ${item.type === 'folder' ? 'text-amber-400' : 'text-slate-400'
@@ -514,8 +575,8 @@ export const FilesView: React.FC = () => {
                         <Button variant="secondary" onClick={() => setShowNewFolder(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleCreateFolder}>
-                            Create
+                        <Button onClick={handleCreateFolder} disabled={createLoading}>
+                            {createLoading ? 'Creating...' : 'Create'}
                         </Button>
                     </div>
                 </div>

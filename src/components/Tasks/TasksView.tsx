@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
     Plus,
@@ -10,30 +10,172 @@ import {
     Search,
     MoreHorizontal,
     ChevronDown,
-    X
+    X,
+    Loader2
 } from 'lucide-react';
 import { KanbanBoard } from './KanbanBoard';
 import { Task } from './TaskCard';
 import { Button, Input, Modal, Badge, Avatar } from '../UI';
+import { tasksService } from '../../../services/workOsService';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
 
 interface TasksViewProps {
     workspaceId?: string;
 }
 
-export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
+export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspaceId }) => {
+    const { currentWorkspace } = useWorkspace();
+    const workspaceId = propWorkspaceId || currentWorkspace?.id;
+
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [loading, setLoading] = useState(true);
     const [view, setView] = useState<'kanban' | 'list' | 'calendar'>('kanban');
     const [showCreateTask, setShowCreateTask] = useState(false);
     const [selectedTask, setSelectedTask] = useState<Task | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [filterPriority, setFilterPriority] = useState<string | null>(null);
 
-    const handleAddTask = (status: Task['status']) => {
-        setShowCreateTask(true);
+    // Form state for new task
+    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [newTaskDescription, setNewTaskDescription] = useState('');
+    const [newTaskPriority, setNewTaskPriority] = useState<Task['priority']>('medium');
+    const [newTaskDueDate, setNewTaskDueDate] = useState('');
+    const [newTaskStatus, setNewTaskStatus] = useState<Task['status']>('backlog');
+    const [createLoading, setCreateLoading] = useState(false);
+
+    // Fetch tasks
+    useEffect(() => {
+        const fetchTasks = async () => {
+            if (!workspaceId) return;
+            setLoading(true);
+            try {
+                const data = await tasksService.getAll(workspaceId);
+                // Transform API data to component format
+                const transformedTasks: Task[] = (data || []).map((t: any) => ({
+                    id: t.id,
+                    title: t.title,
+                    description: t.description,
+                    status: mapApiStatus(t.status),
+                    priority: t.priority || 'medium',
+                    assignee: t.assignee ? { id: t.assignee.id, name: t.assignee.full_name || t.assignee.email } : undefined,
+                    dueDate: t.due_date ? new Date(t.due_date) : undefined,
+                    tags: t.tags || [],
+                    comments: t.comment_count || 0
+                }));
+                setTasks(transformedTasks);
+            } catch (error) {
+                console.error('Failed to fetch tasks:', error);
+                setTasks([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchTasks();
+    }, [workspaceId]);
+
+    // Map API status to component status
+    const mapApiStatus = (status: string): Task['status'] => {
+        const statusMap: Record<string, Task['status']> = {
+            'backlog': 'backlog',
+            'todo': 'todo',
+            'in_progress': 'in-progress',
+            'review': 'review',
+            'done': 'done'
+        };
+        return statusMap[status] || 'backlog';
     };
 
-    const handleTaskClick = (task: Task) => {
-        setSelectedTask(task);
+    // Map component status to API status
+    const mapToApiStatus = (status: Task['status']): string => {
+        const statusMap: Record<Task['status'], string> = {
+            'backlog': 'backlog',
+            'todo': 'todo',
+            'in-progress': 'in_progress',
+            'review': 'review',
+            'done': 'done'
+        };
+        return statusMap[status];
     };
+
+    const handleAddTask = useCallback((status: Task['status']) => {
+        setNewTaskStatus(status);
+        setShowCreateTask(true);
+    }, []);
+
+    const handleTaskClick = useCallback((task: Task) => {
+        setSelectedTask(task);
+    }, []);
+
+    const handleCreateTask = async () => {
+        if (!newTaskTitle.trim() || !workspaceId) return;
+        setCreateLoading(true);
+        try {
+            const newTask = await tasksService.create({
+                title: newTaskTitle.trim(),
+                description: newTaskDescription.trim() || undefined,
+                status: mapToApiStatus(newTaskStatus),
+                priority: newTaskPriority,
+                due_date: newTaskDueDate || undefined,
+                workspace_id: workspaceId
+            });
+
+            // Add to local state
+            const transformedTask: Task = {
+                id: newTask.id,
+                title: newTask.title,
+                description: newTask.description,
+                status: mapApiStatus(newTask.status),
+                priority: newTask.priority || 'medium',
+                dueDate: newTask.due_date ? new Date(newTask.due_date) : undefined,
+                tags: newTask.tags || []
+            };
+            setTasks(prev => [...prev, transformedTask]);
+
+            // Reset form
+            setShowCreateTask(false);
+            setNewTaskTitle('');
+            setNewTaskDescription('');
+            setNewTaskPriority('medium');
+            setNewTaskDueDate('');
+            setNewTaskStatus('backlog');
+        } catch (error) {
+            console.error('Failed to create task:', error);
+        } finally {
+            setCreateLoading(false);
+        }
+    };
+
+    const handleUpdateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
+        // Optimistic update
+        setTasks(prev => prev.map(t =>
+            t.id === taskId ? { ...t, status: newStatus } : t
+        ));
+
+        try {
+            await tasksService.update(taskId, { status: mapToApiStatus(newStatus) });
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            // Revert on error - would need to store previous state
+        }
+    };
+
+    // Filter tasks
+    const filteredTasks = tasks.filter(task => {
+        const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesPriority = !filterPriority || task.priority === filterPriority;
+        return matchesSearch && matchesPriority;
+    });
+
+    if (loading) {
+        return (
+            <div className="h-full flex items-center justify-center bg-slate-950">
+                <div className="text-center">
+                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+                    <p className="text-slate-400">Loading tasks...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="h-full flex flex-col bg-slate-950">
@@ -69,8 +211,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                         <button
                             onClick={() => setView('kanban')}
                             className={`p-2 transition-colors ${view === 'kanban'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
                             <Grid className="w-4 h-4" />
@@ -78,8 +220,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                         <button
                             onClick={() => setView('list')}
                             className={`p-2 transition-colors ${view === 'list'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
                             <List className="w-4 h-4" />
@@ -87,8 +229,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                         <button
                             onClick={() => setView('calendar')}
                             className={`p-2 transition-colors ${view === 'calendar'
-                                    ? 'bg-indigo-600 text-white'
-                                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white'
+                                : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
                             <Calendar className="w-4 h-4" />
@@ -108,6 +250,7 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
             <main className="flex-1 overflow-hidden p-6">
                 {view === 'kanban' && (
                     <KanbanBoard
+                        tasks={filteredTasks}
                         onTaskClick={handleTaskClick}
                         onAddTask={handleAddTask}
                     />
@@ -138,11 +281,15 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                         label="Task Title"
                         placeholder="What needs to be done?"
                         autoFocus
+                        value={newTaskTitle}
+                        onChange={(e) => setNewTaskTitle(e.target.value)}
                     />
 
                     <Input
                         label="Description (optional)"
                         placeholder="Add more details..."
+                        value={newTaskDescription}
+                        onChange={(e) => setNewTaskDescription(e.target.value)}
                     />
 
                     <div className="grid grid-cols-2 gap-4">
@@ -150,7 +297,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                             <label className="block text-sm font-medium text-slate-300 mb-1.5">
                                 Priority
                             </label>
-                            <select className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white">
+                            <select
+                                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white"
+                                value={newTaskPriority}
+                                onChange={(e) => setNewTaskPriority(e.target.value as Task['priority'])}
+                            >
                                 <option value="low">Low</option>
                                 <option value="medium">Medium</option>
                                 <option value="high">High</option>
@@ -165,6 +316,8 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                             <input
                                 type="date"
                                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-2.5 text-white"
+                                value={newTaskDueDate}
+                                onChange={(e) => setNewTaskDueDate(e.target.value)}
                             />
                         </div>
                     </div>
@@ -173,8 +326,11 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId }) => {
                         <Button variant="secondary" onClick={() => setShowCreateTask(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={() => setShowCreateTask(false)}>
-                            Create Task
+                        <Button
+                            onClick={handleCreateTask}
+                            disabled={!newTaskTitle.trim() || createLoading}
+                        >
+                            {createLoading ? 'Creating...' : 'Create Task'}
                         </Button>
                     </div>
                 </div>
