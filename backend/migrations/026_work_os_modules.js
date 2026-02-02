@@ -7,12 +7,12 @@ export async function up(knex) {
     // ===== CHAT MODULE =====
     await knex.schema.createTable('channels', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.string('name').notNullable();
         table.text('description');
         table.enum('type', ['public', 'private', 'direct']).defaultTo('public');
         table.boolean('is_archived').defaultTo(false);
-        table.uuid('created_by').references('id').inTable('users');
+        table.integer('created_by').references('id').inTable('users'); // Integer FK
         table.timestamps(true, true);
         table.index(['workspace_id', 'type']);
     });
@@ -20,7 +20,7 @@ export async function up(knex) {
     await knex.schema.createTable('channel_members', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
         table.uuid('channel_id').notNullable().references('id').inTable('channels').onDelete('CASCADE');
-        table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+        table.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE'); // Integer FK
         table.enum('role', ['owner', 'admin', 'member']).defaultTo('member');
         table.timestamp('last_read_at');
         table.timestamps(true, true);
@@ -30,7 +30,7 @@ export async function up(knex) {
     await knex.schema.createTable('messages', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
         table.uuid('channel_id').notNullable().references('id').inTable('channels').onDelete('CASCADE');
-        table.uuid('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+        table.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE'); // Integer FK
         table.text('content').notNullable();
         table.uuid('parent_id').references('id').inTable('messages'); // Thread support
         table.jsonb('attachments').defaultTo('[]');
@@ -44,13 +44,13 @@ export async function up(knex) {
     // ===== TASKS MODULE =====
     await knex.schema.createTable('tasks', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.string('title').notNullable();
         table.text('description');
         table.enum('status', ['backlog', 'todo', 'in_progress', 'review', 'done']).defaultTo('backlog');
         table.enum('priority', ['low', 'medium', 'high', 'urgent']).defaultTo('medium');
-        table.uuid('assignee_id').references('id').inTable('users');
-        table.uuid('created_by').references('id').inTable('users');
+        table.integer('assignee_id').references('id').inTable('users'); // Integer FK
+        table.integer('created_by').references('id').inTable('users'); // Integer FK
         table.date('due_date');
         table.jsonb('tags').defaultTo('[]');
         table.uuid('parent_id').references('id').inTable('tasks'); // Subtasks
@@ -63,7 +63,7 @@ export async function up(knex) {
     await knex.schema.createTable('task_comments', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
         table.uuid('task_id').notNullable().references('id').inTable('tasks').onDelete('CASCADE');
-        table.uuid('user_id').notNullable().references('id').inTable('users');
+        table.integer('user_id').notNullable().references('id').inTable('users'); // Integer FK
         table.text('content').notNullable();
         table.timestamps(true, true);
     });
@@ -71,12 +71,12 @@ export async function up(knex) {
     // ===== DOCS MODULE =====
     await knex.schema.createTable('documents', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.string('title').notNullable();
         table.string('icon');
         table.string('cover_image');
         table.uuid('parent_id').references('id').inTable('documents'); // Nested docs
-        table.uuid('created_by').references('id').inTable('users');
+        table.integer('created_by').references('id').inTable('users'); // Integer FK
         table.boolean('is_starred').defaultTo(false);
         table.boolean('is_archived').defaultTo(false);
         table.timestamps(true, true);
@@ -97,11 +97,11 @@ export async function up(knex) {
     // ===== FORMS MODULE =====
     await knex.schema.createTable('forms', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.string('title').notNullable();
         table.text('description');
         table.enum('status', ['draft', 'published', 'closed']).defaultTo('draft');
-        table.uuid('created_by').references('id').inTable('users');
+        table.integer('created_by').references('id').inTable('users'); // Integer FK
         table.jsonb('settings').defaultTo('{}');
         table.timestamps(true, true);
         table.index(['workspace_id', 'status']);
@@ -124,7 +124,7 @@ export async function up(knex) {
     await knex.schema.createTable('form_responses', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
         table.uuid('form_id').notNullable().references('id').inTable('forms').onDelete('CASCADE');
-        table.uuid('respondent_id').references('id').inTable('users');
+        table.integer('respondent_id').references('id').inTable('users'); // Integer FK
         table.jsonb('answers').notNullable();
         table.string('ip_address');
         table.timestamps(true, true);
@@ -134,10 +134,10 @@ export async function up(knex) {
     // ===== FILES MODULE =====
     await knex.schema.createTable('folders', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.string('name').notNullable();
         table.uuid('parent_id').references('id').inTable('folders');
-        table.uuid('created_by').references('id').inTable('users');
+        table.integer('created_by').references('id').inTable('users'); // Integer FK
         table.boolean('is_starred').defaultTo(false);
         table.timestamps(true, true);
         table.index(['workspace_id', 'parent_id']);
@@ -145,14 +145,14 @@ export async function up(knex) {
 
     await knex.schema.createTable('files', (table) => {
         table.uuid('id').primary().defaultTo(knex.raw('gen_random_uuid()'));
-        table.uuid('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE');
+        table.integer('workspace_id').notNullable().references('id').inTable('workspaces').onDelete('CASCADE'); // Integer FK
         table.uuid('folder_id').references('id').inTable('folders').onDelete('SET NULL');
         table.string('name').notNullable();
         table.string('mime_type');
         table.bigInteger('size');
         table.string('storage_key'); // S3/Cloud storage key
         table.string('storage_url'); // Public URL
-        table.uuid('uploaded_by').references('id').inTable('users');
+        table.integer('uploaded_by').references('id').inTable('users'); // Integer FK
         table.boolean('is_starred').defaultTo(false);
         table.timestamps(true, true);
         table.index(['workspace_id', 'folder_id']);
