@@ -34,6 +34,13 @@ import metricsRoutes from './routes/metrics.js';
 import reportRoutes from './routes/reports.js';
 import classificationRoutes from './routes/classification.js';
 
+// Work OS Modules
+import chatRoutes from './routes/chat.js';
+import tasksRoutes from './routes/tasks.js';
+import docsRoutes from './routes/docs.js';
+import formsRoutes from './routes/forms.js';
+import filesRoutes from './routes/files.js';
+
 const app = express();
 
 // Middleware
@@ -117,6 +124,13 @@ app.use('/api/tabs', authenticateToken, tabsRoutes); // Workspace tabs
 app.use('/api/activity', authenticateToken, activityRoutes); // Activity Log
 app.use('/api', metricsRoutes); // Metrics Library
 app.use('/api', classificationRoutes); // Source Classification (Phase 1: Intelligent Core Loop)
+
+// Work OS Modules
+app.use('/api/chat', authenticateToken, chatRoutes);
+app.use('/api/tasks', authenticateToken, tasksRoutes);
+app.use('/api/docs', authenticateToken, docsRoutes);
+app.use('/api/forms', authenticateToken, formsRoutes);
+app.use('/api/files', authenticateToken, filesRoutes);
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
