@@ -19,7 +19,7 @@ import { MessageList, Message } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { Button, Badge, Avatar, Modal, Input } from '../UI';
 import { chatService } from '../../../services/workOsService';
-import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface ChatViewProps {
     workspaceId?: string;

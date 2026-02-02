@@ -20,7 +20,7 @@ import { FormBuilder, FormRenderer } from './FormBuilder';
 import { FormField } from './FormFieldInput';
 import { Button, Input, Badge, Card, Modal } from '../UI';
 import { formsService } from '../../../services/workOsService';
-import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface Form {
     id: string;

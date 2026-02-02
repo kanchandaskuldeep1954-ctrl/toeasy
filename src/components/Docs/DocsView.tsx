@@ -23,7 +23,7 @@ import {
 import { BlockEditor, Block } from './BlockEditor';
 import { Button, Input, Modal, Badge, Avatar, Card } from '../UI';
 import { docsService } from '../../../services/workOsService';
-import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface Document {
     id: string;

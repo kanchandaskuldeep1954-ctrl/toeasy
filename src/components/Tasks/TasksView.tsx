@@ -17,7 +17,7 @@ import { KanbanBoard } from './KanbanBoard';
 import { Task } from './TaskCard';
 import { Button, Input, Modal, Badge, Avatar } from '../UI';
 import { tasksService } from '../../../services/workOsService';
-import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface TasksViewProps {
     workspaceId?: string;

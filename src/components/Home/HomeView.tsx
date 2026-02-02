@@ -17,7 +17,7 @@ import {
     Loader2
 } from 'lucide-react';
 import { Card, Button, Badge } from '../UI';
-import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { tasksService, docsService, chatService } from '../../../services/workOsService';
 
 interface QuickAction {
