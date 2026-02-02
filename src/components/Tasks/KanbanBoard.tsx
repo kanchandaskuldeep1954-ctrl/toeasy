@@ -98,7 +98,7 @@ interface KanbanBoardProps {
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
-    tasks = MOCK_TASKS,
+    tasks = [],
     onTaskClick,
     onAddTask
 }) => {

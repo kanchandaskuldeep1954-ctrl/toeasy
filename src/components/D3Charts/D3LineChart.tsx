@@ -57,12 +57,8 @@ const D3LineChart: React.FC<LineChartProps> = ({
             sanitizedData: result.data.map(d => ({ label: d.label, value: d.value, type: d.originalRow?.type })) as DataPoint[],
             quality: result.quality,
             hasIssues: result.hasIssues
-        return {
-                sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
-                quality: result.quality,
-                hasIssues: result.hasIssues
-            };
-        }, [data]);
+        };
+    }, [data]);
 
     if (!sanitizedData || sanitizedData.length === 0) {
         return <EmptyChartState height={height} message="No valid data for Line Chart" />;

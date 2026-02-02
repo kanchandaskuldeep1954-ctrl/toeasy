@@ -51,12 +51,8 @@ const D3PieChart: React.FC<PieChartProps> = ({
             sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })) as DataPoint[],
             quality: result.quality,
             hasIssues: result.hasIssues
-        return {
-                sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
-                quality: result.quality,
-                hasIssues: result.hasIssues
-            };
-        }, [data]);
+        };
+    }, [data]);
 
     if (!sanitizedData || sanitizedData.length === 0) {
         return <EmptyChartState height={height} message="No valid data for Pie Chart" />;

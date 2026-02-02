@@ -175,7 +175,7 @@ const MessageItem: React.FC<{
 };
 
 export const MessageList: React.FC<MessageListProps> = ({
-    messages = MOCK_MESSAGES,
+    messages = [],
     currentUserId = 'user1',
     onReply
 }) => {

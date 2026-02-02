@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -13,9 +13,12 @@ import {
     ArrowRight,
     Sparkles,
     Clock,
-    TrendingUp
+    TrendingUp,
+    Loader2
 } from 'lucide-react';
-import { Card, Button, Badge, Avatar } from '../UI';
+import { Card, Button, Badge } from '../UI';
+import { useWorkspace } from '../../contexts/WorkspaceContext';
+import { tasksService, docsService, chatService } from '../../../services/workOsService';
 
 interface QuickAction {
     icon: React.ElementType;
@@ -26,29 +29,50 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-    { icon: FileText, label: 'New Doc', description: 'Create a document', href: '/app/docs/new', color: 'indigo' },
-    { icon: Table2, label: 'New Sheet', description: 'Create a spreadsheet', href: '/app/sheets/new', color: 'emerald' },
-    { icon: BarChart3, label: 'New Dashboard', description: 'Build analytics', href: '/app/boards/new', color: 'amber' },
-    { icon: CheckSquare, label: 'New Task', description: 'Track work', href: '/app/tasks/new', color: 'sky' },
-    { icon: Zap, label: 'New Flow', description: 'Automate workflows', href: '/app/flows/new', color: 'purple' }
-];
-
-const RECENT_ITEMS = [
-    { type: 'sheet', name: 'Sales Data Q1', updatedAt: '2 hours ago', icon: Table2 },
-    { type: 'board', name: 'Revenue Dashboard', updatedAt: 'Yesterday', icon: BarChart3 },
-    { type: 'doc', name: 'Project Plan', updatedAt: '3 days ago', icon: FileText },
-    { type: 'task', name: 'Design review', updatedAt: '1 week ago', icon: CheckSquare }
-];
-
-const STATS = [
-    { label: 'Active Tasks', value: '12', change: '+3' },
-    { label: 'Unread Messages', value: '5', change: '+5' },
-    { label: 'Running Flows', value: '2', change: '0' },
-    { label: 'Team Members', value: '8', change: '+1' }
+    { icon: FileText, label: 'New Doc', description: 'Create a document', href: '/app/docs', color: 'indigo' },
+    { icon: CheckSquare, label: 'New Task', description: 'Track work', href: '/app/tasks', color: 'sky' },
+    { icon: MessageCircle, label: 'Chat', description: 'Collaborate', href: '/app/chat', color: 'emerald' },
+    { icon: FolderOpen, label: 'Files', description: 'Store assets', href: '/app/files', color: 'amber' },
+    { icon: Zap, label: 'Flows', description: 'Automate', href: '/app/flows', color: 'purple' }
 ];
 
 export const HomeView: React.FC = () => {
-    const userName = 'User'; // Would come from auth context
+    const { currentWorkspace } = useWorkspace();
+    const workspaceId = currentWorkspace?.id;
+
+    const [stats, setStats] = useState([
+        { label: 'Active Tasks', value: '0', change: '0' },
+        { label: 'Documents', value: '0', change: '0' },
+        { label: 'Channels', value: '0', change: '0' },
+        { label: 'Team Members', value: '1', change: '0' }
+    ]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchStats = async () => {
+            if (!workspaceId) return;
+            setLoading(true);
+            try {
+                const [tasks, docs, channels] = await Promise.all([
+                    tasksService.getAll(workspaceId),
+                    docsService.getAll(workspaceId),
+                    chatService.getChannels(workspaceId)
+                ]);
+
+                setStats([
+                    { label: 'Active Tasks', value: String(tasks.length), change: '0' },
+                    { label: 'Documents', value: String(docs.length), change: '0' },
+                    { label: 'Channels', value: String(channels.length), change: '0' },
+                    { label: 'Team Members', value: '1', change: '0' }
+                ]);
+            } catch (error) {
+                console.error('Failed to fetch home stats:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchStats();
+    }, [workspaceId]);
 
     return (
         <div className="min-h-full bg-slate-950 p-6">
@@ -60,10 +84,10 @@ export const HomeView: React.FC = () => {
                     className="text-center py-8"
                 >
                     <h1 className="text-3xl font-bold text-white mb-2">
-                        Welcome back, {userName}! 👋
+                        Welcome back! 👋
                     </h1>
                     <p className="text-slate-400">
-                        What would you like to work on today?
+                        Everything looks good in {currentWorkspace?.name || 'your workspace'}.
                     </p>
                 </motion.div>
 
@@ -131,61 +155,37 @@ export const HomeView: React.FC = () => {
                     transition={{ delay: 0.3 }}
                 >
                     <h2 className="text-lg font-semibold text-white mb-4">Overview</h2>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {STATS.map((stat, index) => (
-                            <Card key={index} padding="md">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="text-sm text-slate-400">{stat.label}</span>
-                                    {stat.change !== '0' && (
-                                        <Badge
-                                            variant={stat.change.startsWith('+') ? 'success' : 'default'}
-                                            size="sm"
-                                        >
-                                            {stat.change}
-                                        </Badge>
-                                    )}
-                                </div>
-                                <div className="text-2xl font-bold text-white">
-                                    {stat.value}
-                                </div>
-                            </Card>
-                        ))}
-                    </div>
-                </motion.div>
-
-                {/* Recent Items */}
-                <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.4 }}
-                >
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-lg font-semibold text-white">Recent</h2>
-                        <Button variant="ghost" size="sm">
-                            View All
-                        </Button>
-                    </div>
-                    <Card padding="none">
-                        {RECENT_ITEMS.map((item, index) => (
-                            <div
-                                key={index}
-                                className={`flex items-center gap-4 p-4 hover:bg-slate-800/50 cursor-pointer transition-colors ${index !== RECENT_ITEMS.length - 1 ? 'border-b border-slate-800' : ''
-                                    }`}
-                            >
-                                <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
-                                    <item.icon className="w-5 h-5 text-slate-400" />
-                                </div>
-                                <div className="flex-1">
-                                    <h3 className="font-medium text-white">{item.name}</h3>
-                                    <p className="text-xs text-slate-500">{item.type}</p>
-                                </div>
-                                <div className="flex items-center gap-2 text-sm text-slate-500">
-                                    <Clock className="w-4 h-4" />
-                                    {item.updatedAt}
-                                </div>
-                            </div>
-                        ))}
-                    </Card>
+                    {loading ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[1, 2, 3, 4].map(i => (
+                                <Card key={i} padding="md" className="animate-pulse">
+                                    <div className="h-4 w-20 bg-slate-800 rounded mb-2" />
+                                    <div className="h-8 w-12 bg-slate-800 rounded" />
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {stats.map((stat, index) => (
+                                <Card key={index} padding="md">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <span className="text-sm text-slate-400">{stat.label}</span>
+                                        {stat.change !== '0' && (
+                                            <Badge
+                                                variant={stat.change.startsWith('+') ? 'success' : 'default'}
+                                                size="sm"
+                                            >
+                                                {stat.change}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <div className="text-2xl font-bold text-white">
+                                        {stat.value}
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
                 </motion.div>
             </div>
         </div>

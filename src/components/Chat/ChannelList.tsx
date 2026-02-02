@@ -56,7 +56,7 @@ const MOCK_CHANNELS: Channel[] = [
 ];
 
 export const ChannelList: React.FC<ChannelListProps> = ({
-    channels = MOCK_CHANNELS,
+    channels = [],
     activeChannelId,
     onSelectChannel,
     onCreateChannel

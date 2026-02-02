@@ -57,12 +57,8 @@ const D3BarChart: React.FC<BarChartProps> = ({
             sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
             quality: result.quality,
             hasIssues: result.hasIssues
-        return {
-                sanitizedData: result.data.map(d => ({ label: d.label, value: d.value })),
-                quality: result.quality,
-                hasIssues: result.hasIssues
-            };
-        }, [data]);
+        };
+    }, [data]);
 
     // Render empty state if no valid data
     if (!sanitizedData || sanitizedData.length === 0) {
