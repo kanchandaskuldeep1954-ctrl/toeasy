@@ -51,7 +51,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
     const [newChannelName, setNewChannelName] = useState('');
     const [newChannelDesc, setNewChannelDesc] = useState('');
     const [createLoading, setCreateLoading] = useState(false);
-    const [createLoading, setCreateLoading] = useState(false);
+
     const [replyTo, setReplyTo] = useState<{ id: string; userName: string; content: string } | null>(null);
     const { socket } = useSocket();
 
