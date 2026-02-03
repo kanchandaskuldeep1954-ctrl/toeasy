@@ -40,6 +40,7 @@ import tasksRoutes from './routes/tasks.js';
 import docsRoutes from './routes/docs.js';
 import formsRoutes from './routes/forms.js';
 import filesRoutes from './routes/files.js';
+import { setupWebSocket } from './websocket.js'; // Import WebSocket Setup
 
 const app = express();
 
@@ -480,6 +481,9 @@ async function startServer() {
       logger.info(`Backend server running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
     });
+
+    // Initialize WebSockets
+    setupWebSocket(server);
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {

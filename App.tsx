@@ -31,6 +31,7 @@ import ReportLibrary from './src/components/ReportLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
 import TheWarRoom from './src/components/TheWarRoom';
 const DashboardViewIntegrated = React.lazy(() => import('./src/components/DashboardViewIntegrated'));
+const SpreadsheetViewIntegrated = React.lazy(() => import('./components/SpreadsheetViewIntegrated'));
 import ReportView from './components/ReportView';
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
 import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
@@ -90,7 +91,7 @@ const AppLayout: React.FC = () => {
           <Route path="explore-connection/:integrationId" element={<ConnectorExplorerView />} />
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
           {/* Sheets View - Data editing with auto-cleaning */}
-          <Route path="sheets" element={<Navigate to="datasets" replace />} />
+          <Route path="sheets" element={<SpreadsheetViewIntegrated />} />
           <Route path="playground" element={<PlaygroundViewIntegrated />} />
           <Route path="dashboard" element={<DashboardViewIntegrated />} />
           <Route path="dashboards" element={<DashboardLibrary />} />
@@ -115,115 +116,118 @@ const AppLayout: React.FC = () => {
 };
 
 import { WorkflowProvider } from './src/context/WorkflowContext';
+import { SocketProvider } from './src/context/SocketContext';
 
 function App() {
   return (
     <AuthProvider>
-      <WorkspaceProvider>
-        <DatasetProvider>
-          <VersionProvider>
-            <ActivityProvider>
-              <Router>
-                <WorkflowProvider>
-                  <Routes>
-                    {/* Public Routes */}
-                    <Route
-                      path="/"
-                      element={
-                        <PublicLayout>
-                          <LandingPage />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/contact"
-                      element={
-                        <PublicLayout>
-                          <ContactUs />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/terms"
-                      element={
-                        <PublicLayout>
-                          <TermsConditions />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/privacy"
-                      element={
-                        <PublicLayout>
-                          <PrivacyPolicy />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/refunds"
-                      element={
-                        <PublicLayout>
-                          <RefundPolicy />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/faq"
-                      element={
-                        <PublicLayout>
-                          <FAQ />
-                        </PublicLayout>
-                      }
-                    />
-                    <Route
-                      path="/help"
-                      element={
-                        <PublicLayout>
-                          <FAQ />
-                        </PublicLayout>
-                      }
-                    />
+      <SocketProvider>
+        <WorkspaceProvider>
+          <DatasetProvider>
+            <VersionProvider>
+              <ActivityProvider>
+                <Router>
+                  <WorkflowProvider>
+                    <Routes>
+                      {/* Public Routes */}
+                      <Route
+                        path="/"
+                        element={
+                          <PublicLayout>
+                            <LandingPage />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/contact"
+                        element={
+                          <PublicLayout>
+                            <ContactUs />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/terms"
+                        element={
+                          <PublicLayout>
+                            <TermsConditions />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/privacy"
+                        element={
+                          <PublicLayout>
+                            <PrivacyPolicy />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/refunds"
+                        element={
+                          <PublicLayout>
+                            <RefundPolicy />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/faq"
+                        element={
+                          <PublicLayout>
+                            <FAQ />
+                          </PublicLayout>
+                        }
+                      />
+                      <Route
+                        path="/help"
+                        element={
+                          <PublicLayout>
+                            <FAQ />
+                          </PublicLayout>
+                        }
+                      />
 
-                    {/* Public Share Route (NO AUTH) */}
-                    <Route path="/public/share/:token" element={<PublicShareView />} />
+                      {/* Public Share Route (NO AUTH) */}
+                      <Route path="/public/share/:token" element={<PublicShareView />} />
 
-                    <Route
-                      path="/login"
-                      element={
-                        <PublicRoute>
-                          <LoginPage />
-                        </PublicRoute>
-                      }
-                    />
-                    <Route
-                      path="/signup"
-                      element={
-                        <PublicRoute>
-                          <SignupPage />
-                        </PublicRoute>
-                      }
-                    />
+                      <Route
+                        path="/login"
+                        element={
+                          <PublicRoute>
+                            <LoginPage />
+                          </PublicRoute>
+                        }
+                      />
+                      <Route
+                        path="/signup"
+                        element={
+                          <PublicRoute>
+                            <SignupPage />
+                          </PublicRoute>
+                        }
+                      />
 
-                    {/* Protected Routes */}
-                    <Route
-                      path="/app/*"
-                      element={
-                        <ProtectedRoute>
-                          <AppLayout />
-                        </ProtectedRoute>
-                      }
-                    />
+                      {/* Protected Routes */}
+                      <Route
+                        path="/app/*"
+                        element={
+                          <ProtectedRoute>
+                            <AppLayout />
+                          </ProtectedRoute>
+                        }
+                      />
 
-                    {/* Default redirect for /app */}
-                    <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
-                  </Routes>
-                </WorkflowProvider>
-              </Router>
-            </ActivityProvider>
-          </VersionProvider>
-        </DatasetProvider>
-      </WorkspaceProvider>
-    </AuthProvider >
+                      {/* Default redirect for /app */}
+                      <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
+                    </Routes>
+                  </WorkflowProvider>
+                </Router>
+              </ActivityProvider>
+            </VersionProvider>
+          </DatasetProvider>
+        </WorkspaceProvider>
+      </SocketProvider>
+    </AuthProvider>
   );
 }
 

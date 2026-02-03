@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
 import { GroqService } from '../services/groqService';
+import { FileText, Database, Presentation, Share2, Download, RefreshCw, Layout, AlignLeft } from 'lucide-react';
 import { ExportService } from '../src/services/exportService';
 import ReactMarkdown from 'react-markdown';
 import { SmartChart } from './Dashboard/SmartChart';
@@ -175,15 +176,22 @@ const createFallbackReport = (dataset: Dataset): StrategicReport => ({
 // type ReportType = 'strategic' | 'operational' | 'financial' | 'quality' | 'risk';
 
 const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }) => {
-    const [report, setReport] = useState<StrategicReport | null>(null);
-    const [loading, setLoading] = useState(true);
-    // const [reportType, setReportType] = useState<ReportType>('strategic');
+    const [loading, setLoading] = useState(false);
+    const [report, setReport] = useState<StrategicReport | null>(dataset.strategicReport || null);
     const [error, setError] = useState<string | null>(null);
-    const [retryCount, setRetryCount] = useState(0);
     const [activeSection, setActiveSection] = useState<string>('');
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [showCopilot, setShowCopilot] = useState(true);
-    const [copilotInput, setCopilotInput] = useState('');
+    const [isSharing, setIsSharing] = useState(false);
+    const [shareUrl, setShareUrl] = useState<string | null>(null);
+    const [showShareModal, setShowShareModal] = useState(false);
+    const [copySuccess, setCopySuccess] = useState(false);
+    const [retryCount, setRetryCount] = useState(0);
+    const [showExportModal, setShowExportModal] = useState(false);
+
+    // Report Template State
+    const [reportType, setReportType] = useState<'strategic' | 'technical' | 'presentation'>('strategic');
+
+    // Focus Mode State
+    const [isFocusMode, setIsFocusMode] = useState(false);
     const [copilotLoading, setCopilotLoading] = useState(false);
     const [selectionOverlay, setSelectionOverlay] = useState<{ text: string, top: number, left: number } | null>(null);
     const contentRef = useRef<HTMLDivElement>(null);
@@ -367,7 +375,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     reject(new Error(`Report generation timed out after 45 seconds`));
                 }, 45000);
 
-                GroqService.generateReport(dataset, 'strategic', extraContext)
+                GroqService.generateReport(dataset, reportType, extraContext)
                     .then(result => {
                         clearTimeout(timeoutId);
                         resolve(result);
@@ -412,7 +420,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         } finally {
             if (isMounted.current) setLoading(false);
         }
-    }, [dataset, onAIAction, onUpdate, retryCount, workspaceId]);
+    }, [dataset, onAIAction, onUpdate, retryCount, workspaceId, reportType]);
 
     useEffect(() => {
         generate(false);
@@ -777,11 +785,40 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                 </div>
 
                 <nav className="space-y-1">
+                    {/* Template Selector */}
+                    <div className="mb-6 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl flex gap-1">
+                        <button
+                            onClick={() => { setReportType('strategic'); generate(true); }}
+                            className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex flex-col items-center gap-1 transition-all ${reportType === 'strategic' ? 'bg-white dark:bg-slate-700 shadow-sm text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            disabled={loading}
+                        >
+                            <FileText className="w-4 h-4" />
+                            Strat
+                        </button>
+                        <button
+                            onClick={() => { setReportType('technical'); generate(true); }}
+                            className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex flex-col items-center gap-1 transition-all ${reportType === 'technical' ? 'bg-white dark:bg-slate-700 shadow-sm text-cyan-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            disabled={loading}
+                        >
+                            <Database className="w-4 h-4" />
+                            Tech
+                        </button>
+                        <button
+                            onClick={() => { setReportType('presentation'); generate(true); }}
+                            className={`flex-1 py-1.5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wider flex flex-col items-center gap-1 transition-all ${reportType === 'presentation' ? 'bg-white dark:bg-slate-700 shadow-sm text-emerald-600' : 'text-slate-400 hover:text-slate-600'}`}
+                            disabled={loading}
+                        >
+                            <Presentation className="w-4 h-4" />
+                            Slide
+                        </button>
+                    </div>
+
                     <button
                         onClick={() => generate(true)}
                         disabled={loading}
-                        className="w-full mb-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50"
+                        className="w-full mb-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[9px] font-black uppercase tracking-[0.2em] shadow-lg shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                     >
+                        <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
                         {loading ? 'Rebuilding...' : 'Rebuild AI Report'}
                     </button>
                     {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => (
@@ -1049,7 +1086,10 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                     });
                 }}
             >
-                <div className="max-w-[900px] mx-auto py-8 md:py-12 px-4 md:px-12 space-y-12 md:space-y-16 print:max-w-none print:p-0">
+                <div className={`mx-auto py-8 md:py-12 px-4 md:px-12 space-y-12 md:space-y-16 print:max-w-none print:p-0 transition-all duration-500 ${reportType === 'presentation' ? 'max-w-[1200px]' :
+                    reportType === 'technical' ? 'max-w-[1100px] font-mono text-sm' :
+                        'max-w-[900px]'
+                    }`}>
 
                     {/* Cover Page */}
                     <div
@@ -1566,8 +1606,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                                                 }
                                             }}
                                             className={`flex items-center gap-3 p-4 rounded-2xl border transition-all group ${(chartOverrides[chartDesigner.chartId!]?.colorScheme || 'indigo') === theme.id
-                                                    ? 'bg-indigo-600/10 border-indigo-600 dark:bg-indigo-600/20'
-                                                    : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 hover:border-indigo-500'
+                                                ? 'bg-indigo-600/10 border-indigo-600 dark:bg-indigo-600/20'
+                                                : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 hover:border-indigo-500'
                                                 }`}
                                         >
                                             <div className={`w-8 h-8 rounded-full ${theme.color} shadow-inner group-hover:scale-110 transition-transform`} />

@@ -19,7 +19,9 @@ import { MessageList, Message } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { Button, Badge, Avatar, Modal, Input } from '../UI';
 import { chatService } from '../../../services/workOsService';
+import { chatService } from '../../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useSocket } from '../../context/SocketContext';
 
 interface ChatViewProps {
     workspaceId?: string;
@@ -49,7 +51,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
     const [newChannelName, setNewChannelName] = useState('');
     const [newChannelDesc, setNewChannelDesc] = useState('');
     const [createLoading, setCreateLoading] = useState(false);
+    const [createLoading, setCreateLoading] = useState(false);
     const [replyTo, setReplyTo] = useState<{ id: string; userName: string; content: string } | null>(null);
+    const { socket } = useSocket();
 
     // Mock members for now
     const members = [
@@ -114,6 +118,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         fetchMessages();
     }, [activeChannel?.id]);
 
+    // WebSocket Integration
+    useEffect(() => {
+        if (!socket || !activeChannel) return;
+
+        console.log('Joining channel via socket:', activeChannel.id);
+        socket.emit('join-channel', activeChannel.id);
+
+        const handleNewMessage = (msg: Message) => {
+            console.log('Socket received message:', msg);
+            if (msg.channelId === activeChannel.id) {
+                // Dedup check: if message with same content/timestamp exists recently, ignore (simple check)
+                setMessages(prev => {
+                    if (prev.some(p => p.id === msg.id)) return prev;
+                    return [...prev, msg];
+                });
+            }
+        };
+
+        socket.on('new-message', handleNewMessage);
+
+        return () => {
+            socket.emit('leave-channel', activeChannel.id);
+            socket.off('new-message', handleNewMessage);
+        };
+    }, [socket, activeChannel?.id]);
+
     const handleSelectChannel = useCallback((channelId: string) => {
         const channel = channels.find(c => c.id === channelId);
         if (channel) {
@@ -150,6 +180,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                     attachments: newMessage.attachments || []
                 } : m
             ));
+
+            // Socket Emit for Real-time (Demo)
+            if (socket) {
+                socket.emit('send-message', {
+                    channelId: activeChannel.id,
+                    content: content,
+                    replyTo: replyTo?.id
+                });
+            }
+
         } catch (error) {
             console.error('Failed to send message:', error);
             // Remove temp message on error
