@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { Activity, X, Bell, Sparkles, ChevronRight, MessageCircle } from 'lucide-react';
 import { FilterProvider } from '../../context/FilterContext';
 import AICopilotPanel from '../AICopilot/AICopilotPanel';
+import FloatingCopilot from '../../../components/AICopilot/FloatingCopilot';
 import { GroqService } from '../../../services/groqService';
 
 interface MainLayoutProps {
@@ -172,13 +173,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     onAsk={handleAskAI}
                 />
 
-                {/* Floating AI Button (mobile/bottom-right) */}
-                <button
-                    onClick={() => setShowCopilot(true)}
-                    className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 rounded-2xl shadow-2xl shadow-indigo-500/40 flex items-center justify-center text-white text-2xl transition-all hover:scale-110 z-30 lg:hidden"
-                >
-                    🤖
-                </button>
+                {/* Floating AI Copilot (enhanced, always visible) */}
+                <FloatingCopilot
+                    context={activeDataset ? 'sheets' : 'general'}
+                    contextData={activeDataset}
+                />
             </div>
         </FilterProvider>
     );

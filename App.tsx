@@ -30,9 +30,7 @@ import { DashboardLibrary } from './src/components/DashboardLibrary';
 import ReportLibrary from './src/components/ReportLibrary';
 import ReportViewIntegrated from './src/components/ReportViewIntegrated';
 import TheWarRoom from './src/components/TheWarRoom';
-const CleanViewIntegrated = React.lazy(() => import('./src/components/CleanViewIntegrated'));
-const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
-import DashboardViewIntegrated from './src/components/DashboardViewIntegrated';
+const DashboardViewIntegrated = React.lazy(() => import('./src/components/DashboardViewIntegrated'));
 import ReportView from './components/ReportView';
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
 import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
@@ -91,8 +89,8 @@ const AppLayout: React.FC = () => {
           <Route path="connect/:providerId" element={<ConnectorSetupView />} />
           <Route path="explore-connection/:integrationId" element={<ConnectorExplorerView />} />
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
-          <Route path="clean" element={<UniverCleanView />} />
-          <Route path="clean-legacy" element={<CleanViewIntegrated />} />
+          {/* Sheets View - Data editing with auto-cleaning */}
+          <Route path="sheets" element={<Navigate to="datasets" replace />} />
           <Route path="playground" element={<PlaygroundViewIntegrated />} />
           <Route path="dashboard" element={<DashboardViewIntegrated />} />
           <Route path="dashboards" element={<DashboardLibrary />} />
