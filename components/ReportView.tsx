@@ -198,11 +198,6 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
     const [searchParams] = useSearchParams();
     const workspaceId = searchParams.get('workspace') || '';
-    const [shareUrl, setShareUrl] = useState<string | null>(null);
-    const [isSharing, setIsSharing] = useState(false);
-    const [showShareModal, setShowShareModal] = useState(false);
-    const [copySuccess, setCopySuccess] = useState(false);
-    const [isFocusMode, setIsFocusMode] = useState(false);
     const [focusIndex, setFocusIndex] = useState(0);
     const [chartDesigner, setChartDesigner] = useState<{ open: boolean, chartId: string | null }>({ open: false, chartId: null });
     const [chartOverrides, setChartOverrides] = useState<Record<string, Partial<ChartSpec>>>({});
@@ -660,7 +655,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         </div>
     );
 
-    const [showExportModal, setShowExportModal] = useState(false);
+
 
     const handleExport = (format: 'pdf' | 'word' | 'powerbi' | 'tableau' | 'markdown') => {
         if (!report) return;
