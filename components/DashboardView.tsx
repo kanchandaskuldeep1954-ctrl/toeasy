@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Responsive, WidthProvider } from 'react-grid-layout';
+import * as ReactGridLayout from 'react-grid-layout';
+const Responsive = ReactGridLayout.Responsive;
+const WidthProvider = ReactGridLayout.WidthProvider;
 import {
     BarChart3,
     LineChart,
@@ -759,202 +761,202 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const ResponsiveGridLayout = WidthProvider(Responsive);
 
 
-return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
-        {/* Integrated Header Toolbar */}
-        <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 shrink-0">
-            <div className="flex items-center gap-4">
-                <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
-                    <Layout className="w-5 h-5 text-indigo-500" />
-                    {dashboardName}
-                </h1>
-                <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
+    return (
+        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
+            {/* Integrated Header Toolbar */}
+            <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 shrink-0">
+                <div className="flex items-center gap-4">
+                    <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
+                        <Layout className="w-5 h-5 text-indigo-500" />
+                        {dashboardName}
+                    </h1>
+                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
 
-                {/* Quick Tools */}
-                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                    <button
-                        onClick={() => setIsPaletteOpen(true)}
-                        className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                        title="Add Chart"
-                    >
-                        <BarChart3 className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={() => setIsSuggesterOpen(true)}
-                        className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                        title="AI Layout"
-                    >
-                        <Sparkles className="w-4 h-4" />
-                    </button>
-                    <button
-                        onClick={handleAddKPI}
-                        className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                        title="Add KPI"
-                    >
-                        <Hash className="w-4 h-4" />
-                    </button>
-                </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-                <button onClick={handleShare} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
-                    <Share2 className="w-4 h-4" />
-                    Share
-                </button>
-                <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
-                    <Download className="w-4 h-4" />
-                    Export
-                </button>
-                <button onClick={onAIAction} className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95">
-                    <Sparkles className="w-4 h-4" />
-                    Ask Agent
-                </button>
-            </div>
-        </div>
-
-        {/* Main Content with Side Panels */}
-        <div className="flex-1 overflow-hidden relative">
-            <div className="absolute inset-0 overflow-y-auto p-6 custom-scrollbar pb-32">
-
-                {/* KPI Strip */}
-                <div className="flex flex-wrap gap-4 px-2 mb-6">
-                    {(config?.kpis || []).map((kpi, idx) => {
-                        if (!kpi) return null;
-                        const dynamicVal = dynamicKPIs.find(k => k.id === kpi.id)?.value || kpi.value;
-                        return (
-                            <div
-                                key={kpi.id}
-                                className="min-w-[200px] flex-1 animate-in slide-in-from-bottom-4 fade-in duration-700 fill-mode-both"
-                                style={{ animationDelay: `${idx * 150}ms` }}
-                            >
-                                <PremiumKPI
-                                    kpi={{ ...kpi, value: dynamicVal }}
-                                    dataset={dataset}
-                                    onEdit={() => { setEditKPIConfig(kpi); setIsEditingKPI(true); }}
-                                />
-                            </div>
-                        );
-                    })}
-                </div>
-
-                <ResponsiveGridLayout
-                    className="layout"
-                    layouts={{ lg: layout }}
-                    breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-                    cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                    rowHeight={100}
-                    onLayoutChange={(l) => setLayout(l)}
-                    isDraggable={!isBindingOpen && !isPaletteOpen}
-                    isResizable={!isBindingOpen && !isPaletteOpen}
-                    draggableHandle=".drag-handle"
-                >
-                    {charts.map(chart => (
-                        <div key={chart.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg transition-shadow overflow-hidden flex flex-col group relative z-10">
-                            {/* Selection Frame */}
-                            {selectedChartId === chart.id && (
-                                <div className="absolute inset-0 border-2 border-indigo-500 rounded-2xl pointer-events-none z-20 animate-pulse"></div>
-                            )}
-
-                            <div className="drag-handle p-4 cursor-move border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                                <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate">{chart.title}</h3>
-                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setSelectedChartId(chart.id); setIsBindingOpen(true); }}
-                                        className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors"
-                                    >
-                                        <Settings2 className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleAiExplain(chart); }} className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors">
-                                        <Sparkles className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button onClick={(e) => { e.stopPropagation(); handleDeleteChart(chart.id); }} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors">
-                                        <X className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex-1 p-2 min-h-0 overflow-hidden relative">
-                                {renderChart(chart)}
-                                {/* Resize Handle Indicator */}
-                                <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                    <Maximize2 className="w-3 h-3 text-slate-300 rotate-90" />
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </ResponsiveGridLayout>
-
-                {layout.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                        <Layout className="w-16 h-16 text-slate-300 mb-4" />
-                        <p className="text-slate-400 text-lg font-medium">Dashboard is empty</p>
-                        <button onClick={() => setIsSuggesterOpen(true)} className="mt-4 text-indigo-500 font-bold hover:underline">
-                            Auto-Generate Layout
+                    {/* Quick Tools */}
+                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                        <button
+                            onClick={() => setIsPaletteOpen(true)}
+                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
+                            title="Add Chart"
+                        >
+                            <BarChart3 className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={() => setIsSuggesterOpen(true)}
+                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
+                            title="AI Layout"
+                        >
+                            <Sparkles className="w-4 h-4" />
+                        </button>
+                        <button
+                            onClick={handleAddKPI}
+                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
+                            title="Add KPI"
+                        >
+                            <Hash className="w-4 h-4" />
                         </button>
                     </div>
-                )}
-            </div>
+                </div>
 
-            {/* Tableau-style Side Panels */}
-            <ChartPalette
-                isOpen={isPaletteOpen}
-                onClose={() => setIsPaletteOpen(false)}
-                onChartSelect={handleChartTypeSelect}
-            />
-
-            <FieldBindingPanel
-                isOpen={isBindingOpen}
-                onClose={() => setIsBindingOpen(false)}
-                columns={dataset.headers}
-                currentBindings={charts.find(c => c.id === selectedChartId)?.dataKeys as any || {}}
-                onBindingChange={handleBindingChange}
-            />
-
-            <AILayoutSuggester
-                isOpen={isSuggesterOpen}
-                onClose={() => setIsSuggesterOpen(false)}
-                dataset={dataset}
-                onApplyLayout={handleApplyLayout}
-            />
-        </div>
-
-        {/* Modals */}
-        {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config?.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
-        {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
-        {isEditingRawData && <DataEditorModal dataset={dataset} onSave={(newData) => { onUpdate?.({ ...dataset, data: newData }); setIsEditingRawData(false); }} onClose={() => setIsEditingRawData(false)} />}
-
-        <ExportModal
-            isOpen={showExportModal}
-            onClose={() => setShowExportModal(false)}
-            exportType="dashboard"
-            data={config}
-            filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
-            onExport={(format) => {
-                if (format === 'pdf') {
-                    ExportService.exportToPDF(dashboardName);
-                } else if (format === 'csv') {
-                    ExportService.exportToCSV(dataset, 'dashboard_data');
-                }
-            }}
-        />
-
-        {/* Share Modal */}
-        {showShareModal && (
-            <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
-                <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
-                    <div className="flex justify-between items-start mb-6">
-                        <div><h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Analysis</h3></div>
-                        <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
-                    </div>
-                    <div className="p-5 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center gap-3">
-                        <input readOnly value={shareUrl || ''} className="flex-1 bg-transparent border-none text-sm font-bold outline-none" />
-                        <button onClick={() => { navigator.clipboard.writeText(shareUrl || ''); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }} className="text-xs font-bold bg-indigo-500 text-white px-3 py-1.5 rounded-lg">{copySuccess ? 'COPIED' : 'COPY'}</button>
-                    </div>
+                <div className="flex items-center gap-3">
+                    <button onClick={handleShare} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
+                        <Share2 className="w-4 h-4" />
+                        Share
+                    </button>
+                    <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
+                        <Download className="w-4 h-4" />
+                        Export
+                    </button>
+                    <button onClick={onAIAction} className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95">
+                        <Sparkles className="w-4 h-4" />
+                        Ask Agent
+                    </button>
                 </div>
             </div>
-        )}
-    </div>
-);
+
+            {/* Main Content with Side Panels */}
+            <div className="flex-1 overflow-hidden relative">
+                <div className="absolute inset-0 overflow-y-auto p-6 custom-scrollbar pb-32">
+
+                    {/* KPI Strip */}
+                    <div className="flex flex-wrap gap-4 px-2 mb-6">
+                        {(config?.kpis || []).map((kpi, idx) => {
+                            if (!kpi) return null;
+                            const dynamicVal = dynamicKPIs.find(k => k.id === kpi.id)?.value || kpi.value;
+                            return (
+                                <div
+                                    key={kpi.id}
+                                    className="min-w-[200px] flex-1 animate-in slide-in-from-bottom-4 fade-in duration-700 fill-mode-both"
+                                    style={{ animationDelay: `${idx * 150}ms` }}
+                                >
+                                    <PremiumKPI
+                                        kpi={{ ...kpi, value: dynamicVal }}
+                                        dataset={dataset}
+                                        onEdit={() => { setEditKPIConfig(kpi); setIsEditingKPI(true); }}
+                                    />
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <ResponsiveGridLayout
+                        className="layout"
+                        layouts={{ lg: layout }}
+                        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+                        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
+                        rowHeight={100}
+                        onLayoutChange={(l) => setLayout(l)}
+                        isDraggable={!isBindingOpen && !isPaletteOpen}
+                        isResizable={!isBindingOpen && !isPaletteOpen}
+                        draggableHandle=".drag-handle"
+                    >
+                        {charts.map(chart => (
+                            <div key={chart.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg transition-shadow overflow-hidden flex flex-col group relative z-10">
+                                {/* Selection Frame */}
+                                {selectedChartId === chart.id && (
+                                    <div className="absolute inset-0 border-2 border-indigo-500 rounded-2xl pointer-events-none z-20 animate-pulse"></div>
+                                )}
+
+                                <div className="drag-handle p-4 cursor-move border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
+                                    <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate">{chart.title}</h3>
+                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); setSelectedChartId(chart.id); setIsBindingOpen(true); }}
+                                            className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors"
+                                        >
+                                            <Settings2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleAiExplain(chart); }} className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors">
+                                            <Sparkles className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteChart(chart.id); }} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors">
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="flex-1 p-2 min-h-0 overflow-hidden relative">
+                                    {renderChart(chart)}
+                                    {/* Resize Handle Indicator */}
+                                    <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                        <Maximize2 className="w-3 h-3 text-slate-300 rotate-90" />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </ResponsiveGridLayout>
+
+                    {layout.length === 0 && (
+                        <div className="flex flex-col items-center justify-center py-20 opacity-50">
+                            <Layout className="w-16 h-16 text-slate-300 mb-4" />
+                            <p className="text-slate-400 text-lg font-medium">Dashboard is empty</p>
+                            <button onClick={() => setIsSuggesterOpen(true)} className="mt-4 text-indigo-500 font-bold hover:underline">
+                                Auto-Generate Layout
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+                {/* Tableau-style Side Panels */}
+                <ChartPalette
+                    isOpen={isPaletteOpen}
+                    onClose={() => setIsPaletteOpen(false)}
+                    onChartSelect={handleChartTypeSelect}
+                />
+
+                <FieldBindingPanel
+                    isOpen={isBindingOpen}
+                    onClose={() => setIsBindingOpen(false)}
+                    columns={dataset.headers}
+                    currentBindings={charts.find(c => c.id === selectedChartId)?.dataKeys as any || {}}
+                    onBindingChange={handleBindingChange}
+                />
+
+                <AILayoutSuggester
+                    isOpen={isSuggesterOpen}
+                    onClose={() => setIsSuggesterOpen(false)}
+                    dataset={dataset}
+                    onApplyLayout={handleApplyLayout}
+                />
+            </div>
+
+            {/* Modals */}
+            {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config?.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
+            {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
+            {isEditingRawData && <DataEditorModal dataset={dataset} onSave={(newData) => { onUpdate?.({ ...dataset, data: newData }); setIsEditingRawData(false); }} onClose={() => setIsEditingRawData(false)} />}
+
+            <ExportModal
+                isOpen={showExportModal}
+                onClose={() => setShowExportModal(false)}
+                exportType="dashboard"
+                data={config}
+                filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
+                onExport={(format) => {
+                    if (format === 'pdf') {
+                        ExportService.exportToPDF(dashboardName);
+                    } else if (format === 'csv') {
+                        ExportService.exportToCSV(dataset, 'dashboard_data');
+                    }
+                }}
+            />
+
+            {/* Share Modal */}
+            {showShareModal && (
+                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
+                        <div className="flex justify-between items-start mb-6">
+                            <div><h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Analysis</h3></div>
+                            <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="p-5 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center gap-3">
+                            <input readOnly value={shareUrl || ''} className="flex-1 bg-transparent border-none text-sm font-bold outline-none" />
+                            <button onClick={() => { navigator.clipboard.writeText(shareUrl || ''); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }} className="text-xs font-bold bg-indigo-500 text-white px-3 py-1.5 rounded-lg">{copySuccess ? 'COPIED' : 'COPY'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
 };
 
 export default DashboardView;
