@@ -40,6 +40,14 @@ export interface DatasetContextType {
 
 export const DatasetContext = createContext<DatasetContextType | undefined>(undefined);
 
+export const useDataset = () => {
+  const context = React.useContext(DatasetContext);
+  if (context === undefined) {
+    throw new Error('useDataset must be used within a DatasetProvider');
+  }
+  return context;
+};
+
 export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { token } = useAuth();
   const { activeWorkspace } = useWorkspace();
