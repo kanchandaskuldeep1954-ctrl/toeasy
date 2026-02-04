@@ -54,7 +54,10 @@ export const DocsView: React.FC = () => {
     // Fetch documents on mount
     useEffect(() => {
         const fetchDocuments = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const data = await docsService.getAll(workspaceId);

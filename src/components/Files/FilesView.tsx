@@ -100,7 +100,10 @@ export const FilesView: React.FC = () => {
     // Fetch files on mount
     useEffect(() => {
         const fetchFiles = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const [filesData, foldersData] = await Promise.all([

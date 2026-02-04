@@ -67,7 +67,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
     // Fetch channels on mount
     useEffect(() => {
         const fetchChannels = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const data = await chatService.getChannels(workspaceId);

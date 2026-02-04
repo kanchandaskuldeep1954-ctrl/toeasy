@@ -46,7 +46,10 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
     // Fetch tasks
     useEffect(() => {
         const fetchTasks = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const data = await tasksService.getAll(workspaceId);

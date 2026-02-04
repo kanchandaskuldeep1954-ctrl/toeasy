@@ -48,7 +48,10 @@ export const FormsView: React.FC = () => {
     // Fetch forms on mount
     useEffect(() => {
         const fetchForms = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const data = await formsService.getAll(workspaceId);
