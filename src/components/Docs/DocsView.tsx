@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 import { BlockEditor, Block } from './BlockEditor';
 import { Button, Input, Modal, Badge, Avatar, Card } from '../UI';
-import { docsService } from '../../../services/workOsService';
+import { docsService } from '../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
 interface Document {

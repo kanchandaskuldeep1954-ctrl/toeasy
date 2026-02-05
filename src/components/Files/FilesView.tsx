@@ -28,7 +28,7 @@ import {
     Loader2
 } from 'lucide-react';
 import { Button, Input, Modal, Badge, Card } from '../UI';
-import { filesService } from '../../../services/workOsService';
+import { filesService } from '../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
 // File Types

@@ -18,8 +18,7 @@ import { ChannelList } from './ChannelList';
 import { MessageList, Message } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { Button, Badge, Avatar, Modal, Input } from '../UI';
-import { chatService } from '../../../services/workOsService';
-import { chatService } from '../../../services/workOsService';
+import { chatService } from '../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useSocket } from '../../context/SocketContext';
 
