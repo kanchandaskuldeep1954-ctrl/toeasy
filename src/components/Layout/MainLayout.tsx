@@ -19,8 +19,8 @@ import { useAuth } from '../../hooks/useAuth';
 import { Activity, X, Bell, Sparkles, ChevronRight, MessageCircle } from 'lucide-react';
 import { FilterProvider } from '../../context/FilterContext';
 import AICopilotPanel from '../AICopilot/AICopilotPanel';
-import FloatingCopilot from '../../../components/AICopilot/FloatingCopilot';
-import { GroqService } from '../../../services/groqService';
+import FloatingCopilot from '../AICopilot/FloatingCopilot';
+import { GroqService } from '../../services/groqService';
 
 interface MainLayoutProps {
     children: React.ReactNode;
