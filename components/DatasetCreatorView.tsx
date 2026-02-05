@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { DataRow, SourceType } from '../types';
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 import { useAuth } from '../src/hooks/useAuth';
 import SaveDatasetModal from './SaveDatasetModal';
 
