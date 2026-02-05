@@ -22,7 +22,7 @@ import {
     X
 } from 'lucide-react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
 import { SmartChart } from './Dashboard/SmartChart';
 import ChartPalette, { ChartType } from './Dashboard/ChartPalette';
@@ -797,6 +797,18 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         </button>
                     </div>
                 </div>
+
+                {/* AI Layout Suggester Modal */}
+                <AILayoutSuggester
+                    dataset={dataset}
+                    onApplyConfig={(newConfig) => {
+                        setConfig(newConfig);
+                        setIsSuggesterOpen(false);
+                        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+                    }}
+                    isOpen={isSuggesterOpen}
+                    onClose={() => setIsSuggesterOpen(false)}
+                />
 
                 <div className="flex items-center gap-3">
                     <button onClick={handleShare} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">

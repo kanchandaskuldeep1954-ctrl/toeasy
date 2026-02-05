@@ -280,8 +280,8 @@ export class GroqService {
   }
 
   // Suggest dashboard
-  static async suggestDashboard(dataset: Dataset): Promise<DashboardConfig> {
-    return await this.callApi<DashboardConfig>('suggest-dashboard', 'POST', { dataset });
+  static async suggestDashboard(dataset: Dataset, focus?: string): Promise<DashboardConfig> {
+    return await this.callApi<DashboardConfig>('suggest-dashboard', 'POST', { dataset, focus });
   }
 
   // Modify chart with AI

@@ -12,11 +12,12 @@ import {
     PieChart,
     ArrowRight
 } from 'lucide-react';
-import { Dataset } from '../../types';
+import { Dataset, DashboardConfig } from '../../types';
+import { GroqService } from '../../src/services/groqService';
 
 interface AILayoutSuggesterProps {
     dataset: Dataset;
-    onApplyLayout: (layout: any[]) => void;
+    onApplyConfig: (config: DashboardConfig) => void;
     isOpen: boolean;
     onClose: () => void;
 }
@@ -27,46 +28,24 @@ const LAYOUT_TEMPLATES = [
         name: 'Executive Overview',
         description: 'High-level KPIs with trend lines',
         icon: <Layout className="w-5 h-5" />,
-        preview: [
-            { i: 'kpi1', x: 0, y: 0, w: 3, h: 2, type: 'kpi' },
-            { i: 'kpi2', x: 3, y: 0, w: 3, h: 2, type: 'kpi' },
-            { i: 'kpi3', x: 6, y: 0, w: 3, h: 2, type: 'kpi' },
-            { i: 'kpi4', x: 9, y: 0, w: 3, h: 2, type: 'kpi' },
-            { i: 'trend', x: 0, y: 2, w: 8, h: 4, type: 'line' },
-            { i: 'dist', x: 8, y: 2, w: 4, h: 4, type: 'pie' }
-        ]
     },
     {
         id: 'sales',
         name: 'Sales Performance',
         description: 'Regional breakdown and top items',
         icon: <BarChart3 className="w-5 h-5" />,
-        preview: [
-            { i: 'total', x: 0, y: 0, w: 4, h: 2, type: 'kpi' },
-            { i: 'growth', x: 4, y: 0, w: 4, h: 2, type: 'kpi' },
-            { i: 'target', x: 8, y: 0, w: 4, h: 2, type: 'kpi' },
-            { i: 'bar', x: 0, y: 2, w: 6, h: 4, type: 'bar' },
-            { i: 'map', x: 6, y: 2, w: 6, h: 4, type: 'map' },
-            { i: 'table', x: 0, y: 6, w: 12, h: 4, type: 'table' }
-        ]
     },
     {
         id: 'trends',
         name: 'Trend Analysis',
         description: 'Deep dive into time-series data',
         icon: <LineChart className="w-5 h-5" />,
-        preview: [
-            { i: 'main_chart', x: 0, y: 0, w: 12, h: 5, type: 'line' },
-            { i: 'sub_chart1', x: 0, y: 5, w: 4, h: 3, type: 'area' },
-            { i: 'sub_chart2', x: 4, y: 5, w: 4, h: 3, type: 'bar' },
-            { i: 'sub_chart3', x: 8, y: 5, w: 4, h: 3, type: 'scatter' }
-        ]
     }
 ];
 
 export const AILayoutSuggester: React.FC<AILayoutSuggesterProps> = ({
     dataset,
-    onApplyLayout,
+    onApplyConfig,
     isOpen,
     onClose
 }) => {
@@ -77,13 +56,19 @@ export const AILayoutSuggester: React.FC<AILayoutSuggesterProps> = ({
 
     const handleGenerate = async () => {
         setGenerating(true);
-        // Simulate AI generation for now - ideally connects to GroqService
-        setTimeout(() => {
-            const template = LAYOUT_TEMPLATES.find(t => t.id === selectedTemplate) || LAYOUT_TEMPLATES[0];
-            onApplyLayout(template.preview);
-            setGenerating(false);
+        try {
+            const template = LAYOUT_TEMPLATES.find(t => t.id === selectedTemplate);
+            const focus = template ? `${template.name}: ${template.description}` : 'General Overview';
+
+            const config = await GroqService.suggestDashboard(dataset, focus);
+            onApplyConfig(config);
             onClose();
-        }, 1500);
+        } catch (error) {
+            console.error("AI Layout Generation Failed:", error);
+            // Fallback or error notification could go here
+        } finally {
+            setGenerating(false);
+        }
     };
 
     return (
@@ -118,13 +103,13 @@ export const AILayoutSuggester: React.FC<AILayoutSuggesterProps> = ({
                             key={template.id}
                             onClick={() => setSelectedTemplate(template.id)}
                             className={`group relative p-4 rounded-xl border-2 text-left transition-all ${selectedTemplate === template.id
-                                    ? 'border-indigo-500 bg-indigo-500/10'
-                                    : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800'
+                                ? 'border-indigo-500 bg-indigo-500/10'
+                                : 'border-slate-800 bg-slate-900/50 hover:border-slate-700 hover:bg-slate-800'
                                 }`}
                         >
                             <div className={`w-10 h-10 rounded-lg mb-3 flex items-center justify-center transition-colors ${selectedTemplate === template.id
-                                    ? 'bg-indigo-500 text-white'
-                                    : 'bg-slate-800 text-slate-400 group-hover:text-white'
+                                ? 'bg-indigo-500 text-white'
+                                : 'bg-slate-800 text-slate-400 group-hover:text-white'
                                 }`}>
                                 {template.icon}
                             </div>

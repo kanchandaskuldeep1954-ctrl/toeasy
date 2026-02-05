@@ -19,6 +19,7 @@ import {
 import { Card, Button, Badge } from '../UI';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { tasksService, docsService, chatService } from '../../../services/workOsService';
+import { datasetAPI } from '../../../services/api';
 
 interface QuickAction {
     icon: React.ElementType;
@@ -44,7 +45,7 @@ export const HomeView: React.FC = () => {
         { label: 'Active Tasks', value: '0', change: '0' },
         { label: 'Documents', value: '0', change: '0' },
         { label: 'Channels', value: '0', change: '0' },
-        { label: 'Team Members', value: '1', change: '0' }
+        { label: 'Datasets', value: '0', change: '0' }
     ]);
     const [loading, setLoading] = useState(true);
 
@@ -53,17 +54,18 @@ export const HomeView: React.FC = () => {
             if (!workspaceId) return;
             setLoading(true);
             try {
-                const [tasks, docs, channels] = await Promise.all([
+                const [tasks, docs, channels, datasetsRes] = await Promise.all([
                     tasksService.getAll(workspaceId),
                     docsService.getAll(workspaceId),
-                    chatService.getChannels(workspaceId)
+                    chatService.getChannels(workspaceId),
+                    datasetAPI.list(workspaceId)
                 ]);
 
                 setStats([
                     { label: 'Active Tasks', value: String(tasks.length), change: '0' },
                     { label: 'Documents', value: String(docs.length), change: '0' },
                     { label: 'Channels', value: String(channels.length), change: '0' },
-                    { label: 'Team Members', value: '1', change: '0' }
+                    { label: 'Datasets', value: String(datasetsRes.data?.data?.length || 0), change: '0' }
                 ]);
             } catch (error) {
                 console.error('Failed to fetch home stats:', error);
