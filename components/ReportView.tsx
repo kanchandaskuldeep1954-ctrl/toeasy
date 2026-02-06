@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 import { FileText, Database, Presentation, Share2, Download, RefreshCw, Layout, AlignLeft } from 'lucide-react';
 import { ExportService } from '../src/services/exportService';
 import ReactMarkdown from 'react-markdown';
