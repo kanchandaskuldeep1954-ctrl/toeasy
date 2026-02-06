@@ -18,8 +18,8 @@ import {
 } from 'lucide-react';
 import { Card, Button, Badge } from '../UI';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { tasksService, docsService, chatService } from '../../../services/workOsService';
-import { datasetAPI } from '../../../services/api';
+import { tasksService, docsService, chatService } from '../../services/workOsService';
+import { datasetAPI } from '../../services/api';
 
 interface QuickAction {
     icon: React.ElementType;
