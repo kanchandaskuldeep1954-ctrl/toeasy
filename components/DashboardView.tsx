@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Responsive, WidthProvider } from 'react-grid-layout';
+import { Responsive } from 'react-grid-layout';
+import WidthProvider from './Dashboard/WidthProvider';
 import {
     BarChart3,
     LineChart,
