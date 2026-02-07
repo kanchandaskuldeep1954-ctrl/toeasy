@@ -38,8 +38,8 @@ export function initializeAPIClient(token?: string | null) {
   apiClient.interceptors.response.use(
     (response) => response,
     (error: AxiosError) => {
-      if (error.response?.status === 401) {
-        // Token expired, clear auth
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        // Token expired or invalid, clear auth
         localStorage.removeItem('auth_token');
         localStorage.removeItem('refresh_token');
         localStorage.removeItem('auth_user');
