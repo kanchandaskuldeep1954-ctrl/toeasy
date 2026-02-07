@@ -1,6 +1,6 @@
 
 import { Dataset, ChartSpec } from '../../types';
-import { GroqService } from '../../services/groqService';
+import { GroqService } from '../services/groqService';
 
 const findClosestColumn = (target: string | undefined, headers: string[]): string | undefined => {
     if (!target || !headers || !Array.isArray(headers)) return undefined;

@@ -289,7 +289,6 @@ export interface DashboardConfig {
   filters?: FilterSpec[];
   insights?: string[];
   layout?: any;
-  layout?: any;
   metadata?: any;
   theme?: 'indigo' | 'emerald' | 'vibrant' | 'minimal' | 'dark' | 'light';
 }

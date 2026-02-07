@@ -9,6 +9,7 @@
  */
 
 import { Server, Socket } from 'socket.io';
+import { query } from './db.js';
 
 // Types
 interface Message {
@@ -112,24 +113,41 @@ export function setupWebSocket(httpServer: any) {
             replyTo?: string;
             attachments?: any[];
         }) => {
-            const message: Message = {
-                id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-                channelId: data.channelId,
-                userId: socket.data.userId,
-                userName: socket.data.userName,
-                content: data.content,
-                timestamp: new Date(),
-                replyTo: data.replyTo,
-                attachments: data.attachments
-            };
+            try {
+                // Save message to database
+                const result = await query(
+                    `INSERT INTO messages (channel_id, user_id, content, parent_id, attachments)
+                     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                    [
+                        data.channelId,
+                        socket.data.userId,
+                        data.content,
+                        data.replyTo || null,
+                        JSON.stringify(data.attachments || [])
+                    ]
+                );
 
-            // TODO: Save to database
-            // await db('messages').insert(message);
+                const savedMessage = result.rows[0];
 
-            // Broadcast to channel
-            io.to(`channel:${data.channelId}`).emit('new-message', message);
+                const message: Message = {
+                    id: savedMessage.id,
+                    channelId: data.channelId,
+                    userId: socket.data.userId,
+                    userName: socket.data.userName,
+                    content: data.content,
+                    timestamp: savedMessage.created_at,
+                    replyTo: data.replyTo,
+                    attachments: data.attachments
+                };
 
-            console.log(`[WS] Message in ${data.channelId}: ${data.content.slice(0, 50)}...`);
+                // Broadcast to channel
+                io.to(`channel:${data.channelId}`).emit('new-message', message);
+
+                console.log(`[WS] Message saved & broadcast in ${data.channelId}: ${data.content.slice(0, 50)}...`);
+            } catch (err) {
+                console.error('[WS] Failed to save message:', err);
+                socket.emit('message-error', { error: 'Failed to save message' });
+            }
         });
 
         socket.on('typing', (data: { channelId: string }) => {
@@ -147,16 +165,35 @@ export function setupWebSocket(httpServer: any) {
             });
         });
 
-        socket.on('add-reaction', (data: {
+        socket.on('add-reaction', async (data: {
             messageId: string;
             channelId: string;
             emoji: string;
         }) => {
-            io.to(`channel:${data.channelId}`).emit('reaction-added', {
-                messageId: data.messageId,
-                userId: socket.data.userId,
-                emoji: data.emoji
-            });
+            try {
+                // Get current reactions
+                const msgResult = await query('SELECT reactions FROM messages WHERE id = $1', [data.messageId]);
+                if (msgResult.rows.length === 0) return;
+
+                let reactions = msgResult.rows[0].reactions;
+                reactions = typeof reactions === 'string' ? JSON.parse(reactions) : (reactions || {});
+
+                if (!reactions[data.emoji]) reactions[data.emoji] = [];
+                if (!reactions[data.emoji].includes(socket.data.userId)) {
+                    reactions[data.emoji].push(socket.data.userId);
+                }
+
+                await query('UPDATE messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), data.messageId]);
+
+                io.to(`channel:${data.channelId}`).emit('reaction-added', {
+                    messageId: data.messageId,
+                    userId: socket.data.userId,
+                    emoji: data.emoji,
+                    reactions
+                });
+            } catch (err) {
+                console.error('[WS] Failed to add reaction:', err);
+            }
         });
 
         // --- Collaboration ---

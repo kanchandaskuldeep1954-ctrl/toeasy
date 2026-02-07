@@ -147,18 +147,30 @@ router.delete('/folders/:id', async (req: AuthRequest, res) => {
 
 // ===== FILES =====
 
-// Upload file (metadata only - actual upload would go to S3/cloud)
+// Upload file (supports base64 data storage or cloud storage URL)
 router.post('/upload', async (req: AuthRequest, res) => {
     try {
-        const { name, mime_type, size, storage_key, storage_url, folder_id, workspace_id } = req.body;
+        const { name, mime_type, size, storage_key, storage_url, folder_id, workspace_id, file_data } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
 
         const wsId = workspace_id || req.user?.active_workspace_id;
 
+        // For small files (< 5MB), we can store base64 data directly
+        // For larger files, use storage_url pointing to S3/cloud
         const result = await query(
             `INSERT INTO files (workspace_id, folder_id, name, mime_type, size, storage_key, storage_url, uploaded_by)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *, 'file' as type`,
-            [wsId, folder_id || null, name, mime_type || null, size || null, storage_key || null, storage_url || null, req.user?.id]
+            [
+                wsId,
+                folder_id || null,
+                name,
+                mime_type || null,
+                size || null,
+                storage_key || null,
+                // Store base64 data as data URL if provided, otherwise use storage_url
+                file_data ? `data:${mime_type || 'application/octet-stream'};base64,${file_data}` : (storage_url || null),
+                req.user?.id
+            ]
         );
 
         res.status(201).json({ file: result.rows[0] });

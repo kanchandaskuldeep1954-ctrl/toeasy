@@ -264,14 +264,8 @@ export const FilesView: React.FC = () => {
 
         try {
             for (const file of Array.from(fileList)) {
-                const formData = new FormData();
-                formData.append('file', file);
-                formData.append('workspace_id', workspaceId);
-                if (currentFolderId) {
-                    formData.append('folder_id', currentFolderId);
-                }
-
-                const uploaded = await filesService.upload(formData);
+                // Use the new upload method that converts to base64
+                const uploaded = await filesService.upload(file, workspaceId, currentFolderId);
 
                 const newFile: FileItem = {
                     id: uploaded.id,

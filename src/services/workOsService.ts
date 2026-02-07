@@ -180,10 +180,19 @@ export const filesService = {
         if (starred) params.append('starred', 'true');
 
         const res = await axios.get(`${API_BASE}/files?${params}`, { headers: getAuthHeaders() });
-        return res.data;
+        return res.data.files || [];
     },
 
-    createFolder: async (data: { name: string; parent_id?: string; workspace_id?: string }) => {
+    getFolders: async (workspaceId?: string, parentId?: string) => {
+        const params = new URLSearchParams();
+        if (workspaceId) params.append('workspace_id', workspaceId);
+        if (parentId) params.append('folder_id', parentId);
+
+        const res = await axios.get(`${API_BASE}/files?${params}`, { headers: getAuthHeaders() });
+        return res.data.folders || [];
+    },
+
+    createFolder: async (data: { name: string; parent_id?: string | null; workspace_id?: string }) => {
         const res = await axios.post(`${API_BASE}/files/folders`, data, { headers: getAuthHeaders() });
         return res.data.folder;
     },
@@ -197,9 +206,35 @@ export const filesService = {
         await axios.delete(`${API_BASE}/files/folders/${id}`, { headers: getAuthHeaders() });
     },
 
-    uploadFile: async (data: { name: string; mime_type?: string; size?: number; storage_key?: string; storage_url?: string; folder_id?: string; workspace_id?: string }) => {
+    uploadFile: async (data: { name: string; mime_type?: string; size?: number; storage_key?: string; storage_url?: string; folder_id?: string | null; workspace_id?: string; file_data?: string }) => {
         const res = await axios.post(`${API_BASE}/files/upload`, data, { headers: getAuthHeaders() });
         return res.data.file;
+    },
+
+    // Upload a File object by converting to base64
+    upload: async (file: File, workspaceId: string, folderId?: string | null) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = async () => {
+                try {
+                    const base64 = (reader.result as string).split(',')[1]; // Remove data:...;base64, prefix
+                    const data = {
+                        name: file.name,
+                        mime_type: file.type,
+                        size: file.size,
+                        workspace_id: workspaceId,
+                        folder_id: folderId || null,
+                        file_data: base64
+                    };
+                    const res = await axios.post(`${API_BASE}/files/upload`, data, { headers: getAuthHeaders() });
+                    resolve(res.data.file);
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
     },
 
     updateFile: async (id: string, data: Partial<{ name: string; folder_id: string; is_starred: boolean }>) => {
@@ -207,8 +242,13 @@ export const filesService = {
         return res.data.file;
     },
 
-    deleteFile: async (id: string) => {
+    delete: async (id: string) => {
         await axios.delete(`${API_BASE}/files/${id}`, { headers: getAuthHeaders() });
+    },
+
+    update: async (id: string, data: Partial<{ name: string; folder_id: string; is_starred: boolean }>) => {
+        const res = await axios.put(`${API_BASE}/files/${id}`, data, { headers: getAuthHeaders() });
+        return res.data.file;
     }
 };
 

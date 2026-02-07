@@ -95,7 +95,7 @@ export const FloatingCopilot: React.FC<FloatingCopilotProps> = ({
 
         try {
             // Call AI service
-            const { GroqService } = await import('../../src/services/groqService');
+            const { GroqService } = await import('../../services/groqService');
 
             let response = '';
 
@@ -146,8 +146,8 @@ export const FloatingCopilot: React.FC<FloatingCopilotProps> = ({
 
     return (
         <div className={`fixed z-[9999] transition-all duration-300 ${isMinimized
-                ? 'bottom-6 right-6 w-auto'
-                : 'bottom-6 right-6 w-[90vw] max-w-[400px] md:w-96'
+            ? 'bottom-6 right-6 w-auto'
+            : 'bottom-6 right-6 w-[90vw] max-w-[400px] md:w-96'
             }`}>
             <div className="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-bottom-4 fade-in duration-200">
                 {/* Header */}
@@ -217,8 +217,8 @@ export const FloatingCopilot: React.FC<FloatingCopilotProps> = ({
                                             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                         >
                                             <div className={`max-w-[85%] px-3 py-2 rounded-xl text-xs leading-relaxed ${msg.role === 'user'
-                                                    ? 'bg-indigo-600 text-white rounded-br-none'
-                                                    : 'bg-slate-800 text-slate-300 rounded-bl-none border border-slate-700'
+                                                ? 'bg-indigo-600 text-white rounded-br-none'
+                                                : 'bg-slate-800 text-slate-300 rounded-bl-none border border-slate-700'
                                                 }`}>
                                                 {msg.content}
                                             </div>

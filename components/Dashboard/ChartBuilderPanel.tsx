@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { ChartSpec, Dataset } from '../../types';
 import { SmartChart } from './SmartChart';
-import { GroqService } from '../../services/groqService';
+import { GroqService } from '../../src/services/groqService';
 import { aggregateData } from '../../src/utils/dashboardHelper';
 
 interface ChartBuilderPanelProps {
