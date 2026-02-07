@@ -66,7 +66,7 @@ const parseNumericValue = (val: any): number | null => {
 };
 
 export const aggregateData = (chart: ChartSpec, dataset: Dataset, filteredData: any[]): any[] => {
-    if (!dataset || !chart) return [];
+    if (!dataset || !chart || !dataset.headers || !Array.isArray(dataset.headers)) return [];
 
     const headers = dataset.headers || [];
     const xAxis = findClosestColumn(chart.xAxis || chart.options?.xAxis, headers) || headers[0]; // Fallback to first header instead of raw string

@@ -24,7 +24,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
 
     // Backend URL from env or default
-    const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000';
+    // Socket.IO needs root URL, not /api path - strip /api suffix if present
+    const SOCKET_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api').replace(/\/api$/, '');
 
     useEffect(() => {
         if (loading) return;
@@ -46,7 +47,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 socketInstance.emit('authenticate', {
                     userId: user.id,
                     userName: user.name,
-                    token: localStorage.getItem('token') // If needed
+                    token: localStorage.getItem('auth_token')
                 });
             });
 
