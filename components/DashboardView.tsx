@@ -1,9 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import * as ReactGridLayout from 'react-grid-layout';
-const Responsive = ReactGridLayout.Responsive;
-const WidthProvider = ReactGridLayout.WidthProvider;
+import { Responsive, WidthProvider } from 'react-grid-layout';
 import {
     BarChart3,
     LineChart,

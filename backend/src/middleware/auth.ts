@@ -29,7 +29,8 @@ export function authenticateToken(req: AuthRequest, res: Response, next: NextFun
     };
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    console.error('[AuthMiddleware] Token verification failed:', err);
+    return res.status(403).json({ error: 'Invalid or expired token', details: (err as Error).message });
   }
 }
 

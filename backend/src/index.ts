@@ -480,6 +480,7 @@ async function startServer() {
     const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`JWT Secret configured: ${config.jwtSecret ? 'Yes (' + config.jwtSecret.substring(0, 3) + '...)' : 'No'}`);
     });
 
     // Initialize WebSockets
