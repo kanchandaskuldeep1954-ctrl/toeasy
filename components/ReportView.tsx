@@ -186,6 +186,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [copySuccess, setCopySuccess] = useState(false);
     const [retryCount, setRetryCount] = useState(0);
     const [showExportModal, setShowExportModal] = useState(false);
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
     // Report Template State
     const [reportType, setReportType] = useState<'strategic' | 'technical' | 'presentation'>('strategic');
