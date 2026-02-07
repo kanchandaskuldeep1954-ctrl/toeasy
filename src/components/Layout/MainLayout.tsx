@@ -13,6 +13,7 @@ import React, { useState, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import WorkspaceTabs from '../WorkspaceTabs';
 import { ActivityFeed } from '../Activity/ActivityFeed';
+import NotificationCenter from '../Notifications/NotificationCenter';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDataset } from '../../hooks/useDataset';
 import { useAuth } from '../../hooks/useAuth';
@@ -102,10 +103,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             </div>
 
                             {/* Notifications */}
-                            <button className="relative p-2 text-slate-400 hover:text-white hover:bg-white/5 rounded-lg transition-colors">
-                                <Bell className="w-5 h-5" />
-                                <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                            </button>
+                            <NotificationCenter />
 
                             {/* Activity Toggle */}
                             <button

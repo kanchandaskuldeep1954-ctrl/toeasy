@@ -485,6 +485,35 @@ export const classificationAPI = {
     getClient().put(`/workspaces/${workspaceId}/datasets/${datasetId}/journey-progress`, { currentStep, progress })
 };
 
+// ============================================
+// Alerts & Notifications Endpoints (Phase 3)
+// ============================================
+
+export const alertsAPI = {
+  list: (workspaceId: string) =>
+    getClient().get('/alerts', { params: { workspaceId } }),
+
+  create: (workspaceId: string, data: any) =>
+    getClient().post('/alerts', { workspace_id: workspaceId, ...data }),
+
+  delete: (id: string | number) =>
+    getClient().delete(`/alerts/${id}`),
+
+  check: (id: string | number) =>
+    getClient().post(`/alerts/${id}/check`)
+};
+
+export const notificationsAPI = {
+  list: (workspaceId?: string) =>
+    getClient().get('/notifications', { params: { workspaceId } }),
+
+  markRead: (id: string | number) =>
+    getClient().post(`/notifications/${id}/read`),
+
+  markAllRead: (workspaceId?: string) =>
+    getClient().post('/notifications/read-all', { workspaceId })
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -504,5 +533,7 @@ export default {
   tabs: tabsAPI,
   activity: activityAPI,
   classification: classificationAPI,
+  alerts: alertsAPI,
+  notifications: notificationsAPI,
   initializeAPIClient
 };

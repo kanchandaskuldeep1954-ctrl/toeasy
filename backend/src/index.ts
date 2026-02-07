@@ -40,6 +40,8 @@ import tasksRoutes from './routes/tasks.js';
 import docsRoutes from './routes/docs.js';
 import formsRoutes from './routes/forms.js';
 import filesRoutes from './routes/files.js';
+import alertsRoutes from './routes/alerts.js';
+import notificationsRoutes from './routes/notifications.js';
 import { setupWebSocket } from './websocket.js'; // Import WebSocket Setup
 
 const app = express();
@@ -132,6 +134,8 @@ app.use('/api/tasks', authenticateToken, tasksRoutes);
 app.use('/api/docs', authenticateToken, docsRoutes);
 app.use('/api/forms', authenticateToken, formsRoutes);
 app.use('/api/files', authenticateToken, filesRoutes);
+app.use('/api/alerts', authenticateToken, alertsRoutes);
+app.use('/api/notifications', authenticateToken, notificationsRoutes);
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

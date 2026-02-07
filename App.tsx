@@ -41,7 +41,9 @@ import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
+import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 import MetricsLibrary from './src/components/MetricsLibrary';
+import AlertsManager from './src/components/Alerts/AlertsManager';
 
 // Unified Work OS Modules
 const HomeView = React.lazy(() => import('./src/components/Home/HomeView'));
@@ -105,6 +107,7 @@ const AppLayout: React.FC = () => {
           <Route path="metrics" element={<UsageMetrics />} />
           <Route path="metrics-library" element={<MetricsLibrary />} />
           <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
+          <Route path="alerts" element={<AlertsManager workspaceId={String(activeWorkspace?.id || '')} />} />
           <Route path="billing" element={<BillingViewIntegrated />} />
 
           {/* Default route */}
