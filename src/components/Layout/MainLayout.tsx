@@ -34,7 +34,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [showCopilot, setShowCopilot] = useState(false);
     const { activeWorkspace } = useWorkspace();
     const { activeDataset } = useDataset();
-    const { activeDataset } = useDataset();
     const { user } = useAuth();
     const { theme } = useTheme();
 
@@ -64,8 +63,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <main className="flex-1 overflow-hidden relative flex flex-col min-w-0">
                     {/* Premium Header Bar */}
                     <header className={`h-14 border-b shrink-0 flex items-center px-4 gap-3 relative z-10 backdrop-blur-xl ${theme === 'dark'
-                            ? 'border-white/5 bg-gradient-to-r from-slate-900/80 via-slate-900/90 to-slate-900/80 text-white'
-                            : 'border-slate-200 bg-white/80 text-slate-900'
+                        ? 'border-white/5 bg-gradient-to-r from-slate-900/80 via-slate-900/90 to-slate-900/80 text-white'
+                        : 'border-slate-200 bg-white/80 text-slate-900'
                         }`}>
                         {/* Mobile Menu Button */}
                         <button
@@ -139,8 +138,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                     {/* Main Content Area with Premium Background */}
                     <div className={`flex flex-1 overflow-hidden ${theme === 'dark'
-                            ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950'
-                            : 'bg-slate-50/50'
+                        ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950'
+                        : 'bg-slate-50/50'
                         }`}>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                             {/* Subtle grid pattern overlay */}
@@ -161,8 +160,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         {/* Activity Feed Sidebar - Premium Style */}
                         {showActivity && (
                             <div className={`w-80 border-l h-full shadow-2xl z-20 absolute right-0 top-0 lg:static lg:shadow-none animate-in slide-in-from-right duration-300 backdrop-blur-xl ${theme === 'dark'
-                                    ? 'border-white/5 bg-slate-900/80'
-                                    : 'border-slate-200 bg-white/80'
+                                ? 'border-white/5 bg-slate-900/80'
+                                : 'border-slate-200 bg-white/80'
                                 }`}>
                                 <div className="lg:hidden absolute top-3 right-3 z-10">
                                     <button
