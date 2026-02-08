@@ -28,7 +28,7 @@ const config: { [key: string]: Knex.Config } = {
     connection: process.env.DATABASE_URL,
     migrations: {
       directory: "./migrations",
-      extension: "ts",
+      extension: "js",
     },
     seeds: {
       directory: "./seeds",

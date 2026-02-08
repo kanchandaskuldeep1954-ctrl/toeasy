@@ -1,6 +1,9 @@
-import { Knex } from "knex";
+/**
+ * Migration: 027_create_alerts_module.js
+ * Creates tables for Alerts, Notifications, and Alert History
+ */
 
-export async function up(knex: Knex): Promise<void> {
+export async function up(knex) {
     // Create Alerts Table
     await knex.schema.createTable("alerts", (table) => {
         table.increments("id").primary();
@@ -50,7 +53,7 @@ export async function up(knex: Knex): Promise<void> {
     });
 }
 
-export async function down(knex: Knex): Promise<void> {
+export async function down(knex) {
     await knex.schema.dropTableIfExists("alert_history");
     await knex.schema.dropTableIfExists("notifications");
     await knex.schema.dropTableIfExists("alerts");
