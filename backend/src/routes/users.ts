@@ -138,6 +138,53 @@ router.get('/me/usage', authenticateToken, async (req: AuthRequest, res) => {
   }
 });
 
+// Get usage statistics (alias)
+router.get('/me/usage-metrics', authenticateToken, async (req: AuthRequest, res) => {
+  // Redirect logic to /me/usage implementation
+  try {
+    // Get subscription tier
+    const subResult = await query(
+      'SELECT tier FROM subscriptions WHERE user_id = $1 AND status = $2 ORDER BY created_at DESC LIMIT 1',
+      [req.user!.id, 'active']
+    );
+
+    const tier = subResult.rows.length > 0 ? subResult.rows[0].tier : 'basic';
+
+    // Get usage stats
+    const statsResult = await query(
+      `SELECT 
+            (SELECT COUNT(*) FROM workspaces WHERE user_id = $1) as workspace_count,
+            (SELECT COUNT(*) FROM datasets WHERE user_id = $1) as dataset_count,
+            (SELECT COUNT(*) FROM dashboards WHERE workspace_id IN (SELECT id FROM workspaces WHERE user_id = $1)) as dashboard_count,
+            (SELECT COUNT(*) FROM queries WHERE executed_by = $1) as query_count`,
+      [req.user!.id]
+    );
+
+    const stats = statsResult.rows[0];
+    const limits = config.tierLimits[tier as keyof typeof config.tierLimits] || config.tierLimits.basic;
+
+    res.json({
+      tier,
+      limits,
+      metrics: { // Frontend expects "metrics" or "stats" depending on version, sending both for safety
+        workspaces: stats.workspace_count,
+        datasets: stats.dataset_count,
+        dashboards: stats.dashboard_count,
+        queriesExecuted: stats.query_count
+      },
+      stats: {
+        workspaces: stats.workspace_count,
+        datasets: stats.dataset_count,
+        dashboards: stats.dashboard_count,
+        queriesExecuted: stats.query_count
+      }
+    });
+  } catch (err) {
+    console.error('Get usage metrics error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Get usage statistics (legacy endpoint)
 router.get('/usage', authenticateToken, async (req: AuthRequest, res) => {
   try {

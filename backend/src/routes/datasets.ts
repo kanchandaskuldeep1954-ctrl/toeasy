@@ -612,6 +612,52 @@ router.put('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) =>
   }
 });
 
+// Get quarantined data
+router.get('/:workspaceId/datasets/:datasetId/quarantine', async (req: AuthRequest, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+
+    const result = await query(
+      'SELECT quarantined_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+      [req.params.datasetId, req.params.workspaceId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
+    let quarantined = result.rows[0].quarantined_data;
+
+    // Parse if string
+    if (typeof quarantined === 'string') {
+      try {
+        quarantined = JSON.parse(quarantined);
+      } catch (e) {
+        quarantined = [];
+      }
+    }
+
+    if (!Array.isArray(quarantined)) {
+      quarantined = [];
+    }
+
+    // Pagination
+    const start = parseInt(offset as string);
+    const end = start + parseInt(limit as string);
+    const paginatedData = quarantined.slice(start, end);
+
+    res.json({
+      data: paginatedData,
+      total: quarantined.length,
+      limit: parseInt(limit as string),
+      offset: start
+    });
+  } catch (err) {
+    console.error('Get quarantine data error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Delete dataset
 router.delete('/:workspaceId/datasets/:datasetId', async (req: AuthRequest, res) => {
 
