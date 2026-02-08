@@ -22,6 +22,7 @@ import { FilterProvider } from '../../context/FilterContext';
 import AICopilotPanel from '../AICopilot/AICopilotPanel';
 import FloatingCopilot from '../AICopilot/FloatingCopilot';
 import { GroqService } from '../../services/groqService';
+import { useTheme } from '../../hooks/useTheme';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -33,7 +34,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [showCopilot, setShowCopilot] = useState(false);
     const { activeWorkspace } = useWorkspace();
     const { activeDataset } = useDataset();
+    const { activeDataset } = useDataset();
     const { user } = useAuth();
+    const { theme } = useTheme();
 
     // Handle AI queries
     const handleAskAI = useCallback(async (query: string): Promise<string> => {
@@ -55,16 +58,20 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
     return (
         <FilterProvider>
-            <div className="flex h-screen bg-slate-950 text-white overflow-hidden font-sans selection:bg-indigo-500/30">
+            <div className={`flex h-screen overflow-hidden font-sans selection:bg-indigo-500/30 ${theme === 'dark' ? 'bg-slate-950 text-white' : 'bg-slate-50 text-slate-900'}`}>
                 <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
 
                 <main className="flex-1 overflow-hidden relative flex flex-col min-w-0">
                     {/* Premium Header Bar */}
-                    <header className="h-14 border-b border-white/5 bg-gradient-to-r from-slate-900/80 via-slate-900/90 to-slate-900/80 backdrop-blur-xl flex items-center px-4 shrink-0 gap-3 relative z-10">
+                    <header className={`h-14 border-b shrink-0 flex items-center px-4 gap-3 relative z-10 backdrop-blur-xl ${theme === 'dark'
+                            ? 'border-white/5 bg-gradient-to-r from-slate-900/80 via-slate-900/90 to-slate-900/80 text-white'
+                            : 'border-slate-200 bg-white/80 text-slate-900'
+                        }`}>
                         {/* Mobile Menu Button */}
                         <button
                             onClick={() => setMobileOpen(true)}
-                            className="lg:hidden p-2 -ml-2 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-colors"
+                            className={`lg:hidden p-2 -ml-2 rounded-lg transition-colors ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
+                                }`}
                         >
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
@@ -73,11 +80,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                         {/* Breadcrumb Context */}
                         <div className="hidden md:flex items-center gap-2 text-sm">
-                            <span className="text-slate-500">{activeWorkspace?.name || 'Workspace'}</span>
+                            <span className={theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}>{activeWorkspace?.name || 'Workspace'}</span>
                             {activeDataset && (
                                 <>
-                                    <ChevronRight className="w-4 h-4 text-slate-600" />
-                                    <span className="text-white font-medium flex items-center gap-2">
+                                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                                    <span className={`font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-900'}`}>
                                         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                         {activeDataset.name}
                                     </span>
@@ -97,9 +104,10 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             </button>
 
                             {/* AI Status Indicator */}
-                            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-full">
-                                <Sparkles className="w-4 h-4 text-indigo-400" />
-                                <span className="text-xs font-medium text-indigo-300">AI Ready</span>
+                            <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 border rounded-full ${theme === 'dark' ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-200'
+                                }`}>
+                                <Sparkles className="w-4 h-4 text-indigo-500" />
+                                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">AI Ready</span>
                             </div>
 
                             {/* Notifications */}
@@ -109,8 +117,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             <button
                                 onClick={() => setShowActivity(!showActivity)}
                                 className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${showActivity
-                                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-                                    : 'text-slate-400 hover:text-white hover:bg-white/5'
+                                    ? 'bg-indigo-500/20 text-indigo-500 border border-indigo-500/30'
+                                    : theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-white/5' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100'
                                     }`}
                             >
                                 <Activity className="w-4 h-4" />
@@ -125,20 +133,25 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     </header>
 
                     {/* Perspective Tabs Bar - Premium Style */}
-                    <div className="flex items-center bg-slate-900/50 border-b border-white/5">
+                    <div className={`flex items-center border-b ${theme === 'dark' ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'}`}>
                         <WorkspaceTabs />
                     </div>
 
                     {/* Main Content Area with Premium Background */}
-                    <div className="flex flex-1 overflow-hidden bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950">
+                    <div className={`flex flex-1 overflow-hidden ${theme === 'dark'
+                            ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950'
+                            : 'bg-slate-50/50'
+                        }`}>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                             {/* Subtle grid pattern overlay */}
-                            <div className="relative">
+                            <div className="relative min-h-full flex flex-col">
                                 <div
-                                    className="absolute inset-0 opacity-[0.02] pointer-events-none"
+                                    className={`absolute inset-0 opacity-[0.02] pointer-events-none ${theme === 'dark' ? 'bg-white' : 'bg-black'}`}
                                     style={{
-                                        backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)',
-                                        backgroundSize: '40px 40px'
+                                        maskImage: 'radial-gradient(circle at 1px 1px, black 1px, transparent 0)',
+                                        WebkitMaskImage: 'radial-gradient(circle at 1px 1px, black 1px, transparent 0)',
+                                        maskSize: '40px 40px',
+                                        WebkitMaskSize: '40px 40px'
                                     }}
                                 />
                                 {children}
@@ -147,11 +160,15 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                         {/* Activity Feed Sidebar - Premium Style */}
                         {showActivity && (
-                            <div className="w-80 border-l border-white/5 bg-slate-900/80 backdrop-blur-xl h-full shadow-2xl z-20 absolute right-0 top-0 lg:static lg:shadow-none animate-in slide-in-from-right duration-300">
+                            <div className={`w-80 border-l h-full shadow-2xl z-20 absolute right-0 top-0 lg:static lg:shadow-none animate-in slide-in-from-right duration-300 backdrop-blur-xl ${theme === 'dark'
+                                    ? 'border-white/5 bg-slate-900/80'
+                                    : 'border-slate-200 bg-white/80'
+                                }`}>
                                 <div className="lg:hidden absolute top-3 right-3 z-10">
                                     <button
                                         onClick={() => setShowActivity(false)}
-                                        className="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white transition-colors"
+                                        className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-white/10 text-slate-400 hover:text-white' : 'hover:bg-slate-100 text-slate-500 hover:text-slate-900'
+                                            }`}
                                     >
                                         <X className="w-4 h-4" />
                                     </button>
