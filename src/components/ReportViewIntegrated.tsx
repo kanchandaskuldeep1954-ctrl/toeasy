@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import ReportView from '../../components/ReportView';
+import ReportView from './ReportView';
 import { Dataset } from '../context/DatasetContext';
 import { reportsAPI, datasetAPI } from '../services/api';
 import { useDataset } from '../hooks/useDataset';
@@ -111,8 +111,7 @@ const ReportViewIntegrated: React.FC = () => {
 
             // 3. Fetch Siblings
             const siblingsRes = await reportsAPI.list(workspaceId, targetDatasetId);
-            setSiblings(siblingsRes.data.data || []);
-            setError(null);
+            setSiblings(Array.isArray(siblingsRes.data.data) ? siblingsRes.data.data : []);
             setError(null);
         } catch (err: any) {
             if (err.response?.status === 404) {

@@ -203,6 +203,8 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
     const [chartDesigner, setChartDesigner] = useState<{ open: boolean, chartId: string | null }>({ open: false, chartId: null });
     const [chartOverrides, setChartOverrides] = useState<Record<string, Partial<ChartSpec>>>({});
     const [copilotMode, setCopilotMode] = useState<'chat' | 'update'>('chat');
+    const [showCopilot, setShowCopilot] = useState(false);
+    const [copilotInput, setCopilotInput] = useState('');
     const [copilotMessages, setCopilotMessages] = useState<{ role: 'user' | 'assistant', content: string, thinking?: string }[]>([]);
     const chatEndRef = useRef<HTMLDivElement>(null);
 

@@ -55,10 +55,10 @@ export const ReportLibrary: React.FC = () => {
             ]);
 
             const reportData = rRes.data || {};
-            const reportEntities = Array.isArray(reportData.data) ? reportData.data : [];
+            const reportEntities = (reportData.data && Array.isArray(reportData.data)) ? reportData.data : [];
 
             const dsData = dsRes.data || {};
-            const dsList = Array.isArray(dsData.data) ? dsData.data : [];
+            const dsList = (dsData.data && Array.isArray(dsData.data)) ? dsData.data : (Array.isArray(dsData) ? dsData : []);
 
             // Synthesis: Primary Strategic Report for every dataset
             const primaryReports = dsList.filter((ds: any) =>
