@@ -5,7 +5,7 @@ import { GroqService } from '../services/groqService';
 import { FileText, Database, Presentation, Share2, Download, RefreshCw, Layout, AlignLeft } from 'lucide-react';
 import { ExportService } from '../services/exportService';
 import ReactMarkdown from 'react-markdown';
-import { SmartChart } from './Dashboard/SmartChart';
+import { SmartChart } from '../../components/Dashboard/SmartChart';
 import { sharingAPI, activityAPI } from '../services/api';
 import { useSearchParams } from 'react-router-dom';
 import ExportModal from './ExportHub/ExportModal';
