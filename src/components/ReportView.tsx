@@ -1,14 +1,14 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../types';
-import { GroqService } from '../src/services/groqService';
+import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../../types';
+import { GroqService } from '../services/groqService';
 import { FileText, Database, Presentation, Share2, Download, RefreshCw, Layout, AlignLeft } from 'lucide-react';
-import { ExportService } from '../src/services/exportService';
+import { ExportService } from '../services/exportService';
 import ReactMarkdown from 'react-markdown';
 import { SmartChart } from './Dashboard/SmartChart';
-import { sharingAPI, activityAPI } from '../src/services/api';
+import { sharingAPI, activityAPI } from '../services/api';
 import { useSearchParams } from 'react-router-dom';
-import ExportModal from '../src/components/ExportHub/ExportModal';
+import ExportModal from './ExportHub/ExportModal';
 import mermaid from 'mermaid';
 
 // Initialize mermaid

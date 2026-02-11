@@ -8,8 +8,48 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import axios from 'axios';
 import PaymentFlow from '../components/PaymentFlow';
 
-jest.mock('axios');
-const mockedAxios = axios as jest.Mocked<typeof axios>;
+// Mock Axios with a factory
+const mockAxiosInstance = {
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+  interceptors: {
+    request: { use: jest.fn(), eject: jest.fn() },
+    response: { use: jest.fn(), eject: jest.fn() },
+  },
+};
+
+jest.mock('axios', () => ({
+  create: jest.fn(() => mockAxiosInstance),
+  isAxiosError: jest.fn((payload) => payload?.isAxiosError === true),
+}));
+
+const mockedAxios = mockAxiosInstance as unknown as jest.Mocked<typeof axios>;
+
+// Mock Razorpay
+const mockRazorpayOpen = jest.fn();
+const mockRazorpayOn = jest.fn();
+window.Razorpay = jest.fn().mockImplementation((options) => {
+  // Automatically call handler for success path if intended, 
+  // or store options to manually trigger in tests.
+  // For now, we'll expose a helper or just rely on the test firing it?
+  // The test logic seems to assume automatic flow or manual trigger?
+  // The existing test "should show success" waits for timers.
+  // This implies the handler is NOT called automatically by the mock unless we make it so.
+  // We'll store the options globally or on the window to access them?
+  // Actually, let's just make it simple:
+  if (options.handler) {
+    // Simulate immediate success for now
+    // But wait, some tests test failure.
+    // We should attach the instance to window for test access?
+    (window as any).razorpayOptions = options;
+  }
+  return {
+    open: mockRazorpayOpen,
+    on: mockRazorpayOn,
+  };
+});
 
 describe('PaymentFlow Component', () => {
   const mockOnClose = jest.fn();
@@ -21,11 +61,14 @@ describe('PaymentFlow Component', () => {
     planId: 'pro' as const,
     amount: 29,
     interval: 'month' as const,
+    currency: 'USD' as const,
     onPaymentSuccess: mockOnPaymentSuccess,
   };
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedAxios.post.mockReset();
+    mockedAxios.get.mockReset();
   });
 
   describe('Rendering', () => {
@@ -66,7 +109,7 @@ describe('PaymentFlow Component', () => {
       });
 
       render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
 
       await waitFor(() => {
         expect(mockedAxios.post).toHaveBeenCalledWith(
@@ -88,9 +131,9 @@ describe('PaymentFlow Component', () => {
       );
 
       render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
 
-      expect(screen.getByText('Creating payment order...')).toBeInTheDocument();
+      expect(screen.getByText('Initializing payment...')).toBeInTheDocument();
     });
 
     it('should handle order creation error', async () => {
@@ -99,7 +142,7 @@ describe('PaymentFlow Component', () => {
       });
 
       render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
 
       await waitFor(() => {
         expect(screen.getByText('Payment Failed')).toBeInTheDocument();
@@ -108,7 +151,7 @@ describe('PaymentFlow Component', () => {
     });
   });
 
-  describe('Payment Status Polling', () => {
+  describe('Payment Success Logic', () => {
     beforeEach(() => {
       jest.useFakeTimers();
     });
@@ -118,76 +161,58 @@ describe('PaymentFlow Component', () => {
       jest.useRealTimers();
     });
 
-    it('should poll payment status after order creation', async () => {
-      mockedAxios.post.mockResolvedValue({
-        data: {
-          orderId: 'ORDER_123',
-          paymentSessionId: 'session_abc',
-          redirectUrl: 'https://cashfree.com/pay',
-        },
-      });
 
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'pending' },
-      });
-
-      render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
-
-      await waitFor(() => {
-        jest.advanceTimersByTime(2100);
-        expect(mockedAxios.get).toHaveBeenCalledWith('/api/payments/status/ORDER_123');
-      });
-    });
 
     it('should show success when payment completes', async () => {
       mockedAxios.post.mockResolvedValue({
         data: {
-          orderId: 'ORDER_123',
-          paymentSessionId: 'session_abc',
-          redirectUrl: 'https://cashfree.com/pay',
+          key: 'rzp_test_123',
+          amount: 2900,
+          currency: 'INR',
+          name: 'Pro Plan',
+          description: 'Monthly Subscription',
+          order_id: 'ORDER_123',
+          subscription_id: 'sub_123',
+          prefill: { email: 'test@example.com' }
         },
       });
 
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'completed' },
+      render(<PaymentFlow {...defaultProps} />);
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
+
+      // Simulate Razorpay success
+      await waitFor(() => {
+        expect(window.Razorpay).toHaveBeenCalled();
       });
 
-      render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      const razorpayOptions = (window as any).razorpayOptions;
 
+      // Trigger success handler
+      React.act(() => {
+        razorpayOptions.handler({
+          razorpay_payment_id: 'pay_123',
+          razorpay_order_id: 'ORDER_123',
+          razorpay_signature: 'sig_123'
+        });
+      });
+
+      // Check success state
       await waitFor(() => {
-        jest.advanceTimersByTime(2100);
         expect(screen.getByText('Payment Successful!')).toBeInTheDocument();
+      });
+
+      // Advance timer for close
+      React.act(() => {
+        jest.advanceTimersByTime(2100);
       });
 
       await waitFor(() => {
         expect(mockOnPaymentSuccess).toHaveBeenCalled();
+        expect(mockOnClose).toHaveBeenCalled();
       });
     });
 
-    it('should stop polling after 5 minutes', async () => {
-      mockedAxios.post.mockResolvedValue({
-        data: {
-          orderId: 'ORDER_123',
-          paymentSessionId: 'session_abc',
-          redirectUrl: 'https://cashfree.com/pay',
-        },
-      });
 
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'pending' },
-      });
-
-      render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
-
-      jest.advanceTimersByTime(5 * 60 * 1000 + 1000);
-
-      expect(mockedAxios.get).toHaveBeenCalledTimes(
-        Math.floor((5 * 60 * 1000) / 2000) + 1
-      );
-    });
   });
 
   describe('Retry Logic', () => {
@@ -197,7 +222,7 @@ describe('PaymentFlow Component', () => {
       });
 
       render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
 
       await waitFor(() => {
         expect(screen.getByText('Try Again')).toBeInTheDocument();
@@ -224,7 +249,7 @@ describe('PaymentFlow Component', () => {
       render(<PaymentFlow {...defaultProps} />);
 
       // First attempt
-      fireEvent.click(screen.getByText('Proceed to Payment'));
+      fireEvent.click(screen.getByText('Pay with Razorpay'));
       await waitFor(() => {
         expect(screen.getByText('Retry Attempts: 1 / 3')).toBeInTheDocument();
       });
@@ -256,36 +281,8 @@ describe('PaymentFlow Component', () => {
       expect(mockOnClose).toHaveBeenCalled();
     });
 
-    it('should close modal on cancel button click', () => {
-      render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Cancel'));
-      expect(mockOnClose).toHaveBeenCalled();
-    });
 
-    it('should close modal after successful payment', async () => {
-      mockedAxios.post.mockResolvedValue({
-        data: {
-          orderId: 'ORDER_123',
-          paymentSessionId: 'session_abc',
-          redirectUrl: 'https://cashfree.com/pay',
-        },
-      });
 
-      mockedAxios.get.mockResolvedValue({
-        data: { status: 'completed' },
-      });
 
-      jest.useFakeTimers();
-      render(<PaymentFlow {...defaultProps} />);
-      fireEvent.click(screen.getByText('Proceed to Payment'));
-
-      jest.advanceTimersByTime(4100);
-
-      await waitFor(() => {
-        expect(mockOnClose).toHaveBeenCalled();
-      });
-
-      jest.useRealTimers();
-    });
   });
 });

@@ -7,7 +7,7 @@
 
 import axios, { AxiosInstance, AxiosError } from 'axios';
 
-const API_BASE_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
+const API_BASE_URL = process.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
 
 let apiClient: AxiosInstance;
 
