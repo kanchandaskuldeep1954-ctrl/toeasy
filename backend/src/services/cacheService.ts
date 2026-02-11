@@ -19,15 +19,23 @@ export async function initializeRedis(redisUrl?: string): Promise<void> {
   }
 
   try {
-    redisClient = createClient({ url: redisUrl });
+    redisClient = createClient({ url: redisUrl, socket: { connectTimeout: 5000 } });
     redisClient.on('error', (err) => logger.error('Redis error:', err));
-    await redisClient.connect();
+    
+    // Add timeout to prevent hanging
+    const connectPromise = redisClient.connect();
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Redis connection timeout')), 8000)
+    );
+    
+    await Promise.race([connectPromise, timeoutPromise]);
 
     isConnected = true;
     logger.info('Redis connected successfully');
   } catch (error) {
-    logger.error('Failed to connect to Redis:', error);
+    logger.warn('Redis connection failed, continuing without cache:', error instanceof Error ? error.message : error);
     isConnected = false;
+    // Don't throw - app should start without Redis
   }
 }
 
