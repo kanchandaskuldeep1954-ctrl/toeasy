@@ -40,6 +40,7 @@ export const DatasetLibrary: React.FC = () => {
   const [localError, setLocalError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [newDatasetId, setNewDatasetId] = useState<string | null>(searchParams.get('new'));
 
   const error = localError || contextError;
 
@@ -111,6 +112,11 @@ export const DatasetLibrary: React.FC = () => {
         {/* Datasets Table */}
         {datasets.length === 0 ? (
           <div className="text-center py-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm">
+            {newDatasetId && (
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+                ✅ Dataset uploaded successfully! Refreshing list...
+              </div>
+            )}
             <svg className="w-16 h-16 mx-auto mb-4 text-slate-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>

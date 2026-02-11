@@ -188,10 +188,9 @@ export const UploadViewPhase3: React.FC = () => {
 
       setStep('complete');
 
-      // Navigate to first step of journey after a brief celebration
+      // Navigate to datasets list showing the newly uploaded dataset
       setTimeout(() => {
-        const firstStep = selectedJourney.steps[0];
-        navigate(`${firstStep.route}?workspace=${workspaceId}&dataset=${datasetId}&journey=${selectedJourney.id}`);
+        navigate(`/app/datasets?workspace=${workspaceId}&new=${datasetId}`);
       }, 1500);
 
     } catch (err: any) {
