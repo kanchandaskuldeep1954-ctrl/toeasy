@@ -478,17 +478,22 @@ const PORT = config.port || 3000;
 // Initialize Redis and start server
 async function startServer() {
   try {
+    logger.info('[STARTUP] Initializing Redis...');
     // Initialize Redis cache
     await initializeRedis(config.redisUrl);
+    logger.info('[STARTUP] Redis initialized');
 
+    logger.info('[STARTUP] Starting Express server on port', PORT);
     const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);
       logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`JWT Secret configured: ${config.jwtSecret ? 'Yes (' + config.jwtSecret.substring(0, 3) + '...)' : 'No'}`);
     });
 
+    logger.info('[STARTUP] Setting up WebSockets...');
     // Initialize WebSockets
     setupWebSocket(server);
+    logger.info('[STARTUP] WebSockets ready');
 
     // Graceful shutdown
     process.on('SIGTERM', async () => {
