@@ -916,7 +916,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         {/* Charts Masonry Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
             {visibleCharts.map((chart, i) => {
-                const data = aggregateData(chart);
+                const data = aggregateData(chart, dataset, filteredData);
                 const validation = chartValidations[chart.id];
                 if (data.length === 0) return null;
                 const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
