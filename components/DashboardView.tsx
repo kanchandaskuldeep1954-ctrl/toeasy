@@ -1,980 +1,1159 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Responsive } from 'react-grid-layout';
-import WidthProvider from './Dashboard/WidthProvider';
-import {
-    BarChart3,
-    LineChart,
-    PieChart,
-    MoreVertical,
-    Maximize2,
-    Type,
-    Download,
-    Share2,
-    Plus,
-    Layout,
-    Sparkles,
-    Palette,
-    Settings2,
-    Hash,
-    X
-} from 'lucide-react';
 import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../types';
-import { GroqService } from '../src/services/groqService';
+import { GroqService } from '../services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
-import { SmartChart } from './Dashboard/SmartChart';
-import ChartPalette, { ChartType } from './Dashboard/ChartPalette';
-import FieldBindingPanel from './Dashboard/FieldBindingPanel';
-import AILayoutSuggester from './Dashboard/AILayoutSuggester';
-import { PremiumKPI } from './Dashboard/PremiumKPI';
-import { KPICard } from './Dashboard/KPICard';
-import { FilterPanel } from './Dashboard/FilterPanel';
-import { InsightCard } from './Dashboard/InsightCard';
-import { ChartBuilderPanel } from './Dashboard/ChartBuilderPanel';
-import { DataPeekModal } from './Dashboard/DataPeekModal';
-import { DataEditorModal } from './Dashboard/DataEditorModal';
-import { aggregateData } from '../src/utils/dashboardHelper';
-import { sharingAPI, dashboardAPI } from '../src/services/api';
-import { useSearchParams } from 'react-router-dom';
-import ExportModal from '../src/components/ExportHub/ExportModal';
-import { ExportService } from '../src/services/exportService';
-import { QnAWidget } from './Dashboard/QnAWidget';
+import { 
+  BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer, 
+  XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, 
+  ScatterChart, Scatter, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+  Treemap, ComposedChart, ZAxis, ReferenceLine, RadialBarChart, RadialBar, FunnelChart, Funnel,
+  LabelList, Legend
+} from 'recharts';
 
 interface DashboardViewProps {
-    dataset: Dataset;
-    dashboardId?: string;
-    onAIAction?: () => void;
-    onUpdate?: (updated: Dataset) => void;
+  dataset: Dataset;
+  onAIAction?: () => void;
+  onUpdate?: (updated: Dataset) => void;
 }
 
+type DashboardPerspective = 'Overview' | 'Financials' | 'Operational' | 'Forensic' | 'Quality' | 'Patterns';
 type ExportFormat = 'pdf' | 'html' | 'powerbi' | 'tableau' | 'json';
 
 const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        const data = payload[0];
-        const value = typeof data.value === 'number' ? data.value.toLocaleString() : data.value;
-        const name = data.name || label || data.payload?.name || 'Record';
-
-        return (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 p-4 rounded-xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 z-[100] min-w-[150px]">
-                <p className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 mb-2 tracking-[0.2em] border-b border-slate-100 dark:border-slate-800 pb-2">{name}</p>
-                <div className="space-y-1">
-                    {payload.map((p: any, idx: number) => (
-                        <p key={idx} className="text-sm font-bold text-slate-900 dark:text-white flex justify-between gap-4">
-                            <span style={{ color: p.color }}>{p.name || 'Value'}:</span>
-                            <span className="font-mono">{typeof p.value === 'number' ? p.value.toLocaleString() : p.value}</span>
-                        </p>
-                    ))}
-                </div>
-            </div>
-        );
-    }
-    return null;
+  if (active && payload && payload.length) {
+    const data = payload[0];
+    const value = typeof data.value === 'number' ? data.value.toLocaleString() : data.value;
+    const name = data.name || label || data.payload?.name || 'Record';
+    
+    return (
+      <div className="bg-slate-900/95 border border-slate-700/50 p-4 rounded-xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 z-[100] min-w-[150px]">
+        <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-[0.2em] border-b border-slate-700 pb-2">{name}</p>
+        <div className="space-y-1">
+            {payload.map((p: any, idx: number) => (
+                <p key={idx} className="text-sm font-bold text-white flex justify-between gap-4">
+                    <span style={{ color: p.color }}>{p.name || 'Value'}:</span>
+                    <span className="font-mono">{typeof p.value === 'number' ? p.value.toLocaleString() : p.value}</span>
+                </p>
+            ))}
+        </div>
+        {data.payload?.z !== undefined && (
+            <p className="text-[10px] font-medium text-slate-500 mt-2 pt-2 border-t border-slate-800">
+                Metric (Z): {typeof data.payload.z === 'number' ? Math.round(data.payload.z).toLocaleString() : data.payload.z}
+            </p>
+        )}
+      </div>
+    );
+  }
+  return null;
 };
 
-const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: propDashboardId, onAIAction, onUpdate }) => {
-    const [config, setConfig] = useState<DashboardConfig | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [showExportModal, setShowExportModal] = useState(false);
+const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUpdate }) => {
+  const [perspective, setPerspective] = useState<DashboardPerspective>('Overview');
+  const [config, setConfig] = useState<DashboardConfig | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [showExportModal, setShowExportModal] = useState(false);
+  
+  // Chart Validation & Quality Warnings
+  const [chartValidations, setChartValidations] = useState<{ [id: string]: any }>({});
+  const [dataQuality, setDataQuality] = useState<any>(null);
+  const [showQualityWarnings, setShowQualityWarnings] = useState(false);
+  
+  // Edit Mode States
+  const [editingChartId, setEditingChartId] = useState<string | null>(null);
+  const [editedChart, setEditedChart] = useState<ChartSpec | null>(null);
+  const [aiEditPrompt, setAiEditPrompt] = useState('');
+  const [isAiEditing, setIsAiEditing] = useState(false);
+  const [dashboardPrompt, setDashboardPrompt] = useState(''); // Global dashboard prompt
+  const [isDashboardThinking, setIsDashboardThinking] = useState(false);
 
-    const cleanName = useMemo(() => {
-        return dataset.name
-            .replace(/[-_.]mock[-_.]data/gi, '')
-            .replace(/[._]sheet\d+/gi, '')
-            .replace(/[_-]+/g, ' ')
-            .trim();
-    }, [dataset.name]);
+  // PowerBI-style Slicers
+  const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+  const [slicers, setSlicers] = useState<string[]>([]); // Columns valid for slicing
 
-    const [dashboardName, setDashboardName] = useState(cleanName + ' Dashboard');
-    const [isEditingTitle, setIsEditingTitle] = useState(false);
-    const [isEditingFilters, setIsEditingFilters] = useState(false);
-    const [isFilterStudioOpen, setIsFilterStudioOpen] = useState(false);
+  const colors = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#334155'];
 
-    const [chartValidations, setChartValidations] = useState<{ [id: string]: any }>({});
-    const [dataQuality, setDataQuality] = useState<any>(null);
+  // Identify Slicers (Low cardinality string columns)
+  useEffect(() => {
+      const candidates = dataset.stats
+          .filter(s => s.type === 'categorical' && s.uniqueValues > 1 && s.uniqueValues < 12)
+          .map(s => s.column)
+          .slice(0, 4); // Limit to 4 slicers
+      setSlicers(candidates);
+  }, [dataset]);
 
-    const [aiExplainingId, setAiExplainingId] = useState<string | null>(null);
-    const [deepDiveResult, setDeepDiveResult] = useState<{ id: string, text: string } | null>(null);
-    const [isForecastMode, setIsForecastMode] = useState(false);
-    const [isCinematicMode, setIsCinematicMode] = useState(0);
-    const [activeCinematicIndex, setActiveCinematicIndex] = useState(0);
-    const [editMode, setEditMode] = useState(false);
-    const [globalTheme, setGlobalTheme] = useState<'indigo' | 'emerald' | 'vibrant' | 'minimal' | 'dark' | 'light'>('indigo');
+  const getPerspectiveData = useCallback(() => {
+    if (perspective === 'Forensic') return dataset.quarantinedData || [];
+    return dataset.data;
+  }, [perspective, dataset]);
 
-    const [dashboardPrompt, setDashboardPrompt] = useState('');
-    const [isDashboardThinking, setIsDashboardThinking] = useState(false);
-    const [kpiPrompt, setKpiPrompt] = useState('');
-    const [isKpiThinking, setIsKpiThinking] = useState(false);
+  // CORE ENGINE: Global Cross-Filtering
+  const filteredData = useMemo(() => {
+      let data = getPerspectiveData();
+      if (Object.keys(activeFilters).length === 0) return data;
 
-    const [activeFilters, setActiveFilters] = useState<Record<string, any>>({});
+      return data.filter(row => {
+          return Object.entries(activeFilters).every(([key, value]) => {
+              if (value === null) return true;
+              return String(row[key]) === String(value);
+          });
+      });
+  }, [getPerspectiveData, activeFilters]);
 
-    const [searchParams] = useSearchParams();
-    const workspaceId = searchParams.get('workspace') || '';
+  // Dynamic KPI Calculation (Reacts to filters)
+  const dynamicKPIs = useMemo(() => {
+      if (!config?.kpis) return [];
+      
+      return config.kpis.map(kpi => {
+          if (!kpi.calculation || !kpi.calculation.column) return kpi;
+          
+          const col = kpi.calculation.column;
+          const op = kpi.calculation.operation;
+          const values = filteredData.map(r => Number(r[col])).filter(n => !isNaN(n));
+          
+          let newVal = 0;
+          if (op === 'sum') newVal = values.reduce((a, b) => a + b, 0);
+          else if (op === 'avg') newVal = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+          else if (op === 'count') newVal = filteredData.length;
+          else if (op === 'max') newVal = Math.max(...values, 0);
+          else if (op === 'min') newVal = Math.min(...values, 0);
+          else if (op === 'unique') newVal = new Set(filteredData.map(r => r[col])).size;
 
-    const [shareUrl, setShareUrl] = useState<string | null>(null);
-    const [isSharing, setIsSharing] = useState(false);
+          let fmtVal = newVal.toLocaleString();
+          if (kpi.calculation.format === 'currency') fmtVal = `$${newVal.toLocaleString(undefined, {maximumFractionDigits: 0})}`;
+          else if (kpi.calculation.format === 'percentage') fmtVal = `${newVal.toFixed(1)}%`;
+          else fmtVal = newVal.toLocaleString(undefined, {maximumFractionDigits: 1});
 
-    // Versioning & Persistence State
-    const [dashboardId, setDashboardId] = useState<string | null>(propDashboardId || null);
-    const [layout, setLayout] = useState<any[]>([]);
-    const [charts, setCharts] = useState<ChartSpec[]>([]);
-    const [kpis, setKpis] = useState<KPI[]>([]);
+          return { ...kpi, value: fmtVal }; 
+      });
+  }, [config, filteredData]);
 
-    // Sync config.charts to charts state whenever config changes
-    useEffect(() => {
-        if (config?.charts && Array.isArray(config.charts)) {
-            setCharts(config.charts);
-        }
-    }, [config?.charts]);
+  const initAnalysis = async () => {
+    setLoading(true);
+    try {
+      if (dataset.dashboardConfig) {
+          setConfig(dataset.dashboardConfig);
+          setLoading(false);
+          return;
+      }
 
-    // Tableau-level Integration State
-    const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-    const [isBindingOpen, setIsBindingOpen] = useState(false);
-    const [isSuggesterOpen, setIsSuggesterOpen] = useState(false);
-    const [selectedChartId, setSelectedChartId] = useState<string | null>(null);
-    const [chartBindings, setChartBindings] = useState<Record<string, any>>({});
-    const [isSaving, setIsSaving] = useState(false);
-    const [lastSaved, setLastSaved] = useState<Date | null>(null);
-    const [versionName, setVersionName] = useState('');
-    const [isCommitting, setIsCommitting] = useState(false);
-    const [showVersionModal, setShowVersionModal] = useState(false);
-    const [showShareModal, setShowShareModal] = useState(false);
-    const [copySuccess, setCopySuccess] = useState(false);
-    const [forceManual, setForceManual] = useState(false);
+      if (onAIAction) onAIAction();
+      const generatedConfig = await GroqService.suggestDashboard(dataset);
+      setConfig(generatedConfig);
+      
+      if (onUpdate) {
+        onUpdate({ ...dataset, dashboardConfig: generatedConfig });
+      }
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
 
-    // Chart/Data Editing State
-    const [editingChartId, setEditingChartId] = useState<string | null>(null);
-    const [isCreatingNew, setIsCreatingNew] = useState(false);
-    const [isEditingRawData, setIsEditingRawData] = useState(false);
-    const [viewingDataChart, setViewingDataChart] = useState<ChartSpec | null>(null);
+  useEffect(() => { initAnalysis(); }, [dataset.name]);
 
-    // KPI Editing State
-    const [isEditingKPI, setIsEditingKPI] = useState(false);
-    const [editKPIConfig, setEditKPIConfig] = useState<KPI | null>(null);
+  // Validate charts and assess data quality
+  useEffect(() => {
+    if (!config || !dataset) return;
 
-    const [dragGhost, setDragGhost] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
-    const [draggingChartId, setDraggingChartId] = useState<string | null>(null);
-    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+    // Assess overall data quality
+    const quality = assessDataQuality(dataset.data || [], dataset.headers || []);
+    setDataQuality(quality);
 
-    const handleSaveChart = useCallback((newChart: ChartSpec) => {
-        if (!config) return;
-        const updatedCharts = (config.charts || []).map(c => c.id === newChart.id ? newChart : c);
-        if (!updatedCharts.find(c => c.id === newChart.id)) updatedCharts.unshift(newChart);
+    // Validate each chart against data
+    const validations: { [id: string]: any } = {};
+    config.charts?.forEach((chart) => {
+      validations[chart.id] = validateChartSpec(
+        chart,
+        dataset.data || [],
+        dataset.headers || []
+      );
+    });
+    setChartValidations(validations);
+  }, [config, dataset]);
 
-        const newConfig = { ...config, charts: updatedCharts };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-        setEditingChartId(null); setIsCreatingNew(false);
-    }, [config, dataset, onUpdate]);
+  const handleChartClick = (data: any, chart: ChartSpec) => {
+      if (!data || !data.activePayload) return;
+      const payload = data.activePayload[0].payload;
+      const key = chart.xAxis; 
+      // Safe check for payload structure varies by chart type
+      const value = payload.name !== undefined ? payload.name : payload.x;
+      
+      if (value === undefined) return;
 
-    const filteredData = useMemo(() => {
-        let data = dataset.data || [];
-        if (!Array.isArray(data) || Object.keys(activeFilters).length === 0) return data;
+      setActiveFilters(prev => {
+          if (prev[key] === value) {
+              const { [key]: _, ...rest } = prev;
+              return rest;
+          }
+          return { ...prev, [key]: value };
+      });
+  };
 
-        return data.filter(row => {
-            if (!row) return false;
-            return Object.entries(activeFilters).every(([key, value]) => {
-                if (value === null || value === '') return true;
-                return String(row[key] || '') === String(value);
-            });
+  const aggregateData = useCallback((chart: ChartSpec) => {
+    if (!filteredData || filteredData.length === 0) return [];
+
+    const xAxis = chart.xAxis;
+    const yAxis = chart.yAxis;
+    const zAxis = chart.zAxis;
+
+    // --- Histogram Logic ---
+    if (chart.type === 'histogram') {
+        const values = filteredData.map(d => Number(d[xAxis])).filter(n => !isNaN(n));
+        if (values.length === 0) return [];
+        const min = Math.min(...values);
+        const max = Math.max(...values);
+        const binCount = 10;
+        const binSize = (max - min) / binCount;
+        const bins = Array.from({ length: binCount }, (_, i) => ({
+            range: `${(min + i * binSize).toFixed(1)} - ${(min + (i + 1) * binSize).toFixed(1)}`,
+            min: min + i * binSize,
+            max: min + (i + 1) * binSize,
+            count: 0
+        }));
+        
+        values.forEach(v => {
+            const binIndex = Math.min(Math.floor((v - min) / binSize), binCount - 1);
+            if (bins[binIndex]) bins[binIndex].count++;
         });
-    }, [dataset.data, activeFilters]);
-
-    const dynamicKPIs = useMemo(() => {
-        if (!config?.kpis || !Array.isArray(config.kpis)) return [];
-
-        return config.kpis.map(kpi => {
-            if (!kpi.calculation || !kpi.calculation.column) return kpi;
-
-            const col = kpi.calculation.column;
-            const op = kpi.calculation.operation;
-            const parseSafe = (val: any) => {
-                if (typeof val === 'number') return val;
-                if (!val) return NaN;
-                const clean = String(val).replace(/[$,%]/g, '').trim();
-                return parseFloat(clean);
-            };
-
-            const values = (filteredData || []).map(r => parseSafe(r ? r[col] : null)).filter(n => !isNaN(n));
-
-            let newVal = 0;
-            if (op === 'sum') newVal = values.reduce((a, b) => a + b, 0);
-            else if (op === 'avg') newVal = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-            else if (op === 'count') newVal = filteredData.length;
-            else if (op === 'max') newVal = values.length ? Math.max(...values) : 0;
-            else if (op === 'min') newVal = values.length ? Math.min(...values) : 0;
-            else if (op === 'unique') newVal = new Set((filteredData || []).map(r => r ? r[col] : null)).size;
-
-            let fmtVal = newVal.toLocaleString();
-            if (kpi.calculation.format === 'currency') fmtVal = `$${newVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-            else if (kpi.calculation.format === 'percentage') fmtVal = `${newVal.toFixed(1)}%`;
-            else fmtVal = newVal.toLocaleString(undefined, { maximumFractionDigits: 1 });
-
-            return { ...kpi, value: fmtVal };
-        });
-    }, [config?.kpis, filteredData]);
-
-    const normalizedCharts = useMemo(() => {
-        const rawCharts = config?.charts || [];
-        const grid: Set<string> = new Set();
-
-        // Helper to check if a rect is occupied
-        const isOccupied = (x: number, y: number, w: number, h: number) => {
-            for (let i = x; i < x + w; i++)
-                for (let j = y; j < y + h; j++)
-                    if (grid.has(`${i},${j}`)) return true;
-            return false;
-        };
-
-        // Helper to mark a rect as occupied
-        const occupy = (x: number, y: number, w: number, h: number) => {
-            for (let i = x; i < x + w; i++)
-                for (let j = y; j < y + h; j++)
-                    grid.add(`${i},${j}`);
-        };
-
-        const findGap = (w: number, h: number) => {
-            let ry = 0;
-            while (true) {
-                for (let rx = 0; rx <= 12 - w; rx++) {
-                    if (!isOccupied(rx, ry, w, h)) return { x: rx, y: ry };
-                }
-                ry++;
-                if (ry > 1000) return { x: 0, y: 0 };
-            }
-        };
-
-        // Separate dragging chart from others for priority
-        const activeChart = draggingChartId && dragGhost ? rawCharts.find(c => c.id === draggingChartId) : null;
-        const otherCharts = rawCharts.filter(c => c.id !== draggingChartId);
-
-        const results: any[] = [];
-
-        // 1. Priority: Place the dragging chart exactly at its ghost position
-        if (activeChart && dragGhost) {
-            const { x, y, w, h } = dragGhost;
-            occupy(x, y, w, h);
-            results.push({ ...activeChart, layout: { ...activeChart.layout, x, y, w, h } });
-        }
-
-        // 2. Secondary: Place charts that have valid, non-colliding positions
-        otherCharts.forEach(chart => {
-            let w = chart.layout?.w || 6;
-            let h = chart.layout?.h || 6;
-
-            // Sync with legacy sizes if necessary
-            if (!chart.layout?.w) {
-                if (chart.size === 'small') w = 3;
-                else if (chart.size === 'medium') w = 6;
-                else if (chart.size === 'large') w = 9;
-                else if (chart.size === 'full') w = 12;
-            }
-            w = Math.max(2, Math.min(12, w));
-            h = Math.max(2, h);
-
-            let x = chart.layout?.x;
-            let y = chart.layout?.y;
-
-            // If it fits where it is, keep it
-            if (x !== undefined && y !== undefined && !isOccupied(x, y, w, h)) {
-                occupy(x, y, w, h);
-                results.push({ ...chart, layout: { ...chart.layout, x, y, w, h } });
-            } else {
-                // Otherwise find a new gap
-                const gap = findGap(w, h);
-                occupy(gap.x, gap.y, w, h);
-                results.push({ ...chart, layout: { ...chart.layout, x: gap.x, y: gap.y, w, h } });
-            }
-        });
-
-        // Ensure order matches original to prevent component unmounting
-        return rawCharts.map(rc => results.find(res => res.id === rc.id) || rc);
-
-    }, [config?.charts, draggingChartId, dragGhost]);
-
-    const isMounted = React.useRef(true);
-    useEffect(() => {
-        isMounted.current = true;
-        return () => { isMounted.current = false; };
-    }, []);
-
-    const loadOrGenerate = async (force: boolean = false) => {
-        setLoading(true);
-        try {
-            // PRIORITY 1: Load from backend API if dashboardId is available
-            if (propDashboardId && workspaceId && !force) {
-                try {
-                    const res = await dashboardAPI.get(workspaceId, propDashboardId);
-                    const dash = res.data?.data || res.data;
-                    if (dash && dash.layout) {
-                        setConfig(dash.layout);
-                        setDashboardName(dash.name || cleanName + ' Dashboard');
-                        setDashboardId(dash.id);
-                        setLoading(false);
-                        return;
-                    }
-                } catch (apiErr) {
-                    console.warn('Could not load dashboard from API, falling back to dataset config:', apiErr);
-                }
-            }
-
-            // PRIORITY 2: Load from dataset.dashboardConfig (legacy support)
-            if (!force && dataset.dashboardConfig) {
-                setConfig(dataset.dashboardConfig);
-                if (dataset.dashboardConfig.name) setDashboardName(dataset.dashboardConfig.name);
-                setLoading(false);
-                return;
-            }
-
-            // PRIORITY 3: If no config and not forced, show empty draft state
-            if (!force && !dataset.dashboardConfig) {
-                setLoading(false);
-                return;
-            }
-
-            // GENERATE NEW DASHBOARD (when force=true)
-            if (onAIAction) onAIAction();
-            const generatedConfig = await GroqService.suggestDashboard(dataset);
-            if (!isMounted.current) return;
-
-            if (generatedConfig.name) setDashboardName(generatedConfig.name);
-            setConfig(generatedConfig);
-
-            // Try to persist to backend as new dashboard
-            if (workspaceId) {
-                try {
-                    const createRes = await dashboardAPI.create(workspaceId, {
-                        name: generatedConfig.name || (cleanName + ' Dashboard'),
-                        dataset_id: dataset.id,
-                        is_primary: true,
-                        layout: generatedConfig
-                    });
-                    const newDash = createRes.data?.data || createRes.data;
-                    if (newDash?.id) setDashboardId(newDash.id);
-                } catch (persistErr) {
-                    console.warn('Failed to persist generated dashboard:', persistErr);
-                }
-            }
-
-            // Legacy callback
-            if (onUpdate) onUpdate({ ...dataset, dashboardConfig: generatedConfig });
-        } catch (e) {
-            console.error('Dashboard Load/Generate Error:', e);
-        } finally {
-            if (isMounted.current) setLoading(false);
-        }
-    };
-
-    useEffect(() => {
-        // Sync name
-        if (!dataset.dashboardConfig && !propDashboardId) {
-            setDashboardName(cleanName + ' Dashboard');
-        } else if (dataset.dashboardConfig?.name) {
-            setDashboardName(dataset.dashboardConfig.name);
-        }
-
-        // Trigger load
-        loadOrGenerate(false);
-    }, [dataset.id, propDashboardId]);
-
-    useEffect(() => {
-        if (!config || !dataset) return;
-        const quality = assessDataQuality(dataset.data || [], dataset.headers || []);
-        setDataQuality(quality);
-        const validations: { [id: string]: any } = {};
-        (config.charts || []).forEach((chart) => {
-            if (chart) validations[chart.id] = validateChartSpec(chart, dataset.data || [], dataset.headers || []);
-        });
-        setChartValidations(validations);
-    }, [config, dataset]);
-
-    // Auto-save to backend when config changes
-    useEffect(() => {
-        if (!config || !dashboardId || loading) return;
-
-        const timer = setTimeout(async () => {
-            try {
-                setIsSaving(true);
-                await dashboardAPI.update(workspaceId, dashboardId, {
-                    name: dashboardName,
-                    layout: config
-                });
-                setLastSaved(new Date());
-            } catch (err) {
-                console.error('Auto-save failed:', err);
-            } finally {
-                setIsSaving(false);
-            }
-        }, 3000);
-
-        return () => clearTimeout(timer);
-    }, [config, dashboardName, dashboardId, workspaceId, loading]);
-
-    // Commit Version Handler
-    const handleCommitVersion = async () => {
-        if (!dashboardId || !versionName.trim() || !workspaceId) return;
-        setIsCommitting(true);
-        try {
-            await dashboardAPI.createVersion(workspaceId, dashboardId, {
-                name: versionName,
-                config: config
-            });
-            setShowVersionModal(false);
-            setVersionName('');
-            alert('Version saved successfully!');
-        } catch (err) {
-            console.error('Commit failed:', err);
-            alert('Failed to save version.');
-        } finally {
-            setIsCommitting(false);
-        }
-    };
-
-    const getChartData = useCallback((chart: ChartSpec) => {
-        return aggregateData(chart, dataset, filteredData);
-    }, [filteredData, dataset]);
-
-    const injectChartConfig = useCallback((chart: ChartSpec): ChartSpec => {
-        if (!isForecastMode) return chart;
-        return {
-            ...chart,
-            chartConfig: { ...chart.chartConfig, trendline: 'ols' }
-        };
-    }, [isForecastMode]);
-
-    const handleResizeChart = (chartId: string, w: number, h: number) => {
-        if (!config) return;
-        const updatedCharts = (config.charts || []).map(c =>
-            c.id === chartId ? { ...c, layout: { ...c.layout, w, h } } : c
-        );
-        setConfig({ ...config, charts: updatedCharts });
-    };
-
-    const handleDeleteChart = (chartId: string) => {
-        if (!config) return;
-        const updatedCharts = (config.charts || []).filter(c => c.id !== chartId);
-        setConfig({ ...config, charts: updatedCharts });
-    };
-
-    const toggleTheme = (theme: any) => {
-        if (!config) return;
-        setGlobalTheme(theme);
-        setConfig({ ...config, theme });
-    };
-
-    const handleChartClick = (data: any, chart: ChartSpec) => {
-        if (data && data.activePayload && data.activePayload.length > 0) {
-            const payload = data.activePayload[0].payload;
-            const val = payload.label || payload.name;
-            const key = chart.xAxis || chart.groupBy;
-            if (key && val) {
-                setActiveFilters(prev => (prev[key] === val ? { ...prev, [key]: null } : { ...prev, [key]: val }));
-            }
-        }
-    };
-
-    const handleUpdateKPI = (updatedKpi: KPI) => {
-        if (!config || !config.kpis) return;
-        const updatedKPIs = config.kpis.map(k => k.id === updatedKpi.id ? updatedKpi : k);
-        const newConfig = { ...config, kpis: updatedKPIs };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-    };
-
-    const handleRemoveKPI = (id: string) => {
-        if (!config || !config.kpis) return;
-        const updatedKPIs = config.kpis.filter(k => k.id !== id);
-        const newConfig = { ...config, kpis: updatedKPIs };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-    };
-
-    const handleAddKPI = () => {
-        if (!config) return;
-        const firstCol = (dataset.headers || [])[0] || '';
-        const newKpi: KPI = {
-            id: 'kpi-' + Date.now(),
-            label: 'New KPI Metric',
-            value: '-',
-            calculation: { column: firstCol, operation: 'count', format: 'number' }
-        };
-        const updatedKPIs = [...(config.kpis || []), newKpi];
-        const newConfig = { ...config, kpis: updatedKPIs };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-    };
-
-    const handleAiAddKPI = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!kpiPrompt || !config) return;
-        setIsKpiThinking(true);
-        try {
-            const newKpi = await GroqService.generateKPIFromPrompt(dataset, kpiPrompt);
-            const updatedKPIs = [...(config.kpis || []), newKpi];
-            const newConfig = { ...config, kpis: updatedKPIs };
-            setConfig(newConfig);
-            if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-            setKpiPrompt('');
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsKpiThinking(false);
-        }
-    };
-
-    const handleAddFilter = (column: string) => {
-        if (!config) return;
-        const newFilter = {
-            id: 'filter-' + Date.now(),
-            label: column,
-            column: column,
-            type: 'select' as const,
-            options: Array.from(new Set((dataset.data || []).map(r => r ? String(r[column] || '') : ''))).filter(v => v !== '').slice(0, 50)
-        };
-        const updatedFilters = [...(config.filters || []), newFilter];
-        const newConfig = { ...config, filters: updatedFilters };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-        setIsFilterStudioOpen(false);
-    };
-
-    const handleRemoveFilter = (filterId: string) => {
-        if (!config || !config.filters) return;
-        const updatedFilters = config.filters.filter(f => f.id !== filterId);
-        const newConfig = { ...config, filters: updatedFilters };
-        setConfig(newConfig);
-        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-    };
-
-    const handleGlobalDashboardPrompt = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!dashboardPrompt || !config) return;
-        setIsDashboardThinking(true);
-        try {
-            const newChart = await GroqService.generateChartFromPrompt(dataset, dashboardPrompt);
-            const updatedConfig = { ...config, charts: [newChart, ...config.charts] };
-            setConfig(updatedConfig);
-            if (onUpdate) onUpdate({ ...dataset, dashboardConfig: updatedConfig });
-            setDashboardPrompt('');
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsDashboardThinking(false);
-        }
-    };
-
-    const handleAiExplain = async (chart: ChartSpec) => {
-        setAiExplainingId(chart.id);
-        try {
-            const result = await GroqService.consultVerifiedAgent(dataset, `Analyze this chart: "${chart.title}".`, { title: chart.title, type: chart.type, data: getChartData(chart).slice(0, 5) });
-            setDeepDiveResult({ id: chart.id, text: result });
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setAiExplainingId(null);
-        }
-    };
-
-
-    const handleCopyLink = () => {
-        if (!shareUrl) return;
-        navigator.clipboard.writeText(shareUrl);
-        setCopySuccess(true);
-        setTimeout(() => setCopySuccess(false), 2000);
-    };
-
-    const handleNativeShare = async () => {
-        if (!shareUrl) return;
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: dashboardName,
-                    text: `Check out this dashboard analysis from Toeasy: ${dashboardName}`,
-                    url: shareUrl,
-                });
-            } catch (err) {
-                console.error('Error sharing:', err);
-            }
-        } else {
-            handleCopyLink();
-        }
-    };
-
-    const socialShares = [
-        {
-            name: 'WhatsApp',
-            icon: 'M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.438 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.45L0 24l6.835-1.794c1.516.827 3.215 1.263 4.946 1.263h0c6.557 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.415-8.412',
-            color: '#25D366',
-            action: (url: string) => window.open(`https://wa.me/?text=${encodeURIComponent(`Check out this dashboard analysis from Toeasy: ${url}`)}`, '_blank')
-        },
-        {
-            name: 'LinkedIn',
-            icon: 'M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z',
-            color: '#0077B5',
-            action: (url: string) => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`, '_blank')
-        },
-        {
-            name: 'X',
-            icon: 'M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932 6.064-6.932zm-1.294 19.497h2.039L6.486 3.24H4.298L17.607 20.65z',
-            color: '#000000',
-            action: (url: string) => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Dashboard analysis from Toeasy: ${url}`)}`, '_blank')
-        }
-    ];
-
-    const handleShare = async () => {
-        if (!config || isSharing) return;
-        setIsSharing(true);
-        try {
-            // Capture frozen snapshot
-            const snapshot = {
-                kpis: (dynamicKPIs || []).map(k => ({ label: k.label, value: k.value, change: (k as any).change })),
-                charts: (config.charts || []).map(c => {
-                    if (!c) return null;
-                    return {
-                        type: c.type,
-                        title: c.title,
-                        data: getChartData(c),
-                        spec: c
-                    };
-                }).filter(Boolean)
-            };
-
-            const response = await sharingAPI.create({
-                resourceType: 'dashboard',
-                resourceId: dataset.id, // Or dashboard ID if exists
-                workspaceId,
-                title: dashboardName,
-                snapshot
-            });
-
-            setShareUrl(response.data.publicUrl);
-            setShowShareModal(true);
-        } catch (err) {
-            console.error('Sharing failed:', err);
-            alert('Failed to generate share link');
-        } finally {
-            setIsSharing(false);
-        }
-    };
-
-    if (loading) return <div className="h-full flex items-center justify-center bg-slate-950 text-white/50 animate-pulse">Establishing Neural Link...</div>;
-
-    // Show drafting screen if no config OR (empty config AND not forced manual)
-    const isEmptyConfig = config && (!config.charts || config.charts.length === 0) && (!config.kpis || config.kpis.length === 0);
-    const showDrafting = !config || (isEmptyConfig && !forceManual);
-
-    if (showDrafting) {
-        return (
-            <div className="h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#080c14] transition-colors p-6">
-                <div className="max-w-md w-full text-center space-y-8 animate-in fade-in zoom-in-95 duration-500">
-                    <div className="w-24 h-24 bg-indigo-600/10 border-2 border-dashed border-indigo-500/30 rounded-[32px] flex items-center justify-center mx-auto group">
-                        <svg className="w-12 h-12 text-indigo-500 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h2 className="text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-3">Analysis Drafting</h2>
-                        <p className="text-slate-500 dark:text-slate-400 font-medium text-sm leading-relaxed">
-                            No visual insights have been drafted for this dataset yet. Use the Toeasy AI to automatically generate a professional dashboard.
-                        </p>
-                    </div>
-                    <div className="pt-4 flex flex-col items-center gap-4">
-                        <button
-                            onClick={() => loadOrGenerate(true)}
-                            className="px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[24px] text-xs font-black uppercase tracking-[0.2em] shadow-2xl shadow-indigo-600/20 active:scale-95 transition-all flex items-center gap-3"
-                        >
-                            <span>✨ Generate Dashboard</span>
-                        </button>
-                        <button
-                            onClick={() => setForceManual(true)}
-                            className="text-[10px] text-slate-400 font-bold uppercase tracking-widest hover:text-indigo-500 transition-colors"
-                        >
-                            Start Manually →
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
+        
+        return bins.map(b => ({ name: b.range, value: b.count }));
     }
 
-    const visibleCharts = normalizedCharts;
+    // --- Scatter / Bubble / Heatmap Logic ---
+    if (chart.type === 'scatter' || chart.type === 'bubble' || chart.type === 'heatmap') {
+         if (chart.type === 'heatmap') {
+             // For heatmap, we treat X and Y as categorical buckets
+             const map = new Map<string, { x: string, y: string, z: number }>();
+             filteredData.forEach(row => {
+                 const xVal = String(row[xAxis] || 'Unknown');
+                 const yVal = String(row[yAxis] || 'Unknown');
+                 const key = `${xVal}::${yVal}`;
+                 const zVal = zAxis ? (Number(row[zAxis]) || 1) : 1; // Count or Sum Z
+                 
+                 if (map.has(key)) {
+                     map.get(key)!.z += zVal;
+                 } else {
+                     map.set(key, { x: xVal, y: yVal, z: zVal });
+                 }
+             });
+             return Array.from(map.values());
+         }
 
-    // Tableau-style Handlers
-    const handleChartTypeSelect = (chartType: ChartType) => {
-        const newChart: ChartSpec = {
-            id: `chart-${Date.now()}`,
-            type: chartType.id as any,
-            title: `New ${chartType.name}`,
-            dataKeys: { x: '', y: '' }, // Waiting for binding
-            i: `chart-${Date.now()}`,
-            x: 0,
-            y: Infinity, // Puts it at bottom
-            w: 6,
-            h: 4
-        };
+         // Scatter / Bubble
+         return filteredData.map(row => ({
+             x: Number(row[xAxis]) || 0,
+             y: Number(row[yAxis]) || 0,
+             z: zAxis ? (Number(row[zAxis]) || 100) : 100, // Z determines bubble size
+             name: row[dataset.headers[0]]
+         })).slice(0, 500); // Limit points for performance
+    }
 
-        setCharts(prev => [...prev, newChart]);
-        setLayout(prev => [...prev, { i: newChart.id, x: newChart.x, y: newChart.y, w: newChart.w, h: newChart.h, minW: 3, minH: 3 }]);
-        setSelectedChartId(newChart.id);
-        setIsPaletteOpen(false);
-        setIsBindingOpen(true); // Open binding immediately
-    };
+    // --- Treemap Logic ---
+    if (chart.type === 'treemap') {
+        const map = new Map<string, number>();
+        filteredData.forEach(row => {
+            const key = String(row[xAxis] || 'Unknown');
+            const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[yAxis])) || 0);
+            map.set(key, (map.get(key) || 0) + val);
+        });
+        return Array.from(map.entries())
+            .map(([name, size]) => ({ name, size }))
+            .sort((a, b) => b.size - a.size)
+            .slice(0, 20);
+    }
 
-    const handleApplyLayout = (newLayout: any[]) => {
-        // Convert preview layout to actual RGL layout
-        // This assumes generation logic matches IDs
-        setLayout(newLayout.map(l => ({ ...l, i: l.i || `item-${Math.random()}` })));
-        setIsSuggesterOpen(false);
-    };
+    // --- Standard Aggregation (Bar, Line, Area, Pie, Radar, Funnel, Gauge) ---
+    // IMPROVED: Use smart aggregation for high-cardinality data with automatic "Top N + Other" grouping
+    const limit = chart.limit || (chart.type === 'pie' ? 10 : 20);
+    const showOther = chart.showOther !== false; // Default true
+    
+    // Use smart aggregation from GroqService for intelligent grouping
+    const smartData = GroqService.smartAggregateData(
+      filteredData,
+      xAxis,
+      yAxis,
+      chart.aggregation || 'sum',
+      limit,
+      showOther
+    );
 
-    const handleBindingChange = (bindings: any) => {
-        if (!selectedChartId) return;
+    // Handle truncation of labels for readability
+    let result = smartData.map(item => ({
+      name: item.label.length > 20 ? item.label.substring(0, 18) + '...' : item.label,
+      value: Number(item.value.toFixed(2))
+    }));
+    
+    // Sorting typically helps standard charts (already done by smartAggregateData)
+    // Only re-sort if this is a time-series chart
+    if (chart.type === 'line' || chart.type === 'area') {
+        // For time-series, check if data looks like dates
+        if (result.length > 0 && !isNaN(Date.parse(result[0].name))) {
+            result.sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
+        }
+    }
+    
+    return result;
+  }, [filteredData, dataset.headers]);
 
-        setCharts(prev => prev.map(c => {
-            if (c.id === selectedChartId) {
-                return {
-                    ...c,
-                    dataKeys: {
-                        x: bindings.xAxis || c.dataKeys.x,
-                        y: bindings.yAxis || c.dataKeys.y
-                    },
-                    // Store extended bindings in a separate property if ChartSpec supported it
-                    // For now, we fit into existing structure
-                };
+  // --- Rendering Logic ---
+  const renderChartContent = (chart: ChartSpec, data: any[], isPreview = false) => {
+      const color = isPreview ? '#6366f1' : (perspective === 'Forensic' ? '#f43f5e' : '#6366f1');
+      // Helper for gradients
+      const gradientId = `grad-${chart.id}`;
+      
+      const CommonGrid = () => <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />;
+      const CommonX = () => <XAxis dataKey={chart.type === 'scatter' || chart.type === 'bubble' ? 'x' : 'name'} fontSize={10} axisLine={false} tickLine={false} tick={{dy: 10, fill: '#94a3b8'}} type={chart.type === 'scatter' || chart.type === 'bubble' ? 'number' : 'category'} hide={chart.type === 'heatmap'} />;
+      const CommonY = () => <YAxis fontSize={10} axisLine={false} tickLine={false} tick={{fill: '#94a3b8'}} type={chart.type === 'scatter' || chart.type === 'bubble' ? 'number' : 'number'} hide={chart.type === 'heatmap'} />;
+      
+      switch (chart.type) {
+          case 'bar_horizontal':
+              return (
+                  <BarChart layout="vertical" data={data} margin={{left: 20}}>
+                      <CommonGrid />
+                      <XAxis type="number" hide />
+                      <YAxis dataKey="name" type="category" width={80} fontSize={10} tickLine={false} axisLine={false} />
+                      <Tooltip content={<CustomTooltip />} cursor={{fill: 'transparent'}} />
+                      <Bar dataKey="value" fill={color} radius={[0, 4, 4, 0]} barSize={20} />
+                  </BarChart>
+              );
+          
+          case 'scatter':
+          case 'bubble':
+              return (
+                  <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                      <CommonGrid />
+                      <XAxis type="number" dataKey="x" name={chart.xAxis} fontSize={10} domain={['auto', 'auto']} />
+                      <YAxis type="number" dataKey="y" name={chart.yAxis} fontSize={10} domain={['auto', 'auto']} />
+                      {chart.type === 'bubble' && <ZAxis type="number" dataKey="z" range={[50, 1000]} name={chart.zAxis} />}
+                      <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
+                      <Scatter name={chart.title} data={data} fill={color} fillOpacity={0.6} />
+                  </ScatterChart>
+              );
+
+          case 'heatmap':
+              // Simulated Heatmap using Scatter with custom shape
+              return (
+                  <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 60 }}>
+                      <XAxis type="category" dataKey="x" name={chart.xAxis} fontSize={10} />
+                      <YAxis type="category" dataKey="y" name={chart.yAxis} fontSize={10} />
+                      <ZAxis type="number" dataKey="z" range={[0, 500]} name={chart.zAxis} /> // Z maps to opacity/size conceptually
+                      <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
+                      <Scatter data={data} shape={(props: any) => {
+                          const { cx, cy, payload } = props;
+                          // Simple intensity scaling based on Z value relative to max Z in data would be better
+                          // For now, random opacity or fixed size
+                          const opacity = Math.min(1, Math.max(0.2, (payload.z / (Math.max(...data.map(d=>d.z)) || 1))));
+                          return <rect x={cx-15} y={cy-15} width={30} height={30} fill={color} fillOpacity={opacity} rx={4} />;
+                      }} />
+                  </ScatterChart>
+              );
+
+          case 'pie':
+          case 'donut':
+              return (
+                  <PieChart>
+                      <Pie 
+                          data={data} 
+                          dataKey="value" 
+                          nameKey="name" 
+                          cx="50%" 
+                          cy="50%" 
+                          innerRadius={chart.type === 'donut' ? '60%' : '0%'} 
+                          outerRadius="80%" 
+                          paddingAngle={2}
+                          stroke="none"
+                      >
+                          {data.map((_, idx) => <Cell key={idx} fill={colors[idx % colors.length]} />)}
+                      </Pie>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{fontSize: '10px'}} />
+                  </PieChart>
+              );
+          
+          case 'radar':
+              return (
+                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+                      <PolarGrid strokeOpacity={0.1} />
+                      <PolarAngleAxis dataKey="name" fontSize={10} />
+                      <PolarRadiusAxis angle={30} domain={[0, 'auto']} opacity={0} />
+                      <Radar name={chart.yAxis} dataKey="value" stroke={color} fill={color} fillOpacity={0.4} />
+                      <Tooltip content={<CustomTooltip />} />
+                  </RadarChart>
+              );
+          
+          case 'funnel':
+              return (
+                  <FunnelChart>
+                      <Tooltip content={<CustomTooltip />} />
+                      <Funnel data={data} dataKey="value" nameKey="name" fill={color}>
+                          <LabelList position="right" fill="#000" stroke="none" dataKey="name" />
+                      </Funnel>
+                  </FunnelChart>
+              );
+
+          case 'gauge':
+              return (
+                  <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="100%" barSize={20} data={data.slice(0, 1)} startAngle={180} endAngle={0}>
+                      <RadialBar label={{ position: 'insideStart', fill: '#fff' }} background dataKey="value" fill={color} cornerRadius={10} />
+                      <Legend iconSize={10} layout="vertical" verticalAlign="middle" wrapperStyle={{top: '50%', left: '50%', transform: 'translate(-50%, -50%)'}} />
+                      <Tooltip content={<CustomTooltip />} />
+                  </RadialBarChart>
+              );
+
+          case 'treemap':
+              return (
+                  <ResponsiveContainer>
+                      <Treemap data={data} dataKey="size" aspectRatio={4/3} stroke="#fff" fill={color} animationDuration={800}>
+                           <Tooltip content={<CustomTooltip />} />
+                      </Treemap>
+                  </ResponsiveContainer>
+              );
+
+          case 'line':
+              return (
+                  <LineChart data={data}>
+                      <CommonGrid />
+                      <CommonX />
+                      <CommonY />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Line type="monotone" dataKey="value" stroke={color} strokeWidth={3} dot={{r: 3, fill: '#fff', strokeWidth: 2}} activeDot={{r: 6}} />
+                  </LineChart>
+              );
+
+          case 'area':
+              return (
+                  <AreaChart data={data}>
+                      <defs>
+                          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+                              <stop offset="95%" stopColor={color} stopOpacity={0}/>
+                          </linearGradient>
+                      </defs>
+                      <CommonGrid />
+                      <CommonX />
+                      <CommonY />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Area type="monotone" dataKey="value" stroke={color} fill={`url(#${gradientId})`} strokeWidth={3} />
+                  </AreaChart>
+              );
+
+          case 'composed':
+              return (
+                  <ComposedChart data={data}>
+                      <CommonGrid />
+                      <CommonX />
+                      <CommonY />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} barSize={20} fillOpacity={0.6} />
+                      <Line type="monotone" dataKey="value" stroke={colors[1]} strokeWidth={3} dot={{r: 4, fill: '#fff'}} />
+                  </ComposedChart>
+              );
+
+          case 'bar':
+          case 'histogram':
+          default:
+              return (
+                  <BarChart data={data} barCategoryGap={chart.type === 'histogram' ? 1 : '10%'}>
+                      <CommonGrid />
+                      <CommonX />
+                      <CommonY />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
+                      {chart.type !== 'histogram' && <ReferenceLine y={data.reduce((a,b) => a + b.value, 0) / (data.length || 1)} stroke="orange" strokeDasharray="3 3" opacity={0.5} label={{ value: 'AVG', position: 'insideTopRight', fill: 'orange', fontSize: 9 }} />}
+                  </BarChart>
+              );
+      }
+  };
+
+  // --- Editing Functions ---
+
+  const openEditor = (chart: ChartSpec) => {
+      setEditingChartId(chart.id);
+      setEditedChart(JSON.parse(JSON.stringify(chart))); // Deep copy
+      setAiEditPrompt('');
+  };
+
+  const saveEditedChart = () => {
+      if (!config || !editedChart) return;
+      const updatedCharts = config.charts.map(c => c.id === editedChart.id ? editedChart : c);
+      const newConfig = { ...config, charts: updatedCharts };
+      setConfig(newConfig);
+      if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+      setEditingChartId(null);
+      setEditedChart(null);
+  };
+
+  const handleAiEditChart = async () => {
+      if (!editedChart || !aiEditPrompt) return;
+      setIsAiEditing(true);
+      try {
+          if (onAIAction) onAIAction();
+          const newSpec = await GroqService.modifyChartWithAI(dataset, editedChart, aiEditPrompt);
+          // Preserve ID to ensure it replaces the correct chart
+          setEditedChart({ ...newSpec, id: editedChart.id });
+          setAiEditPrompt('');
+      } catch (e) {
+          console.error(e);
+          alert('AI modification failed. Please try again.');
+      } finally {
+          setIsAiEditing(false);
+      }
+  };
+
+  const handleGlobalDashboardPrompt = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!dashboardPrompt || !config) return;
+      setIsDashboardThinking(true);
+      try {
+          if (onAIAction) onAIAction();
+          // Generate a NEW chart based on the prompt
+          const newChart = await GroqService.generateChartFromPrompt(dataset, dashboardPrompt);
+          
+          // Add to current perspective
+          newChart.category = perspective;
+          newChart.priority = 'high';
+          
+          const updatedConfig = { ...config, charts: [newChart, ...config.charts] };
+          setConfig(updatedConfig);
+          if (onUpdate) onUpdate({ ...dataset, dashboardConfig: updatedConfig });
+          setDashboardPrompt('');
+          // Optional: Scroll to top or highlight new chart
+      } catch(e) {
+          console.error(e);
+          alert("Could not generate chart from prompt.");
+      } finally {
+          setIsDashboardThinking(false);
+      }
+  };
+
+  // --- Export Logic ---
+
+  const generateRichHTMLDashboard = () => {
+      // 1. Prepare KPI Data
+      const kpiData = dynamicKPIs;
+      
+      // 2. Prepare Chart Data (Pre-aggregated for offline use)
+      const chartDataMap: Record<string, any> = {};
+      const visibleCharts = config?.charts || [];
+      
+      visibleCharts.forEach(chart => {
+          const rawData = aggregateData(chart);
+          // Format for Chart.js
+          chartDataMap[chart.id] = {
+              type: chart.type === 'bar' ? 'bar' : chart.type === 'line' ? 'line' : chart.type === 'pie' ? 'doughnut' : 'line',
+              labels: rawData.map(d => d.name),
+              datasets: [{
+                  label: chart.title,
+                  data: rawData.map(d => d.value || d.size || d.y),
+                  backgroundColor: rawData.map((_, i) => colors[i % colors.length] + 'CC'),
+                  borderColor: rawData.map((_, i) => colors[i % colors.length]),
+                  borderWidth: 1,
+                  tension: 0.4,
+                  fill: chart.type === 'area'
+              }]
+          };
+      });
+
+      return `
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${dataset.name} - Interactive Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+            colors: {
+               slate: { 850: '#151e2e', 900: '#0f172a', 950: '#020617' },
+               indigo: { 500: '#6366f1', 600: '#4f46e5' }
             }
-            return c;
-        }));
-    };
-
-    const renderChart = (chart: ChartSpec) => {
-        // This is a placeholder. In a real app, you'd render SmartChart here
-        // with the appropriate data and props.
-        return (
-            <SmartChart
-                chart={injectChartConfig(chart)}
-                data={getChartData(chart)}
-                onChartClick={(data) => handleChartClick(data, chart)}
-                validation={chartValidations[chart.id]}
-                onAiExplain={() => handleAiExplain(chart)}
-                aiExplaining={aiExplainingId === chart.id}
-                deepDiveResult={deepDiveResult?.id === chart.id ? deepDiveResult.text : null}
-                dataset={dataset}
-            />
-        );
-    };
-
-    const ResponsiveGridLayout = WidthProvider(Responsive);
-
-
-    return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-950 transition-colors relative overflow-hidden">
-            {/* Integrated Header Toolbar */}
-            <div className="flex items-center justify-between px-6 py-4 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shadow-sm z-30 shrink-0">
-                <div className="flex items-center gap-4">
-                    <h1 className="text-xl font-black text-slate-800 dark:text-white tracking-tight flex items-center gap-2">
-                        <Layout className="w-5 h-5 text-indigo-500" />
-                        {dashboardName}
-                    </h1>
-                    <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-2"></div>
-
-                    {/* Quick Tools */}
-                    <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
-                        <button
-                            onClick={() => setIsPaletteOpen(true)}
-                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                            title="Add Chart"
-                        >
-                            <BarChart3 className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={() => setIsSuggesterOpen(true)}
-                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                            title="AI Layout"
-                        >
-                            <Sparkles className="w-4 h-4" />
-                        </button>
-                        <button
-                            onClick={handleAddKPI}
-                            className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 transition-all tooltip"
-                            title="Add KPI"
-                        >
-                            <Hash className="w-4 h-4" />
-                        </button>
-                    </div>
+          }
+        }
+      }
+    </script>
+    <style>
+        body { background-color: #020617; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.4); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .card-hover:hover { border-color: rgba(99, 102, 241, 0.3); transform: translateY(-2px); }
+    </style>
+</head>
+<body class="p-8 min-h-screen">
+    <div class="max-w-[1600px] mx-auto space-y-10">
+        <!-- Header -->
+        <div class="flex justify-between items-end border-b border-white/5 pb-8">
+            <div>
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center text-xl font-black">T</div>
+                    <h1 class="text-3xl font-black uppercase tracking-tight">Analytics OS</h1>
                 </div>
+                <p class="text-slate-400 font-medium">Portable Intelligence • ${dataset.name}</p>
+            </div>
+            <div class="text-right">
+                <p class="text-[10px] uppercase font-bold text-slate-500 tracking-widest">Generated On</p>
+                <p class="text-sm font-mono text-indigo-400">${new Date().toLocaleString()}</p>
+            </div>
+        </div>
 
-                {/* AI Layout Suggester Modal */}
-                <AILayoutSuggester
-                    dataset={dataset}
-                    onApplyConfig={(newConfig) => {
-                        setConfig(newConfig);
-                        setIsSuggesterOpen(false);
-                        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
-                    }}
-                    isOpen={isSuggesterOpen}
-                    onClose={() => setIsSuggesterOpen(false)}
-                />
+        <!-- KPI Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            ${kpiData.map(k => `
+            <div class="glass p-6 rounded-3xl transition-all duration-300 card-hover">
+                <p class="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] mb-3">${k.label}</p>
+                <h3 class="text-4xl font-black tracking-tighter text-white">${k.value}</h3>
+            </div>
+            `).join('')}
+        </div>
 
-                <div className="flex items-center gap-3">
-                    <button onClick={handleShare} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
-                        <Share2 className="w-4 h-4" />
-                        Share
-                    </button>
-                    <button onClick={() => setShowExportModal(true)} className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 bg-slate-100 dark:bg-slate-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-all">
-                        <Download className="w-4 h-4" />
-                        Export
-                    </button>
-                    <button onClick={onAIAction} className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all hover:scale-105 active:scale-95">
-                        <Sparkles className="w-4 h-4" />
-                        Ask Agent
-                    </button>
+        <!-- Charts Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+            ${visibleCharts.map((c, i) => `
+            <div class="glass p-8 rounded-[40px] flex flex-col h-[400px] card-hover transition-all duration-300 ${i % 3 === 0 ? 'md:col-span-2' : ''}">
+                <div class="mb-6">
+                    <h3 class="text-lg font-bold text-white">${c.title}</h3>
+                    <p class="text-[11px] text-slate-400 mt-1">${c.description}</p>
+                </div>
+                <div class="flex-1 relative w-full min-h-0">
+                    <canvas id="chart-${c.id}"></canvas>
                 </div>
             </div>
+            `).join('')}
+        </div>
+        
+        <footer class="text-center pt-12 pb-6 text-slate-600 text-xs font-bold uppercase tracking-widest opacity-50">
+            Powered by Toeasy AI • Offline Mode
+        </footer>
+    </div>
 
-            {/* Main Content with Side Panels */}
-            <div className="flex-1 overflow-hidden relative">
-                <div className="absolute inset-0 overflow-y-auto p-6 custom-scrollbar pb-32">
+    <script>
+        // Embedded Data
+        const chartData = ${JSON.stringify(chartDataMap)};
+        
+        // Render Charts
+        Object.keys(chartData).forEach(id => {
+            const ctx = document.getElementById('chart-' + id);
+            if(ctx) {
+                new Chart(ctx, {
+                    type: chartData[id].type,
+                    data: chartData[id],
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: { 
+                                backgroundColor: '#1e293b', 
+                                titleColor: '#94a3b8',
+                                bodyColor: '#f8fafc',
+                                padding: 12,
+                                cornerRadius: 8,
+                                displayColors: true
+                            }
+                        },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: '#64748b', font: { size: 10 } } },
+                            y: { grid: { color: '#33415522' }, ticks: { color: '#64748b', font: { size: 10 } }, display: chartData[id].type !== 'doughnut' }
+                        },
+                        elements: {
+                           bar: { borderRadius: 4 },
+                           point: { radius: 0, hitRadius: 20 }
+                        }
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
+      `;
+  };
 
-                    {/* KPI Strip */}
-                    <div className="flex flex-wrap gap-4 px-2 mb-6">
-                        {(config?.kpis || []).map((kpi, idx) => {
-                            if (!kpi) return null;
-                            const dynamicVal = dynamicKPIs.find(k => k.id === kpi.id)?.value || kpi.value;
-                            return (
-                                <div
-                                    key={kpi.id}
-                                    className="min-w-[200px] flex-1 animate-in slide-in-from-bottom-4 fade-in duration-700 fill-mode-both"
-                                    style={{ animationDelay: `${idx * 150}ms` }}
-                                >
-                                    <PremiumKPI
-                                        kpi={{ ...kpi, value: dynamicVal }}
-                                        dataset={dataset}
-                                        onEdit={() => { setEditKPIConfig(kpi); setIsEditingKPI(true); }}
-                                    />
-                                </div>
-                            );
-                        })}
-                    </div>
+  const handleExport = (format: ExportFormat) => {
+      if (format === 'pdf') {
+          window.print();
+          return;
+      }
 
-                    <ResponsiveGridLayout
-                        className="layout"
-                        layouts={{ lg: layout }}
-                        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-                        cols={{ lg: 12, md: 10, sm: 6, xs: 4, xxs: 2 }}
-                        rowHeight={100}
-                        onLayoutChange={(l) => setLayout(l)}
-                        isDraggable={!isBindingOpen && !isPaletteOpen}
-                        isResizable={!isBindingOpen && !isPaletteOpen}
-                        draggableHandle=".drag-handle"
+      let content = '';
+      let mime = 'text/plain';
+      let ext = 'txt';
+
+      if (format === 'html') {
+          content = generateRichHTMLDashboard();
+          mime = 'text/html';
+          ext = 'html';
+      } else if (format === 'powerbi' || format === 'tableau') {
+          // Both consume CSV best
+          const headers = dataset.headers.join(',');
+          const rows = dataset.data.map(r => dataset.headers.map(h => 
+            `"${String(r[h] ?? '').replace(/"/g, '""')}"`
+          ).join(',')).join('\n');
+          content = `${headers}\n${rows}`;
+          mime = 'text/csv';
+          ext = 'csv';
+      } else if (format === 'json') {
+          content = JSON.stringify(dataset, null, 2);
+          mime = 'application/json';
+          ext = 'json';
+      }
+
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${dataset.name}_${format === 'html' ? 'Visual_Dashboard' : 'Export'}.${ext}`;
+      link.click();
+      URL.revokeObjectURL(url);
+      setShowExportModal(false);
+  };
+
+  if (loading || !config) return (
+    <div className="h-full flex flex-col items-center justify-center space-y-12 animate-pulse bg-slate-50 dark:bg-slate-950">
+        <div className="w-24 h-24 border-[8px] border-indigo-500/10 border-t-indigo-600 rounded-full animate-spin" />
+        <div className="space-y-4 text-center">
+            <h3 className="text-xl font-black uppercase tracking-[0.5em] text-indigo-500">Constructing BI Matrix</h3>
+            <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px]">Processing {dataset.data.length.toLocaleString()} entities...</p>
+        </div>
+    </div>
+  );
+
+  const visibleCharts = config.charts.filter(c => {
+     if (perspective === 'Overview') return c.priority === 'critical' || c.priority === 'high';
+     if (perspective === 'Forensic') return c.category === 'Forensic' || c.category === 'Patterns';
+     return c.category === perspective;
+  });
+
+  return (
+    <div className="h-full overflow-y-auto custom-scrollbar bg-slate-50 dark:bg-slate-950 pb-40 relative">
+      
+      {/* Top Bar: Slicers & Context */}
+      <div className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 px-8 py-4 flex flex-col xl:flex-row justify-between gap-6 shadow-sm no-print">
+          <div className="flex items-center gap-6">
+              <h2 className="text-2xl font-black uppercase tracking-tighter text-slate-900 dark:text-white hidden md:block">Analytics OS</h2>
+              
+              {/* Slicers (Global Filters) */}
+              <div className="flex flex-wrap gap-2 items-center">
+                  <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-2">Slicers:</span>
+                  {slicers.map(slicer => {
+                      // Get unique values for this slicer from FULL dataset
+                      const unique = Array.from(new Set(dataset.data.map(r => String(r[slicer])))).sort();
+                      const isActive = !!activeFilters[slicer];
+                      
+                      return (
+                          <div key={slicer} className="relative group">
+                              <select 
+                                value={activeFilters[slicer] || ''}
+                                onChange={(e) => setActiveFilters(prev => {
+                                    const val = e.target.value;
+                                    if (!val) { const { [slicer]: _, ...rest } = prev; return rest; }
+                                    return { ...prev, [slicer]: val };
+                                })}
+                                className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border cursor-pointer transition-all outline-none ${
+                                    isActive 
+                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-md' 
+                                    : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                                }`}
+                              >
+                                  <option value="">{slicer} (All)</option>
+                                  {unique.map(u => <option key={u} value={u}>{u}</option>)}
+                              </select>
+                              <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+                                  <svg className={`w-3 h-3 ${isActive ? 'text-white' : 'text-slate-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+                              </div>
+                          </div>
+                      )
+                  })}
+                  {Object.keys(activeFilters).length > 0 && (
+                      <button onClick={() => setActiveFilters({})} className="ml-2 p-1.5 rounded-full bg-rose-100 text-rose-600 hover:bg-rose-200 transition-colors" title="Clear All">
+                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                  )}
+              </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+              {/* Perspective Tabs */}
+              <div className="flex gap-1 overflow-x-auto no-scrollbar bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                {(['Overview', 'Financials', 'Operational', 'Forensic', 'Patterns'] as DashboardPerspective[]).map(p => (
+                    <button
+                        key={p}
+                        onClick={() => setPerspective(p)}
+                        className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                        perspective === p 
+                        ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm scale-100' 
+                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                        }`}
                     >
-                        {visibleCharts.map(chart => (
-                            <div key={chart.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg transition-shadow overflow-hidden flex flex-col group relative z-10">
-                                {/* Selection Frame */}
-                                {selectedChartId === chart.id && (
-                                    <div className="absolute inset-0 border-2 border-indigo-500 rounded-2xl pointer-events-none z-20 animate-pulse"></div>
-                                )}
+                        {p}
+                    </button>
+                ))}
+              </div>
 
-                                <div className="drag-handle p-4 cursor-move border-b border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-900/50">
-                                    <h3 className="font-bold text-slate-700 dark:text-slate-200 text-sm truncate">{chart.title}</h3>
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); setSelectedChartId(chart.id); setIsBindingOpen(true); }}
-                                            className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors"
-                                        >
-                                            <Settings2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleAiExplain(chart); }} className="p-1.5 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-slate-400 hover:text-indigo-500 rounded-lg transition-colors">
-                                            <Sparkles className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button onClick={(e) => { e.stopPropagation(); handleDeleteChart(chart.id); }} className="p-1.5 hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 rounded-lg transition-colors">
-                                            <X className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </div>
+              {/* Export Button */}
+              <button 
+                  onClick={() => setShowExportModal(true)}
+                  className="px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 shadow-lg flex items-center gap-2"
+              >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4-4m0 0l-4-4m4 4h14" /></svg>
+                  Export
+              </button>
+          </div>
+      </div>
 
-                                <div className="flex-1 p-2 min-h-0 overflow-hidden relative">
-                                    {renderChart(chart)}
-                                    {/* Resize Handle Indicator */}
-                                    <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                        <Maximize2 className="w-3 h-3 text-slate-300 rotate-90" />
+      <div className="p-8 space-y-12">
+        {/* KPI Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {dynamicKPIs.slice(0, 5).map((kpi, idx) => (
+                <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <svg className="w-16 h-16 text-indigo-600 transform translate-x-4 -translate-y-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+                    </div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 truncate">{kpi.label}</p>
+                    <h3 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter truncate">{kpi.value}</h3>
+                    
+                    {/* Simulated Mini Sparkline */}
+                    <div className="h-8 mt-4 w-full opacity-50">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={[
+                                {v: Math.random() * 10}, {v: Math.random() * 20}, {v: Math.random() * 15}, 
+                                {v: Math.random() * 30}, {v: Math.random() * 25}, {v: Math.random() * 40}
+                            ]}>
+                                <Line type="monotone" dataKey="v" stroke={colors[idx % colors.length]} strokeWidth={2} dot={false} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
+            ))}
+        </div>
+
+        {/* Data Quality Warnings Section */}
+        {dataQuality && (dataQuality.warnings.length > 0 || dataQuality.overallScore < 80) && (
+          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 dark:from-yellow-900/10 dark:to-orange-900/10 border border-yellow-200 dark:border-yellow-900/30 rounded-[32px] p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 rounded-full bg-yellow-100 dark:bg-yellow-900/30 flex items-center justify-center">
+                <span className="text-lg">⚠️</span>
+              </div>
+              <div>
+                <h3 className="font-black uppercase tracking-widest text-yellow-900 dark:text-yellow-200">Data Quality Report</h3>
+                <p className="text-[10px] font-bold text-yellow-700 dark:text-yellow-300 uppercase tracking-wide">
+                  {dataQuality.overallScore}% Quality Score
+                </p>
+              </div>
+            </div>
+
+            {/* Quality Score Bar */}
+            <div className="mb-6">
+              <div className="w-full bg-white/50 dark:bg-slate-900/50 rounded-full h-2 overflow-hidden border border-yellow-200 dark:border-yellow-900/50">
+                <div 
+                  className={`h-full transition-all ${
+                    dataQuality.overallScore >= 80 
+                      ? 'bg-green-500' 
+                      : dataQuality.overallScore >= 60 
+                      ? 'bg-yellow-500' 
+                      : 'bg-red-500'
+                  }`}
+                  style={{ width: `${dataQuality.overallScore}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Warnings List */}
+            {dataQuality.warnings.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-black uppercase text-yellow-900 dark:text-yellow-300 tracking-widest">Issues Found:</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-40 overflow-y-auto">
+                  {dataQuality.warnings.slice(0, 8).map((warning: any, idx: number) => (
+                    <div 
+                      key={idx}
+                      className={`p-3 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${
+                        warning.level === 'error'
+                          ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300'
+                          : warning.level === 'warning'
+                          ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                          : 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300'
+                      }`}
+                    >
+                      <p className="font-black mb-1">
+                        {warning.level === 'error' ? '❌' : warning.level === 'warning' ? '⚠️' : 'ℹ️'} {warning.affectedField}
+                      </p>
+                      <p className="font-medium opacity-90 mb-2">{warning.message}</p>
+                      {warning.recommendation && (
+                        <p className="text-[9px] italic opacity-75">💡 {warning.recommendation}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {dataQuality.warnings.length > 8 && (
+                  <p className="text-[9px] font-bold text-yellow-600 dark:text-yellow-400 text-center pt-2">
+                    +{dataQuality.warnings.length - 8} more issues...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Cardinalities Info */}
+            {Object.keys(dataQuality.cardinalities).length > 0 && (
+              <div className="mt-6 pt-6 border-t border-yellow-200 dark:border-yellow-900/30">
+                <p className="text-[10px] font-black uppercase text-yellow-900 dark:text-yellow-300 tracking-widest mb-3">Column Cardinalities:</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                  {Object.entries(dataQuality.cardinalities).slice(0, 12).map(([col, card]: [string, any]) => (
+                    <div key={col} className="text-center">
+                      <p className="text-[9px] font-bold text-yellow-700 dark:text-yellow-300 truncate">{col}</p>
+                      <p className="text-[10px] font-black text-yellow-900 dark:text-yellow-200">{card}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Charts Masonry Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
+            {visibleCharts.map((chart, i) => {
+                const data = aggregateData(chart);
+                const validation = chartValidations[chart.id];
+                if (data.length === 0) return null;
+                const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
+                const hasWarnings = validation && (validation.warnings.length > 0 || !validation.valid);
+                const insights = data.length > 0 ? generateChartInsights(data, chart.type) : [];
+
+                return (
+                    <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border transition-all ${
+                      hasWarnings 
+                        ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md' 
+                        : 'border-slate-200 dark:border-slate-800'
+                    } shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
+                        <div className="flex justify-between items-start mb-6">
+                            <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h3>
+                                  {hasWarnings && (
+                                    <div className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded text-[8px] font-bold uppercase tracking-wide">
+                                      ⚠️ {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
                                     </div>
+                                  )}
                                 </div>
+                                <p className="text-[10px] text-slate-500 mt-1">{chart.description}</p>
                             </div>
-                        ))}
-                    </ResponsiveGridLayout>
-
-                    {layout.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-20 opacity-50">
-                            <Layout className="w-16 h-16 text-slate-300 mb-4" />
-                            <p className="text-slate-400 text-lg font-medium">Dashboard is empty</p>
-                            <button onClick={() => setIsSuggesterOpen(true)} className="mt-4 text-indigo-500 font-bold hover:underline">
-                                Auto-Generate Layout
+                            <button 
+                                onClick={() => openEditor(chart)}
+                                className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 transition-all no-print flex items-center gap-1"
+                            >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                Edit
                             </button>
                         </div>
-                    )}
-                </div>
 
-                {/* Tableau-style Side Panels */}
-                <ChartPalette
-                    isOpen={isPaletteOpen}
-                    onClose={() => setIsPaletteOpen(false)}
-                    onChartSelect={handleChartTypeSelect}
-                />
-
-                <FieldBindingPanel
-                    isOpen={isBindingOpen}
-                    onClose={() => setIsBindingOpen(false)}
-                    columns={dataset.headers}
-                    currentBindings={charts.find(c => c.id === selectedChartId)?.dataKeys as any || {}}
-                    onBindingChange={handleBindingChange}
-                />
-
-                <AILayoutSuggester
-                    isOpen={isSuggesterOpen}
-                    onClose={() => setIsSuggesterOpen(false)}
-                    dataset={dataset}
-                    onApplyConfig={(newConfig) => { setConfig(newConfig); setIsSuggesterOpen(false); }}
-                />
-            </div>
-
-            {/* Modals */}
-            {(editingChartId || isCreatingNew) && <ChartBuilderPanel dataset={dataset} initialChart={isCreatingNew ? undefined : (config?.charts || []).find(c => c.id === editingChartId)} onSave={handleSaveChart} onCancel={() => { setEditingChartId(null); setIsCreatingNew(false); }} onAIAction={onAIAction} />}
-            {viewingDataChart && <DataPeekModal chart={viewingDataChart} data={getChartData(viewingDataChart)} onClose={() => setViewingDataChart(null)} />}
-            {isEditingRawData && <DataEditorModal dataset={dataset} onSave={(newData) => { onUpdate?.({ ...dataset, data: newData }); setIsEditingRawData(false); }} onClose={() => setIsEditingRawData(false)} />}
-
-            <ExportModal
-                isOpen={showExportModal}
-                onClose={() => setShowExportModal(false)}
-                exportType="dashboard"
-                data={config}
-                filename={`${dashboardName}_${new Date().toISOString().split('T')[0]}`}
-                onExport={(format) => {
-                    if (format === 'pdf') {
-                        ExportService.exportToPDF(dashboardName);
-                    } else if (format === 'csv') {
-                        ExportService.exportToCSV(dataset, 'dashboard_data');
-                    }
-                }}
-            />
-
-            {/* Share Modal */}
-            {showShareModal && (
-                <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-md animate-in fade-in">
-                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-8 w-full max-w-lg shadow-4xl border border-slate-200 dark:border-white/10 animate-in zoom-in-95">
-                        <div className="flex justify-between items-start mb-6">
-                            <div><h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">Share Analysis</h3></div>
-                            <button onClick={() => setShowShareModal(false)} className="p-2 text-slate-400 hover:text-slate-900 dark:hover:text-white"><X className="w-5 h-5" /></button>
+                        <div className="flex-1 w-full relative min-h-0 cursor-crosshair">
+                            <ResponsiveContainer width="100%" height="100%">
+                                {renderChartContent(chart, data)}
+                            </ResponsiveContainer>
                         </div>
-                        <div className="p-5 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center gap-3">
-                            <input readOnly value={shareUrl || ''} className="flex-1 bg-transparent border-none text-sm font-bold outline-none" />
-                            <button onClick={() => { navigator.clipboard.writeText(shareUrl || ''); setCopySuccess(true); setTimeout(() => setCopySuccess(false), 2000); }} className="text-xs font-bold bg-indigo-500 text-white px-3 py-1.5 rounded-lg">{copySuccess ? 'COPIED' : 'COPY'}</button>
+
+                        {/* Chart Insights Footer */}
+                        {insights.length > 0 && (
+                          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Insights:</p>
+                            <p className="text-[9px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                              {insights.slice(0, 2).join(' • ')}
+                            </p>
+                          </div>
+                        )}
+                    </div>
+                );
+            })}
+        </div>
+
+        {/* Patterns/Insights Section */}
+        {perspective === 'Patterns' && config.patterns.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-10">
+                {config.patterns.map((pat, i) => (
+                    <div key={i} className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white p-8 rounded-[32px] shadow-xl relative overflow-hidden">
+                        <div className="absolute top-0 right-0 p-8 opacity-20 text-6xl">
+                            {pat.type === 'anomaly' ? '⚡' : '🔍'}
+                        </div>
+                        <h4 className="font-black uppercase tracking-widest text-xs mb-2 opacity-70">{pat.type} Detected</h4>
+                        <p className="font-bold text-lg mb-4 leading-tight">{pat.description}</p>
+                        <div className="bg-white/10 p-4 rounded-xl backdrop-blur-sm border border-white/10">
+                            <p className="text-[10px] uppercase font-bold opacity-60 mb-1">AI Recommendation</p>
+                            <p className="text-sm font-medium">{pat.recommendation}</p>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
-    );
+                ))}
+            </div>
+        )}
+      </div>
+
+      {/* Global Dashboard AI Copilot (Bottom Bar) */}
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-[90] no-print">
+          <div className="glass p-2 rounded-full shadow-2xl border border-indigo-500/20 flex gap-2 items-center relative">
+              <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center shrink-0">
+                  {isDashboardThinking ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> : <span className="text-lg">✨</span>}
+              </div>
+              <form onSubmit={handleGlobalDashboardPrompt} className="flex-1">
+                  <input 
+                    value={dashboardPrompt}
+                    onChange={(e) => setDashboardPrompt(e.target.value)}
+                    placeholder="Ask Copilot: 'Add a chart showing Sales by City' or 'Change layout'..."
+                    className="w-full bg-transparent border-none outline-none text-sm font-bold text-slate-900 dark:text-white placeholder-slate-400 h-10"
+                  />
+              </form>
+              <button onClick={handleGlobalDashboardPrompt} disabled={!dashboardPrompt || isDashboardThinking} className="px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-full text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity">
+                  Go
+              </button>
+          </div>
+      </div>
+
+      {/* Visual Studio (Chart Editor Modal) */}
+      {editingChartId && editedChart && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in">
+              <div className="bg-white dark:bg-slate-900 rounded-[48px] w-full max-w-6xl h-[85vh] shadow-2xl flex overflow-hidden border border-slate-200 dark:border-slate-800 animate-in zoom-in-95">
+                  
+                  {/* Left: Preview Area */}
+                  <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-12 flex flex-col justify-center relative border-r border-slate-200 dark:border-slate-800">
+                      <div className="absolute top-8 left-8">
+                          <span className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.3em]">Live Preview</span>
+                      </div>
+                      <div className="h-[500px] w-full bg-white dark:bg-slate-900 rounded-[32px] p-6 shadow-inner">
+                          {(() => {
+                              const previewData = aggregateData(editedChart);
+                              if (previewData.length === 0) return <div className="flex items-center justify-center h-full text-slate-400 font-medium">Invalid Configuration or Empty Data</div>;
+                              return (
+                                  <ResponsiveContainer width="100%" height="100%">
+                                      {renderChartContent(editedChart, previewData, true)}
+                                  </ResponsiveContainer>
+                              );
+                          })()}
+                      </div>
+                  </div>
+
+                  {/* Right: Controls Panel */}
+                  <div className="w-[400px] bg-white dark:bg-slate-900 p-8 flex flex-col gap-8 overflow-y-auto custom-scrollbar">
+                      <div className="flex justify-between items-center">
+                          <h3 className="text-xl font-black uppercase tracking-tighter text-slate-900 dark:text-white">Visual Studio</h3>
+                          <button onClick={() => setEditingChartId(null)} className="text-slate-400 hover:text-rose-500 transition-colors">✕</button>
+                      </div>
+
+                      {/* AI Magic Edit */}
+                      <div className="bg-indigo-50 dark:bg-indigo-900/10 p-6 rounded-[32px] border border-indigo-100 dark:border-indigo-900/30">
+                          <label className="text-[10px] font-black uppercase text-indigo-600 dark:text-indigo-400 tracking-widest mb-3 block flex items-center gap-2">
+                              <span className="text-lg">✨</span> Magic Edit
+                          </label>
+                          <div className="relative">
+                              <textarea 
+                                value={aiEditPrompt} 
+                                onChange={(e) => setAiEditPrompt(e.target.value)}
+                                placeholder="e.g., 'Change to area chart showing trend'" 
+                                className="w-full bg-white dark:bg-slate-900 border-none rounded-xl p-4 text-xs font-bold min-h-[80px] resize-none focus:ring-2 focus:ring-indigo-500 outline-none"
+                              />
+                              <button 
+                                onClick={handleAiEditChart}
+                                disabled={!aiEditPrompt || isAiEditing}
+                                className="absolute bottom-3 right-3 px-4 py-1.5 bg-indigo-600 text-white rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-indigo-700 transition-all"
+                              >
+                                  {isAiEditing ? '...' : 'Apply'}
+                              </button>
+                          </div>
+                      </div>
+
+                      <div className="h-px bg-slate-100 dark:bg-slate-800 w-full"></div>
+
+                      {/* Manual Controls */}
+                      <div className="space-y-6">
+                          <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Chart Type</label>
+                              <div className="grid grid-cols-4 gap-2">
+                                  {['bar', 'bar_horizontal', 'line', 'area', 'pie', 'donut', 'scatter', 'bubble', 'heatmap', 'radar', 'treemap', 'funnel', 'gauge', 'histogram', 'composed'].map(t => (
+                                      <button 
+                                        key={t}
+                                        onClick={() => setEditedChart({...editedChart, type: t})}
+                                        className={`px-1 py-2 rounded-lg text-[8px] font-bold uppercase border transition-all truncate ${editedChart.type === t ? 'bg-slate-900 text-white border-slate-900 dark:bg-white dark:text-slate-900' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                        title={t}
+                                      >
+                                          {t.replace('_', ' ')}
+                                      </button>
+                                  ))}
+                              </div>
+                          </div>
+
+                          <div className="space-y-2">
+                              <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Title</label>
+                              <input 
+                                value={editedChart.title}
+                                onChange={(e) => setEditedChart({...editedChart, title: e.target.value})}
+                                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                              />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">X-Axis (Category)</label>
+                                  <select 
+                                    value={editedChart.xAxis}
+                                    onChange={(e) => setEditedChart({...editedChart, xAxis: e.target.value})}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                                  >
+                                      {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                  </select>
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Y-Axis (Value)</label>
+                                  <select 
+                                    value={editedChart.yAxis}
+                                    onChange={(e) => setEditedChart({...editedChart, yAxis: e.target.value})}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                                  >
+                                      {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                  </select>
+                              </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Z-Axis (Size/Metric)</label>
+                                  <select 
+                                    value={editedChart.zAxis || ''}
+                                    onChange={(e) => setEditedChart({...editedChart, zAxis: e.target.value})}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                                  >
+                                      <option value="">None</option>
+                                      {dataset.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                                  </select>
+                              </div>
+                              <div className="space-y-2">
+                                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Aggregation</label>
+                                  <select 
+                                    value={editedChart.aggregation || 'sum'}
+                                    onChange={(e) => setEditedChart({...editedChart, aggregation: e.target.value})}
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold outline-none"
+                                  >
+                                      <option value="sum">Sum</option>
+                                      <option value="avg">Average</option>
+                                      <option value="count">Count</option>
+                                      <option value="max">Max</option>
+                                      <option value="min">Min</option>
+                                  </select>
+                              </div>
+                          </div>
+                      </div>
+
+                      <div className="mt-auto pt-6">
+                          <button onClick={saveEditedChart} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-emerald-200 dark:shadow-none transition-all">
+                              Save Changes
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+    </div>
+  );
 };
 
 export default DashboardView;
