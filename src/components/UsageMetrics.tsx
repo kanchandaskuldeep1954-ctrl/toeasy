@@ -59,15 +59,15 @@ const UsageMetrics: React.FC = () => {
     );
   }
 
-  const apiCallsPercent = Math.round((metrics.api_calls_this_month / metrics.api_calls_limit) * 100);
-  const storagePercent = Math.round((metrics.storage_used_gb / metrics.storage_limit_gb) * 100);
-  const datasetsPercent = Math.round((metrics.datasets_created / metrics.datasets_limit) * 100);
+  const apiCallsPercent = metrics.api_calls_limit > 0 ? Math.round(((metrics.api_calls_this_month || 0) / metrics.api_calls_limit) * 100) : 0;
+  const storagePercent = metrics.storage_limit_gb > 0 ? Math.round(((metrics.storage_used_gb || 0) / metrics.storage_limit_gb) * 100) : 0;
+  const datasetsPercent = metrics.datasets_limit > 0 ? Math.round(((metrics.datasets_created || 0) / metrics.datasets_limit) * 100) : 0;
 
   const COLORS = ['#4f46e5', '#06b6d4', '#10b981', '#f59e0b', '#ef4444'];
 
   return (
     <div className="max-w-[1600px] mx-auto h-full flex flex-col gap-6 p-4 overflow-auto">
-      
+
       {/* Header */}
       <div className="flex justify-between items-start gap-6 shrink-0">
         <div>
@@ -79,11 +79,10 @@ const UsageMetrics: React.FC = () => {
             <button
               key={range}
               onClick={() => setTimeRange(range)}
-              className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase transition-all ${
-                timeRange === range
+              className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase transition-all ${timeRange === range
                   ? 'bg-indigo-600 text-white shadow-lg'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              }`}
+                }`}
             >
               {range === 'day' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
             </button>
@@ -98,8 +97,8 @@ const UsageMetrics: React.FC = () => {
           <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-3">API Calls</p>
           <div className="flex items-end justify-between mb-4">
             <div>
-              <p className="text-2xl font-black text-indigo-600">{metrics.api_calls_this_month.toLocaleString()}</p>
-              <p className="text-[8px] text-slate-500 mt-1">/ {metrics.api_calls_limit.toLocaleString()}</p>
+              <p className="text-2xl font-black text-indigo-600">{(metrics.api_calls_this_month || 0).toLocaleString()}</p>
+              <p className="text-[8px] text-slate-500 mt-1">/ {(metrics.api_calls_limit || 0).toLocaleString()}</p>
             </div>
             <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{apiCallsPercent}%</div>
           </div>
@@ -116,8 +115,8 @@ const UsageMetrics: React.FC = () => {
           <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-3">Storage</p>
           <div className="flex items-end justify-between mb-4">
             <div>
-              <p className="text-2xl font-black text-cyan-600">{metrics.storage_used_gb.toFixed(2)} GB</p>
-              <p className="text-[8px] text-slate-500 mt-1">/ {metrics.storage_limit_gb.toFixed(0)} GB</p>
+              <p className="text-2xl font-black text-cyan-600">{(metrics.storage_used_gb || 0).toFixed(2)} GB</p>
+              <p className="text-[8px] text-slate-500 mt-1">/ {(metrics.storage_limit_gb || 0).toFixed(0)} GB</p>
             </div>
             <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{storagePercent}%</div>
           </div>
@@ -134,8 +133,8 @@ const UsageMetrics: React.FC = () => {
           <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-3">Datasets</p>
           <div className="flex items-end justify-between mb-4">
             <div>
-              <p className="text-2xl font-black text-emerald-600">{metrics.datasets_created}</p>
-              <p className="text-[8px] text-slate-500 mt-1">/ {metrics.datasets_limit}</p>
+              <p className="text-2xl font-black text-emerald-600">{metrics.datasets_created || 0}</p>
+              <p className="text-[8px] text-slate-500 mt-1">/ {metrics.datasets_limit || 0}</p>
             </div>
             <div className="text-[10px] font-bold text-slate-600 dark:text-slate-400">{datasetsPercent}%</div>
           </div>
@@ -150,7 +149,7 @@ const UsageMetrics: React.FC = () => {
         {/* Today's Calls */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-6">
           <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-widest mb-3">Today's Calls</p>
-          <p className="text-2xl font-black text-amber-600">{metrics.api_calls_today}</p>
+          <p className="text-2xl font-black text-amber-600">{metrics.api_calls_today || 0}</p>
           <p className="text-[8px] text-slate-500 mt-2">24-hour count</p>
         </div>
       </div>
@@ -235,15 +234,15 @@ const UsageMetrics: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
               <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase">Queries Executed</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{metrics.queries_executed.toLocaleString()}</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{(metrics.queries_executed || 0).toLocaleString()}</p>
             </div>
             <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
               <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase">Validations Run</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{metrics.validations_run.toLocaleString()}</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{(metrics.validations_run || 0).toLocaleString()}</p>
             </div>
             <div className="col-span-2 bg-slate-50 dark:bg-slate-800 rounded-xl p-4">
               <p className="text-[9px] font-bold text-slate-600 dark:text-slate-400 uppercase">Rows Processed</p>
-              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{metrics.rows_processed.toLocaleString()}</p>
+              <p className="text-2xl font-black text-slate-900 dark:text-white mt-2">{(metrics.rows_processed || 0).toLocaleString()}</p>
             </div>
           </div>
         </div>

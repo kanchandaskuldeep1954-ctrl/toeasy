@@ -32,7 +32,10 @@ const TheWarRoom: React.FC = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 
-            const datasetsWithReports = response.data.filter((d: any) => d.strategicReport || d.cleaningReport);
+            // Handle both flat array (legacy) and paginated object { data: [...] }
+            const rawData = response.data?.data || (Array.isArray(response.data) ? response.data : []);
+
+            const datasetsWithReports = rawData.filter((d: any) => d.strategicReport || d.cleaningReport);
             const reportItems = datasetsWithReports.map((d: any) => ({
                 id: d.id,
                 title: d.strategicReport?.title || `${d.name} Audit Report`,
