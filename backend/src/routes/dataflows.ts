@@ -217,7 +217,7 @@ router.post('/:workspaceId/dataflows/:dataflowId/execute', async (req: AuthReque
 
                 try {
                     // Simulate step execution based on type
-                    let stepOutput = { success: true, message: `Step ${step.type} completed` };
+                    let stepOutput: any = { success: true, message: `Step ${step.type} completed` };
 
                     switch (step.type) {
                         case 'analyze':
