@@ -927,7 +927,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                     isOpen={isSuggesterOpen}
                     onClose={() => setIsSuggesterOpen(false)}
                     dataset={dataset}
-                    onApplyLayout={handleApplyLayout}
+                    onApplyConfig={(newConfig) => { setConfig(newConfig); setIsSuggesterOpen(false); }}
                 />
             </div>
 
