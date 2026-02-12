@@ -1,7 +1,7 @@
 
 import React, { useRef, useState } from 'react';
 import { DataRow, SourceType, ConnectorDef } from '../types';
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 
 interface UploadViewProps {
     onDataLoaded: (data: DataRow[], name: string, sourceType: SourceType) => void;
@@ -309,8 +309,8 @@ const UploadView: React.FC<UploadViewProps> = ({ onDataLoaded }) => {
                             key={cat.id}
                             onClick={() => setActiveCategory(cat.id)}
                             className={`text-left px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-between ${activeCategory === cat.id
-                                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
-                                    : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-none'
+                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                         >
                             {cat.label}

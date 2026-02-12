@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Dataset, AnalysisInsight, CleaningAction, DataRow, ValidationRule, QualityDimension } from '../types';
 import { GeminiService } from '../services/geminiService';
 // Fixed: Added missing import for GroqService which provides the generateCleaningCode method
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 
 interface CleanViewProps {
     dataset: Dataset;
@@ -272,8 +272,8 @@ const CleanView: React.FC<CleanViewProps> = ({ dataset, onUpdate, onAIAction }) 
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as any)}
                             className={`px-8 py-3 rounded-[24px] text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all whitespace-nowrap ${activeTab === tab.id
-                                    ? 'bg-indigo-600 text-white shadow-xl scale-105'
-                                    : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
+                                ? 'bg-indigo-600 text-white shadow-xl scale-105'
+                                : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800'
                                 }`}
                         >
                             <span>{tab.icon}</span> {tab.label}
@@ -338,8 +338,8 @@ const CleanView: React.FC<CleanViewProps> = ({ dataset, onUpdate, onAIAction }) 
                                     key={dim}
                                     onClick={() => setActiveDimension(dim as any)}
                                     className={`px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${activeDimension === dim
-                                            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
-                                            : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
+                                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl border-transparent'
+                                        : 'bg-white dark:bg-slate-800 text-slate-500 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                                         }`}
                                 >
                                     {dim}

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Dataset, ChartSpec, DataRow } from '../types';
-import { GroqService } from '../services/groqService';
+import { GroqService } from '../src/services/groqService';
 import ReactMarkdown from 'react-markdown';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
