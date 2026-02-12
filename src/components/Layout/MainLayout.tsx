@@ -103,10 +103,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             </button>
 
                             {/* AI Status Indicator */}
-                            <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 border rounded-full ${theme === 'dark' ? 'bg-indigo-500/10 border-indigo-500/20' : 'bg-indigo-50 border-indigo-200'
+                            <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 border rounded-full shadow-sm transition-all duration-500 ${theme === 'dark'
+                                ? 'bg-indigo-500/10 border-indigo-500/20 shadow-indigo-500/5'
+                                : 'bg-indigo-50 border-indigo-200 shadow-indigo-500/10'
                                 }`}>
-                                <Sparkles className="w-4 h-4 text-indigo-500" />
-                                <span className="text-xs font-medium text-indigo-600 dark:text-indigo-300">AI Ready</span>
+                                <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
+                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tracking-tight uppercase">AI Ready</span>
                             </div>
 
                             {/* Notifications */}
@@ -141,9 +143,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950'
                         : 'bg-slate-50/50'
                         }`}>
-                        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col">
                             {/* Subtle grid pattern overlay */}
-                            <div className="relative min-h-full flex flex-col">
+                            <div className="relative flex-1 flex flex-col">
                                 <div
                                     className={`absolute inset-0 opacity-[0.02] pointer-events-none ${theme === 'dark' ? 'bg-white' : 'bg-black'}`}
                                     style={{

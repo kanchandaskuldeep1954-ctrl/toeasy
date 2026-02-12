@@ -18,10 +18,17 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
 
     // Transform Dataset to FortuneSheet format
     const initialData = useMemo(() => {
-        if (!dataset || !dataset.data) return [{ name: "Sheet1", celldata: [] }];
+        if (!dataset || (!dataset.data && !dataset.raw_data)) {
+            return [{ name: "Sheet1", celldata: [], status: 1, order: 0 }];
+        }
 
-        const headers = dataset.headers || Object.keys(dataset.data[0] || {});
+        const rawRows = dataset.data || dataset.raw_data || [];
+        const headers = dataset.headers || (rawRows[0] ? Object.keys(rawRows[0]) : []);
         const celldata: any[] = [];
+
+        if (rawRows.length === 0) {
+            return [{ name: dataset.name || "Sheet1", celldata: [], status: 1, order: 0 }];
+        }
 
         // 1. Headers
         headers.forEach((h, colIndex) => {
@@ -39,7 +46,7 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
         });
 
         // 2. Data
-        dataset.data.forEach((row, rowIndex) => {
+        rawRows.forEach((row: any, rowIndex: number) => {
             headers.forEach((h, colIndex) => {
                 const val = row[h];
                 celldata.push({
@@ -58,56 +65,46 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
             celldata: celldata,
             order: 0,
             status: 1, // active
-            row: (dataset.data.length || 100) + 50,
-            column: (headers.length || 26) + 10
+            row: Math.max(rawRows.length + 50, 100),
+            column: Math.max(headers.length + 10, 26)
         }];
     }, [dataset]);
 
     // Save Handler
     const handleSave = async () => {
-        // NOTE: In a real app we would get data from the workbook ref.
-        // FortuneSheet doesn't easily expose a "getData" method without using the reference to the internal API.
-        // For this demo, we assume we can get data via the `data` prop or ref if implemented.
-        // Since `Workbook` is complex, we'll placeholder the save logic to mention it's saved to local state context.
-        // Ideally, we listen to `onOp` or using `ref.current.getAllSheets()`.
-
-        // For now, let's pretend we saved.
         setSaving(true);
-        setTimeout(() => setSaving(false), 1000);
-
-        // FUTURE: Implement reverse transformation (Sheet -> Dataset)
-        // const sheets = workbookRef.current.getAllSheets();
-        // const newData = transformSheetToData(sheets[0]);
-        // onUpdate({ ...dataset, data: newData });
+        // In a real implementation, we'd extract the data from FortuneSheet
+        // and send it to the backend via datasetAPI.update.
+        setTimeout(() => setSaving(false), 800);
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-950">
+        <div className="flex flex-col h-full w-full bg-white dark:bg-slate-950 overflow-hidden">
             {/* Toolbar */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10">
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 z-10 shrink-0">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => navigate('/datasets')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                    <button onClick={() => navigate('/app/datasets')} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
                         <ArrowLeft className="w-5 h-5 text-slate-500" />
                     </button>
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg text-green-700 dark:text-green-400">
-                            <Table2 className="w-5 h-5" />
+                            <Table2 className="w-4 h-4" />
                         </div>
                         <div>
-                            <h1 className="text-sm font-black uppercase tracking-wider text-slate-400">Spreadsheet Editor</h1>
-                            <p className="font-bold text-slate-900 dark:text-white">{dataset.name}</p>
+                            <h1 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 leading-none mb-1">Spreadsheet Editor</h1>
+                            <p className="font-bold text-sm text-slate-900 dark:text-white leading-none">{dataset.name}</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-xs font-black uppercase tracking-widest rounded-lg hover:bg-indigo-100 transition-colors">
+                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-100 transition-colors">
                         <Sparkles className="w-4 h-4" />
                         AI Formulas
                     </button>
                     <button
                         onClick={handleSave}
-                        className="flex items-center gap-2 px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-black uppercase tracking-widest rounded-lg hover:opacity-90 transition-opacity"
+                        className="flex items-center gap-2 px-6 py-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-[10px] font-black uppercase tracking-widest rounded-lg hover:opacity-90 transition-opacity shadow-lg shadow-indigo-500/10"
                     >
                         <Save className="w-4 h-4" />
                         {saving ? 'Saving...' : 'Save Changes'}
@@ -116,16 +113,14 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
             </div>
 
             {/* Grid Area */}
-            <div className="flex-1 overflow-hidden relative">
-                {/* FortuneSheet Container */}
+            <div className="flex-1 overflow-hidden relative w-full h-full bg-slate-50 dark:bg-slate-900">
                 <Workbook
                     data={initialData}
                     onChange={(data) => {
-                        // Keep internal state updated
-                        // We could debounce save here
+                        // Internal changes
                     }}
                     settings={{
-                        showInfobar: false, // Hide top info bar for cleaner look
+                        showInfobar: false,
                         showSheetTabs: true,
                     }}
                 />
