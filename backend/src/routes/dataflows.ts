@@ -2,6 +2,10 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
+import { ProCleaningAgent } from '../services/cleaningAgent.js';
+import { GroqService } from '../services/groq.service.js';
+
+
 
 const router = Router();
 
@@ -187,6 +191,24 @@ router.post('/:workspaceId/dataflows/:dataflowId/execute', async (req: AuthReque
         const runId = runResult.rows[0].id;
         const stepResults: any[] = [];
 
+        // Fetch the dataset for processing
+        let currentData: any[] = [];
+        let currentHeaders: string[] = [];
+        let datasetName = 'Unknown';
+
+        if (datasetId) {
+            const dsResult = await query(
+                'SELECT * FROM datasets WHERE id = $1 AND workspace_id = $2',
+                [datasetId, workspaceId]
+            );
+            if (dsResult.rows.length > 0) {
+                const ds = dsResult.rows[0];
+                datasetName = ds.name;
+                currentData = typeof ds.raw_data === 'string' ? JSON.parse(ds.raw_data) : (ds.raw_data || []);
+                currentHeaders = typeof ds.headers === 'string' ? JSON.parse(ds.headers) : (ds.headers || []);
+            }
+        }
+
         try {
             // Execute each step in sequence
             for (let i = 0; i < pipeline.length; i++) {
@@ -198,26 +220,90 @@ router.post('/:workspaceId/dataflows/:dataflowId/execute', async (req: AuthReque
                     let stepOutput = { success: true, message: `Step ${step.type} completed` };
 
                     switch (step.type) {
+                        case 'analyze':
+                            const analysis = await ProCleaningAgent.analyze(currentHeaders, currentData);
+                            stepOutput = {
+                                success: true,
+                                message: 'Comprehensive AI analysis completed',
+                                results: analysis
+                            };
+                            break;
+                        case 'clean':
+                            const cleanAnalysis = await ProCleaningAgent.analyze(currentHeaders, currentData);
+                            const rules = cleanAnalysis.rules || [];
+                            let affectedTotal = 0;
+
+                            for (const rule of rules) {
+                                const fixResult = await ProCleaningAgent.applyFix(currentData, rule, currentHeaders);
+                                currentData = fixResult.data;
+                                currentHeaders = fixResult.headers;
+                                affectedTotal += fixResult.affected;
+                            }
+
+                            // Save as a new version
+                            const versionResult = await query(
+                                `INSERT INTO dataset_versions 
+                                 (dataset_id, created_by_user_id, version_name, description, data, headers, row_count, created_by_tool)
+                                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                                 RETURNING id`,
+                                [
+                                    datasetId,
+                                    req.user!.id,
+                                    `Cleaned: ${dataflow.name}`,
+                                    `Auto-cleaned by dataflow run ${runId}`,
+                                    JSON.stringify(currentData),
+                                    JSON.stringify(currentHeaders),
+                                    currentData.length,
+                                    'dataflow'
+                                ]
+                            );
+
+                            stepOutput = {
+                                success: true,
+                                message: `Applied ${rules.length} rules, ${affectedTotal} rows affected`,
+                                newVersionId: versionResult.rows[0].id
+                            };
+                            break;
                         case 'upload':
                             stepOutput.message = 'Dataset uploaded successfully';
                             break;
-                        case 'clean':
-                            stepOutput.message = 'Data cleaning rules applied';
-                            break;
-                        case 'validate':
-                            stepOutput.message = 'Validation rules checked';
-                            break;
-                        case 'analyze':
-                            stepOutput.message = 'AI analysis completed';
-                            break;
                         case 'dashboard':
-                            stepOutput.message = 'Dashboard generated';
+                            const dashboardConfig = await GroqService.suggestDashboard({
+                                headers: currentHeaders,
+                                data: currentData
+                            });
+                            stepOutput = {
+                                success: true,
+                                message: 'Professional dashboard configuration generated',
+                                config: dashboardConfig
+                            };
                             break;
                         case 'report':
-                            stepOutput.message = 'Report generated';
+                            // Determine report type from options or default to strategic
+                            const reportType = (step.options?.type || 'strategic') as any;
+                            const report = await GroqService.generateReport({
+                                headers: currentHeaders,
+                                data: currentData
+                            }, reportType);
+                            stepOutput = {
+                                success: true,
+                                message: `Generated ${reportType} report with AI insights`,
+                                report
+                            };
+                            break;
+                        case 'validate':
+                            const validationRules = await ProCleaningAgent.analyze(currentHeaders, currentData);
+                            const issues = validationRules.forensics?.issuesFound || 0;
+                            stepOutput = {
+                                success: true,
+                                message: issues > 0 ? `Detected ${issues} potential quality issues` : 'Data validation passed (no major issues found)',
+                                forensics: validationRules.forensics,
+                                rules: validationRules.rules
+                            };
                             break;
                         case 'export':
-                            stepOutput.message = 'Data exported';
+                            stepOutput.message = 'Data ready for export';
+                            stepOutput.rowCount = currentData.length;
                             break;
                         default:
                             stepOutput.message = `Custom step ${step.type} executed`;
