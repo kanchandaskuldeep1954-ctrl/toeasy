@@ -121,6 +121,13 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
     const [charts, setCharts] = useState<ChartSpec[]>([]);
     const [kpis, setKpis] = useState<KPI[]>([]);
 
+    // Sync config.charts to charts state whenever config changes
+    useEffect(() => {
+        if (config?.charts && Array.isArray(config.charts)) {
+            setCharts(config.charts);
+        }
+    }, [config?.charts]);
+
     // Tableau-level Integration State
     const [isPaletteOpen, setIsPaletteOpen] = useState(false);
     const [isBindingOpen, setIsBindingOpen] = useState(false);
@@ -861,7 +868,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, dashboardId: pro
                         isResizable={!isBindingOpen && !isPaletteOpen}
                         draggableHandle=".drag-handle"
                     >
-                        {charts.map(chart => (
+                        {visibleCharts.map(chart => (
                             <div key={chart.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-lg transition-shadow overflow-hidden flex flex-col group relative z-10">
                                 {/* Selection Frame */}
                                 {selectedChartId === chart.id && (
