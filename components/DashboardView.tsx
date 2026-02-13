@@ -75,8 +75,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
     // Identify Slicers (Low cardinality string columns)
     useEffect(() => {
-        const candidates = dataset.stats
-            .filter(s => s.type === 'categorical' && s.uniqueValues > 1 && s.uniqueValues < 12)
+        const candidates = (dataset.stats || [])
+            .filter(s => s && s.type === 'categorical' && s.uniqueValues > 1 && s.uniqueValues < 12)
             .map(s => s.column)
             .slice(0, 4); // Limit to 4 slicers
         setSlicers(candidates);
@@ -92,9 +92,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         let data = getPerspectiveData();
         if (Object.keys(activeFilters).length === 0) return data;
 
-        return data.filter(row => {
+        return (data || []).filter(row => {
+            if (!row) return false;
             return Object.entries(activeFilters).every(([key, value]) => {
-                if (value === null) return true;
+                if (value === null || value === undefined) return true;
                 return String(row[key]) === String(value);
             });
         });
@@ -104,25 +105,26 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
     const dynamicKPIs = useMemo(() => {
         if (!config?.kpis) return [];
 
-        return config.kpis.map(kpi => {
-            if (!kpi.calculation || !kpi.calculation.column) return kpi;
+        return (config.kpis || []).map(kpi => {
+            if (!kpi || !kpi.calculation || !kpi.calculation.column) return kpi;
 
             const col = kpi.calculation.column;
             const op = kpi.calculation.operation;
-            const values = filteredData.map(r => Number(r[col])).filter(n => !isNaN(n));
+            const dataToUse = filteredData || [];
+            const values = dataToUse.map(r => r && r[col] !== undefined ? Number(r[col]) : NaN).filter(n => !isNaN(n));
 
             let newVal = 0;
             if (op === 'sum') newVal = values.reduce((a, b) => a + b, 0);
             else if (op === 'avg') newVal = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-            else if (op === 'count') newVal = filteredData.length;
-            else if (op === 'max') newVal = Math.max(...values, 0);
-            else if (op === 'min') newVal = Math.min(...values, 0);
-            else if (op === 'unique') newVal = new Set(filteredData.map(r => r[col])).size;
+            else if (op === 'count') newVal = dataToUse.length;
+            else if (op === 'max') newVal = values.length ? Math.max(...values) : 0;
+            else if (op === 'min') newVal = values.length ? Math.min(...values) : 0;
+            else if (op === 'unique') newVal = new Set(dataToUse.map(r => r && r[col])).size;
 
-            let fmtVal = newVal.toLocaleString();
-            if (kpi.calculation.format === 'currency') fmtVal = `$${newVal.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
-            else if (kpi.calculation.format === 'percentage') fmtVal = `${newVal.toFixed(1)}%`;
-            else fmtVal = newVal.toLocaleString(undefined, { maximumFractionDigits: 1 });
+            let fmtVal = (newVal || 0).toLocaleString();
+            if (kpi.calculation.format === 'currency') fmtVal = `$${(newVal || 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+            else if (kpi.calculation.format === 'percentage') fmtVal = `${(newVal || 0).toFixed(1)}%`;
+            else fmtVal = (newVal || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
 
             return { ...kpi, value: fmtVal };
         });
@@ -291,8 +293,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
             }
         }
 
-        return result;
-    }, [filteredData, dataset.headers]);
+        return result || [];
+    }, [filteredData, dataset?.headers]);
 
     // --- Rendering Logic ---
     const renderChartContent = (chart: ChartSpec, data: any[], isPreview = false) => {
@@ -741,7 +743,7 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                         <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-2">Slicers:</span>
                         {slicers.map(slicer => {
                             // Get unique values for this slicer from FULL dataset
-                            const unique = Array.from(new Set(dataset.data.map(r => String(r[slicer])))).sort();
+                            const unique = Array.from(new Set((dataset.data || []).map(r => r && r[slicer] !== undefined ? String(r[slicer]) : 'Unknown'))).sort();
                             const isActive = !!activeFilters[slicer];
 
                             return (
@@ -754,8 +756,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                             return { ...prev, [slicer]: val };
                                         })}
                                         className={`appearance-none pl-3 pr-8 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border cursor-pointer transition-all outline-none ${isActive
-                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
-                                                : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
+                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-indigo-400'
                                             }`}
                                     >
                                         <option value="">{slicer} (All)</option>
@@ -783,8 +785,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                 key={p}
                                 onClick={() => setPerspective(p)}
                                 className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${perspective === p
-                                        ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm scale-100'
-                                        : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                                    ? 'bg-white dark:bg-slate-700 text-indigo-600 shadow-sm scale-100'
+                                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
                                     }`}
                             >
                                 {p}
@@ -849,10 +851,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                             <div className="w-full bg-white/50 dark:bg-slate-900/50 rounded-full h-2 overflow-hidden border border-yellow-200 dark:border-yellow-900/50">
                                 <div
                                     className={`h-full transition-all ${dataQuality.overallScore >= 80
-                                            ? 'bg-green-500'
-                                            : dataQuality.overallScore >= 60
-                                                ? 'bg-yellow-500'
-                                                : 'bg-red-500'
+                                        ? 'bg-green-500'
+                                        : dataQuality.overallScore >= 60
+                                            ? 'bg-yellow-500'
+                                            : 'bg-red-500'
                                         }`}
                                     style={{ width: `${dataQuality.overallScore}%` }}
                                 />
@@ -868,10 +870,10 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                         <div
                                             key={idx}
                                             className={`p-3 rounded-lg border text-[10px] font-bold uppercase tracking-wide ${warning.level === 'error'
-                                                    ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300'
-                                                    : warning.level === 'warning'
-                                                        ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                                                        : 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300'
+                                                ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/30 text-red-700 dark:text-red-300'
+                                                : warning.level === 'warning'
+                                                    ? 'bg-yellow-50 dark:bg-yellow-900/10 border-yellow-200 dark:border-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                                                    : 'bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/30 text-blue-700 dark:text-blue-300'
                                                 }`}
                                         >
                                             <p className="font-black mb-1">
@@ -921,8 +923,8 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
 
                         return (
                             <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border transition-all ${hasWarnings
-                                    ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md'
-                                    : 'border-slate-200 dark:border-slate-800'
+                                ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md'
+                                : 'border-slate-200 dark:border-slate-800'
                                 } shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
                                 <div className="flex justify-between items-start mb-6">
                                     <div className="flex-1">

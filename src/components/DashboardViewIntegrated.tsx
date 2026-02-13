@@ -71,7 +71,7 @@ const DashboardViewIntegrated: React.FC = () => {
           };
 
           const rawData = safeParse(dsData.raw_data || dsData.data) || [];
-          const headers = safeParse(dsData.headers) || (rawData[0] ? Object.keys(rawData[0]) : []);
+          const headers = safeParse(dsData.headers) || (rawData && rawData[0] ? Object.keys(rawData[0]) : []);
 
           setActiveDataset({
             ...dsData,
@@ -87,10 +87,11 @@ const DashboardViewIntegrated: React.FC = () => {
           axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
         ]);
 
-        const allDashboards = siblingsRes.data.data || [];
-        setDataVersions(versionsRes.data || []);
+        const allDashboards = siblingsRes?.data?.data || siblingsRes?.data || [];
+        const versions = versionsRes?.data?.data || (Array.isArray(versionsRes?.data) ? versionsRes.data : []);
+        setDataVersions(versions);
 
-        const dashSiblings = allDashboards.filter((d: any) => String(d.dataset_id) === String(targetDatasetId));
+        const dashSiblings = allDashboards.filter((d: any) => d && String(d.dataset_id) === String(targetDatasetId));
         setSiblings(dashSiblings);
 
         if (!initialDashboardId && !currentDashboard) {
@@ -200,18 +201,20 @@ const DashboardViewIntegrated: React.FC = () => {
                       </div>
                     </button>
 
-                    {dataVersions.map(ver => (
-                      <button
-                        key={ver.id}
-                        onClick={() => { setSelectedDataVersionId(ver.id); setIsVersionSwitcherOpen(false); }}
-                        className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${selectedDataVersionId == ver.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
-                      >
-                        <span className="opacity-50">{ver.created_by_tool === 'playground' ? '⚡' : '💾'}</span>
-                        <div>
-                          <div className="truncate">{ver.version_name}</div>
-                          <div className="text-[9px] opacity-60 font-normal">{new Date(ver.created_at).toLocaleDateString()} • {ver.created_by_tool}</div>
-                        </div>
-                      </button>
+                    {(dataVersions || []).map(ver => (
+                      ver && ver.id && (
+                        <button
+                          key={ver.id}
+                          onClick={() => { setSelectedDataVersionId(ver.id); setIsVersionSwitcherOpen(false); }}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-[11px] font-bold transition-all flex items-center gap-3 ${selectedDataVersionId == ver.id ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                        >
+                          <span className="opacity-50">{ver.created_by_tool === 'playground' ? '⚡' : '💾'}</span>
+                          <div>
+                            <div className="truncate">{ver.version_name}</div>
+                            <div className="text-[9px] opacity-60 font-normal">{ver.created_at ? new Date(ver.created_at).toLocaleDateString() : 'Unknown'} • {ver.created_by_tool}</div>
+                          </div>
+                        </button>
+                      )
                     ))}
                   </div>
                 </div>
