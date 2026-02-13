@@ -80,8 +80,8 @@ const UsageMetrics: React.FC = () => {
               key={range}
               onClick={() => setTimeRange(range)}
               className={`px-4 py-2 rounded-xl text-[9px] font-bold uppercase transition-all ${timeRange === range
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
             >
               {range === 'day' ? 'Today' : range === 'week' ? 'This Week' : 'This Month'}
@@ -159,7 +159,7 @@ const UsageMetrics: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-6">
           <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6">API Calls Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={metrics.api_calls_trend}>
+            <LineChart data={metrics.api_calls_trend || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="date" stroke="#94a3b8" style={{ fontSize: 12 }} />
               <YAxis stroke="#94a3b8" style={{ fontSize: 12 }} />
@@ -185,7 +185,7 @@ const UsageMetrics: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-6">
           <h3 className="text-[10px] font-black text-slate-800 dark:text-white uppercase tracking-widest mb-6">Storage Trend</h3>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={metrics.storage_trend}>
+            <BarChart data={metrics.storage_trend || []}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
               <XAxis dataKey="date" stroke="#94a3b8" style={{ fontSize: 12 }} />
               <YAxis stroke="#94a3b8" style={{ fontSize: 12 }} />
@@ -210,7 +210,7 @@ const UsageMetrics: React.FC = () => {
           <ResponsiveContainer width="100%" height={300}>
             <PieChart>
               <Pie
-                data={metrics.feature_usage}
+                data={metrics.feature_usage || []}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
@@ -219,7 +219,7 @@ const UsageMetrics: React.FC = () => {
                 fill="#8884d8"
                 dataKey="count"
               >
-                {metrics.feature_usage.map((entry, index) => (
+                {(metrics.feature_usage || []).map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
