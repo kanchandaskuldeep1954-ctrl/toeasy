@@ -16,13 +16,38 @@ router.use(authenticateToken);
 // Get all channels for workspace
 router.get('/channels', async (req: AuthRequest, res) => {
     try {
-        const workspaceId = req.query.workspace_id || req.user?.active_workspace_id;
+        const workspaceId = req.query.workspace_id as string | undefined;
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspaceId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         const result = await query(
             `SELECT * FROM channels WHERE workspace_id = $1 AND is_archived = false ORDER BY created_at ASC`,
             [workspaceId]
         );
         const channels = result.rows;
+
+        if (channels.length === 0) {
+            // Bootstrap a default channel so the module works out-of-the-box.
+            const created = await query(
+                `INSERT INTO channels (workspace_id, name, description, type, created_by)
+                 VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+                [workspaceId, 'general', 'Default channel', 'public', req.user!.id]
+            );
+
+            const channel = created.rows[0];
+            await query(
+                'INSERT INTO channel_members (channel_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (channel_id, user_id) DO NOTHING',
+                [channel.id, req.user!.id, 'owner']
+            );
+
+            return res.json({ channels: [{ ...channel, unread: 0 }] });
+        }
 
         // Get unread counts
         const membershipsResult = await query(
@@ -57,7 +82,15 @@ router.post('/channels', async (req: AuthRequest, res) => {
         const { name, description, type, workspace_id } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
 
-        const wsId = workspace_id || req.user?.active_workspace_id;
+        const wsId = workspace_id;
+        if (!wsId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [wsId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         const result = await query(
             `INSERT INTO channels (workspace_id, name, description, type, created_by)
@@ -69,7 +102,7 @@ router.post('/channels', async (req: AuthRequest, res) => {
 
         // Add creator as owner
         await query(
-            'INSERT INTO channel_members (channel_id, user_id, role) VALUES ($1, $2, $3)',
+            'INSERT INTO channel_members (channel_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (channel_id, user_id) DO NOTHING',
             [channel.id, req.user?.id, 'owner']
         );
 
@@ -85,6 +118,15 @@ router.post('/channels', async (req: AuthRequest, res) => {
 // Get messages for channel
 router.get('/channels/:channelId/messages', async (req: AuthRequest, res) => {
     try {
+        const channelAccess = await query(
+            `SELECT c.id
+             FROM channels c
+             JOIN workspaces w ON w.id = c.workspace_id
+             WHERE c.id = $1 AND w.user_id = $2`,
+            [req.params.channelId, req.user!.id]
+        );
+        if (channelAccess.rows.length === 0) return res.status(404).json({ error: 'Channel not found' });
+
         const limit = parseInt(req.query.limit as string) || 50;
         const before = req.query.before as string | undefined;
 
@@ -116,11 +158,14 @@ router.get('/channels/:channelId/messages', async (req: AuthRequest, res) => {
         const userMap = Object.fromEntries(users.map(u => [u.id, u]));
 
         // Get thread counts
-        const threadResult = await query(
-            `SELECT parent_id, COUNT(*) as count FROM messages WHERE parent_id = ANY($1) GROUP BY parent_id`,
-            [messages.map((m: any) => m.id)]
-        );
-        const threadMap = Object.fromEntries(threadResult.rows.map((t: any) => [t.parent_id, parseInt(t.count)]));
+        let threadMap: Record<string, number> = {};
+        if (messages.length > 0) {
+            const threadResult = await query(
+                `SELECT parent_id, COUNT(*) as count FROM messages WHERE parent_id = ANY($1) GROUP BY parent_id`,
+                [messages.map((m: any) => m.id)]
+            );
+            threadMap = Object.fromEntries(threadResult.rows.map((t: any) => [t.parent_id, parseInt(t.count)]));
+        }
 
         const messagesWithUsers = messages.map((m: any) => ({
             ...m,
@@ -130,10 +175,12 @@ router.get('/channels/:channelId/messages', async (req: AuthRequest, res) => {
             attachments: typeof m.attachments === 'string' ? JSON.parse(m.attachments) : (m.attachments || [])
         }));
 
-        // Update last read
+        // Update last read (upsert membership if missing)
         await query(
-            `UPDATE channel_members SET last_read_at = NOW() WHERE channel_id = $1 AND user_id = $2`,
-            [req.params.channelId, req.user?.id]
+            `INSERT INTO channel_members (channel_id, user_id, role, last_read_at)
+             VALUES ($1, $2, $3, NOW())
+             ON CONFLICT (channel_id, user_id) DO UPDATE SET last_read_at = EXCLUDED.last_read_at`,
+            [req.params.channelId, req.user!.id, 'member']
         );
 
         res.json({ messages: messagesWithUsers.reverse() });
@@ -146,6 +193,15 @@ router.get('/channels/:channelId/messages', async (req: AuthRequest, res) => {
 // Send message
 router.post('/channels/:channelId/messages', async (req: AuthRequest, res) => {
     try {
+        const channelAccess = await query(
+            `SELECT c.id
+             FROM channels c
+             JOIN workspaces w ON w.id = c.workspace_id
+             WHERE c.id = $1 AND w.user_id = $2`,
+            [req.params.channelId, req.user!.id]
+        );
+        if (channelAccess.rows.length === 0) return res.status(404).json({ error: 'Channel not found' });
+
         const { content, parent_id, attachments } = req.body;
         if (!content) return res.status(400).json({ error: 'Content is required' });
 
@@ -178,7 +234,14 @@ router.post('/messages/:messageId/reactions', async (req: AuthRequest, res) => {
         const { emoji } = req.body;
         if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
 
-        const msgResult = await query('SELECT reactions FROM messages WHERE id = $1', [req.params.messageId]);
+        const msgResult = await query(
+            `SELECT m.reactions
+             FROM messages m
+             JOIN channels c ON c.id = m.channel_id
+             JOIN workspaces w ON w.id = c.workspace_id
+             WHERE m.id = $1 AND w.user_id = $2`,
+            [req.params.messageId, req.user!.id]
+        );
         if (msgResult.rows.length === 0) return res.status(404).json({ error: 'Message not found' });
 
         let reactions = msgResult.rows[0].reactions;

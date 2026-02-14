@@ -1,5 +1,5 @@
 
-import { Dataset, StrategicReport } from '../types';
+import { Dataset, StrategicReport } from '../../types';
 
 export class ExportService {
 

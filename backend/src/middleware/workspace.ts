@@ -22,6 +22,8 @@ export const verifyWorkspaceOwnership = async (req: AuthRequest, res: any, next:
                 return res.status(404).json({ error: 'Default workspace not found' });
             }
             targetWorkspaceId = defaultWs.rows[0].id;
+            // Ensure downstream handlers use the resolved ID.
+            req.params.workspaceId = targetWorkspaceId;
         }
 
         const result = await query(

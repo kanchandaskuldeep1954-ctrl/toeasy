@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { Dataset, StrategicReport } from '../../types';
-import axios from 'axios';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { activityAPI } from '../services/api';
+import { activityAPI, alertsAPI, datasetAPI, reportsAPI } from '../services/api';
 
 const TheWarRoom: React.FC = () => {
     const { activeWorkspace } = useWorkspace();
@@ -17,8 +16,6 @@ const TheWarRoom: React.FC = () => {
     const [healthScore, setHealthScore] = useState(0);
     const [alertCount, setAlertCount] = useState(0);
 
-    const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
     useEffect(() => {
         if (activeWorkspace?.id && token) {
             fetchReports();
@@ -28,36 +25,53 @@ const TheWarRoom: React.FC = () => {
     const fetchReports = async () => {
         try {
             setLoading(true);
-            const response = await axios.get(`${backendUrl}/workspaces/${activeWorkspace?.id}/datasets`, {
-                headers: { Authorization: `Bearer ${token}` }
+
+            const workspaceId = String(activeWorkspace?.id || '');
+            if (!workspaceId) return;
+
+            const [dsRes, rRes, aRes] = await Promise.all([
+                datasetAPI.list(workspaceId, 200, 0),
+                reportsAPI.list(workspaceId, undefined, 200, 0),
+                alertsAPI.list(workspaceId).catch(() => ({ data: [] } as any)),
+            ]);
+
+            const dsPayload = dsRes.data || {};
+            const datasets = Array.isArray(dsPayload.data) ? dsPayload.data : [];
+            const datasetMap = new Map(datasets.map((d: any) => [String(d.id), d]));
+
+            const reportsPayload = rRes.data || {};
+            const reportEntities = Array.isArray(reportsPayload.data) ? reportsPayload.data : [];
+
+            const reportItems = reportEntities.map((r: any) => {
+                const ds = datasetMap.get(String(r.dataset_id));
+                return {
+                    id: r.id,
+                    title: r.name || 'Strategic Report',
+                    type: 'strategic',
+                    datasetName: ds?.name || `Dataset ${r.dataset_id}`,
+                    date: r.updated_at || r.created_at,
+                    datasetId: r.dataset_id,
+                    score: typeof ds?.health_score === 'number' ? ds.health_score : 0
+                };
             });
-
-            // Handle both flat array (legacy) and paginated object { data: [...] }
-            const rawData = response.data?.data || (Array.isArray(response.data) ? response.data : []);
-
-            const datasetsWithReports = rawData.filter((d: any) => d.strategicReport || d.cleaningReport);
-            const reportItems = datasetsWithReports.map((d: any) => ({
-                id: d.id,
-                title: d.strategicReport?.title || `${d.name} Audit Report`,
-                type: d.strategicReport ? 'strategic' : 'clean',
-                datasetName: d.name,
-                date: d.created_at,
-                datasetId: d.id,
-                score: d.strategicReport?.overall_score || 0
-            }));
 
             setReports(reportItems);
 
-            // Calculate health score
-            if (reportItems.length > 0) {
-                const totalScore = reportItems.reduce((acc: number, r: any) => {
-                    const s = typeof r.score === 'number' ? r.score : parseFloat(String(r.score).replace(/[^0-9.]/g, '')) || 0;
-                    return acc + s;
-                }, 0);
-                setHealthScore(Math.round(totalScore / reportItems.length));
+            // Calculate health score from datasets (real backend value)
+            const healthValues = datasets
+                .map((d: any) => (typeof d.health_score === 'number' ? d.health_score : null))
+                .filter((v: any) => typeof v === 'number') as number[];
+
+            if (healthValues.length > 0) {
+                const avg = healthValues.reduce((a, b) => a + b, 0) / healthValues.length;
+                setHealthScore(Math.round(avg));
             } else {
                 setHealthScore(0);
             }
+
+            // Alerts count (real backend)
+            const alerts = Array.isArray((aRes as any)?.data) ? (aRes as any).data : [];
+            setAlertCount(alerts.length);
         } catch (e) {
             console.error("Failed to fetch reports", e);
         } finally {
@@ -77,14 +91,11 @@ const TheWarRoom: React.FC = () => {
 
                 const pulseItems = acts.map((a: any) => ({
                     id: a.id,
-                    type: a.actionCategory === 'alert' ? 'alert' : (a.actionCategory === 'system' ? 'check' : 'pulse'),
-                    title: a.actionType,
-                    desc: a.actionDetail,
+                    type: a.action_category === 'alert' ? 'alert' : (a.action_category === 'system' ? 'check' : 'pulse'),
+                    title: a.action_type,
+                    desc: a.action_detail,
                     time: new Date(a.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 }));
-
-                // Count alerts
-                setAlertCount(acts.filter((a: any) => a.actionCategory === 'alert').length);
 
                 if (pulseItems.length > 0) {
                     setFeed(pulseItems);
@@ -103,22 +114,22 @@ const TheWarRoom: React.FC = () => {
         setIsGenerating(false);
         setLoading(true);
         try {
-            // Pick a dataset to audit if none specified, or show selection
-            // For pro level, we pick the most recent dataset without a report
-            const response = await axios.get(`${backendUrl}/workspaces/${activeWorkspace?.id}/datasets`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            const workspaceId = String(activeWorkspace?.id || '');
+            if (!workspaceId) return;
 
-            const target = response.data.find((d: any) => !d.strategicReport);
+            const dsRes = await datasetAPI.list(workspaceId, 50, 0);
+            const dsPayload = dsRes.data || {};
+            const datasets = Array.isArray(dsPayload.data) ? dsPayload.data : [];
 
+            const target = datasets[0];
             if (!target) {
-                alert("All datasets have active intelligence. Try uploading a new source.");
-                setLoading(false);
+                alert('No datasets found. Upload a dataset first.');
+                navigate('/app/upload');
                 return;
             }
 
             // Navigate to report view which triggers generation if missing
-            navigate(`/app/report?workspace=${activeWorkspace?.id}&dataset=${target.id}&autoGenerate=true`);
+            navigate(`/app/report?workspace=${workspaceId}&dataset=${target.id}&autoGenerate=true`);
         } catch (e) {
             console.error("Initiation failed", e);
             setLoading(false);

@@ -73,7 +73,8 @@ export const JOURNEY_STEPS: Record<JourneyStepId, JourneyStep> = {
         label: 'Classify',
         description: 'AI identifies what type of data you uploaded',
         icon: '🧠',
-        route: '/app/classify'
+        // Classification currently happens during upload; route to preview until a dedicated view exists.
+        route: '/app/preview'
     },
     clean: {
         id: 'clean',
@@ -108,7 +109,8 @@ export const JOURNEY_STEPS: Record<JourneyStepId, JourneyStep> = {
         label: 'Export',
         description: 'Download your cleaned data and visualizations',
         icon: '📤',
-        route: '/app/export',
+        // Export is currently surfaced inside the cleaning/report experiences (ExportModal).
+        route: '/app/clean',
         isOptional: true
     },
     share: {
@@ -116,7 +118,8 @@ export const JOURNEY_STEPS: Record<JourneyStepId, JourneyStep> = {
         label: 'Share',
         description: 'Share insights with your team or stakeholders',
         icon: '🔗',
-        route: '/app/share',
+        // Sharing is currently supported from reports (public share link).
+        route: '/app/report',
         isOptional: true,
         requiredTier: 'pro'
     }

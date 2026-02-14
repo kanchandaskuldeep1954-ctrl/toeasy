@@ -34,12 +34,22 @@ const QUICK_ACTIONS: QuickAction[] = [
     { icon: CheckSquare, label: 'New Task', description: 'Track work', href: '/app/tasks', color: 'sky' },
     { icon: MessageCircle, label: 'Chat', description: 'Collaborate', href: '/app/chat', color: 'emerald' },
     { icon: FolderOpen, label: 'Files', description: 'Store assets', href: '/app/files', color: 'amber' },
-    { icon: Zap, label: 'Flows', description: 'Automate', href: '/app/flows', color: 'purple' }
+    { icon: Zap, label: 'Flows', description: 'Automate', href: '/app/dataflows', color: 'purple' }
 ];
 
+// Tailwind can't reliably pick up dynamic class names (e.g. `bg-${color}-...`),
+// so keep these explicit to ensure the styles are generated in production builds.
+const QUICK_ACTION_COLOR: Record<string, { bg: string; text: string }> = {
+    indigo: { bg: 'bg-indigo-500/20', text: 'text-indigo-400' },
+    sky: { bg: 'bg-sky-500/20', text: 'text-sky-400' },
+    emerald: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
+    amber: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
+    purple: { bg: 'bg-purple-500/20', text: 'text-purple-400' }
+};
+
 export const HomeView: React.FC = () => {
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : undefined;
 
     const [stats, setStats] = useState([
         { label: 'Active Tasks', value: '0', change: '0' },
@@ -89,7 +99,7 @@ export const HomeView: React.FC = () => {
                         Welcome back! 👋
                     </h1>
                     <p className="text-slate-400">
-                        Everything looks good in {currentWorkspace?.name || 'your workspace'}.
+                        Everything looks good in {activeWorkspace?.name || 'your workspace'}.
                     </p>
                 </motion.div>
 
@@ -135,8 +145,8 @@ export const HomeView: React.FC = () => {
                                     padding="md"
                                     className="text-center h-full transition-transform hover:scale-105"
                                 >
-                                    <div className={`w-12 h-12 mx-auto mb-3 rounded-xl bg-${action.color}-500/20 flex items-center justify-center`}>
-                                        <action.icon className={`w-6 h-6 text-${action.color}-400`} />
+                                    <div className={`w-12 h-12 mx-auto mb-3 rounded-xl ${QUICK_ACTION_COLOR[action.color]?.bg || 'bg-slate-500/20'} flex items-center justify-center`}>
+                                        <action.icon className={`w-6 h-6 ${QUICK_ACTION_COLOR[action.color]?.text || 'text-slate-300'}`} />
                                     </div>
                                     <h3 className="font-medium text-white text-sm mb-1">
                                         {action.label}

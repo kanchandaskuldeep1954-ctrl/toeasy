@@ -32,7 +32,7 @@ import ReportViewIntegrated from './src/components/ReportViewIntegrated';
 import TheWarRoom from './src/components/TheWarRoom';
 const DashboardViewIntegrated = React.lazy(() => import('./src/components/DashboardViewIntegrated'));
 const SpreadsheetViewIntegrated = React.lazy(() => import('./components/SpreadsheetViewIntegrated'));
-import ReportView from './components/ReportView';
+const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
 import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
 import DatasetCreatorView from './components/DatasetCreatorView';
@@ -40,7 +40,6 @@ import DataPreview from './src/components/DataPreview';
 import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
 import UsageMetrics from './src/components/UsageMetrics';
-import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 import DataflowBuilder from './src/components/DataflowBuilder/DataflowBuilder';
 import MetricsLibrary from './src/components/MetricsLibrary';
 import AlertsManager from './src/components/Alerts/AlertsManager';
@@ -92,6 +91,7 @@ const AppLayout: React.FC = () => {
           <Route path="connect/:providerId" element={<ConnectorSetupView />} />
           <Route path="explore-connection/:integrationId" element={<ConnectorExplorerView />} />
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
+          <Route path="clean" element={<UniverCleanView />} />
           {/* Sheets View - Data editing with auto-cleaning */}
           <Route path="sheets" element={<SpreadsheetViewIntegrated />} />
           <Route path="playground" element={<PlaygroundViewIntegrated />} />

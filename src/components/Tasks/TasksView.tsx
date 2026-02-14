@@ -24,8 +24,8 @@ interface TasksViewProps {
 }
 
 export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspaceId }) => {
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = propWorkspaceId || currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = propWorkspaceId || (activeWorkspace?.id ? String(activeWorkspace.id) : undefined);
 
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);

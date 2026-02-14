@@ -23,6 +23,14 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
             return res.status(400).json({ error: 'workspaceId is required' });
         }
 
+        const wsCheck = await query(
+            'SELECT id FROM workspaces WHERE id = $1 AND user_id = $2',
+            [workspaceId, req.user!.id]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
+
         const result = await query(
             `SELECT id, tab_type, resource_id, tab_name, tab_order
              FROM workspace_tabs
@@ -54,6 +62,14 @@ router.post('/', authenticateToken, async (req: AuthRequest, res) => {
 
         if (!['dashboard', 'report', 'dataset'].includes(tabType)) {
             return res.status(400).json({ error: 'Invalid tab type' });
+        }
+
+        const wsCheck = await query(
+            'SELECT id FROM workspaces WHERE id = $1 AND user_id = $2',
+            [workspaceId, req.user!.id]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
         }
 
         // Get max order for this workspace
@@ -120,6 +136,14 @@ router.put('/reorder', authenticateToken, async (req: AuthRequest, res) => {
 
         if (!workspaceId || !Array.isArray(tabIds)) {
             return res.status(400).json({ error: 'Missing workspaceId or tabIds array' });
+        }
+
+        const wsCheck = await query(
+            'SELECT id FROM workspaces WHERE id = $1 AND user_id = $2',
+            [workspaceId, req.user!.id]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
         }
 
         // Update order for each tab

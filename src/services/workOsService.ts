@@ -5,11 +5,12 @@
 
 import axios from 'axios';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+// All Work OS module endpoints live under the backend `/api` prefix.
+const API_BASE = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api';
 
 // Helper to get auth headers
 const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('auth_token');
     return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
@@ -156,7 +157,7 @@ export const formsService = {
         await axios.delete(`${API_BASE}/forms/${id}`, { headers: getAuthHeaders() });
     },
 
-    updateFields: async (id: string, fields: Array<{ type: string; label: string; placeholder?: string; required?: boolean; options?: string[]; validation?: Record<string, any> }>) => {
+    updateFields: async (id: string, fields: Array<{ type: string; label: string; placeholder?: string; required?: boolean; options?: any[]; validation?: Record<string, any>; position?: number }>) => {
         await axios.put(`${API_BASE}/forms/${id}/fields`, { fields }, { headers: getAuthHeaders() });
     },
 

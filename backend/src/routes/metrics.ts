@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ interface MetricCreateRequest {
 }
 
 // GET /api/workspaces/:workspaceId/metrics - List all metrics
-router.get('/workspaces/:workspaceId/metrics', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/workspaces/:workspaceId/metrics', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId } = req.params;
         const { category, certified, search } = req.query;
@@ -57,7 +58,7 @@ router.get('/workspaces/:workspaceId/metrics', authenticateToken, async (req: Au
 });
 
 // GET /api/workspaces/:workspaceId/metrics/:id - Get single metric with usage
-router.get('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/workspaces/:workspaceId/metrics/:id', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
 
@@ -100,7 +101,7 @@ router.get('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (req
 });
 
 // POST /api/workspaces/:workspaceId/metrics - Create new metric
-router.post('/workspaces/:workspaceId/metrics', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/workspaces/:workspaceId/metrics', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId } = req.params;
         const userId = req.user?.id;
@@ -139,7 +140,7 @@ router.post('/workspaces/:workspaceId/metrics', authenticateToken, async (req: A
 });
 
 // PUT /api/workspaces/:workspaceId/metrics/:id - Update metric
-router.put('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/workspaces/:workspaceId/metrics/:id', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
         const userId = req.user?.id;
@@ -198,7 +199,7 @@ router.put('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (req
 });
 
 // PATCH /api/workspaces/:workspaceId/metrics/:id/certify - Certify/uncertify a metric
-router.patch('/workspaces/:workspaceId/metrics/:id/certify', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.patch('/workspaces/:workspaceId/metrics/:id/certify', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
         const { certified } = req.body;
@@ -221,7 +222,7 @@ router.patch('/workspaces/:workspaceId/metrics/:id/certify', authenticateToken, 
 });
 
 // DELETE /api/workspaces/:workspaceId/metrics/:id - Delete metric
-router.delete('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.delete('/workspaces/:workspaceId/metrics/:id', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
 
@@ -246,7 +247,7 @@ router.delete('/workspaces/:workspaceId/metrics/:id', authenticateToken, async (
 });
 
 // GET /api/workspaces/:workspaceId/metrics/categories - Get all categories
-router.get('/workspaces/:workspaceId/metrics/categories', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/workspaces/:workspaceId/metrics/categories', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId } = req.params;
 
@@ -264,10 +265,18 @@ router.get('/workspaces/:workspaceId/metrics/categories', authenticateToken, asy
 });
 
 // POST /api/workspaces/:workspaceId/metrics/:id/track-usage - Track metric usage
-router.post('/workspaces/:workspaceId/metrics/:id/track-usage', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/workspaces/:workspaceId/metrics/:id/track-usage', authenticateToken, verifyWorkspaceOwnership, async (req: AuthRequest, res: Response) => {
     try {
-        const { id } = req.params;
+        const { workspaceId, id } = req.params;
         const { used_in_type, used_in_id } = req.body;
+
+        const metricCheck = await query(
+            `SELECT id FROM metrics WHERE id = $1 AND workspace_id = $2`,
+            [id, workspaceId]
+        );
+        if (metricCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Metric not found' });
+        }
 
         // Check if already tracked
         const existing = await query(`

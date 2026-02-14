@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { initializeRedis, closeRedis } from './services/cacheService.js';
 import { cacheMiddleware, invalidateCacheMiddleware } from './middleware/cacheMiddleware.js';
-import { authenticateToken, AuthRequest } from './middleware/auth.js';
+import { authenticateToken, AuthRequest, optionalAuthenticateToken } from './middleware/auth.js';
 import { checkSubscription, checkTierLimit } from './middleware/subscription.js';
 import { GroqService } from './services/groq.service.js';
 import { query } from './db.js';
@@ -58,8 +58,29 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // Trust proxy for Railway deployment
 app.set('trust proxy', 1);
 
+// Populate req.user early when a valid Bearer token exists.
+// This prevents cache keys from collapsing to "anonymous" and accidentally serving
+// authenticated responses to unauthenticated clients.
+app.use(optionalAuthenticateToken);
+
 // Cache middleware for GET requests (5 minute TTL)
-app.use(cacheMiddleware({ ttl: 300 }));
+app.use(cacheMiddleware({
+  ttl: 300,
+  shouldCache: (req) => {
+    // Work OS modules are interactive; caching them causes stale UI and missing invalidations.
+    const url = req.originalUrl || req.url || '';
+    const skipPrefixes = [
+      '/api/chat',
+      '/api/tasks',
+      '/api/docs',
+      '/api/forms',
+      '/api/files',
+      '/api/alerts',
+      '/api/notifications'
+    ];
+    return !skipPrefixes.some((p) => url.startsWith(p));
+  }
+}));
 
 // Cache invalidation middleware for mutations
 app.use(invalidateCacheMiddleware());
@@ -84,31 +105,33 @@ app.use(requestLogger);
 // API Routes
 app.use('/api/auth', authRoutes);
 
-// Test DB Route to debug schema
-app.get('/api/test-db', async (req, res) => {
-  try {
-    const tableResult = await query(`
-      SELECT table_name 
-      FROM information_schema.tables 
-      WHERE table_schema = 'public'
-    `);
+// Test DB Route to debug schema (development-only)
+if (config.nodeEnv === 'development') {
+  app.get('/api/test-db', async (req, res) => {
+    try {
+      const tableResult = await query(`
+        SELECT table_name 
+        FROM information_schema.tables 
+        WHERE table_schema = 'public'
+      `);
 
-    // Check specific columns in datasets
-    const columnsResult = await query(`
-      SELECT column_name, data_type 
-      FROM information_schema.columns 
-      WHERE table_name = 'datasets'
-    `);
+      // Check specific columns in datasets
+      const columnsResult = await query(`
+        SELECT column_name, data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'datasets'
+      `);
 
-    res.json({
-      status: 'Available',
-      tables: tableResult.rows.map(r => r.table_name),
-      datasetColumns: columnsResult.rows
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'DB Connection Failed', details: err.message });
-  }
-});
+      res.json({
+        status: 'Available',
+        tables: tableResult.rows.map(r => r.table_name),
+        datasetColumns: columnsResult.rows
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: 'DB Connection Failed', details: err.message });
+    }
+  });
+}
 app.use('/api/workspaces', workspaceRoutes);
 app.use('/api/workspaces', datasetRoutes);
 app.use('/api/workspaces', dashboardRoutes);
@@ -132,7 +155,8 @@ app.use('/api', classificationRoutes); // Source Classification (Phase 1: Intell
 app.use('/api/chat', authenticateToken, chatRoutes);
 app.use('/api/tasks', authenticateToken, tasksRoutes);
 app.use('/api/docs', authenticateToken, docsRoutes);
-app.use('/api/forms', authenticateToken, formsRoutes);
+// Forms include a public submit endpoint (`POST /api/forms/:id/respond`) and must not be globally auth-guarded.
+app.use('/api/forms', formsRoutes);
 app.use('/api/files', authenticateToken, filesRoutes);
 app.use('/api/alerts', authenticateToken, alertsRoutes);
 app.use('/api/notifications', authenticateToken, notificationsRoutes);

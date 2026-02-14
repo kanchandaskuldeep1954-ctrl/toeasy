@@ -10,6 +10,8 @@
 
 import { Server, Socket } from 'socket.io';
 import { query } from './db.js';
+import jwt from 'jsonwebtoken';
+import { config } from './config.js';
 
 // Types
 interface Message {
@@ -58,27 +60,78 @@ export function setupWebSocket(httpServer: any) {
         console.log(`[WS] Client connected: ${socket.id}`);
 
         // --- Authentication ---
-        socket.on('authenticate', (data: { userId: string; userName: string; token?: string }) => {
-            socket.data.userId = data.userId;
-            socket.data.userName = data.userName;
+        socket.on('authenticate', async (data: { userId?: string; userName?: string; token?: string }) => {
+            const token = data.token;
+            if (!token) {
+                socket.emit('auth-error', { error: 'Missing token' });
+                socket.disconnect(true);
+                return;
+            }
+
+            let decoded: any;
+            try {
+                decoded = jwt.verify(token, config.jwtSecret) as any;
+            } catch (err: any) {
+                socket.emit('auth-error', { error: 'Invalid or expired token', details: err?.message });
+                socket.disconnect(true);
+                return;
+            }
+
+            const authedUserId = String(decoded.userId || '');
+            if (!authedUserId) {
+                socket.emit('auth-error', { error: 'Invalid token payload' });
+                socket.disconnect(true);
+                return;
+            }
+
+            // Prefer DB full_name for display, fall back to token email.
+            let userName = String(decoded.email || 'User');
+            try {
+                const u = await query('SELECT full_name, email FROM users WHERE id = $1', [authedUserId]);
+                if (u.rows.length > 0) {
+                    userName = u.rows[0].full_name || u.rows[0].email || userName;
+                }
+            } catch {
+                // Non-fatal
+            }
+
+            socket.data.userId = authedUserId;
+            socket.data.userName = userName;
 
             // Track user sockets
-            if (!userSockets.has(data.userId)) {
-                userSockets.set(data.userId, new Set());
+            if (!userSockets.has(authedUserId)) {
+                userSockets.set(authedUserId, new Set());
             }
-            userSockets.get(data.userId)!.add(socket.id);
+            userSockets.get(authedUserId)!.add(socket.id);
 
             // Broadcast presence
             io.emit('user-status-change', {
-                userId: data.userId,
+                userId: authedUserId,
                 status: 'online'
             });
 
-            console.log(`[WS] User authenticated: ${data.userName} (${data.userId})`);
+            console.log(`[WS] User authenticated: ${userName} (${authedUserId})`);
         });
 
         // --- Chat ---
-        socket.on('join-channel', (channelId: string) => {
+        socket.on('join-channel', async (channelId: string) => {
+            if (!socket.data.userId) {
+                socket.emit('auth-error', { error: 'Not authenticated' });
+                return;
+            }
+
+            const channelAccess = await query(
+                `SELECT c.id
+                 FROM channels c
+                 JOIN workspaces w ON w.id = c.workspace_id
+                 WHERE c.id = $1 AND w.user_id = $2`,
+                [channelId, socket.data.userId]
+            );
+            if (channelAccess.rows.length === 0) {
+                socket.emit('channel-error', { error: 'Channel not found' });
+                return;
+            }
+
             socket.join(`channel:${channelId}`);
 
             // Track participants
@@ -98,6 +151,7 @@ export function setupWebSocket(httpServer: any) {
         });
 
         socket.on('leave-channel', (channelId: string) => {
+            if (!socket.data.userId) return;
             socket.leave(`channel:${channelId}`);
             roomParticipants.get(channelId)?.delete(socket.data.userId);
 
@@ -112,8 +166,28 @@ export function setupWebSocket(httpServer: any) {
             content: string;
             replyTo?: string;
             attachments?: any[];
-        }) => {
+            clientMessageId?: string;
+        }, ack?: (payload: any) => void) => {
             try {
+                if (!socket.data.userId) {
+                    socket.emit('auth-error', { error: 'Not authenticated' });
+                    if (typeof ack === 'function') ack({ ok: false, error: 'Not authenticated' });
+                    return;
+                }
+
+                // Ensure the user owns the workspace for this channel (prevents cross-tenant writes).
+                const channelAccess = await query(
+                    `SELECT c.id
+                     FROM channels c
+                     JOIN workspaces w ON w.id = c.workspace_id
+                     WHERE c.id = $1 AND w.user_id = $2`,
+                    [data.channelId, socket.data.userId]
+                );
+                if (channelAccess.rows.length === 0) {
+                    if (typeof ack === 'function') ack({ ok: false, error: 'Channel not found' });
+                    return;
+                }
+
                 // Save message to database
                 const result = await query(
                     `INSERT INTO messages (channel_id, user_id, content, parent_id, attachments)
@@ -141,16 +215,26 @@ export function setupWebSocket(httpServer: any) {
                 };
 
                 // Broadcast to channel
-                io.to(`channel:${data.channelId}`).emit('new-message', message);
+                io.to(`channel:${data.channelId}`).emit('new-message', {
+                    ...message,
+                    clientMessageId: data.clientMessageId
+                });
+
+                if (typeof ack === 'function') {
+                    ack({ ok: true, message: { ...message, clientMessageId: data.clientMessageId } });
+                }
 
                 console.log(`[WS] Message saved & broadcast in ${data.channelId}: ${data.content.slice(0, 50)}...`);
             } catch (err) {
                 console.error('[WS] Failed to save message:', err);
                 socket.emit('message-error', { error: 'Failed to save message' });
+                if (typeof ack === 'function') ack({ ok: false, error: 'Failed to save message' });
             }
         });
 
         socket.on('typing', (data: { channelId: string }) => {
+            if (!socket.data.userId) return;
+            if (!socket.rooms.has(`channel:${data.channelId}`)) return;
             socket.to(`channel:${data.channelId}`).emit('user-typing', {
                 userId: socket.data.userId,
                 userName: socket.data.userName,
@@ -159,6 +243,8 @@ export function setupWebSocket(httpServer: any) {
         });
 
         socket.on('stop-typing', (data: { channelId: string }) => {
+            if (!socket.data.userId) return;
+            if (!socket.rooms.has(`channel:${data.channelId}`)) return;
             socket.to(`channel:${data.channelId}`).emit('user-stopped-typing', {
                 userId: socket.data.userId,
                 channelId: data.channelId
@@ -171,8 +257,16 @@ export function setupWebSocket(httpServer: any) {
             emoji: string;
         }) => {
             try {
+                if (!socket.data.userId) return;
                 // Get current reactions
-                const msgResult = await query('SELECT reactions FROM messages WHERE id = $1', [data.messageId]);
+                const msgResult = await query(
+                    `SELECT m.reactions
+                     FROM messages m
+                     JOIN channels c ON c.id = m.channel_id
+                     JOIN workspaces w ON w.id = c.workspace_id
+                     WHERE m.id = $1 AND m.channel_id = $2 AND w.user_id = $3`,
+                    [data.messageId, data.channelId, socket.data.userId]
+                );
                 if (msgResult.rows.length === 0) return;
 
                 let reactions = msgResult.rows[0].reactions;
@@ -198,6 +292,7 @@ export function setupWebSocket(httpServer: any) {
 
         // --- Collaboration ---
         socket.on('join-document', (documentId: string) => {
+            if (!socket.data.userId) return;
             socket.join(`doc:${documentId}`);
 
             socket.to(`doc:${documentId}`).emit('collaborator-joined', {
@@ -210,6 +305,7 @@ export function setupWebSocket(httpServer: any) {
             documentId: string;
             position: CursorPosition;
         }) => {
+            if (!socket.data.userId) return;
             socket.to(`doc:${data.documentId}`).emit('cursor-update', {
                 userId: socket.data.userId,
                 userName: socket.data.userName,
@@ -222,6 +318,7 @@ export function setupWebSocket(httpServer: any) {
             changes: any;
             version: number;
         }) => {
+            if (!socket.data.userId) return;
             socket.to(`doc:${data.documentId}`).emit('document-updated', {
                 userId: socket.data.userId,
                 changes: data.changes,
@@ -231,6 +328,7 @@ export function setupWebSocket(httpServer: any) {
 
         // --- Dashboard Collaboration ---
         socket.on('join-dashboard', (dashboardId: string) => {
+            if (!socket.data.userId) return;
             socket.join(`dashboard:${dashboardId}`);
         });
 
@@ -240,6 +338,7 @@ export function setupWebSocket(httpServer: any) {
             action: 'select' | 'filter' | 'drill';
             value: any;
         }) => {
+            if (!socket.data.userId) return;
             socket.to(`dashboard:${data.dashboardId}`).emit('chart-interacted', {
                 userId: socket.data.userId,
                 ...data
@@ -248,12 +347,14 @@ export function setupWebSocket(httpServer: any) {
 
         // --- Notifications ---
         socket.on('mark-notification-read', (notificationId: string) => {
+            if (!socket.data.userId) return;
             // TODO: Update database
             socket.emit('notification-read', { id: notificationId });
         });
 
         // --- Presence ---
         socket.on('set-status', (status: 'online' | 'away' | 'busy') => {
+            if (!socket.data.userId) return;
             io.emit('user-status-change', {
                 userId: socket.data.userId,
                 status

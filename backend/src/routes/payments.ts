@@ -175,24 +175,35 @@ router.post('/create-order', authenticateToken, async (req: AuthRequest, res) =>
 // Verify Payment
 router.post('/verify', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+    const { razorpay_order_id, razorpay_subscription_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-    const body = razorpay_order_id + "|" + razorpay_payment_id;
+    if (!razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({ success: false, error: 'Missing payment_id or signature' });
+    }
 
-    const expectedSignature = crypto
-      .createHmac("sha256", config.razorpay.keySecret || '')
-      .update(body.toString())
-      .digest("hex");
+    if (!razorpay_order_id && !razorpay_subscription_id) {
+      return res.status(400).json({ success: false, error: 'Missing order_id or subscription_id' });
+    }
 
-    const isAuthentic = expectedSignature === razorpay_signature;
+    const secret = config.razorpay.keySecret || '';
+    const candidates = [
+      razorpay_order_id ? `${razorpay_order_id}|${razorpay_payment_id}` : null,
+      razorpay_subscription_id ? `${razorpay_subscription_id}|${razorpay_payment_id}` : null,
+    ].filter(Boolean) as string[];
+
+    const isAuthentic = candidates.some((body) => {
+      const expectedSignature = crypto.createHmac('sha256', secret).update(body).digest('hex');
+      return expectedSignature === razorpay_signature;
+    });
 
     if (isAuthentic) {
       // Payment Successful
 
       // Get payment order details
       const paymentResult = await query(
-        'SELECT user_id, plan_id FROM payment_orders WHERE cashfree_order_id = $1', // Using cashfree_order_id as generic order id storage
-        [razorpay_order_id]
+        // Backward compatible lookup (we historically used cashfree_order_id in some places)
+        'SELECT user_id, plan_id FROM payment_orders WHERE order_id = $1 OR cashfree_order_id = $1',
+        [razorpay_order_id || razorpay_subscription_id]
       );
 
       if (paymentResult.rows.length > 0) {
@@ -211,8 +222,8 @@ router.post('/verify', authenticateToken, async (req: AuthRequest, res) => {
 
         // Update payment order status
         await query(
-          'UPDATE payment_orders SET status = $1, updated_at = NOW() WHERE cashfree_order_id = $2',
-          ['completed', razorpay_order_id]
+          'UPDATE payment_orders SET status = $1, updated_at = NOW() WHERE order_id = $2 OR cashfree_order_id = $2',
+          ['completed', razorpay_order_id || razorpay_subscription_id]
         );
       }
 
@@ -231,7 +242,7 @@ router.get('/status/:orderId', authenticateToken, async (req: AuthRequest, res) 
   try {
     const { orderId } = req.params;
     const result = await query(
-      'SELECT status FROM payment_orders WHERE cashfree_order_id = $1 AND user_id = $2',
+      'SELECT status FROM payment_orders WHERE (order_id = $1 OR cashfree_order_id = $1) AND user_id = $2',
       [orderId, req.user!.id]
     );
 

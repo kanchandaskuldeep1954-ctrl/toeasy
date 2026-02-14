@@ -82,8 +82,8 @@ const formatFileSize = (bytes?: number): string => {
 };
 
 export const FilesView: React.FC = () => {
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : undefined;
 
     const [files, setFiles] = useState<FileItem[]>([]);
     const [loading, setLoading] = useState(true);

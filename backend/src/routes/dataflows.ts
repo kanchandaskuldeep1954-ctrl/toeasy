@@ -4,6 +4,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
 import { ProCleaningAgent } from '../services/cleaningAgent.js';
 import { GroqService } from '../services/groq.service.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 
 
@@ -12,6 +13,7 @@ const router = Router();
 // Apply auth and subscription middleware
 router.use(authenticateToken);
 router.use(checkSubscription);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
 
 // ==================== DATAFLOW CRUD ====================
 
@@ -23,6 +25,8 @@ router.get('/:workspaceId/dataflows', async (req: AuthRequest, res) => {
         const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
         const offset = parseInt(req.query.offset as string) || 0;
 
+        // Default: show only the user's dataflows in this workspace.
+        // Optionally include template flows owned by this user (across any workspace).
         let sql = `
             SELECT id, name, description, pipeline, is_template, is_active, schedule, created_at, updated_at
             FROM dataflows 
@@ -30,7 +34,7 @@ router.get('/:workspaceId/dataflows', async (req: AuthRequest, res) => {
         `;
 
         if (includeTemplates) {
-            sql += ` OR (is_template = true AND is_active = true)`;
+            sql += ` OR (is_template = true AND is_active = true AND user_id = $2)`;
         }
 
         sql += ` ORDER BY updated_at DESC LIMIT $3 OFFSET $4`;
@@ -38,10 +42,10 @@ router.get('/:workspaceId/dataflows', async (req: AuthRequest, res) => {
         const result = await query(sql, [workspaceId, req.user!.id, limit, offset]);
 
         // Get total count
-        const countResult = await query(
-            `SELECT COUNT(*) as total FROM dataflows WHERE workspace_id = $1 AND user_id = $2`,
-            [workspaceId, req.user!.id]
-        );
+        const countSql = includeTemplates
+            ? `SELECT COUNT(*) as total FROM dataflows WHERE (workspace_id = $1 AND user_id = $2) OR (is_template = true AND is_active = true AND user_id = $2)`
+            : `SELECT COUNT(*) as total FROM dataflows WHERE workspace_id = $1 AND user_id = $2`;
+        const countResult = await query(countSql, [workspaceId, req.user!.id]);
 
         res.json({
             dataflows: result.rows,
@@ -61,7 +65,7 @@ router.get('/:workspaceId/dataflows/:dataflowId', async (req: AuthRequest, res) 
         const { workspaceId, dataflowId } = req.params;
 
         const result = await query(
-            `SELECT * FROM dataflows WHERE id = $1 AND workspace_id = $2 AND (user_id = $3 OR is_template = true)`,
+            `SELECT * FROM dataflows WHERE id = $1 AND workspace_id = $2 AND user_id = $3`,
             [dataflowId, workspaceId, req.user!.id]
         );
 
@@ -167,8 +171,8 @@ router.post('/:workspaceId/dataflows/:dataflowId/execute', async (req: AuthReque
 
         // Get the dataflow
         const dataflowResult = await query(
-            `SELECT * FROM dataflows WHERE id = $1 AND workspace_id = $2`,
-            [dataflowId, workspaceId]
+            `SELECT * FROM dataflows WHERE id = $1 AND workspace_id = $2 AND user_id = $3`,
+            [dataflowId, workspaceId, req.user!.id]
         );
 
         if (dataflowResult.rows.length === 0) {
@@ -369,23 +373,27 @@ router.post('/:workspaceId/dataflows/:dataflowId/execute', async (req: AuthReque
 // Get run history for a dataflow
 router.get('/:workspaceId/dataflows/:dataflowId/runs', async (req: AuthRequest, res) => {
     try {
-        const { dataflowId } = req.params;
+        const { workspaceId, dataflowId } = req.params;
         const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
         const offset = parseInt(req.query.offset as string) || 0;
 
         const result = await query(
             `SELECT dr.*, u.full_name as user_name, u.email as user_email
              FROM dataflow_runs dr
+             JOIN dataflows df ON df.id = dr.dataflow_id
              LEFT JOIN users u ON dr.user_id = u.id
-             WHERE dr.dataflow_id = $1
+             WHERE dr.dataflow_id = $1 AND df.workspace_id = $2 AND df.user_id = $3
              ORDER BY dr.started_at DESC
-             LIMIT $2 OFFSET $3`,
-            [dataflowId, limit, offset]
+             LIMIT $4 OFFSET $5`,
+            [dataflowId, workspaceId, req.user!.id, limit, offset]
         );
 
         const countResult = await query(
-            `SELECT COUNT(*) as total FROM dataflow_runs WHERE dataflow_id = $1`,
-            [dataflowId]
+            `SELECT COUNT(*) as total
+             FROM dataflow_runs dr
+             JOIN dataflows df ON df.id = dr.dataflow_id
+             WHERE dr.dataflow_id = $1 AND df.workspace_id = $2 AND df.user_id = $3`,
+            [dataflowId, workspaceId, req.user!.id]
         );
 
         res.json({
@@ -403,14 +411,15 @@ router.get('/:workspaceId/dataflows/:dataflowId/runs', async (req: AuthRequest, 
 // Get a specific run
 router.get('/:workspaceId/dataflows/:dataflowId/runs/:runId', async (req: AuthRequest, res) => {
     try {
-        const { runId } = req.params;
+        const { workspaceId, dataflowId, runId } = req.params;
 
         const result = await query(
             `SELECT dr.*, u.full_name as user_name, u.email as user_email
              FROM dataflow_runs dr
+             JOIN dataflows df ON df.id = dr.dataflow_id
              LEFT JOIN users u ON dr.user_id = u.id
-             WHERE dr.id = $1`,
-            [runId]
+             WHERE dr.id = $1 AND dr.dataflow_id = $2 AND df.workspace_id = $3 AND df.user_id = $4`,
+            [runId, dataflowId, workspaceId, req.user!.id]
         );
 
         if (result.rows.length === 0) {

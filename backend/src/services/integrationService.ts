@@ -33,14 +33,14 @@ class IntegrationService {
         return id;
     }
 
-    async listIntegrations(workspaceId: string, db: any) {
+    async listIntegrations(workspaceId: string, userId: number, db: any) {
         return db('integrations')
-            .where({ workspace_id: workspaceId })
+            .where({ workspace_id: workspaceId, user_id: userId })
             .select('id', 'provider', 'name', 'status', 'last_sync_at', 'sync_message');
     }
 
-    async getIntegration(id: string, db: any) {
-        const integration = await db('integrations').where({ id }).first();
+    async getIntegration(id: string, userId: number, db: any) {
+        const integration = await db('integrations').where({ id, user_id: userId }).first();
         if (integration && integration.credentials) {
             integration.decryptedCredentials = await this.decrypt(integration.credentials.data);
         }

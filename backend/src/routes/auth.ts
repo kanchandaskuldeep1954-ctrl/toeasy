@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { query } from '../db.js';
 import { generateToken, generateRefreshToken } from '../middleware/auth.js';
+import { config } from '../config.js';
 import { otpService } from '../services/otpService.js';
 import { validateResource } from '../middleware/validateResource.js';
 import { loginSchema, registerSchema } from '../schemas/validation.js';
@@ -150,6 +152,52 @@ router.post('/resend-otp', async (req, res) => {
     res.json({ message: 'OTP resent successfully' });
   } catch (err) {
     console.error('Resend OTP error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Refresh access token
+// NOTE: refresh tokens are JWTs signed with the same secret; we don't persist them server-side yet.
+router.post('/refresh', async (req, res) => {
+  try {
+    const refreshToken = req.body?.refreshToken || req.body?.refresh_token;
+    if (!refreshToken) {
+      return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(refreshToken, config.jwtSecret) as any;
+    } catch (err: any) {
+      return res.status(403).json({ error: 'Invalid or expired refresh token', details: err?.message });
+    }
+
+    const userId = decoded.userId;
+    if (!userId) {
+      return res.status(403).json({ error: 'Invalid refresh token payload' });
+    }
+
+    const userResult = await query('SELECT id, email FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const email = userResult.rows[0].email as string;
+
+    // Pull latest active tier for token claims
+    const subResult = await query(
+      `SELECT tier FROM subscriptions 
+       WHERE user_id = $1 AND status = 'active' 
+       ORDER BY created_at DESC LIMIT 1`,
+      [userId]
+    );
+    const tier = subResult.rows[0]?.tier || 'basic';
+
+    const accessToken = generateToken(String(userId), email, tier);
+
+    res.json({ accessToken });
+  } catch (err) {
+    console.error('Refresh token error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

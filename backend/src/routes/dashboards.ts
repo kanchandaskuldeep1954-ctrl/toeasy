@@ -3,6 +3,7 @@ import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
 import { GroqService } from '../services/groq.service.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
 const groqService = new GroqService();
@@ -24,6 +25,7 @@ const safeParse = (value: any) => {
 // Apply auth and subscription middleware
 router.use(authenticateToken);
 router.use(checkSubscription);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
 
 // List dashboards in workspace (with pagination)
 router.get('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
@@ -179,6 +181,15 @@ router.post('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthRe
       return res.status(400).json({ error: 'Version name and config required' });
     }
 
+    // Ensure dashboard belongs to the workspace (and the workspace belongs to the user).
+    const dashboardCheck = await query(
+      `SELECT id FROM dashboards WHERE id = $1 AND workspace_id = $2`,
+      [req.params.dashboardId, req.params.workspaceId]
+    );
+    if (dashboardCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Dashboard not found' });
+    }
+
     const result = await query(
       `INSERT INTO dashboard_versions (dashboard_id, version_name, description, config) 
        VALUES ($1, $2, $3, $4) 
@@ -196,6 +207,15 @@ router.post('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthRe
 // LIST VERSIONS
 router.get('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthRequest, res) => {
   try {
+    // Ensure dashboard belongs to the workspace (and the workspace belongs to the user).
+    const dashboardCheck = await query(
+      `SELECT id FROM dashboards WHERE id = $1 AND workspace_id = $2`,
+      [req.params.dashboardId, req.params.workspaceId]
+    );
+    if (dashboardCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Dashboard not found' });
+    }
+
     const result = await query(
       `SELECT id, version_name, description, config, created_at 
        FROM dashboard_versions 
@@ -215,6 +235,14 @@ router.get('/:workspaceId/dashboards/:dashboardId/versions', async (req: AuthReq
 router.post('/:workspaceId/dashboards/:dashboardId/suggest', async (req: AuthRequest, res) => {
   try {
     const { datasetId } = req.body;
+
+    const dashboardCheck = await query(
+      `SELECT id FROM dashboards WHERE id = $1 AND workspace_id = $2`,
+      [req.params.dashboardId, req.params.workspaceId]
+    );
+    if (dashboardCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Dashboard not found' });
+    }
 
     const datasetResult = await query(
       'SELECT raw_data, source_type FROM datasets WHERE id = $1 AND workspace_id = $2',

@@ -6,7 +6,7 @@ import { datasetAPI } from '../src/services/api';
 import { Loader2 } from 'lucide-react';
 
 const SpreadsheetViewIntegrated: React.FC = () => {
-    const { activeDataset, setActiveDataset, updateDataset } = useDataset();
+    const { activeDataset, setActiveDataset } = useDataset();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const [isLoading, setIsLoading] = useState(false);
@@ -87,8 +87,8 @@ const SpreadsheetViewIntegrated: React.FC = () => {
     return (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <SpreadsheetView
-                dataset={activeDataset}
-                onUpdate={updateDataset}
+                dataset={activeDataset as any}
+                onUpdate={(updated: any) => setActiveDataset(updated)}
             />
         </div>
     );

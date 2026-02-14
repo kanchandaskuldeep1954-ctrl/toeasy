@@ -34,6 +34,18 @@ router.post('/create', authenticateToken, async (req: AuthRequest, res) => {
             return res.status(400).json({ error: 'Missing required fields: resourceId, title, snapshot' });
         }
 
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspaceId is required' });
+        }
+
+        const wsCheck = await query(
+            `SELECT id FROM workspaces WHERE id = $1 AND user_id = $2`,
+            [workspaceId, req.user!.id]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
+
         const shareToken = generateShareToken();
 
         const result = await query(

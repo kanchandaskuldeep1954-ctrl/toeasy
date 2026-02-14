@@ -11,6 +11,11 @@ router.get('/', authenticateToken, async (req: AuthRequest, res) => {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(400).json({ error: 'Workspace ID required' });
 
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspaceId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
+
         const result = await query(
             `SELECT * FROM alerts WHERE workspace_id = $1 ORDER BY created_at DESC`,
             [workspaceId]
@@ -32,6 +37,11 @@ router.post('/', authenticateToken, async (req: AuthRequest, res) => {
             return res.status(400).json({ error: 'Missing required fields' });
         }
 
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspace_id, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
+
         const result = await query(
             `INSERT INTO alerts (workspace_id, name, condition_type, threshold_value, metric_id, owner_id)
        VALUES ($1, $2, $3, $4, $5, $6)
@@ -50,7 +60,18 @@ router.post('/', authenticateToken, async (req: AuthRequest, res) => {
 router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
-        await query(`DELETE FROM alerts WHERE id = $1`, [id]);
+        const result = await query(
+            `DELETE FROM alerts a
+             USING workspaces w
+             WHERE a.id = $1 AND a.workspace_id = w.id AND w.user_id = $2
+             RETURNING a.id`,
+            [id, req.user!.id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+
         res.json({ message: 'Alert deleted' });
     } catch (err) {
         console.error('Delete alert error:', err);
@@ -62,6 +83,18 @@ router.delete('/:id', authenticateToken, async (req: AuthRequest, res) => {
 router.post('/:id/check', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { id } = req.params;
+
+        const access = await query(
+            `SELECT a.id
+             FROM alerts a
+             JOIN workspaces w ON w.id = a.workspace_id
+             WHERE a.id = $1 AND w.user_id = $2`,
+            [id, req.user!.id]
+        );
+        if (access.rows.length === 0) {
+            return res.status(404).json({ error: 'Alert not found' });
+        }
+
         const triggered = await AlertService.checkAlert(parseInt(id));
         res.json({ triggered });
     } catch (err) {

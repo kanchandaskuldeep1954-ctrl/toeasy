@@ -2,11 +2,17 @@
 import express, { Request, Response } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
+import { checkSubscription } from '../middleware/subscription.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = express.Router();
 
+router.use(authenticateToken);
+router.use(checkSubscription);
+router.use('/:workspaceId', verifyWorkspaceOwnership);
+
 // GET /api/:workspaceId/reports - List reports
-router.get('/:workspaceId/reports', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/:workspaceId/reports', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId } = req.params;
         const { datasetId } = req.query;
@@ -53,7 +59,7 @@ router.get('/:workspaceId/reports', authenticateToken, async (req: AuthRequest, 
 });
 
 // GET /api/:workspaceId/reports/:id - Get single report
-router.get('/:workspaceId/reports/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/:workspaceId/reports/:id', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
         const result = await query(`
@@ -75,11 +81,25 @@ router.get('/:workspaceId/reports/:id', authenticateToken, async (req: AuthReque
 });
 
 // POST /api/:workspaceId/reports - Create report
-router.post('/:workspaceId/reports', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:workspaceId/reports', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId } = req.params;
         const userId = req.user?.id;
         const { name, description, dataset_id, content } = req.body;
+
+        if (!name) {
+            return res.status(400).json({ error: 'Report name is required' });
+        }
+
+        if (dataset_id) {
+            const dsCheck = await query(
+                `SELECT id FROM datasets WHERE id = $1 AND workspace_id = $2`,
+                [dataset_id, workspaceId]
+            );
+            if (dsCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Dataset not found' });
+            }
+        }
 
         const result = await query(`
       INSERT INTO strategic_reports (workspace_id, dataset_id, owner_id, name, description, current_content)
@@ -95,7 +115,7 @@ router.post('/:workspaceId/reports', authenticateToken, async (req: AuthRequest,
 });
 
 // PUT /api/:workspaceId/reports/:id - Update report
-router.put('/:workspaceId/reports/:id', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.put('/:workspaceId/reports/:id', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
         const { name, description, content } = req.body;
@@ -121,8 +141,29 @@ router.put('/:workspaceId/reports/:id', authenticateToken, async (req: AuthReque
     }
 });
 
+// DELETE /api/:workspaceId/reports/:id - Delete report
+router.delete('/:workspaceId/reports/:id', async (req: AuthRequest, res: Response) => {
+    try {
+        const { workspaceId, id } = req.params;
+
+        const result = await query(
+            `DELETE FROM strategic_reports WHERE id = $1 AND workspace_id = $2 RETURNING id`,
+            [id, workspaceId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Report not found' });
+        }
+
+        res.json({ success: true, id: result.rows[0].id });
+    } catch (error) {
+        console.error('Error deleting report:', error);
+        res.status(500).json({ error: 'Failed to delete report' });
+    }
+});
+
 // GET /api/:workspaceId/reports/:id/versions - List versions
-router.get('/:workspaceId/reports/:id/versions', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.get('/:workspaceId/reports/:id/versions', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
 
@@ -146,7 +187,7 @@ router.get('/:workspaceId/reports/:id/versions', authenticateToken, async (req: 
 });
 
 // POST /api/:workspaceId/reports/:id/versions - Create version
-router.post('/:workspaceId/reports/:id/versions', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:workspaceId/reports/:id/versions', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id } = req.params;
         const userId = req.user?.id;
@@ -176,7 +217,7 @@ router.post('/:workspaceId/reports/:id/versions', authenticateToken, async (req:
 });
 
 // POST /api/:workspaceId/reports/:id/restore/:versionId - Restore version
-router.post('/:workspaceId/reports/:id/restore/:versionId', authenticateToken, async (req: AuthRequest, res: Response) => {
+router.post('/:workspaceId/reports/:id/restore/:versionId', async (req: AuthRequest, res: Response) => {
     try {
         const { workspaceId, id, versionId } = req.params;
 

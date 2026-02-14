@@ -1,11 +1,12 @@
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Workbook } from "@fortune-sheet/react";
 import "@fortune-sheet/react/dist/index.css";
 import { Dataset, DataRow } from '../types';
 import { Sheet } from "@fortune-sheet/core";
 import { Save, Sparkles, Table2, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { datasetAPI } from '../src/services/api';
 
 interface SpreadsheetViewProps {
     dataset: Dataset;
@@ -70,12 +71,116 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
         }];
     }, [dataset]);
 
+    const [workbookData, setWorkbookData] = useState<any[]>(initialData as any);
+
+    // Reset workbook state when switching datasets.
+    useEffect(() => {
+        setWorkbookData(initialData as any);
+    }, [initialData]);
+
+    const extractRowsFromWorkbook = useCallback((): { headers: string[]; rows: DataRow[] } => {
+        const sheet = workbookData?.[0];
+        const celldata = Array.isArray(sheet?.celldata) ? sheet.celldata : [];
+
+        if (!celldata.length) {
+            return { headers: (dataset as any)?.headers || [], rows: [] };
+        }
+
+        const rowsByIndex = new Map<number, Map<number, any>>();
+        let maxRow = 0;
+        let maxCol = 0;
+
+        for (const cell of celldata) {
+            const r = cell?.r;
+            const c = cell?.c;
+            if (typeof r !== 'number' || typeof c !== 'number') continue;
+            maxRow = Math.max(maxRow, r);
+            maxCol = Math.max(maxCol, c);
+
+            const value = cell?.v?.v ?? cell?.v?.m ?? '';
+            let row = rowsByIndex.get(r);
+            if (!row) {
+                row = new Map<number, any>();
+                rowsByIndex.set(r, row);
+            }
+            row.set(c, value);
+        }
+
+        const headerRow = rowsByIndex.get(0) || new Map<number, any>();
+        const headerCols = Array.from(headerRow.keys());
+        if (headerCols.length > 0) {
+            maxCol = Math.max(maxCol, ...headerCols);
+        }
+
+        const headers: string[] = [];
+        const used = new Set<string>();
+        for (let c = 0; c <= maxCol; c++) {
+            const raw = headerRow.get(c);
+            let h = raw === undefined || raw === null ? '' : String(raw).trim();
+            if (!h) h = `Column${c + 1}`;
+
+            // Enforce unique headers for object keys.
+            let unique = h;
+            let suffix = 2;
+            while (used.has(unique)) unique = `${h}_${suffix++}`;
+            used.add(unique);
+            headers.push(unique);
+        }
+
+        const rows: DataRow[] = [];
+        for (let r = 1; r <= maxRow; r++) {
+            const rowCells = rowsByIndex.get(r) || new Map<number, any>();
+            const obj: DataRow = {};
+            let hasAny = false;
+
+            for (let c = 0; c < headers.length; c++) {
+                const key = headers[c];
+                const val = rowCells.get(c);
+                const isNonEmpty = val !== undefined && val !== null && String(val) !== '';
+                if (isNonEmpty) hasAny = true;
+                obj[key] = val === undefined ? '' : val;
+            }
+
+            if (hasAny) rows.push(obj);
+        }
+
+        return { headers, rows };
+    }, [workbookData, dataset]);
+
     // Save Handler
     const handleSave = async () => {
         setSaving(true);
-        // In a real implementation, we'd extract the data from FortuneSheet
-        // and send it to the backend via datasetAPI.update.
-        setTimeout(() => setSaving(false), 800);
+        try {
+            const workspaceId = (dataset as any)?.workspace_id;
+            const datasetId = (dataset as any)?.id;
+            if (!workspaceId || !datasetId) {
+                throw new Error('Missing workspace_id or dataset id; cannot save spreadsheet.');
+            }
+
+            const { headers, rows } = extractRowsFromWorkbook();
+
+            // Persist as the dataset's raw_data + headers.
+            const res = await datasetAPI.update(String(workspaceId), String(datasetId), {
+                raw_data: rows,
+                headers
+            });
+
+            const updated = res.data;
+            const merged = {
+                ...(dataset as any),
+                ...(updated || {}),
+                headers,
+                data: rows,
+                raw_data: rows
+            };
+
+            onUpdate?.(merged);
+        } catch (e) {
+            console.error('Spreadsheet save failed:', e);
+            alert(e instanceof Error ? e.message : 'Failed to save spreadsheet changes.');
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -115,10 +220,8 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
             {/* Grid Area */}
             <div className="flex-1 overflow-hidden relative w-full h-full bg-slate-50 dark:bg-slate-900">
                 <Workbook
-                    data={initialData}
-                    onChange={(data) => {
-                        // Internal changes
-                    }}
+                    data={workbookData as any}
+                    onChange={(data) => setWorkbookData(data as any)}
                     settings={{
                         showInfobar: false,
                         showSheetTabs: true,

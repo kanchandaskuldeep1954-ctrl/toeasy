@@ -21,6 +21,66 @@ import {
     calculateJourneyProgress
 } from '../config/journeys';
 
+// Tailwind can't safely generate dynamic class names like `bg-${color}-500` in production builds.
+// Keep an explicit mapping so styles are always included.
+const JOURNEY_COLOR_CLASSES: Record<string, {
+    bg500: string;
+    border500: string;
+    text500: string;
+    textLabelCompleted: string;
+    shadow500_30: string;
+}> = {
+    indigo: {
+        bg500: 'bg-indigo-500',
+        border500: 'border-indigo-500',
+        text500: 'text-indigo-500',
+        textLabelCompleted: 'text-indigo-600 dark:text-indigo-400',
+        shadow500_30: 'shadow-indigo-500/30',
+    },
+    emerald: {
+        bg500: 'bg-emerald-500',
+        border500: 'border-emerald-500',
+        text500: 'text-emerald-500',
+        textLabelCompleted: 'text-emerald-600 dark:text-emerald-400',
+        shadow500_30: 'shadow-emerald-500/30',
+    },
+    blue: {
+        bg500: 'bg-blue-500',
+        border500: 'border-blue-500',
+        text500: 'text-blue-500',
+        textLabelCompleted: 'text-blue-600 dark:text-blue-400',
+        shadow500_30: 'shadow-blue-500/30',
+    },
+    purple: {
+        bg500: 'bg-purple-500',
+        border500: 'border-purple-500',
+        text500: 'text-purple-500',
+        textLabelCompleted: 'text-purple-600 dark:text-purple-400',
+        shadow500_30: 'shadow-purple-500/30',
+    },
+    orange: {
+        bg500: 'bg-orange-500',
+        border500: 'border-orange-500',
+        text500: 'text-orange-500',
+        textLabelCompleted: 'text-orange-600 dark:text-orange-400',
+        shadow500_30: 'shadow-orange-500/30',
+    },
+    amber: {
+        bg500: 'bg-amber-500',
+        border500: 'border-amber-500',
+        text500: 'text-amber-500',
+        textLabelCompleted: 'text-amber-600 dark:text-amber-400',
+        shadow500_30: 'shadow-amber-500/30',
+    },
+    slate: {
+        bg500: 'bg-slate-500',
+        border500: 'border-slate-500',
+        text500: 'text-slate-500',
+        textLabelCompleted: 'text-slate-600 dark:text-slate-400',
+        shadow500_30: 'shadow-slate-500/30',
+    },
+};
+
 interface JourneyProgressBarProps {
     journey: Journey;
     currentStep: JourneyStepId;
@@ -41,6 +101,7 @@ export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
     const navigate = useNavigate();
     const location = useLocation();
 
+    const color = JOURNEY_COLOR_CLASSES[journey.color] || JOURNEY_COLOR_CLASSES.indigo;
     const progress = calculateJourneyProgress(journey, completedSteps);
     const currentIndex = journey.steps.findIndex(s => s.id === currentStep);
 
@@ -88,7 +149,7 @@ export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
                     </div>
                     <div className="w-24 h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                         <div
-                            className={`h-full bg-${journey.color}-500 transition-all duration-500`}
+                            className={`h-full ${color.bg500} transition-all duration-500`}
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -100,7 +161,7 @@ export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
                 {/* Connecting line */}
                 <div className="absolute top-5 left-0 right-0 h-0.5 bg-slate-200 dark:bg-slate-700 -z-10" />
                 <div
-                    className={`absolute top-5 left-0 h-0.5 bg-${journey.color}-500 transition-all duration-500 -z-10`}
+                    className={`absolute top-5 left-0 h-0.5 ${color.bg500} transition-all duration-500 -z-10`}
                     style={{ width: `${(currentIndex / (journey.steps.length - 1)) * 100}%` }}
                 />
 
@@ -121,9 +182,9 @@ export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
                   w-10 h-10 rounded-full flex items-center justify-center text-lg
                   transition-all duration-300 relative
                   ${status === 'completed'
-                                        ? `bg-${journey.color}-500 text-white shadow-lg shadow-${journey.color}-500/30`
+                                        ? `${color.bg500} text-white shadow-lg ${color.shadow500_30}`
                                         : status === 'current'
-                                            ? `bg-white dark:bg-slate-800 border-2 border-${journey.color}-500 text-${journey.color}-500 shadow-lg animate-pulse`
+                                            ? `bg-white dark:bg-slate-800 border-2 ${color.border500} ${color.text500} shadow-lg animate-pulse`
                                             : status === 'locked'
                                                 ? 'bg-slate-100 dark:bg-slate-800 text-slate-300 dark:text-slate-600 cursor-not-allowed'
                                                 : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 cursor-pointer'
@@ -161,9 +222,9 @@ export const JourneyProgressBar: React.FC<JourneyProgressBarProps> = ({
 
                             {/* Step Label */}
                             <span className={`
-                mt-2 text-xs font-medium text-center max-w-[80px]
+                                mt-2 text-xs font-medium text-center max-w-[80px]
                 ${status === 'completed'
-                                    ? `text-${journey.color}-600 dark:text-${journey.color}-400`
+                                    ? `${color.textLabelCompleted}`
                                     : status === 'current'
                                         ? 'text-slate-900 dark:text-white font-bold'
                                         : 'text-slate-400 dark:text-slate-500'
@@ -187,6 +248,7 @@ export const JourneyProgressMini: React.FC<{
     completedSteps: JourneyStepId[];
 }> = ({ journey, completedSteps }) => {
     const progress = calculateJourneyProgress(journey, completedSteps);
+    const color = JOURNEY_COLOR_CLASSES[journey.color] || JOURNEY_COLOR_CLASSES.indigo;
 
     return (
         <div className="flex items-center gap-3 px-4 py-2 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
@@ -200,7 +262,7 @@ export const JourneyProgressMini: React.FC<{
                 </div>
                 <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                     <div
-                        className={`h-full bg-${journey.color}-500`}
+                        className={`h-full ${color.bg500}`}
                         style={{ width: `${progress}%` }}
                     />
                 </div>

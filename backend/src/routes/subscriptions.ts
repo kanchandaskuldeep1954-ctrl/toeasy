@@ -98,7 +98,8 @@ router.get('/current', authenticateToken, async (req: AuthRequest, res) => {
 // Upgrade/Downgrade subscription
 router.post('/upgrade', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { newTier } = req.body;
+    // Frontend variants: { newTier } or legacy { plan_tier }
+    const newTier = req.body?.newTier || req.body?.plan_tier;
 
     if (!newTier || !['basic', 'pro', 'enterprise'].includes(newTier)) {
       return res.status(400).json({ error: 'Invalid subscription tier' });
@@ -145,7 +146,7 @@ router.post('/cancel', authenticateToken, async (req: AuthRequest, res) => {
   try {
     // Get Razorpay subscription ID if any
     const subResult = await query(
-      'SELECT id, razorpay_subscription_id, interval FROM subscriptions WHERE user_id = $1 AND status = $2',
+      'SELECT id, razorpay_subscription_id FROM subscriptions WHERE user_id = $1 AND status = $2',
       [req.user!.id, 'active']
     );
 
@@ -153,7 +154,7 @@ router.post('/cancel', authenticateToken, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'No active subscription to cancel' });
     }
 
-    const { razorpay_subscription_id, interval } = subResult.rows[0];
+    const { razorpay_subscription_id } = subResult.rows[0];
 
     // If it's a recurring yearly subscription, cancel it in Razorpay
     if (razorpay_subscription_id) {
@@ -174,6 +175,31 @@ router.post('/cancel', authenticateToken, async (req: AuthRequest, res) => {
     res.json({ message: 'Membership set to expire at period end. No further charges will occur.' });
   } catch (err) {
     console.error('Cancel subscription error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Downgrade to free tier (alias for upgrade -> basic)
+router.post('/downgrade-to-free', authenticateToken, async (req: AuthRequest, res) => {
+  try {
+    const renewalDate = new Date();
+    renewalDate.setDate(renewalDate.getDate() + 30);
+
+    const result = await query(
+      `UPDATE subscriptions 
+       SET tier = $1, updated_at = NOW(), renewal_date = $2 
+       WHERE user_id = $3 AND status = $4 
+       RETURNING id, tier, status, renewal_date`,
+      ['basic', renewalDate, req.user!.id, 'active']
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'No active subscription' });
+    }
+
+    res.json({ message: 'Downgraded to Starter plan', subscription: result.rows[0], plan: getPlanInfo('basic') });
+  } catch (err) {
+    console.error('Downgrade to free error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });

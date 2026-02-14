@@ -2,16 +2,26 @@ import { Router } from 'express';
 import { integrationService } from '../services/integrationService.js';
 import { integrationHealthService } from '../services/integrationHealthService.js';
 import db from '../knex.js';
+import { AuthRequest } from '../middleware/auth.js';
 
 const router = Router();
 
 import { integrationAnalyticsService } from '../services/integrationAnalyticsService.js';
 
+async function ensureWorkspaceAccess(workspaceId: any, userId: any) {
+    if (!workspaceId || !userId) return null;
+    return db('workspaces').where({ id: workspaceId, user_id: userId }).first();
+}
+
 // Get sync throughput analytics
-router.get('/analytics/throughput', async (req: any, res) => {
+router.get('/analytics/throughput', async (req: AuthRequest, res) => {
     try {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
+
+        const ws = await ensureWorkspaceAccess(workspaceId, req.user!.id);
+        if (!ws) return res.status(404).json({ message: 'Workspace not found' });
+
         const throughput = await integrationAnalyticsService.getWorkspaceThroughput(workspaceId.toString(), db);
         res.json(throughput);
     } catch (error: any) {
@@ -20,14 +30,17 @@ router.get('/analytics/throughput', async (req: any, res) => {
 });
 
 // Create new integration
-router.post('/', async (req: any, res) => {
+router.post('/', async (req: AuthRequest, res) => {
     try {
         const { provider, name, credentials, workspaceId } = req.body;
-        const userId = req.user.id;
+        const userId = Number(req.user!.id);
 
         if (!provider || !name || !credentials || !workspaceId) {
             return res.status(400).json({ message: 'Missing required fields' });
         }
+
+        const ws = await ensureWorkspaceAccess(workspaceId, req.user!.id);
+        if (!ws) return res.status(404).json({ message: 'Workspace not found' });
 
         const id = await integrationService.createIntegration(userId, workspaceId, {
             provider,
@@ -43,12 +56,15 @@ router.post('/', async (req: any, res) => {
 });
 
 // List integrations
-router.get('/', async (req: any, res) => {
+router.get('/', async (req: AuthRequest, res) => {
     try {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
 
-        const list = await integrationService.listIntegrations(workspaceId.toString(), db);
+        const ws = await ensureWorkspaceAccess(workspaceId, req.user!.id);
+        if (!ws) return res.status(404).json({ message: 'Workspace not found' });
+
+        const list = await integrationService.listIntegrations(workspaceId.toString(), Number(req.user!.id), db);
         res.json(list);
     } catch (error: any) {
         res.status(500).json({ message: error.message || 'Failed to list integrations' });
@@ -56,9 +72,14 @@ router.get('/', async (req: any, res) => {
 });
 
 // Health check for specific integration
-router.get('/:id/health', async (req: any, res) => {
+router.get('/:id/health', async (req: AuthRequest, res) => {
     try {
-        const status = await integrationHealthService.checkHealth(req.params.id, db);
+        const integration = await db('integrations')
+            .where({ id: req.params.id, user_id: req.user!.id })
+            .first();
+        if (!integration) return res.status(404).json({ message: 'Integration not found' });
+
+        const status = await integrationHealthService.checkHealth(req.params.id, Number(req.user!.id), db);
         res.json(status);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -66,11 +87,15 @@ router.get('/:id/health', async (req: any, res) => {
 });
 
 // Health summary for all integrations in workspace
-router.get('/health-summary', async (req: any, res) => {
+router.get('/health-summary', async (req: AuthRequest, res) => {
     try {
         const { workspaceId } = req.query;
         if (!workspaceId) return res.status(400).json({ message: 'Workspace ID required' });
-        const summary = await integrationHealthService.getSystemHealthSummary(workspaceId.toString(), db);
+
+        const ws = await ensureWorkspaceAccess(workspaceId, req.user!.id);
+        if (!ws) return res.status(404).json({ message: 'Workspace not found' });
+
+        const summary = await integrationHealthService.getSystemHealthSummaryForUser(workspaceId.toString(), Number(req.user!.id), db);
         res.json(summary);
     } catch (error: any) {
         res.status(500).json({ message: error.message });
@@ -78,9 +103,14 @@ router.get('/health-summary', async (req: any, res) => {
 });
 
 // Delete integration
-router.delete('/:id', async (req: any, res) => {
+router.delete('/:id', async (req: AuthRequest, res) => {
     try {
-        await db('integrations').where({ id: req.params.id }).delete();
+        const deleted = await db('integrations')
+            .where({ id: req.params.id, user_id: req.user!.id })
+            .delete();
+
+        if (!deleted) return res.status(404).json({ message: 'Integration not found' });
+
         res.json({ message: 'Integration deleted' });
     } catch (error: any) {
         res.status(500).json({ message: 'Failed to delete integration' });

@@ -10,8 +10,8 @@ export interface HealthStatus {
 }
 
 class IntegrationHealthService {
-    async checkHealth(integrationId: string, db: any): Promise<HealthStatus> {
-        const integration = await integrationService.getIntegration(integrationId, db);
+    async checkHealth(integrationId: string, userId: number, db: any): Promise<HealthStatus> {
+        const integration = await integrationService.getIntegration(integrationId, userId, db);
         if (!integration) {
             throw new Error('Integration not found');
         }
@@ -58,8 +58,12 @@ class IntegrationHealthService {
     }
 
     async getSystemHealthSummary(workspaceId: string, db: any) {
-        const integrations = await integrationService.listIntegrations(workspaceId, db);
-        const results = await Promise.all(integrations.map((i: any) => this.checkHealth(i.id, db)));
+        throw new Error('Deprecated: use getSystemHealthSummaryForUser');
+    }
+
+    async getSystemHealthSummaryForUser(workspaceId: string, userId: number, db: any) {
+        const integrations = await integrationService.listIntegrations(workspaceId, userId, db);
+        const results = await Promise.all(integrations.map((i: any) => this.checkHealth(i.id, userId, db)));
 
         return {
             total: results.length,

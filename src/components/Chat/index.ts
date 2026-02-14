@@ -4,4 +4,4 @@ export { MessageList } from './MessageList';
 export { MessageInput } from './MessageInput';
 export type { Message } from './MessageList';
 
-export default ChatView;
+export { default } from './ChatView';

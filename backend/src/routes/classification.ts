@@ -9,11 +9,13 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { classifySource, SourceClassification } from '../services/sourceClassifier.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
 
 // Apply auth middleware
 router.use(authenticateToken);
+router.use('/workspaces/:workspaceId', verifyWorkspaceOwnership);
 
 /**
  * POST /api/classify-source
@@ -168,8 +170,8 @@ router.get('/workspaces/:workspaceId/datasets/:datasetId/classification', async 
                 current_journey_step,
                 journey_progress
              FROM datasets 
-             WHERE id = $1 AND workspace_id = $2`,
-            [datasetId, workspaceId]
+             WHERE id = $1 AND workspace_id = $2 AND user_id = $3`,
+            [datasetId, workspaceId, req.user!.id]
         );
 
         if (result.rows.length === 0) {

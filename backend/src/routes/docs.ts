@@ -14,9 +14,18 @@ router.use(authenticateToken);
 // Get all documents for workspace
 router.get('/', async (req: AuthRequest, res) => {
     try {
-        const workspaceId = req.query.workspace_id || req.user?.active_workspace_id;
+        const workspaceId = req.query.workspace_id as string | undefined;
         const parent_id = req.query.parent_id as string | undefined;
         const starred = req.query.starred as string | undefined;
+
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspaceId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         let sql = `SELECT * FROM documents WHERE workspace_id = $1 AND is_archived = false`;
         const params: any[] = [workspaceId];
@@ -46,7 +55,13 @@ router.get('/', async (req: AuthRequest, res) => {
 // Get single document with blocks
 router.get('/:id', async (req: AuthRequest, res) => {
     try {
-        const docResult = await query('SELECT * FROM documents WHERE id = $1', [req.params.id]);
+        const docResult = await query(
+            `SELECT d.*
+             FROM documents d
+             JOIN workspaces w ON w.id = d.workspace_id
+             WHERE d.id = $1 AND w.user_id = $2`,
+            [req.params.id, req.user!.id]
+        );
         if (docResult.rows.length === 0) return res.status(404).json({ error: 'Document not found' });
 
         const blocksResult = await query(
@@ -70,7 +85,16 @@ router.get('/:id', async (req: AuthRequest, res) => {
 router.post('/', async (req: AuthRequest, res) => {
     try {
         const { title, icon, parent_id, workspace_id } = req.body;
-        const wsId = workspace_id || req.user?.active_workspace_id;
+        const wsId = workspace_id;
+
+        if (!wsId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [wsId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         const result = await query(
             `INSERT INTO documents (workspace_id, title, icon, parent_id, created_by)
@@ -99,21 +123,24 @@ router.put('/:id', async (req: AuthRequest, res) => {
         const { title, icon, cover_image, is_starred, is_archived } = req.body;
 
         const result = await query(
-            `UPDATE documents SET
-                title = COALESCE($1, title),
-                icon = COALESCE($2, icon),
-                cover_image = COALESCE($3, cover_image),
-                is_starred = COALESCE($4, is_starred),
-                is_archived = COALESCE($5, is_archived),
+            `UPDATE documents d SET
+                title = COALESCE($1, d.title),
+                icon = COALESCE($2, d.icon),
+                cover_image = COALESCE($3, d.cover_image),
+                is_starred = COALESCE($4, d.is_starred),
+                is_archived = COALESCE($5, d.is_archived),
                 updated_at = NOW()
-             WHERE id = $6 RETURNING *`,
+             FROM workspaces w
+             WHERE d.id = $6 AND w.id = d.workspace_id AND w.user_id = $7
+             RETURNING d.*`,
             [
                 title || null,
                 icon !== undefined ? icon : null,
                 cover_image !== undefined ? cover_image : null,
                 is_starred !== undefined ? is_starred : null,
                 is_archived !== undefined ? is_archived : null,
-                req.params.id
+                req.params.id,
+                req.user!.id
             ]
         );
 
@@ -128,7 +155,14 @@ router.put('/:id', async (req: AuthRequest, res) => {
 // Delete document
 router.delete('/:id', async (req: AuthRequest, res) => {
     try {
-        await query('DELETE FROM documents WHERE id = $1', [req.params.id]);
+        const result = await query(
+            `DELETE FROM documents d
+             USING workspaces w
+             WHERE d.id = $1 AND w.id = d.workspace_id AND w.user_id = $2
+             RETURNING d.id`,
+            [req.params.id, req.user!.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Document not found' });
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting document:', error);
@@ -142,6 +176,15 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 router.put('/:id/blocks', async (req: AuthRequest, res) => {
     try {
         const { blocks } = req.body;
+
+        const accessResult = await query(
+            `SELECT d.id
+             FROM documents d
+             JOIN workspaces w ON w.id = d.workspace_id
+             WHERE d.id = $1 AND w.user_id = $2`,
+            [req.params.id, req.user!.id]
+        );
+        if (accessResult.rows.length === 0) return res.status(404).json({ error: 'Document not found' });
 
         // Delete existing blocks
         await query('DELETE FROM document_blocks WHERE document_id = $1', [req.params.id]);

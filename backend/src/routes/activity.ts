@@ -8,7 +8,18 @@ const router = express.Router();
 router.get('/', authenticateToken, async (req: AuthRequest, res) => {
     try {
         const { workspaceId, datasetId, limit = 50, offset = 0, category, type } = req.query;
-        const userId = req.user!.id;
+
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspaceId is required' });
+        }
+
+        const wsCheck = await query(
+            'SELECT id FROM workspaces WHERE id = $1 AND user_id = $2',
+            [workspaceId, req.user!.id]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
+        }
 
         // Base query
         let sql = `
@@ -83,6 +94,14 @@ router.post('/', authenticateToken, async (req: AuthRequest, res) => {
 
         if (!workspaceId || !actionType || !actionCategory) {
             return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        const wsCheck = await query(
+            'SELECT id FROM workspaces WHERE id = $1 AND user_id = $2',
+            [workspaceId, userId]
+        );
+        if (wsCheck.rows.length === 0) {
+            return res.status(404).json({ error: 'Workspace not found' });
         }
 
         const sql = `

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
+import { verifyWorkspaceOwnership } from '../middleware/workspace.js';
 
 const router = Router();
 
@@ -10,7 +11,7 @@ router.use(authenticateToken);
 router.use(checkSubscription);
 
 // Get workspace statistics
-router.get('/:workspaceId/stats', async (req: AuthRequest, res) => {
+router.get('/:workspaceId/stats', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
   try {
     const statsResult = await query(
       `SELECT 
@@ -39,7 +40,7 @@ router.get('/:workspaceId/stats', async (req: AuthRequest, res) => {
 });
 
 // Get activity logs for workspace (with pagination)
-router.get('/:workspaceId/activity', async (req: AuthRequest, res) => {
+router.get('/:workspaceId/activity', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 100, 500); // Max 500
     const offset = parseInt(req.query.offset as string) || 0;
@@ -170,8 +171,17 @@ router.get('/subscription-usage', async (req: AuthRequest, res) => {
 });
 
 // Get dataset usage statistics
-router.get('/:workspaceId/datasets/:datasetId/stats', async (req: AuthRequest, res) => {
+router.get('/:workspaceId/datasets/:datasetId/stats', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
   try {
+    const dsCheck = await query(
+      `SELECT id FROM datasets WHERE id = $1 AND workspace_id = $2`,
+      [req.params.datasetId, req.params.workspaceId]
+    );
+
+    if (dsCheck.rows.length === 0) {
+      return res.status(404).json({ error: 'Dataset not found' });
+    }
+
     const statsResult = await query(
       `SELECT 
         (SELECT COUNT(*) FROM queries WHERE dataset_id = $1) as query_count,
@@ -193,7 +203,7 @@ router.get('/:workspaceId/datasets/:datasetId/stats', async (req: AuthRequest, r
 });
 
 // Export analytics report
-router.post('/:workspaceId/analytics/export', async (req: AuthRequest, res) => {
+router.post('/:workspaceId/analytics/export', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
   try {
     const { format } = req.body; // 'csv' or 'json'
 

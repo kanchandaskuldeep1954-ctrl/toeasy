@@ -36,8 +36,8 @@ interface Form {
 export const FormsView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : undefined;
 
     const [forms, setForms] = useState<Form[]>([]);
     const [loading, setLoading] = useState(true);
@@ -60,7 +60,7 @@ export const FormsView: React.FC = () => {
                     title: f.title,
                     description: f.description,
                     fields: [],
-                    responses: f.response_count || 0,
+                    responses: (f.responses ?? f.response_count ?? 0),
                     createdAt: new Date(f.created_at),
                     updatedAt: new Date(f.updated_at),
                     status: f.status || 'draft'
@@ -98,7 +98,7 @@ export const FormsView: React.FC = () => {
                         required: f.required,
                         options: f.options
                     })),
-                    responses: data.response_count || 0,
+                    responses: (data.responses ?? data.response_count ?? 0),
                     createdAt: new Date(data.created_at),
                     updatedAt: new Date(data.updated_at),
                     status: data.status || 'draft'
@@ -121,8 +121,7 @@ export const FormsView: React.FC = () => {
         try {
             const newForm = await formsService.create({
                 title: 'Untitled Form',
-                workspace_id: workspaceId,
-                status: 'draft'
+                workspace_id: workspaceId
             });
 
             const transformedForm: Form = {

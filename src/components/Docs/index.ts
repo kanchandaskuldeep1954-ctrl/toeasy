@@ -2,4 +2,4 @@ export { DocsView } from './DocsView';
 export { BlockEditor } from './BlockEditor';
 export type { Block, BlockType } from './BlockEditor';
 
-export default DocsView;
+export { default } from './DocsView';

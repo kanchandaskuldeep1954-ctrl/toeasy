@@ -40,8 +40,8 @@ interface Document {
 export const DocsView: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : undefined;
 
     const [documents, setDocuments] = useState<Document[]>([]);
     const [loading, setLoading] = useState(true);

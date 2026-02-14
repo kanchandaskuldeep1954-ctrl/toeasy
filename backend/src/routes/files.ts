@@ -14,9 +14,18 @@ router.use(authenticateToken);
 // Get files and folders for workspace
 router.get('/', async (req: AuthRequest, res) => {
     try {
-        const workspaceId = req.query.workspace_id || req.user?.active_workspace_id;
+        const workspaceId = req.query.workspace_id as string | undefined;
         const folder_id = req.query.folder_id as string | undefined;
         const starred = req.query.starred as string | undefined;
+
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspaceId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         // Get folders
         let folderSql = `SELECT *, 'folder' as type FROM folders WHERE workspace_id = $1`;
@@ -91,7 +100,15 @@ router.post('/folders', async (req: AuthRequest, res) => {
         const { name, parent_id, workspace_id } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
 
-        const wsId = workspace_id || req.user?.active_workspace_id;
+        const wsId = workspace_id;
+        if (!wsId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [wsId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         const result = await query(
             `INSERT INTO folders (workspace_id, name, parent_id, created_by)
@@ -112,17 +129,20 @@ router.put('/folders/:id', async (req: AuthRequest, res) => {
         const { name, parent_id, is_starred } = req.body;
 
         const result = await query(
-            `UPDATE folders SET
-                name = COALESCE($1, name),
-                parent_id = COALESCE($2, parent_id),
-                is_starred = COALESCE($3, is_starred),
+            `UPDATE folders f SET
+                name = COALESCE($1, f.name),
+                parent_id = COALESCE($2, f.parent_id),
+                is_starred = COALESCE($3, f.is_starred),
                 updated_at = NOW()
-             WHERE id = $4 RETURNING *`,
+             FROM workspaces w
+             WHERE f.id = $4 AND w.id = f.workspace_id AND w.user_id = $5
+             RETURNING f.*`,
             [
                 name || null,
                 parent_id !== undefined ? parent_id : null,
                 is_starred !== undefined ? is_starred : null,
-                req.params.id
+                req.params.id,
+                req.user!.id
             ]
         );
 
@@ -137,7 +157,14 @@ router.put('/folders/:id', async (req: AuthRequest, res) => {
 // Delete folder
 router.delete('/folders/:id', async (req: AuthRequest, res) => {
     try {
-        await query('DELETE FROM folders WHERE id = $1', [req.params.id]);
+        const result = await query(
+            `DELETE FROM folders f
+             USING workspaces w
+             WHERE f.id = $1 AND w.id = f.workspace_id AND w.user_id = $2
+             RETURNING f.id`,
+            [req.params.id, req.user!.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Folder not found' });
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting folder:', error);
@@ -153,7 +180,15 @@ router.post('/upload', async (req: AuthRequest, res) => {
         const { name, mime_type, size, storage_key, storage_url, folder_id, workspace_id, file_data } = req.body;
         if (!name) return res.status(400).json({ error: 'Name is required' });
 
-        const wsId = workspace_id || req.user?.active_workspace_id;
+        const wsId = workspace_id;
+        if (!wsId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [wsId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         // For small files (< 5MB), we can store base64 data directly
         // For larger files, use storage_url pointing to S3/cloud
@@ -186,17 +221,20 @@ router.put('/:id', async (req: AuthRequest, res) => {
         const { name, folder_id, is_starred } = req.body;
 
         const result = await query(
-            `UPDATE files SET
-                name = COALESCE($1, name),
-                folder_id = COALESCE($2, folder_id),
-                is_starred = COALESCE($3, is_starred),
+            `UPDATE files f SET
+                name = COALESCE($1, f.name),
+                folder_id = COALESCE($2, f.folder_id),
+                is_starred = COALESCE($3, f.is_starred),
                 updated_at = NOW()
-             WHERE id = $4 RETURNING *`,
+             FROM workspaces w
+             WHERE f.id = $4 AND w.id = f.workspace_id AND w.user_id = $5
+             RETURNING f.*`,
             [
                 name || null,
                 folder_id !== undefined ? folder_id : null,
                 is_starred !== undefined ? is_starred : null,
-                req.params.id
+                req.params.id,
+                req.user!.id
             ]
         );
 
@@ -212,7 +250,14 @@ router.put('/:id', async (req: AuthRequest, res) => {
 router.delete('/:id', async (req: AuthRequest, res) => {
     try {
         // TODO: Also delete from cloud storage
-        await query('DELETE FROM files WHERE id = $1', [req.params.id]);
+        const result = await query(
+            `DELETE FROM files f
+             USING workspaces w
+             WHERE f.id = $1 AND w.id = f.workspace_id AND w.user_id = $2
+             RETURNING f.id`,
+            [req.params.id, req.user!.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ error: 'File not found' });
         res.json({ success: true });
     } catch (error) {
         console.error('Error deleting file:', error);

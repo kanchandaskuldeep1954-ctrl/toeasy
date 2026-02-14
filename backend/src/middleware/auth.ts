@@ -11,6 +11,32 @@ export interface AuthRequest extends Request {
   };
 }
 
+/**
+ * Best-effort auth: if a Bearer token is present and valid, populate req.user.
+ * Never blocks the request. Useful for middleware that needs user context (e.g. caching)
+ * but must not enforce auth at this layer.
+ */
+export function optionalAuthenticateToken(req: AuthRequest, _res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) return next();
+
+  try {
+    const decoded = jwt.verify(token, config.jwtSecret) as any;
+    req.user = {
+      id: decoded.userId,
+      email: decoded.email,
+      tier: decoded.tier,
+      active_workspace_id: decoded.activeWorkspaceId || decoded.active_workspace_id
+    };
+  } catch (err) {
+    // Ignore invalid tokens here; enforcement happens in authenticateToken where required.
+  }
+
+  next();
+}
+
 export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];

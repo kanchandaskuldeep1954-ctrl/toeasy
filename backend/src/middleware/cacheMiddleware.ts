@@ -9,6 +9,7 @@ import { logger } from '../services/logger.js';
 export interface CacheOptions {
   ttl?: number; // Time to live in seconds
   keyPrefix?: string; // Optional prefix for cache key
+  shouldCache?: (req: Request) => boolean; // Optional filter
 }
 
 /**
@@ -29,6 +30,11 @@ export function cacheMiddleware(options: CacheOptions = {}) {
   return async (req: Request, res: Response, next: NextFunction) => {
     // Only cache GET requests
     if (req.method !== 'GET') {
+      return next();
+    }
+
+    if (options.shouldCache && !options.shouldCache(req)) {
+      res.set('X-Cache', 'SKIP');
       return next();
     }
 

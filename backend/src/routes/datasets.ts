@@ -29,7 +29,7 @@ router.get('/:workspaceId/datasets', async (req: AuthRequest, res) => {
     const total = parseInt(countResult.rows[0].total);
 
     const result = await query(
-      `SELECT id, name, file_name, row_count, column_count, file_size, created_at 
+      `SELECT id, name, file_name, row_count, column_count, file_size, health_score, created_at, updated_at 
        FROM datasets 
        WHERE workspace_id = $1 
        ORDER BY created_at DESC
@@ -526,17 +526,32 @@ router.post('/:workspaceId/datasets/:datasetId/export', async (req: AuthRequest,
 router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 100, 1000);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
-    const result = await query(
-      'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
-      [req.params.datasetId, req.params.workspaceId]
-    );
+    let result;
+    try {
+      result = await query(
+        'SELECT raw_data, headers FROM datasets WHERE id = $1 AND workspace_id = $2',
+        [req.params.datasetId, req.params.workspaceId]
+      );
+    } catch (e: any) {
+      // Backward compatibility if older DB schema doesn't have `headers` column.
+      if (e?.message && String(e.message).toLowerCase().includes('headers')) {
+        result = await query(
+          'SELECT raw_data FROM datasets WHERE id = $1 AND workspace_id = $2',
+          [req.params.datasetId, req.params.workspaceId]
+        );
+      } else {
+        throw e;
+      }
+    }
 
     if (result.rows.length === 0) {
       return res.status(404).json({ error: 'Dataset not found' });
     }
 
     const rawData = result.rows[0].raw_data;
+    const storedHeaders = (result.rows[0] as any).headers;
     let data: any[] = [];
 
     if (typeof rawData === 'string') {
@@ -554,9 +569,89 @@ router.get('/:workspaceId/datasets/:datasetId/preview', async (req: AuthRequest,
       }
     }
 
+    const totalRows = data.length;
+
+    const safeParse = (value: any) => {
+      if (!value) return null;
+      if (typeof value === 'string') {
+        try { return JSON.parse(value); } catch { return null; }
+      }
+      return value;
+    };
+
+    // Determine headers/columns
+    let headers: string[] | null = null;
+    const parsedHeaders = safeParse(storedHeaders);
+    if (Array.isArray(parsedHeaders)) {
+      headers = parsedHeaders.map((h) => String(h));
+    }
+
+    const sampleRows = Array.isArray(data) ? data.slice(0, Math.min(200, data.length)) : [];
+    if (!headers || headers.length === 0) {
+      const headerSet = new Set<string>();
+      for (const row of sampleRows) {
+        if (row && typeof row === 'object' && !Array.isArray(row)) {
+          Object.keys(row).forEach((k) => headerSet.add(k));
+        }
+      }
+      headers = Array.from(headerSet);
+    }
+
+    const inferType = (v: any): string => {
+      if (v === null || v === undefined) return 'null';
+      if (Array.isArray(v)) return 'array';
+      const t = typeof v;
+      if (t === 'number') return 'number';
+      if (t === 'boolean') return 'boolean';
+      if (t === 'object') return 'object';
+      if (t === 'string') {
+        const s = v.trim();
+        if (s === '') return 'string';
+
+        if (/^-?\d+(\.\d+)?$/.test(s) && Number.isFinite(Number(s))) return 'number';
+        if (s === 'true' || s === 'false') return 'boolean';
+
+        const d = Date.parse(s);
+        if (!Number.isNaN(d)) return 'date';
+
+        return 'string';
+      }
+      return 'string';
+    };
+
+    const mergeTypes = (types: Set<string>): string => {
+      types.delete('null');
+      if (types.size === 0) return 'string';
+      if (types.size === 1) return Array.from(types)[0];
+      if (types.has('string')) return 'string';
+      return 'mixed';
+    };
+
+    const columns = (headers || []).map((name) => {
+      let nullable = false;
+      const typeSet = new Set<string>();
+
+      for (const row of sampleRows) {
+        const value = row && typeof row === 'object' ? (row as any)[name] : undefined;
+        if (value === null || value === undefined) nullable = true;
+        typeSet.add(inferType(value));
+      }
+
+      return {
+        name,
+        type: mergeTypes(typeSet),
+        nullable
+      };
+    });
+
     res.json({
-      data: data.slice(0, limit),
-      total: data.length,
+      data: data.slice(offset, offset + limit),
+      columns,
+      total_rows: totalRows,
+      // Backwards compatibility for older callers
+      total: totalRows,
+      limit,
+      offset,
       preview: true
     });
   } catch (err) {

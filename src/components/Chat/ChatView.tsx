@@ -21,6 +21,7 @@ import { Button, Badge, Avatar, Modal, Input } from '../UI';
 import { chatService } from '../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useSocket } from '../../context/SocketContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface ChatViewProps {
     workspaceId?: string;
@@ -36,8 +37,8 @@ interface Channel {
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId }) => {
-    const { currentWorkspace } = useWorkspace();
-    const workspaceId = propWorkspaceId || currentWorkspace?.id;
+    const { activeWorkspace } = useWorkspace();
+    const workspaceId = propWorkspaceId || (activeWorkspace?.id ? String(activeWorkspace.id) : undefined);
 
     const [channels, setChannels] = useState<Channel[]>([]);
     const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
@@ -53,15 +54,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
 
     const [replyTo, setReplyTo] = useState<{ id: string; userName: string; content: string } | null>(null);
     const { socket } = useSocket();
+    const { user } = useAuth();
 
-    // Mock members for now
-    const members = [
-        { id: '1', name: 'John Doe', status: 'online' as const },
-        { id: '2', name: 'Sarah Smith', status: 'online' as const },
-        { id: '3', name: 'Mike Johnson', status: 'away' as const },
-        { id: '4', name: 'Emily Brown', status: 'offline' as const },
-        { id: '5', name: 'Alex Wilson', status: 'busy' as const }
-    ];
+    const currentUserId = user?.id ? String(user.id) : 'current-user';
+    const currentUserName = user?.name || user?.email || 'You';
+
+    type SocketMessage = {
+        id: string;
+        channelId: string;
+        userId: string | number;
+        userName: string;
+        content: string;
+        timestamp: string | Date;
+        replyTo?: string;
+        attachments?: { type: string; url: string; name: string }[];
+        clientMessageId?: string;
+    };
+
+    // Workspaces are currently single-owner (no team workspace membership yet).
+    // Show the current user as the only member to avoid fake/mock data.
+    const members = user ? [
+        { id: currentUserId, name: currentUserName, status: (socket?.connected ? 'online' : 'offline') as 'online' | 'offline' }
+    ] : [];
 
     // Fetch channels on mount
     useEffect(() => {
@@ -102,7 +116,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                 const transformedMessages: Message[] = (data || []).map((m: any) => ({
                     id: m.id,
                     content: m.content,
-                    userId: m.user_id,
+                    userId: String(m.user_id),
                     userName: m.user?.full_name || m.user?.email || 'Unknown',
                     timestamp: new Date(m.created_at),
                     reactions: m.reactions || {},
@@ -127,15 +141,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         console.log('Joining channel via socket:', activeChannel.id);
         socket.emit('join-channel', activeChannel.id);
 
-        const handleNewMessage = (msg: Message) => {
-            console.log('Socket received message:', msg);
-            if (msg.channelId === activeChannel.id) {
-                // Dedup check: if message with same content/timestamp exists recently, ignore (simple check)
-                setMessages(prev => {
-                    if (prev.some(p => p.id === msg.id)) return prev;
-                    return [...prev, msg];
-                });
-            }
+        const handleNewMessage = (msg: SocketMessage) => {
+            // NOTE: Socket payload timestamps arrive as strings; normalize to Date for MessageList.
+            if (msg.channelId !== activeChannel.id) return;
+
+            const mapped: Message = {
+                id: String(msg.id),
+                content: msg.content,
+                userId: String(msg.userId),
+                userName: msg.userName || 'Unknown',
+                timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+                attachments: msg.attachments || []
+            };
+
+            setMessages(prev => {
+                const withoutTemp = msg.clientMessageId
+                    ? prev.filter(p => p.id !== `temp-${msg.clientMessageId}`)
+                    : prev;
+
+                if (withoutTemp.some(p => p.id === mapped.id)) return withoutTemp;
+                return [...withoutTemp, mapped];
+            });
         };
 
         socket.on('new-message', handleNewMessage);
@@ -157,47 +183,94 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         if (!activeChannel || !content.trim()) return;
 
         // Optimistic update
-        const tempId = `temp-${Date.now()}`;
+        const clientMessageId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const tempId = `temp-${clientMessageId}`;
         const tempMessage: Message = {
             id: tempId,
             content,
-            userId: 'current-user',
-            userName: 'You',
+            userId: currentUserId,
+            userName: currentUserName,
             timestamp: new Date()
         };
         setMessages(prev => [...prev, tempMessage]);
+        const replyToId = replyTo?.id;
         setReplyTo(null);
 
+        // Prefer socket for real-time + persistence (server writes & broadcasts).
+        // Fallback to REST if socket isn't available or fails to ack quickly.
+        if (socket && socket.connected) {
+            let didAck = false;
+            const fallbackTimer = window.setTimeout(async () => {
+                if (didAck) return;
+                try {
+                    const newMessage = await chatService.sendMessage(activeChannel.id, content, replyToId);
+                    setMessages(prev => prev.map(m =>
+                        m.id === tempId ? {
+                            id: String(newMessage.id),
+                            content: newMessage.content,
+                            userId: String(newMessage.user_id),
+                            userName: newMessage.user?.full_name || newMessage.user?.email || currentUserName,
+                            timestamp: new Date(newMessage.created_at),
+                            reactions: newMessage.reactions || {},
+                            attachments: newMessage.attachments || []
+                        } : m
+                    ));
+                } catch (error) {
+                    console.error('Failed to send message:', error);
+                    setMessages(prev => prev.filter(m => m.id !== tempId));
+                }
+            }, 5000);
+
+            socket.emit('send-message', {
+                channelId: activeChannel.id,
+                content,
+                replyTo: replyToId,
+                clientMessageId
+            }, (ack: any) => {
+                didAck = true;
+                window.clearTimeout(fallbackTimer);
+
+                if (!ack?.ok || !ack?.message?.id) {
+                    // Keep the optimistic message; fallback timer handles REST if needed.
+                    return;
+                }
+
+                const msg = ack.message as SocketMessage;
+                const mapped: Message = {
+                    id: String(msg.id),
+                    content: msg.content,
+                    userId: String(msg.userId),
+                    userName: msg.userName || currentUserName,
+                    timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
+                    attachments: msg.attachments || []
+                };
+
+                setMessages(prev => prev.map(m => (m.id === tempId ? mapped : m)));
+            });
+
+            return;
+        }
+
         try {
-            const newMessage = await chatService.sendMessage(activeChannel.id, content, replyTo?.id);
+            const newMessage = await chatService.sendMessage(activeChannel.id, content, replyToId);
             // Replace temp message with real one
             setMessages(prev => prev.map(m =>
                 m.id === tempId ? {
-                    id: newMessage.id,
+                    id: String(newMessage.id),
                     content: newMessage.content,
-                    userId: newMessage.user_id,
-                    userName: newMessage.user?.full_name || 'You',
+                    userId: String(newMessage.user_id),
+                    userName: newMessage.user?.full_name || newMessage.user?.email || currentUserName,
                     timestamp: new Date(newMessage.created_at),
                     reactions: newMessage.reactions || {},
                     attachments: newMessage.attachments || []
                 } : m
             ));
-
-            // Socket Emit for Real-time (Demo)
-            if (socket) {
-                socket.emit('send-message', {
-                    channelId: activeChannel.id,
-                    content: content,
-                    replyTo: replyTo?.id
-                });
-            }
-
         } catch (error) {
             console.error('Failed to send message:', error);
             // Remove temp message on error
             setMessages(prev => prev.filter(m => m.id !== tempId));
         }
-    }, [activeChannel, replyTo]);
+    }, [activeChannel, replyTo, socket, currentUserId, currentUserName]);
 
     const handleCreateChannel = async () => {
         if (!newChannelName.trim() || !workspaceId) return;
@@ -326,7 +399,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                                 ) : (
                                     <MessageList
                                         messages={messages}
-                                        currentUserId="current-user"
+                                        currentUserId={currentUserId}
                                         onReply={handleReply}
                                     />
                                 )}

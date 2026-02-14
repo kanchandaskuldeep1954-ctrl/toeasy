@@ -14,10 +14,19 @@ router.use(authenticateToken);
 // Get all tasks for workspace
 router.get('/', async (req: AuthRequest, res) => {
     try {
-        const workspaceId = req.query.workspace_id || req.user?.active_workspace_id;
+        const workspaceId = req.query.workspace_id as string | undefined;
         const status = req.query.status as string | undefined;
         const assignee_id = req.query.assignee_id as string | undefined;
         const priority = req.query.priority as string | undefined;
+
+        if (!workspaceId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [workspaceId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         let sql = `SELECT * FROM tasks WHERE workspace_id = $1`;
         const params: any[] = [workspaceId];
@@ -69,7 +78,13 @@ router.get('/', async (req: AuthRequest, res) => {
 // Get single task
 router.get('/:id', async (req: AuthRequest, res) => {
     try {
-        const result = await query('SELECT * FROM tasks WHERE id = $1', [req.params.id]);
+        const result = await query(
+            `SELECT t.*
+             FROM tasks t
+             JOIN workspaces w ON w.id = t.workspace_id
+             WHERE t.id = $1 AND w.user_id = $2`,
+            [req.params.id, req.user!.id]
+        );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
 
         const task = result.rows[0];
@@ -82,8 +97,12 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
         // Get subtasks
         const subtasksResult = await query(
-            'SELECT * FROM tasks WHERE parent_id = $1 ORDER BY position',
-            [req.params.id]
+            `SELECT t.*
+             FROM tasks t
+             JOIN workspaces w ON w.id = t.workspace_id
+             WHERE t.parent_id = $1 AND w.user_id = $2
+             ORDER BY t.position`,
+            [req.params.id, req.user!.id]
         );
 
         res.json({
@@ -107,7 +126,16 @@ router.post('/', async (req: AuthRequest, res) => {
 
         if (!title) return res.status(400).json({ error: 'Title is required' });
 
-        const wsId = workspace_id || req.user?.active_workspace_id;
+        const wsId = workspace_id;
+
+        if (!wsId) {
+            return res.status(400).json({ error: 'workspace_id is required' });
+        }
+
+        const wsCheck = await query('SELECT id FROM workspaces WHERE id = $1 AND user_id = $2', [wsId, req.user!.id]);
+        if (wsCheck.rows.length === 0) {
+            return res.status(403).json({ error: 'Unauthorized access to workspace' });
+        }
 
         // Get max position for status
         const maxPosResult = await query(
@@ -147,18 +175,19 @@ router.put('/:id', async (req: AuthRequest, res) => {
         const { title, description, status, priority, assignee_id, due_date, tags, position } = req.body;
 
         const result = await query(
-            `UPDATE tasks SET
-                title = COALESCE($1, title),
-                description = COALESCE($2, description),
-                status = COALESCE($3, status),
-                priority = COALESCE($4, priority),
-                assignee_id = COALESCE($5, assignee_id),
-                due_date = COALESCE($6, due_date),
-                tags = COALESCE($7, tags),
-                position = COALESCE($8, position),
+            `UPDATE tasks t SET
+                title = COALESCE($1, t.title),
+                description = COALESCE($2, t.description),
+                status = COALESCE($3, t.status),
+                priority = COALESCE($4, t.priority),
+                assignee_id = COALESCE($5, t.assignee_id),
+                due_date = COALESCE($6, t.due_date),
+                tags = COALESCE($7, t.tags),
+                position = COALESCE($8, t.position),
                 updated_at = NOW()
-             WHERE id = $9
-             RETURNING *`,
+             FROM workspaces w
+             WHERE t.id = $9 AND w.id = t.workspace_id AND w.user_id = $10
+             RETURNING t.*`,
             [
                 title || null,
                 description !== undefined ? description : null,
@@ -168,7 +197,8 @@ router.put('/:id', async (req: AuthRequest, res) => {
                 due_date !== undefined ? due_date : null,
                 tags !== undefined ? JSON.stringify(tags) : null,
                 position !== undefined ? position : null,
-                req.params.id
+                req.params.id,
+                req.user!.id
             ]
         );
 
@@ -184,7 +214,13 @@ router.put('/:id', async (req: AuthRequest, res) => {
 // Delete task
 router.delete('/:id', async (req: AuthRequest, res) => {
     try {
-        const result = await query('DELETE FROM tasks WHERE id = $1 RETURNING id', [req.params.id]);
+        const result = await query(
+            `DELETE FROM tasks t
+             USING workspaces w
+             WHERE t.id = $1 AND w.id = t.workspace_id AND w.user_id = $2
+             RETURNING t.id`,
+            [req.params.id, req.user!.id]
+        );
         if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
         res.json({ success: true });
     } catch (error) {
@@ -198,10 +234,15 @@ router.post('/reorder', async (req: AuthRequest, res) => {
     try {
         const { task_id, new_status, new_position } = req.body;
 
-        await query(
-            'UPDATE tasks SET status = $1, position = $2, updated_at = NOW() WHERE id = $3',
-            [new_status, new_position, task_id]
+        const result = await query(
+            `UPDATE tasks t
+             SET status = $1, position = $2, updated_at = NOW()
+             FROM workspaces w
+             WHERE t.id = $3 AND w.id = t.workspace_id AND w.user_id = $4`,
+            [new_status, new_position, task_id, req.user!.id]
         );
+
+        if (result.rowCount === 0) return res.status(404).json({ error: 'Task not found' });
 
         res.json({ success: true });
     } catch (error) {
@@ -217,10 +258,19 @@ router.post('/:id/comments', async (req: AuthRequest, res) => {
         if (!content) return res.status(400).json({ error: 'Content is required' });
 
         const result = await query(
-            'INSERT INTO task_comments (task_id, user_id, content) VALUES ($1, $2, $3) RETURNING *',
-            [req.params.id, req.user?.id, content]
+            `INSERT INTO task_comments (task_id, user_id, content)
+             SELECT $1, $2, $3
+             WHERE EXISTS (
+               SELECT 1
+               FROM tasks t
+               JOIN workspaces w ON w.id = t.workspace_id
+               WHERE t.id = $1 AND w.user_id = $2
+             )
+             RETURNING *`,
+            [req.params.id, req.user!.id, content]
         );
 
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Task not found' });
         res.status(201).json({ comment: result.rows[0] });
     } catch (error) {
         console.error('Error adding comment:', error);

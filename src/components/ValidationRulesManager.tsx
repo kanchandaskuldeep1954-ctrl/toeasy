@@ -52,7 +52,35 @@ const ValidationRulesManager: React.FC = () => {
         `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/rules`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setRules(response.data.data || []); // Backend returns paginated { data: rules }
+
+      const raw = Array.isArray(response.data?.data) ? response.data.data : [];
+      const mapped: ValidationRule[] = raw.map((r: any) => {
+        const def = (typeof r.rule_definition === 'string')
+          ? (() => { try { return JSON.parse(r.rule_definition); } catch { return {}; } })()
+          : (r.rule_definition || {});
+
+        const ruleType = String(r.rule_type || '').trim();
+        const uiType: ValidationRule['type'] = (ruleType === 'null_check')
+          ? 'not_null'
+          : (['pattern', 'range', 'unique', 'format'].includes(ruleType) ? ruleType as any : 'not_null');
+
+        const field = String(def.field || (Array.isArray(def.columns) ? def.columns[0] : '') || '').trim();
+
+        return {
+          id: String(r.id),
+          dataset_id: String(r.dataset_id),
+          field,
+          type: uiType,
+          description: String(r.name || def.description || ''),
+          pattern: def.pattern ? String(def.pattern) : undefined,
+          min: def.min !== undefined && def.min !== null && def.min !== '' ? Number(def.min) : undefined,
+          max: def.max !== undefined && def.max !== null && def.max !== '' ? Number(def.max) : undefined,
+          created_at: r.created_at,
+          updated_at: r.updated_at
+        };
+      });
+
+      setRules(mapped);
     } catch (err) {
       setError('Failed to load rules');
       console.error(err);
@@ -68,28 +96,42 @@ const ValidationRulesManager: React.FC = () => {
     }
 
     try {
-      const ruleData: any = {
-        name: `${form.field} - ${form.type}`, // Backend expects 'name'
-        ruleType: form.type === 'not_null' ? 'null_check' : 'custom', // Map types if needed, backend specific?
-        // Actually backend seems to accept generic definition. Let's align with schema.
-        // Backend expects: name, ruleType, ruleDefinition (json)
+      const field = form.field.trim();
 
-        // Let's construct ruleDefinition based on type
-        ruleDefinition: {
-          field: form.field,
-          type: form.type,
-          pattern: form.pattern,
-          min: form.min,
-          max: form.max
-        }
-      };
+      let ruleType: string = form.type;
+      let ruleDefinition: any = {};
 
-      // Backend validation.ts expects 'name', 'ruleType', 'ruleDefinition'
-      // Mapping frontend state to backend requirements
+      switch (form.type) {
+        case 'not_null':
+          ruleType = 'null_check';
+          ruleDefinition = { columns: [field] };
+          break;
+        case 'pattern':
+          ruleType = 'pattern';
+          ruleDefinition = { field, pattern: form.pattern };
+          break;
+        case 'range':
+          ruleType = 'range';
+          ruleDefinition = {
+            field,
+            min: form.min !== '' ? Number(form.min) : undefined,
+            max: form.max !== '' ? Number(form.max) : undefined
+          };
+          break;
+        case 'unique':
+          ruleType = 'unique';
+          ruleDefinition = { field };
+          break;
+        case 'format':
+          ruleType = 'format';
+          ruleDefinition = { field, format: 'auto' };
+          break;
+      }
+
       const payload = {
-        name: `${form.field} check`,
-        ruleType: form.type, // simplified
-        ruleDefinition: ruleData.ruleDefinition,
+        name: (form.description || `${field} ${form.type}`).trim(),
+        ruleType,
+        ruleDefinition,
         isActive: true
       };
 

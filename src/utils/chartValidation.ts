@@ -1,4 +1,4 @@
-import { ChartSpec, DataRow } from '../types';
+import { ChartSpec, DataRow } from '../../types';
 
 /**
  * Chart Validation & Quality Utilities

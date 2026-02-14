@@ -18,7 +18,7 @@ const SocketContext = createContext<SocketContextType>({
 export const useSocket = () => useContext(SocketContext);
 
 export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user, loading } = useAuth();
+    const { user, isLoading } = useAuth();
     const [socket, setSocket] = useState<Socket | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -28,7 +28,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const SOCKET_URL = (import.meta.env.VITE_BACKEND_URL || 'http://localhost:3000/api').replace(/\/api$/, '');
 
     useEffect(() => {
-        if (loading) return;
+        if (isLoading) return;
 
         if (user) {
             // Initialize Socket
@@ -71,7 +71,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
                 socketInstance.disconnect();
             };
         }
-    }, [user, loading]);
+    }, [user, isLoading]);
 
     return (
         <SocketContext.Provider value={{ socket, isConnected, onlineUsers }}>

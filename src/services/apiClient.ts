@@ -33,7 +33,8 @@ apiClient.interceptors.response.use(
     // 401 - Unauthorized (Token expired)
     if (status === 401) {
       localStorage.removeItem('auth_token');
-      localStorage.removeItem('user');
+      localStorage.removeItem('refresh_token');
+      localStorage.removeItem('auth_user');
       window.location.href = '/login';
       return Promise.reject({
         message: 'Session expired. Please log in again.',
