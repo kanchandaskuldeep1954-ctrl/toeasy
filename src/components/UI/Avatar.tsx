@@ -36,16 +36,16 @@ const statusColors: Record<NonNullable<AvatarProps['status']>, string> = {
 // Generate consistent color from name
 const getColorFromName = (name: string): string => {
     const colors = [
-        'bg-indigo-500',
-        'bg-purple-500',
-        'bg-pink-500',
-        'bg-rose-500',
-        'bg-orange-500',
-        'bg-amber-500',
-        'bg-emerald-500',
-        'bg-teal-500',
+        'bg-blue-500',
+        'bg-blue-600',
+        'bg-sky-500',
+        'bg-sky-600',
         'bg-cyan-500',
-        'bg-sky-500'
+        'bg-cyan-600',
+        'bg-slate-500',
+        'bg-slate-600',
+        'bg-zinc-500',
+        'bg-zinc-600'
     ];
 
     let hash = 0;

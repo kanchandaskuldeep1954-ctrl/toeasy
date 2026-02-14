@@ -114,7 +114,7 @@ const MessageItem: React.FC<{
                             part.startsWith('@') ? (
                                 <span
                                     key={i}
-                                    className="text-indigo-400 bg-indigo-400/10 px-1 rounded cursor-pointer hover:bg-indigo-400/20"
+                                    className="text-blue-400 bg-blue-400/10 px-1 rounded cursor-pointer hover:bg-blue-400/20"
                                 >
                                     {part}
                                 </span>
@@ -142,7 +142,7 @@ const MessageItem: React.FC<{
 
                     {/* Thread indicator */}
                     {message.threadCount && (
-                        <button className="flex items-center gap-2 mt-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
+                        <button className="flex items-center gap-2 mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors">
                             <Reply className="w-4 h-4" />
                             <span>{message.threadCount} replies</span>
                         </button>

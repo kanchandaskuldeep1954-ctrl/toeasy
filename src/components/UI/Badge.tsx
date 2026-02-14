@@ -13,7 +13,7 @@ interface BadgeProps {
 
 const variantStyles: Record<BadgeVariant, string> = {
     default: 'bg-slate-700 text-slate-200',
-    primary: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
+    primary: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
     success: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
     warning: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     danger: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
@@ -28,7 +28,7 @@ const sizeStyles: Record<BadgeSize, string> = {
 
 const dotColors: Record<BadgeVariant, string> = {
     default: 'bg-slate-400',
-    primary: 'bg-indigo-400',
+    primary: 'bg-blue-400',
     success: 'bg-emerald-400',
     warning: 'bg-amber-400',
     danger: 'bg-rose-400',

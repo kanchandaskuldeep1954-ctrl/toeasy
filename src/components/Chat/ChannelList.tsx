@@ -157,7 +157,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-900/50 border-r border-slate-800">
+        <div className="flex flex-col h-full bg-slate-950">
             {/* Header */}
             <div className="p-4 border-b border-slate-800">
                 <div className="flex items-center justify-between mb-3">

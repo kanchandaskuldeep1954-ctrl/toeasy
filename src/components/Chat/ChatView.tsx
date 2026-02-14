@@ -311,37 +311,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         name: c.name,
         type: c.type === 'direct' ? 'dm' as const : c.type as 'public' | 'private',
         unread: c.unread
-    }));
+    return(
+        <div className = "flex h-full bg-slate-950" >
+                {/* Channel List Sidebar */ }
+                < div className = "w-64 flex-shrink-0 hidden md:block" >
+                    <ChannelList
+                        channels={channelListData}
+                        activeChannelId={activeChannel?.id}
+                        onSelectChannel={handleSelectChannel}
+                        onCreateChannel={() => setShowCreateChannel(true)}
+                    />
+            </div >
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-full bg-slate-950">
-                <div className="text-center">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
-                    <p className="text-slate-400">Loading chat...</p>
-                </div>
-            </div>
-        );
-    }
-
-    return (
-        <div className="flex h-full bg-slate-950">
-            {/* Channel List Sidebar */}
-            <div className="w-64 flex-shrink-0 hidden md:block">
-                <ChannelList
-                    channels={channelListData}
-                    activeChannelId={activeChannel?.id}
-                    onSelectChannel={handleSelectChannel}
-                    onCreateChannel={() => setShowCreateChannel(true)}
-                />
-            </div>
-
-            {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col min-w-0">
-                {activeChannel ? (
+    {/* Main Chat Area */ }
+    < div className = "flex-1 flex flex-col min-w-0" >
+    {
+        activeChannel?(
                     <>
-                        {/* Channel Header */}
-                        <header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl">
+        {/* Channel Header */ }
+        < header className = "flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl" >
                             <div className="flex items-center gap-3">
                                 <div className="flex items-center gap-2">
                                     <Hash className="w-5 h-5 text-slate-400" />
@@ -376,7 +364,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                                 <button
                                     onClick={() => setShowMemberPanel(!showMemberPanel)}
                                     className={`p-2 rounded-lg transition-colors ${showMemberPanel
-                                        ? 'bg-indigo-600/20 text-indigo-300'
+                                        ? 'bg-blue-600/20 text-blue-300'
                                         : 'hover:bg-slate-800 text-slate-400 hover:text-white'
                                         }`}
                                 >
@@ -386,130 +374,133 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                                     <Search className="w-5 h-5" />
                                 </button>
                             </div>
-                        </header>
+                        </header >
 
-                        {/* Messages Area */}
-                        <div className="flex-1 flex overflow-hidden">
-                            {/* Message List */}
-                            <div className="flex-1 flex flex-col">
-                                {messagesLoading ? (
-                                    <div className="flex-1 flex items-center justify-center">
-                                        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+    {/* Messages Area */ }
+    < div className = "flex-1 flex overflow-hidden" >
+        {/* Message List */ }
+        < div className = "flex-1 flex flex-col" >
+        {
+            messagesLoading?(
+                                    <div className = "flex-1 flex items-center justify-center" >
+                    <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
                                     </div>
                                 ) : (
-                                    <MessageList
-                                        messages={messages}
-                                        currentUserId={currentUserId}
-                                        onReply={handleReply}
-                                    />
-                                )}
+    <MessageList
+        messages={messages}
+        currentUserId={currentUserId}
+        onReply={handleReply}
+    />
+)}
 
-                                <MessageInput
-                                    channelName={activeChannel.name}
-                                    onSendMessage={handleSendMessage}
-                                    replyTo={replyTo || undefined}
-                                    onCancelReply={() => setReplyTo(null)}
-                                />
-                            </div>
+<MessageInput
+    channelName={activeChannel.name}
+    onSendMessage={handleSendMessage}
+    replyTo={replyTo || undefined}
+    onCancelReply={() => setReplyTo(null)}
+/>
+                            </div >
 
-                            {/* Members Panel */}
-                            <AnimatePresence>
-                                {showMemberPanel && (
-                                    <motion.aside
-                                        initial={{ width: 0, opacity: 0 }}
-                                        animate={{ width: 256, opacity: 1 }}
-                                        exit={{ width: 0, opacity: 0 }}
-                                        transition={{ duration: 0.2 }}
-                                        className="border-l border-slate-800 bg-slate-900/50 overflow-hidden"
-                                    >
-                                        <div className="w-64 p-4">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <h3 className="font-semibold text-white">
-                                                    Members ({members.length})
-                                                </h3>
-                                                <button
-                                                    onClick={() => setShowMemberPanel(false)}
-                                                    className="p-1 rounded hover:bg-slate-800 text-slate-400"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
+    {/* Members Panel */ }
+    <AnimatePresence>
+{
+    showMemberPanel && (
+        <motion.aside
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 256, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="border-l border-slate-800 bg-slate-900/50 overflow-hidden"
+        >
+            <div className="w-64 p-4">
+                <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-semibold text-white">
+                        Members ({members.length})
+                    </h3>
+                    <button
+                        onClick={() => setShowMemberPanel(false)}
+                        className="p-1 rounded hover:bg-slate-800 text-slate-400"
+                    >
+                        <X className="w-4 h-4" />
+                    </button>
+                </div>
 
-                                            <div className="space-y-2">
-                                                {members.map(member => (
-                                                    <div
-                                                        key={member.id}
-                                                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer transition-colors"
-                                                    >
-                                                        <Avatar
-                                                            name={member.name}
-                                                            size="sm"
-                                                            status={member.status as any}
-                                                        />
-                                                        <span className="text-sm text-slate-300 truncate">
-                                                            {member.name}
-                                                        </span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    </motion.aside>
-                                )}
-                            </AnimatePresence>
+                <div className="space-y-2">
+                    {members.map(member => (
+                        <div
+                            key={member.id}
+                            className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-800/50 cursor-pointer transition-colors"
+                        >
+                            <Avatar
+                                name={member.name}
+                                size="sm"
+                                status={member.status as any}
+                            />
+                            <span className="text-sm text-slate-300 truncate">
+                                {member.name}
+                            </span>
                         </div>
+                    ))}
+                </div>
+            </div>
+        </motion.aside>
+    )
+}
+                            </AnimatePresence >
+                        </div >
                     </>
                 ) : (
-                    <div className="flex-1 flex items-center justify-center">
-                        <div className="text-center">
-                            <Hash className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-                            <h2 className="text-xl font-semibold text-white mb-2">No channels yet</h2>
-                            <p className="text-slate-400 mb-4">Create your first channel to start chatting</p>
-                            <Button onClick={() => setShowCreateChannel(true)}>
-                                Create Channel
-                            </Button>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {/* Create Channel Modal */}
-            <Modal
-                isOpen={showCreateChannel}
-                onClose={() => setShowCreateChannel(false)}
-                title="Create Channel"
-                description="Create a new channel for your team"
-            >
-                <div className="space-y-4">
-                    <Input
-                        label="Channel Name"
-                        placeholder="e.g. marketing, design-team"
-                        leftIcon={<Hash className="w-4 h-4" />}
-                        value={newChannelName}
-                        onChange={(e) => setNewChannelName(e.target.value)}
-                    />
-                    <Input
-                        label="Description (optional)"
-                        placeholder="What's this channel about?"
-                        value={newChannelDesc}
-                        onChange={(e) => setNewChannelDesc(e.target.value)}
-                    />
-                    <div className="flex justify-end gap-3 pt-4">
-                        <Button
-                            variant="secondary"
-                            onClick={() => setShowCreateChannel(false)}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            onClick={handleCreateChannel}
-                            disabled={!newChannelName.trim() || createLoading}
-                        >
-                            {createLoading ? 'Creating...' : 'Create Channel'}
-                        </Button>
-                    </div>
-                </div>
-            </Modal>
+    <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+            <Hash className="w-12 h-12 text-slate-600 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-white mb-2">No channels yet</h2>
+            <p className="text-slate-400 mb-4">Create your first channel to start chatting</p>
+            <Button onClick={() => setShowCreateChannel(true)}>
+                Create Channel
+            </Button>
         </div>
+    </div>
+)}
+            </div >
+
+    {/* Create Channel Modal */ }
+    < Modal
+isOpen = { showCreateChannel }
+onClose = {() => setShowCreateChannel(false)}
+title = "Create Channel"
+description = "Create a new channel for your team"
+    >
+    <div className="space-y-4">
+        <Input
+            label="Channel Name"
+            placeholder="e.g. marketing, design-team"
+            leftIcon={<Hash className="w-4 h-4" />}
+            value={newChannelName}
+            onChange={(e) => setNewChannelName(e.target.value)}
+        />
+        <Input
+            label="Description (optional)"
+            placeholder="What's this channel about?"
+            value={newChannelDesc}
+            onChange={(e) => setNewChannelDesc(e.target.value)}
+        />
+        <div className="flex justify-end gap-3 pt-4">
+            <Button
+                variant="secondary"
+                onClick={() => setShowCreateChannel(false)}
+            >
+                Cancel
+            </Button>
+            <Button
+                onClick={handleCreateChannel}
+                disabled={!newChannelName.trim() || createLoading}
+            >
+                {createLoading ? 'Creating...' : 'Create Channel'}
+            </Button>
+        </div>
+    </div>
+            </Modal >
+        </div >
     );
 };
 
