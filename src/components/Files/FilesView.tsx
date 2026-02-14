@@ -300,7 +300,7 @@ export const FilesView: React.FC = () => {
         return (
             <div className="h-full flex items-center justify-center bg-slate-950">
                 <div className="text-center">
-                    <Loader2 className="w-8 h-8 text-indigo-500 animate-spin mx-auto mb-3" />
+                    <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
                     <p className="text-slate-400">Loading files...</p>
                 </div>
             </div>
@@ -338,7 +338,7 @@ export const FilesView: React.FC = () => {
                         <button
                             onClick={() => setView('grid')}
                             className={`p-2 transition-colors ${view === 'grid'
-                                ? 'bg-indigo-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
@@ -347,7 +347,7 @@ export const FilesView: React.FC = () => {
                         <button
                             onClick={() => setView('list')}
                             className={`p-2 transition-colors ${view === 'list'
-                                ? 'bg-indigo-600 text-white'
+                                ? 'bg-blue-600 text-white'
                                 : 'text-slate-400 hover:text-white hover:bg-slate-800'
                                 }`}
                         >
@@ -399,8 +399,8 @@ export const FilesView: React.FC = () => {
 
             {/* Selection Actions */}
             {selectedIds.size > 0 && (
-                <div className="px-6 py-2 bg-indigo-600/10 border-b border-indigo-500/30 flex items-center gap-4">
-                    <span className="text-sm text-indigo-300">{selectedIds.size} selected</span>
+                <div className="px-6 py-2 bg-blue-600/10 border-b border-blue-500/30 flex items-center gap-4">
+                    <span className="text-sm text-blue-300">{selectedIds.size} selected</span>
                     <Button variant="ghost" size="sm" leftIcon={<Download className="w-4 h-4" />}>
                         Download
                     </Button>
@@ -420,12 +420,12 @@ export const FilesView: React.FC = () => {
             )}
 
             {/* File Grid/List */}
-            <main className={`flex-1 overflow-y-auto p-6 ${dragOver ? 'bg-indigo-600/10' : ''}`}>
+            <main className={`flex-1 overflow-y-auto p-6 ${dragOver ? 'bg-blue-600/10' : ''}`}>
                 {dragOver && (
-                    <div className="absolute inset-6 border-2 border-dashed border-indigo-500 rounded-2xl flex items-center justify-center bg-indigo-600/10 z-10">
+                    <div className="absolute inset-6 border-2 border-dashed border-blue-500 rounded-2xl flex items-center justify-center bg-blue-600/10 z-10">
                         <div className="text-center">
-                            <Upload className="w-12 h-12 text-indigo-400 mx-auto mb-2" />
-                            <p className="text-indigo-300 font-medium">Drop files here to upload</p>
+                            <Upload className="w-12 h-12 text-blue-400 mx-auto mb-2" />
+                            <p className="text-blue-300 font-medium">Drop files here to upload</p>
                         </div>
                     </div>
                 )}
@@ -455,7 +455,7 @@ export const FilesView: React.FC = () => {
                                         }
                                     }}
                                     className={`group relative p-4 rounded-xl border cursor-pointer transition-all ${isSelected
-                                        ? 'bg-indigo-600/20 border-indigo-500'
+                                        ? 'bg-blue-600/20 border-blue-500'
                                         : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
                                         }`}
                                 >
@@ -515,7 +515,7 @@ export const FilesView: React.FC = () => {
                                         }
                                     }}
                                     className={`group flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${isSelected
-                                        ? 'bg-indigo-600/20 border border-indigo-500'
+                                        ? 'bg-blue-600/20 border border-blue-500'
                                         : 'hover:bg-slate-800/50'
                                         }`}
                                 >

@@ -15,10 +15,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
     primary: `
-        bg-gradient-to-r from-indigo-600 to-purple-600 
-        hover:from-indigo-700 hover:to-purple-700 
+        bg-blue-600 
+        hover:bg-blue-700 
         text-white 
-        shadow-lg shadow-indigo-500/30 
+        shadow-lg shadow-blue-500/30 
         border-transparent
     `,
     secondary: `

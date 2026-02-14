@@ -274,7 +274,7 @@ const DashboardViewIntegrated: React.FC = () => {
               <span>⚡</span> {dataset.dataQualitySource.toString().replace('VERSION:', '')}
             </div>
           ) : dataset?.dataQualitySource === 'PRO_CLEANED' ? (
-            <div className="hidden md:flex px-2 py-1 bg-gradient-to-r from-emerald-500 to-teal-500 rounded text-[9px] font-black text-white uppercase tracking-widest shadow-lg shadow-emerald-500/20 items-center gap-1">
+            <div className="hidden md:flex px-2 py-1 bg-emerald-600 rounded text-[9px] font-black text-white uppercase tracking-widest shadow-lg shadow-emerald-500/20 items-center gap-1">
               <span>💎</span> PRO CLEANED
             </div>
           ) : (

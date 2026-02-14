@@ -195,9 +195,9 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                         className="fixed right-0 top-0 bottom-0 w-96 bg-white dark:bg-slate-900 shadow-2xl z-50 flex flex-col border-l border-slate-200 dark:border-slate-800"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-gradient-to-r from-indigo-500/10 to-purple-500/10">
+                        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                                <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
                                     <span className="text-xl">🤖</span>
                                 </div>
                                 <div>
@@ -219,7 +219,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
                             {messages.length === 0 ? (
                                 <div className="text-center py-8">
-                                    <div className="w-16 h-16 mx-auto bg-gradient-to-br from-indigo-100 to-purple-100 dark:from-indigo-900/30 dark:to-purple-900/30 rounded-2xl flex items-center justify-center mb-4">
+                                    <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4">
                                         <span className="text-3xl">💬</span>
                                     </div>
                                     <h3 className="font-bold text-slate-900 dark:text-white">How can I help?</h3>
@@ -252,8 +252,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                                         className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                     >
                                         <div className={`max-w-[85%] ${message.role === 'user'
-                                                ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm'
-                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl rounded-tl-sm'
+                                            ? 'bg-indigo-600 text-white rounded-2xl rounded-tr-sm'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-2xl rounded-tl-sm'
                                             } px-4 py-3`}>
                                             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
 
@@ -307,8 +307,8 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                                 <button
                                     onClick={handleVoiceInput}
                                     className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${isListening
-                                            ? 'bg-rose-500 text-white animate-pulse'
-                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600'
+                                        ? 'bg-rose-500 text-white animate-pulse'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 hover:text-indigo-600'
                                         }`}
                                     title="Voice input"
                                 >

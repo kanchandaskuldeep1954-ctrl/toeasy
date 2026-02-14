@@ -310,7 +310,7 @@ export const DashboardLibrary: React.FC = () => {
 
                     <div className="flex flex-col items-end gap-2">
                       {dash.isPrimary ? (
-                        <span className="px-3 py-1 bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-indigo-500/20">
+                        <span className="px-3 py-1 bg-blue-600 text-white text-[9px] font-black uppercase tracking-widest rounded-full shadow-lg shadow-blue-500/20">
                           Master Session
                         </span>
                       ) : (

@@ -138,7 +138,7 @@ const PublicShareView: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors flex items-center justify-center">
                 <div className="text-center">
                     <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                     <p className="text-slate-600 dark:text-slate-400">Loading shared content...</p>
@@ -176,11 +176,7 @@ const PublicShareView: React.FC = () => {
     return (
         <div className={`min-h-screen ${theme === 'dark' ? 'dark bg-[#030711]' : 'bg-slate-50'} transition-colors duration-500 overflow-x-hidden relative`}>
             {/* Ambient Mesh Background */}
-            <div className="fixed inset-0 overflow-hidden pointer-events-none no-print">
-                <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-indigo-500/10 blur-[120px] rounded-full animate-pulse" />
-                <div className="absolute top-[20%] -right-[5%] w-[35%] h-[35%] bg-blue-500/10 blur-[100px] rounded-full animate-pulse delay-700" />
-                <div className="absolute -bottom-[10%] left-[20%] w-[20%] h-[30%] bg-emerald-500/5 blur-[80px] rounded-full animate-pulse delay-1000" />
-            </div>
+            {/* Removed gradient background as per instruction */}
 
             {/* Ultra-Slim Header */}
             <header className="bg-white/40 dark:bg-slate-950/40 backdrop-blur-3xl border-b border-slate-200/50 dark:border-white/5 sticky top-0 z-[60]">
@@ -347,7 +343,7 @@ const PublicShareView: React.FC = () => {
                 {resourceType === 'report' && (
                     <div className="max-w-4xl mx-auto space-y-12 pb-20">
                         {snapshot.summary && (
-                            <div className="bg-gradient-to-br from-indigo-600 to-violet-700 rounded-[3rem] p-12 text-white shadow-2xl shadow-indigo-600/30 relative overflow-hidden">
+                            <div className="bg-indigo-600 rounded-[3rem] p-12 text-white shadow-2xl shadow-indigo-600/30 relative overflow-hidden">
                                 <h3 className="text-[10px] font-black uppercase tracking-[0.4em] opacity-60 mb-6 text-indigo-100 relative z-10">Strategic Executive Summary</h3>
                                 <p className="text-3xl font-bold leading-tight tracking-tight relative z-10">{snapshot.summary}</p>
                             </div>
@@ -469,7 +465,7 @@ const PublicShareView: React.FC = () => {
                                                 </div>
 
                                                 <div className="bg-white/5 p-12 rounded-[4rem] border border-white/10 backdrop-blur-3xl shadow-2xl relative group">
-                                                    <div className="absolute -inset-1 bg-gradient-to-br from-indigo-500/20 to-purple-500/20 rounded-[4.2rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
+                                                    <div className="absolute -inset-1 bg-indigo-500/20 rounded-[4.2rem] blur-2xl opacity-0 group-hover:opacity-100 transition-opacity" />
                                                     <div className="relative">
                                                         {snapshot.sections[focusIndex].charts?.[0] ? (
                                                             <div className="h-[500px]">

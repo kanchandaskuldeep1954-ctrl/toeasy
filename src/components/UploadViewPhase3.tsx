@@ -209,7 +209,7 @@ export const UploadViewPhase3: React.FC = () => {
 
   // Render based on step
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-12 px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4 transition-colors">
       <div className="max-w-3xl mx-auto">
 
         {/* Header */}
@@ -217,8 +217,8 @@ export const UploadViewPhase3: React.FC = () => {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-indigo-500/20 mb-4">
             <span className="text-3xl">🧠</span>
           </div>
-          <h1 className="text-4xl font-bold text-white mb-2">Smart Upload</h1>
-          <p className="text-slate-400 text-lg">
+          <h1 className="text-4xl font-black text-slate-900 dark:text-white mb-2 tracking-tight">Smart Upload</h1>
+          <p className="text-slate-500 dark:text-slate-400 text-lg font-medium">
             Drop your data — AI will understand it
           </p>
         </div>
@@ -241,18 +241,18 @@ export const UploadViewPhase3: React.FC = () => {
             className={`relative border-2 border-dashed rounded-2xl p-16 text-center transition-all duration-300 cursor-pointer
               ${dragActive
                 ? 'border-indigo-500 bg-indigo-500/10 scale-[1.02]'
-                : 'border-slate-600 hover:border-slate-500 bg-slate-800/50 hover:bg-slate-800'
+                : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
           >
             <div className="space-y-4">
-              <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-600/20">
                 <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                 </svg>
               </div>
               <div>
-                <p className="text-xl font-bold text-white">Drop your file here</p>
-                <p className="text-slate-400 mt-1">or click to browse</p>
+                <p className="text-xl font-bold text-slate-900 dark:text-white">Drop your file here</p>
+                <p className="text-slate-500 dark:text-slate-400 mt-1">or click to browse</p>
               </div>
               <div className="flex justify-center gap-3">
                 <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">CSV</span>
@@ -271,7 +271,7 @@ export const UploadViewPhase3: React.FC = () => {
 
         {/* Step: Parsing / Classifying */}
         {(step === 'parsing' || step === 'classifying') && (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-12 text-center">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm">
             <div className="w-20 h-20 mx-auto mb-6 relative">
               <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
               <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
@@ -279,10 +279,10 @@ export const UploadViewPhase3: React.FC = () => {
                 {step === 'parsing' ? '📄' : '🧠'}
               </span>
             </div>
-            <p className="text-xl font-bold text-white mb-2">
+            <p className="text-xl font-bold text-slate-900 dark:text-white mb-2">
               {step === 'parsing' ? 'Reading your data...' : 'AI is analyzing...'}
             </p>
-            <p className="text-slate-400">
+            <p className="text-slate-500 dark:text-slate-400">
               {step === 'parsing'
                 ? `Processing ${file?.name}`
                 : 'Detecting patterns, entities, and data type'}
@@ -294,16 +294,16 @@ export const UploadViewPhase3: React.FC = () => {
         {step === 'review' && classification && (
           <div className="space-y-6">
             {/* Classification Result Card */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
-              <div className="p-6 border-b border-slate-700">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+              <div className="p-6 border-b border-slate-200 dark:border-slate-800">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-4xl">
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-4xl text-indigo-600 dark:text-indigo-400">
                       {SOURCE_TYPE_INFO[classification.sourceType]?.icon || '📄'}
                     </div>
                     <div>
                       <p className="text-sm text-slate-400 mb-1">AI Classification</p>
-                      <h2 className="text-2xl font-bold text-white">
+                      <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
                         {SOURCE_TYPE_INFO[classification.sourceType]?.label || 'Dataset'}
                       </h2>
                       <p className={`text-sm font-medium ${getConfidenceColor(classification.confidence)}`}>
@@ -321,9 +321,9 @@ export const UploadViewPhase3: React.FC = () => {
               </div>
 
               {/* AI Reasoning */}
-              <div className="p-6 bg-slate-900/50">
-                <p className="text-sm text-slate-400 mb-2">Why I think this:</p>
-                <p className="text-slate-300">{classification.reasoning}</p>
+              <div className="p-6 bg-slate-50 dark:bg-slate-900/50">
+                <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">Why I think this:</p>
+                <p className="text-slate-700 dark:text-slate-300">{classification.reasoning}</p>
               </div>
 
               {/* Key Insights */}
@@ -357,35 +357,35 @@ export const UploadViewPhase3: React.FC = () => {
             </div>
 
             {/* Dataset Name */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-              <label className="text-sm text-slate-400 mb-2 block">Dataset Name</label>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+              <label className="text-sm text-slate-500 dark:text-slate-400 mb-2 block font-bold uppercase tracking-wider text-[10px]">Dataset Name</label>
               <input
                 type="text"
                 value={datasetName}
                 onChange={(e) => setDatasetName(e.target.value)}
-                className="w-full px-4 py-3 bg-slate-900 border border-slate-600 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 text-lg"
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-indigo-500 text-lg font-medium"
                 placeholder="Enter a name for your dataset"
               />
             </div>
 
             {/* Journey Selection */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-              <p className="text-sm text-slate-400 mb-4">Recommended Workflow</p>
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm">
+              <p className="text-sm text-slate-500 dark:text-slate-400 mb-4 font-bold uppercase tracking-wider text-[10px]">Recommended Workflow</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {Object.values(JOURNEYS).map((journey) => (
                   <button
                     key={journey.id}
                     onClick={() => setSelectedJourney(journey)}
                     className={`p-4 rounded-xl text-left transition-all ${selectedJourney?.id === journey.id
-                        ? 'bg-indigo-500/20 border-2 border-indigo-500'
-                        : 'bg-slate-900/50 border-2 border-transparent hover:border-slate-600'
+                      ? 'bg-indigo-500/20 border-2 border-indigo-500'
+                      : 'bg-slate-50 dark:bg-slate-800 border-2 border-transparent hover:border-slate-200 dark:hover:border-slate-700'
                       }`}
                   >
                     <div className="flex items-center gap-3">
                       <span className="text-2xl">{journey.icon}</span>
                       <div>
-                        <p className="font-bold text-white">{journey.name}</p>
-                        <p className="text-xs text-slate-400">{journey.steps.length} steps</p>
+                        <p className="font-bold text-slate-900 dark:text-white">{journey.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{journey.steps.length} steps</p>
                       </div>
                       {selectedJourney?.id === journey.id && (
                         <span className="ml-auto text-indigo-400">✓</span>
@@ -400,7 +400,7 @@ export const UploadViewPhase3: React.FC = () => {
             <button
               onClick={handleUpload}
               disabled={!datasetName.trim()}
-              className="w-full py-4 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-600 disabled:to-slate-700 text-white text-lg font-bold rounded-xl transition-all transform hover:scale-[1.02]"
+              className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 dark:disabled:bg-slate-800 text-white text-lg font-bold rounded-xl transition-all transform hover:scale-[1.02] shadow-lg shadow-indigo-600/20"
             >
               🚀 Start {selectedJourney?.name || 'Analysis'}
             </button>
@@ -409,52 +409,52 @@ export const UploadViewPhase3: React.FC = () => {
 
         {/* Step: Uploading */}
         {step === 'uploading' && (
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-12 text-center">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center shadow-sm">
             <div className="w-20 h-20 mx-auto mb-6 relative">
               <div className="absolute inset-0 rounded-full border-4 border-slate-700"></div>
               <div className="absolute inset-0 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin"></div>
               <span className="absolute inset-0 flex items-center justify-center text-3xl">☁️</span>
             </div>
-            <p className="text-xl font-bold text-white mb-2">Uploading to cloud...</p>
-            <p className="text-slate-400">This will only take a moment</p>
+            <p className="text-xl font-bold text-slate-900 dark:text-white mb-2">Uploading to cloud...</p>
+            <p className="text-slate-500 dark:text-slate-400">This will only take a moment</p>
           </div>
         )}
 
         {/* Step: Complete */}
         {step === 'complete' && (
-          <div className="bg-slate-800/50 border border-emerald-500/30 rounded-2xl p-12 text-center">
+          <div className="bg-white dark:bg-slate-900 border border-emerald-500/30 rounded-2xl p-12 text-center shadow-lg shadow-emerald-500/10">
             <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-emerald-500/20 flex items-center justify-center">
               <span className="text-5xl">✨</span>
             </div>
-            <p className="text-2xl font-bold text-white mb-2">Data Ready!</p>
-            <p className="text-slate-400">Redirecting to your {selectedJourney?.name}...</p>
+            <p className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Data Ready!</p>
+            <p className="text-slate-500 dark:text-slate-400">Redirecting to your {selectedJourney?.name}...</p>
           </div>
         )}
 
         {/* Data Preview */}
         {step === 'review' && parsedData.length > 0 && (
-          <div className="mt-6 bg-slate-800/50 border border-slate-700 rounded-2xl overflow-hidden">
-            <div className="p-4 border-b border-slate-700 flex items-center justify-between">
-              <p className="text-sm text-slate-400">Data Preview</p>
+          <div className="mt-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+            <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <p className="text-sm text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10px]">Data Preview</p>
               <span className="text-xs text-slate-500">{parsedData.length.toLocaleString()} rows × {headers.length} columns</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="bg-slate-900">
+                  <tr className="bg-slate-50 dark:bg-slate-800/50">
                     {headers.slice(0, 6).map((h, i) => (
-                      <th key={i} className="px-4 py-2 text-left text-slate-400 font-medium">{h}</th>
+                      <th key={i} className="px-4 py-2 text-left text-slate-500 dark:text-slate-400 font-bold text-xs uppercase tracking-wider">{h}</th>
                     ))}
                     {headers.length > 6 && (
-                      <th className="px-4 py-2 text-left text-slate-500">+{headers.length - 6} more</th>
+                      <th className="px-4 py-2 text-left text-slate-400">+{headers.length - 6} more</th>
                     )}
                   </tr>
                 </thead>
                 <tbody>
                   {parsedData.slice(0, 5).map((row, i) => (
-                    <tr key={i} className="border-t border-slate-800">
+                    <tr key={i} className="border-t border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
                       {headers.slice(0, 6).map((h, j) => (
-                        <td key={j} className="px-4 py-2 text-slate-300 truncate max-w-[150px]">
+                        <td key={j} className="px-4 py-2 text-slate-600 dark:text-slate-300 truncate max-w-[150px] font-medium">
                           {row[h] || <span className="text-slate-600">null</span>}
                         </td>
                       ))}

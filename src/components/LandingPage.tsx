@@ -9,32 +9,9 @@ const LandingPage: React.FC = () => {
     return (
         <div className="relative overflow-hidden bg-slate-50 dark:bg-slate-950 transition-colors duration-500">
             {/* Animated Background Glows */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full -z-10 opacity-30 dark:opacity-20 pointer-events-none">
-                <motion.div
-                    animate={{
-                        scale: [1, 1.2, 1],
-                        opacity: [0.3, 0.5, 0.3],
-                    }}
-                    transition={{
-                        duration: 8,
-                        repeat: Infinity,
-                        ease: "easeInOut"
-                    }}
-                    className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500 rounded-full blur-[120px]"
-                ></motion.div>
-                <motion.div
-                    animate={{
-                        scale: [1, 1.3, 1],
-                        opacity: [0.2, 0.4, 0.2],
-                    }}
-                    transition={{
-                        duration: 10,
-                        repeat: Infinity,
-                        ease: "easeInOut",
-                        delay: 2
-                    }}
-                    className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-cyan-500 rounded-full blur-[120px]"
-                ></motion.div>
+            {/* Animated Background Glows - Subtler or Removed for Clean Look */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full -z-10 opacity-10 pointer-events-none">
+                {/* Kept extremely subtle or removed entirely per "no undervisuality" */}
             </div>
 
             {/* Hero Section */}
@@ -59,7 +36,7 @@ const LandingPage: React.FC = () => {
                         transition={{ duration: 0.7, delay: 0.2 }}
                         className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.05] text-slate-900 dark:text-white max-w-5xl mx-auto"
                     >
-                        Clean Data. <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 bg-300% animate-gradient">Pure Insights.</span>
+                        Clean Data. <span className="text-blue-600">Pure Insights.</span>
                     </motion.h1>
 
                     <motion.p
@@ -79,7 +56,7 @@ const LandingPage: React.FC = () => {
                     >
                         <Link
                             to="/signup"
-                            className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black shadow-2xl shadow-blue-600/40 transition-all hover:scale-110 active:scale-95 group flex items-center gap-2"
+                            className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-xl shadow-blue-900/10 transition-all hover:scale-105 active:scale-95 group flex items-center gap-2"
                         >
                             Start for free
                             <motion.span animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>→</motion.span>

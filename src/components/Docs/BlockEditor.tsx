@@ -189,7 +189,7 @@ const BlockItem: React.FC<{
                 case 'heading3':
                     return 'text-xl font-medium text-white';
                 case 'quote':
-                    return 'text-lg italic text-slate-400 border-l-4 border-indigo-500 pl-4';
+                    return 'text-lg italic text-slate-400 border-l-4 border-blue-500 pl-4';
                 case 'code':
                     return 'font-mono text-sm bg-slate-800 p-4 rounded-lg text-emerald-400';
                 default:
@@ -208,8 +208,8 @@ const BlockItem: React.FC<{
                         <button
                             onClick={onToggleCheck}
                             className={`mt-1 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${block.checked
-                                    ? 'bg-indigo-600 border-indigo-600'
-                                    : 'border-slate-600 hover:border-indigo-500'
+                                ? 'bg-blue-600 border-blue-600'
+                                : 'border-slate-600 hover:border-blue-500'
                                 }`}
                         >
                             {block.checked && (

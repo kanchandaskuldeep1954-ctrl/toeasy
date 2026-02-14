@@ -109,10 +109,10 @@ export const HomeView: React.FC = () => {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
                 >
-                    <Card className="relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-600/20" />
+                    <Card className="relative overflow-hidden bg-slate-900 border-slate-800">
+                        <div className="absolute inset-0 bg-blue-600/5" />
                         <div className="relative flex items-center gap-4 p-6">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center">
                                 <Sparkles className="w-6 h-6 text-white" />
                             </div>
                             <div className="flex-1">

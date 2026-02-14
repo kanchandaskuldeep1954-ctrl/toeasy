@@ -171,7 +171,7 @@ export const WorkspacesView: React.FC = () => {
                 }}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-600/20 rounded-lg flex items-center justify-center border border-indigo-100 dark:border-indigo-500/50">
+                  <div className="w-12 h-12 bg-indigo-50 dark:bg-slate-800 rounded-lg flex items-center justify-center border border-indigo-100 dark:border-slate-700">
                     <svg
                       className="w-6 h-6 text-indigo-600 dark:text-indigo-400"
                       fill="none"

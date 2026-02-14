@@ -176,7 +176,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                                     <p className="text-sm">No tasks</p>
                                     <button
                                         onClick={() => onAddTask?.(column.status)}
-                                        className="mt-2 text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                                        className="mt-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
                                     >
                                         + Add task
                                     </button>

@@ -147,17 +147,17 @@ const SourceHubView: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-slate-950 text-slate-200 uppercase">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-200 uppercase transition-colors">
             {/* Header Area */}
-            <div className="border-b border-white/5 bg-white/[0.02] backdrop-blur-md sticky top-0 z-50">
+            <div className="border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-6 py-8">
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div>
-                            <h1 className="text-4xl font-black text-white uppercase tracking-tighter mb-2 flex items-center gap-3">
-                                <Zap className="text-indigo-500" fill="currentColor" />
+                            <h1 className="text-4xl font-black text-slate-900 dark:text-white uppercase tracking-tighter mb-2 flex items-center gap-3">
+                                <Zap className="text-indigo-600 dark:text-indigo-500" fill="currentColor" />
                                 Data Catalyst Hub
                             </h1>
-                            <p className="text-slate-500 font-medium tracking-wide normal-case italic">Connect any data source to the ToEasy OS</p>
+                            <p className="text-slate-500 dark:text-slate-400 font-medium tracking-wide normal-case italic">Connect any data source to the ToEasy OS</p>
                         </div>
 
                         <div className="relative w-full md:w-96 group">
@@ -169,7 +169,7 @@ const SourceHubView: React.FC = () => {
                                 placeholder="Search connectors..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="w-full bg-slate-900/50 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-white focus:outline-none focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600"
+                                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl py-4 pl-12 pr-4 text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all placeholder:text-slate-500"
                             />
                         </div>
                     </div>
@@ -192,13 +192,13 @@ const SourceHubView: React.FC = () => {
                                 <div
                                     key={ext.id}
                                     onClick={() => navigate(`/app/explore-connection/${ext.id}?workspace=${workspaceId}`)}
-                                    className="bg-white/[0.04] border border-white/10 rounded-2xl p-4 flex items-center gap-4 hover:bg-white/[0.06] transition-all cursor-pointer group"
+                                    className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 flex items-center gap-4 hover:border-indigo-300 dark:hover:border-slate-700 transition-all cursor-pointer group shadow-sm"
                                 >
                                     <div className="w-10 h-10 rounded-xl bg-indigo-600/20 flex items-center justify-center text-indigo-400">
                                         <Database size={20} />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h4 className="text-sm font-bold text-white truncate uppercase tracking-tight">{ext.name}</h4>
+                                        <h4 className="text-sm font-bold text-slate-900 dark:text-white truncate uppercase tracking-tight">{ext.name}</h4>
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                             <p className="text-[10px] text-slate-500 font-bold uppercase tracking-tighter">Sync Active</p>
@@ -225,7 +225,7 @@ const SourceHubView: React.FC = () => {
                                             onClick={() => setActiveCategory(cat.id)}
                                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeCategory === cat.id
                                                 ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
-                                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                                                 }`}
                                         >
                                             {cat.icon}
@@ -235,10 +235,10 @@ const SourceHubView: React.FC = () => {
                                 </nav>
                             </div>
 
-                            <div className="bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/20 rounded-2xl p-6">
+                            <div className="bg-indigo-50 dark:bg-indigo-900/10 border border-indigo-100 dark:border-indigo-500/20 rounded-2xl p-6">
                                 <Shield className="text-indigo-400 mb-3" size={24} />
-                                <h4 className="text-white font-bold text-sm mb-2">Secure Ingestion</h4>
-                                <p className="text-[11px] text-slate-400 leading-relaxed normal-case">
+                                <h4 className="text-slate-900 dark:text-white font-bold text-sm mb-2">Secure Ingestion</h4>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed normal-case">
                                     All credentials are encrypted with AES-256 at rest. We never store your raw source passwords.
                                 </p>
                             </div>
@@ -252,7 +252,7 @@ const SourceHubView: React.FC = () => {
                                 <div
                                     key={source.id}
                                     onClick={() => handleConnect(source)}
-                                    className={`group relative bg-white/[0.03] border border-white/10 rounded-3xl p-6 transition-all hover:bg-white/[0.05] hover:border-white/20 hover:-translate-y-1 cursor-pointer ${source.status === 'coming_soon' ? 'opacity-50 grayscale pointer-events-none' : ''
+                                    className={`group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 transition-all hover:border-indigo-300 dark:hover:border-slate-700 hover:-translate-y-1 cursor-pointer shadow-sm hover:shadow-md ${source.status === 'coming_soon' ? 'opacity-50 grayscale pointer-events-none' : ''
                                         }`}
                                 >
                                     {/* Connectivity Icon */}
@@ -263,7 +263,7 @@ const SourceHubView: React.FC = () => {
                                     {/* Info */}
                                     <div className="mb-8">
                                         <div className="flex items-center gap-2 mb-2">
-                                            <h3 className="text-lg font-black text-white uppercase tracking-tight">{source.name}</h3>
+                                            <h3 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">{source.name}</h3>
                                             {source.status === 'beta' && (
                                                 <span className="text-[9px] font-black bg-amber-500/10 text-amber-500 px-1.5 py-0.5 rounded border border-amber-500/20 uppercase tracking-widest">Beta</span>
                                             )}
@@ -272,13 +272,13 @@ const SourceHubView: React.FC = () => {
                                     </div>
 
                                     {/* Action Foot */}
-                                    <div className="flex items-center justify-between pt-6 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <div className="flex items-center justify-between pt-6 border-t border-slate-100 dark:border-slate-800 opacity-0 group-hover:opacity-100 transition-opacity">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-indigo-400">Establish Connection</span>
                                         <ArrowRight size={16} className="text-indigo-400" />
                                     </div>
 
                                     {/* Hover Sparkle */}
-                                    <div className="absolute top-4 right-4 text-white/5 group-hover:text-white/20 transition-colors">
+                                    <div className="absolute top-4 right-4 text-slate-300 dark:text-slate-700 group-hover:text-indigo-400 transition-colors">
                                         <Plus size={20} />
                                     </div>
                                 </div>

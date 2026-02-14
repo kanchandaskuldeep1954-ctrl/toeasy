@@ -112,7 +112,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                     {icon}
                     <span className="flex-1 text-left">{title}</span>
                     {items.some(ch => ch.unread) && (
-                        <span className="w-2 h-2 rounded-full bg-indigo-500" />
+                        <span className="w-2 h-2 rounded-full bg-blue-500" />
                     )}
                 </button>
 
@@ -133,7 +133,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                                         w-full flex items-center gap-2 px-3 py-2 mx-1 rounded-lg
                                         transition-colors text-sm
                                         ${activeChannelId === channel.id
-                                            ? 'bg-indigo-600/20 text-white'
+                                            ? 'bg-blue-600/20 text-white'
                                             : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                                         }
                                     `}
@@ -162,7 +162,7 @@ export const ChannelList: React.FC<ChannelListProps> = ({
             <div className="p-4 border-b border-slate-800">
                 <div className="flex items-center justify-between mb-3">
                     <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                        <MessageCircle className="w-5 h-5 text-indigo-400" />
+                        <MessageCircle className="w-5 h-5 text-blue-400" />
                         Chat
                     </h2>
                     <button

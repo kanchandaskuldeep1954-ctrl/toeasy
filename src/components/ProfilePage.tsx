@@ -187,7 +187,7 @@ export const ProfilePage: React.FC = () => {
           <div className="lg:col-span-4 space-y-6">
             <div className="glass-card rounded-[32px] overflow-hidden relative group">
               {/* Banner */}
-              <div className="h-32 bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 relative">
+              <div className="h-32 bg-blue-600 relative">
                 <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,#fff,transparent)] scale-150"></div>
               </div>
 

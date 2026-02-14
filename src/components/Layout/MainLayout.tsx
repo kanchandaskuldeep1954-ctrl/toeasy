@@ -63,7 +63,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                 <main className="flex-1 overflow-hidden relative flex flex-col min-w-0">
                     {/* Premium Header Bar */}
                     <header className={`h-14 border-b shrink-0 flex items-center px-4 gap-3 relative z-10 backdrop-blur-xl ${theme === 'dark'
-                        ? 'border-white/5 bg-gradient-to-r from-slate-900/80 via-slate-900/90 to-slate-900/80 text-white'
+                        ? 'border-white/5 bg-slate-900/90 text-white'
                         : 'border-slate-200 bg-white/80 text-slate-900'
                         }`}>
                         {/* Mobile Menu Button */}
@@ -96,7 +96,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             {/* AI Copilot Button */}
                             <button
                                 onClick={() => setShowCopilot(true)}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-indigo-500/30 transition-all hover:scale-105"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-lg shadow-lg shadow-blue-500/30 transition-all hover:scale-105"
                             >
                                 <MessageCircle className="w-4 h-4" />
                                 <span className="hidden sm:inline">Ask AI</span>
@@ -127,7 +127,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                             </button>
 
                             {/* User Avatar */}
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-indigo-500/30 cursor-pointer hover:scale-105 transition-transform">
+                            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-blue-500/30 cursor-pointer hover:scale-105 transition-transform">
                                 {user?.full_name?.[0]?.toUpperCase() || user?.email?.[0]?.toUpperCase() || 'U'}
                             </div>
                         </div>
@@ -140,7 +140,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
 
                     {/* Main Content Area with Premium Background */}
                     <div className={`flex flex-1 overflow-hidden ${theme === 'dark'
-                        ? 'bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950'
+                        ? 'bg-slate-950'
                         : 'bg-slate-50/50'
                         }`}>
                         <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar flex flex-col">

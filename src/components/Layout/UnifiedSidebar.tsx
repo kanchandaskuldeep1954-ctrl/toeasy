@@ -124,7 +124,7 @@ export const UnifiedSidebar: React.FC<UnifiedSidebarProps> = ({
                         ${collapsed ? 'justify-center' : ''}
                     `}
                 >
-                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center text-white font-bold text-sm">
                         {activeWorkspace?.name?.charAt(0) || 'T'}
                     </div>
                     {!collapsed && (
@@ -149,10 +149,8 @@ export const UnifiedSidebar: React.FC<UnifiedSidebarProps> = ({
                 <button
                     className={`
                         w-full flex items-center gap-3 p-2.5 rounded-xl
-                        bg-gradient-to-r from-indigo-600/20 to-purple-600/20
-                        hover:from-indigo-600/30 hover:to-purple-600/30
-                        border border-indigo-500/20
-                        text-indigo-300 transition-all
+                        bg-blue-600 hover:bg-blue-700
+                        text-white transition-all
                         ${collapsed ? 'justify-center' : ''}
                     `}
                 >
@@ -241,7 +239,7 @@ export const UnifiedSidebar: React.FC<UnifiedSidebarProps> = ({
                                                         flex items-center gap-3 p-2 rounded-xl
                                                         transition-colors text-sm
                                                         ${isActive
-                                                            ? 'bg-indigo-600/20 text-indigo-300 border-l-2 border-indigo-500'
+                                                            ? 'bg-blue-600 text-white'
                                                             : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                                                         }
                                                     `}
@@ -262,7 +260,7 @@ export const UnifiedSidebar: React.FC<UnifiedSidebarProps> = ({
                                     flex items-center gap-3 p-2 rounded-xl
                                     transition-colors
                                     ${isActive
-                                        ? 'bg-indigo-600/20 text-indigo-300'
+                                        ? 'bg-blue-600 text-white'
                                         : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
                                     }
                                     ${collapsed ? 'justify-center' : ''}

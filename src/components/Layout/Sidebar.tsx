@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
 
             <aside className={`
                 fixed lg:static top-0 left-0 h-full z-50
-                bg-slate-50 dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 
+                bg-slate-950 border-r border-slate-800 
                 transition-transform duration-300 ease-in-out
                 ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
                 ${collapsed ? 'lg:w-20' : 'w-64 lg:w-64'}
@@ -85,7 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                 {/* Logo Area */}
                 <div className="h-16 flex items-center justify-between px-6 border-b border-slate-200 dark:border-slate-800 shrink-0">
                     <div className="flex items-center">
-                        <div className="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white text-lg font-black shrink-0 shadow-lg shadow-indigo-500/30">
+                        <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white text-lg font-black shrink-0">
                             T
                         </div>
                         {(!collapsed || mobileOpen) && (
@@ -144,8 +144,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                                             key={item.name} // Use name as key since path is dynamic
                                             to={item.path}
                                             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${active
-                                                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20'
-                                                : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white'
+                                                ? 'bg-blue-600 text-white'
+                                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
                                                 }`}
                                             title={collapsed ? item.name : ''}
                                         >
@@ -190,7 +190,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                         onClick={() => navigate('/app/profile')}
                         className={`flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors ${collapsed ? 'justify-center' : ''}`}
                     >
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shadow-md">
+                        <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-xs font-bold">
                             {user?.email?.[0].toUpperCase() || 'U'}
                         </div>
                         {!collapsed && (

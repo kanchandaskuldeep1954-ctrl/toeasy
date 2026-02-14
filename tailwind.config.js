@@ -49,27 +49,27 @@ export default {
           300: '#93c5fd',
           400: '#60a5fa',
           500: '#3b82f6',
-          600: '#2563eb', // Primary Blue
+          600: '#2563eb', // Primary Cargo Blue
           700: '#1d4ed8',
           800: '#1e40af',
           900: '#1e3a8a',
           950: '#172554',
         },
         purple: {
-          50: '#f0f9ff', // Aliasing purple to sky/blue
+          50: '#f0f9ff', // Aliasing to blue
           100: '#e0f2fe',
           200: '#bae6fd',
           300: '#7dd3fc',
           400: '#38bdf8',
           500: '#0ea5e9',
-          600: '#0284c7', // Sky Blue
+          600: '#0284c7', // Sky/Blue
           700: '#0369a1',
           800: '#075985',
           900: '#0c4a6e',
           950: '#082f49',
         },
         violet: {
-          50: '#f8fafc', // Aliasing violet to slate/blue
+          50: '#f8fafc', // Aliasing to slate
           100: '#f1f5f9',
           200: '#e2e8f0',
           300: '#cbd5e1',
@@ -82,16 +82,18 @@ export default {
           950: '#020617',
         },
         slate: {
-          950: '#020617',
+          850: '#1e293b',
+          900: '#0f172a',
+          950: '#020617', // Deep Cargo Dark
         }
       },
       borderRadius: {
-        'lg': '0.75rem',
-        'xl': '1rem',
-        '2xl': '1.5rem',
-        '3xl': '2rem',
-        '4xl': '3rem',
-        '5xl': '4rem',
+        'lg': '0.5rem', // Slightly tighter, more industrial
+        'xl': '0.75rem',
+        '2xl': '1rem',
+        '3xl': '1.5rem',
+        '4xl': '2rem',
+        '5xl': '2.5rem',
       }
     }
   },

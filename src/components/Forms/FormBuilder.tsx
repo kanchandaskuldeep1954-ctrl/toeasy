@@ -146,8 +146,8 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                                             exit={{ opacity: 0, scale: 0.95 }}
                                             onClick={() => setSelectedFieldId(field.id)}
                                             className={`group relative p-4 rounded-xl border transition-all cursor-pointer ${selectedFieldId === field.id
-                                                    ? 'bg-slate-800/50 border-indigo-500'
-                                                    : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
+                                                ? 'bg-slate-800/50 border-blue-500'
+                                                : 'bg-slate-900/50 border-slate-800 hover:border-slate-700'
                                                 }`}
                                         >
                                             {/* Drag Handle */}
@@ -205,7 +205,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                         {/* Add Field Button */}
                         <button
                             onClick={() => setShowFieldPicker(true)}
-                            className="w-full p-4 rounded-xl border-2 border-dashed border-slate-700 text-slate-400 hover:text-white hover:border-indigo-500 transition-colors flex items-center justify-center gap-2"
+                            className="w-full p-4 rounded-xl border-2 border-dashed border-slate-700 text-slate-400 hover:text-white hover:border-blue-500 transition-colors flex items-center justify-center gap-2"
                         >
                             <Plus className="w-5 h-5" />
                             Add Field
@@ -255,7 +255,7 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                                 type="checkbox"
                                 checked={selectedField.required}
                                 onChange={(e) => updateField(selectedField.id, { required: e.target.checked })}
-                                className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-indigo-500"
+                                className="w-5 h-5 rounded border-slate-600 bg-slate-700 text-blue-500"
                             />
                             <span className="text-slate-300">Required field</span>
                         </label>
@@ -315,10 +315,10 @@ export const FormBuilder: React.FC<FormBuilderProps> = ({
                         <button
                             key={fieldType.type}
                             onClick={() => addField(fieldType.type)}
-                            className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-indigo-500 transition-all"
+                            className="flex flex-col items-center gap-2 p-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-blue-500 transition-all"
                         >
                             <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
-                                <fieldType.icon className="w-5 h-5 text-indigo-400" />
+                                <fieldType.icon className="w-5 h-5 text-blue-400" />
                             </div>
                             <span className="text-sm text-white">{fieldType.label}</span>
                         </button>
