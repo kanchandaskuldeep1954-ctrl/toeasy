@@ -92,11 +92,11 @@
   }
 
   .glass-card:hover {
-    @apply shadow-xl shadow-indigo-500/5 border-indigo-500/20;
+    @apply shadow-xl shadow-blue-500/5 border-blue-500/20;
   }
 
   .text-glow {
-    text-shadow: 0 0 15px rgba(99, 102, 241, 0.3);
+    text-shadow: 0 0 15px rgba(59, 130, 246, 0.3);
   }
 
   .hide-scrollbar {
@@ -179,18 +179,18 @@
   .edge-pulse {
     stroke-dasharray: 10, 10;
     animation: flowPulse 1.5s linear infinite;
-    filter: drop-shadow(0 0 5px rgba(99, 102, 241, 0.6));
+    filter: drop-shadow(0 0 5px rgba(59, 130, 246, 0.6));
   }
 
   @keyframes auraPulse {
 
     0%,
     100% {
-      box-shadow: 0 0 15px -5px rgba(99, 102, 241, 0.4);
+      box-shadow: 0 0 15px -5px rgba(59, 130, 246, 0.4);
     }
 
     50% {
-      box-shadow: 0 0 30px 2px rgba(99, 102, 241, 0.6);
+      box-shadow: 0 0 30px 2px rgba(59, 130, 246, 0.6);
     }
   }
 

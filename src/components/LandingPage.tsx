@@ -20,7 +20,7 @@ const LandingPage: React.FC = () => {
                         repeat: Infinity,
                         ease: "easeInOut"
                     }}
-                    className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500 rounded-full blur-[120px]"
+                    className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500 rounded-full blur-[120px]"
                 ></motion.div>
                 <motion.div
                     animate={{
@@ -33,7 +33,7 @@ const LandingPage: React.FC = () => {
                         ease: "easeInOut",
                         delay: 2
                     }}
-                    className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-purple-500 rounded-full blur-[120px]"
+                    className="absolute top-1/2 right-1/4 w-[400px] h-[400px] bg-cyan-500 rounded-full blur-[120px]"
                 ></motion.div>
             </div>
 
@@ -44,11 +44,11 @@ const LandingPage: React.FC = () => {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.5 }}
-                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-bold uppercase tracking-widest"
+                        className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold uppercase tracking-widest"
                     >
                         <span className="relative flex h-2 w-2">
-                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                            <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
                         </span>
                         Next Gen Data Governance
                     </motion.div>
@@ -59,7 +59,7 @@ const LandingPage: React.FC = () => {
                         transition={{ duration: 0.7, delay: 0.2 }}
                         className="text-5xl md:text-7xl lg:text-8xl font-black tracking-tight leading-[1.05] text-slate-900 dark:text-white max-w-5xl mx-auto"
                     >
-                        Clean Data. <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-500 to-indigo-600 bg-300% animate-gradient">Pure Insights.</span>
+                        Clean Data. <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 via-cyan-500 to-blue-600 bg-300% animate-gradient">Pure Insights.</span>
                     </motion.h1>
 
                     <motion.p
@@ -79,7 +79,7 @@ const LandingPage: React.FC = () => {
                     >
                         <Link
                             to="/signup"
-                            className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black shadow-2xl shadow-indigo-600/40 transition-all hover:scale-110 active:scale-95 group flex items-center gap-2"
+                            className="w-full sm:w-auto px-10 py-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black shadow-2xl shadow-blue-600/40 transition-all hover:scale-110 active:scale-95 group flex items-center gap-2"
                         >
                             Start for free
                             <motion.span animate={{ x: [0, 5, 0] }} transition={{ repeat: Infinity, duration: 1.5 }}>→</motion.span>
@@ -110,7 +110,7 @@ const LandingPage: React.FC = () => {
                                     allowFullScreen
                                 ></iframe>
                                 {/* Optional Overlay if video is still loading or for extra branding */}
-                                <div className="absolute inset-0 bg-indigo-500/5 pointer-events-none"></div>
+                                <div className="absolute inset-0 bg-blue-500/5 pointer-events-none"></div>
                             </div>
                         </div>
                     </motion.div>
@@ -180,7 +180,7 @@ const LandingPage: React.FC = () => {
                 <div className="max-w-7xl mx-auto">
                     <Reveal width="100%">
                         <div className="text-center mb-24 space-y-4">
-                            <h3 className="text-indigo-600 font-black text-xs uppercase tracking-[0.3em]">The Toolkit</h3>
+                            <h3 className="text-blue-600 font-black text-xs uppercase tracking-[0.3em]">The Toolkit</h3>
                             <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leadning-none">Built for modern data teams</h2>
                         </div>
                     </Reveal>
@@ -191,13 +191,13 @@ const LandingPage: React.FC = () => {
                                 title: 'AI Cleaning',
                                 desc: 'Automatically detect and fix anomalies, missing values, and inconsistent formatting with our advanced LLM engine.',
                                 icon: 'M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10',
-                                color: 'indigo'
+                                color: 'blue'
                             },
                             {
                                 title: 'Smart Visuals',
                                 desc: 'Generate beautiful, interactive D3.js and Plotly charts that respond to your data insights automatically.',
                                 icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 v14a2 2 0 002 2h2a2 2 0 002-2z',
-                                color: 'purple'
+                                color: 'cyan'
                             },
                             {
                                 title: 'Enterprise Logic',
@@ -207,8 +207,8 @@ const LandingPage: React.FC = () => {
                             }
                         ].map((feature, idx) => (
                             <Reveal key={idx} delay={0.2 * (idx + 1)}>
-                                <div className="p-10 rounded-[40px] border border-slate-200 dark:border-slate-800 hover:border-indigo-500/50 transition-all hover:bg-slate-50 dark:hover:bg-slate-800/80 group h-full shadow-sm hover:shadow-2xl">
-                                    <div className={`w-16 h-16 rounded-2xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 mb-8 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
+                                <div className="p-10 rounded-[40px] border border-slate-200 dark:border-slate-800 hover:border-blue-500/50 transition-all hover:bg-slate-50 dark:hover:bg-slate-800/80 group h-full shadow-sm hover:shadow-2xl">
+                                    <div className={`w-16 h-16 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-600 mb-8 group-hover:scale-110 group-hover:rotate-6 transition-all duration-500`}>
                                         <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={feature.icon} /></svg>
                                     </div>
                                     <h3 className="text-2xl font-black mb-4 text-slate-900 dark:text-white uppercase tracking-tight">{feature.title}</h3>
@@ -225,7 +225,7 @@ const LandingPage: React.FC = () => {
                 <div className="max-w-7xl mx-auto text-center">
                     <Reveal width="100%">
                         <div className="space-y-4 mb-24">
-                            <h3 className="text-indigo-600 font-black text-xs uppercase tracking-[0.3em]">The Process</h3>
+                            <h3 className="text-blue-600 font-black text-xs uppercase tracking-[0.3em]">The Process</h3>
                             <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white uppercase tracking-tighter">The Toeasy Engine</h2>
                             <p className="text-slate-500 dark:text-slate-400 font-bold text-lg max-w-xl mx-auto">How we turn raw numbers into business strategy in three simple steps.</p>
                         </div>
@@ -242,8 +242,8 @@ const LandingPage: React.FC = () => {
                         ].map((item, idx) => (
                             <Reveal key={idx} delay={0.3 * (idx + 1)}>
                                 <div className="relative group">
-                                    <div className="w-20 h-20 rounded-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 flex items-center justify-center mx-auto mb-8 shadow-xl group-hover:scale-110 group-hover:border-indigo-600 transition-all duration-500">
-                                        <span className="text-xl font-black text-indigo-600">{item.step}</span>
+                                    <div className="w-20 h-20 rounded-full bg-white dark:bg-slate-900 border-4 border-slate-100 dark:border-slate-800 flex items-center justify-center mx-auto mb-8 shadow-xl group-hover:scale-110 group-hover:border-blue-600 transition-all duration-500">
+                                        <span className="text-xl font-black text-blue-600">{item.step}</span>
                                     </div>
                                     <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-6 tracking-tight leading-none">{item.title}</h3>
                                     <p className="text-slate-500 dark:text-slate-400 leading-relaxed font-bold text-base">{item.desc}</p>
@@ -259,7 +259,7 @@ const LandingPage: React.FC = () => {
                 <div className="max-w-7xl mx-auto">
                     <Reveal width="100%">
                         <div className="text-center mb-24 space-y-4">
-                            <h3 className="text-indigo-600 font-black text-xs uppercase tracking-[0.3em]">Social Proof</h3>
+                            <h3 className="text-blue-600 font-black text-xs uppercase tracking-[0.3em]">Social Proof</h3>
                             <h2 className="text-4xl md:text-6xl font-black text-slate-900 dark:text-white uppercase tracking-tighter leadning-none font-black">Wall of Love</h2>
                             <p className="text-slate-500 dark:text-slate-400 font-bold text-lg">Real stories from engineers and data scientists using Toeasy AI.</p>
                         </div>
@@ -277,16 +277,16 @@ const LandingPage: React.FC = () => {
                             <Reveal key={idx} delay={0.1 * idx}>
                                 <motion.div
                                     whileHover={{ y: -10 }}
-                                    className="p-10 rounded-[40px] bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 hover:border-indigo-500/30 transition-all shadow-sm group h-full"
+                                    className="p-10 rounded-[40px] bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 hover:border-blue-500/30 transition-all shadow-sm group h-full"
                                 >
                                     <div className="flex items-center gap-5 mb-8">
-                                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white text-base font-black shadow-xl group-hover:scale-110 transition-transform">
+                                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-600 flex items-center justify-center text-white text-base font-black shadow-xl group-hover:scale-110 transition-transform">
                                             {testi.avatar}
                                         </div>
                                         <div className="text-left">
                                             <p className="font-black text-slate-900 dark:text-white text-lg tracking-tight leading-none mb-1">{testi.name}</p>
                                             <p className="text-[11px] text-slate-500 dark:text-slate-400 font-black uppercase tracking-widest leading-none">{testi.role}</p>
-                                            <p className="text-[11px] text-indigo-500 font-black uppercase tracking-widest leading-none mt-1">{testi.company}</p>
+                                            <p className="text-[11px] text-blue-500 font-black uppercase tracking-widest leading-none mt-1">{testi.company}</p>
                                         </div>
                                     </div>
                                     <blockquote className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed font-bold italic opacity-90 group-hover:opacity-100 transition-opacity">
@@ -308,15 +308,15 @@ const LandingPage: React.FC = () => {
             {/* CTA Section */}
             <section className="py-32 px-4 overflow-hidden relative">
                 <Reveal width="100%">
-                    <div className="max-w-6xl mx-auto rounded-[60px] bg-indigo-600 p-16 md:p-32 text-center text-white relative shadow-[0_50px_100px_-30px_rgba(79,70,229,0.6)]">
+                    <div className="max-w-6xl mx-auto rounded-[60px] bg-blue-600 p-16 md:p-32 text-center text-white relative shadow-[0_50px_100px_-30px_rgba(37,99,235,0.6)]">
                         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white/20 via-transparent to-transparent opacity-50"></div>
                         <div className="relative space-y-10">
                             <h2 className="text-5xl md:text-8xl font-black tracking-tight leading-none">Ready to clean your data?</h2>
-                            <p className="text-indigo-100 text-xl font-bold max-w-2xl mx-auto opacity-90">Join 500+ teams automating their data governance today. No credit card required.</p>
+                            <p className="text-blue-100 text-xl font-bold max-w-2xl mx-auto opacity-90">Join 500+ teams automating their data governance today. No credit card required.</p>
                             <div className="pt-8">
                                 <Link
                                     to="/signup"
-                                    className="inline-block px-14 py-6 rounded-3xl bg-white text-indigo-600 font-black shadow-2xl transition-all hover:scale-110 active:scale-95 text-2xl hover:shadow-white/20"
+                                    className="inline-block px-14 py-6 rounded-3xl bg-white text-blue-600 font-black shadow-2xl transition-all hover:scale-110 active:scale-95 text-2xl hover:shadow-white/20"
                                 >
                                     Get started for free
                                 </Link>

@@ -30,21 +30,21 @@ interface QuickAction {
 }
 
 const QUICK_ACTIONS: QuickAction[] = [
-    { icon: FileText, label: 'New Doc', description: 'Create a document', href: '/app/docs', color: 'indigo' },
+    { icon: FileText, label: 'New Doc', description: 'Create a document', href: '/app/docs', color: 'blue' },
     { icon: CheckSquare, label: 'New Task', description: 'Track work', href: '/app/tasks', color: 'sky' },
     { icon: MessageCircle, label: 'Chat', description: 'Collaborate', href: '/app/chat', color: 'emerald' },
     { icon: FolderOpen, label: 'Files', description: 'Store assets', href: '/app/files', color: 'amber' },
-    { icon: Zap, label: 'Flows', description: 'Automate', href: '/app/dataflows', color: 'purple' }
+    { icon: Zap, label: 'Flows', description: 'Automate', href: '/app/dataflows', color: 'cyan' }
 ];
 
 // Tailwind can't reliably pick up dynamic class names (e.g. `bg-${color}-...`),
 // so keep these explicit to ensure the styles are generated in production builds.
 const QUICK_ACTION_COLOR: Record<string, { bg: string; text: string }> = {
-    indigo: { bg: 'bg-indigo-500/20', text: 'text-indigo-400' },
+    blue: { bg: 'bg-blue-500/20', text: 'text-blue-400' },
     sky: { bg: 'bg-sky-500/20', text: 'text-sky-400' },
     emerald: { bg: 'bg-emerald-500/20', text: 'text-emerald-400' },
     amber: { bg: 'bg-amber-500/20', text: 'text-amber-400' },
-    purple: { bg: 'bg-purple-500/20', text: 'text-purple-400' }
+    cyan: { bg: 'bg-cyan-500/20', text: 'text-cyan-400' }
 };
 
 export const HomeView: React.FC = () => {
@@ -110,9 +110,9 @@ export const HomeView: React.FC = () => {
                     transition={{ delay: 0.1 }}
                 >
                     <Card className="relative overflow-hidden">
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-purple-600/20" />
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-cyan-600/20" />
                         <div className="relative flex items-center gap-4 p-6">
-                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
                                 <Sparkles className="w-6 h-6 text-white" />
                             </div>
                             <div className="flex-1">
