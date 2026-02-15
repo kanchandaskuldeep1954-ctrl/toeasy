@@ -514,6 +514,18 @@ export const notificationsAPI = {
     getClient().post('/notifications/read-all', { workspaceId })
 };
 
+// ============================================
+// Invites Endpoints
+// ============================================
+
+export const invitesAPI = {
+  send: (emails: string[], workspaceId?: string) =>
+    getClient().post('/invites/send', { emails, workspaceId }),
+
+  get: (token: string) =>
+    getClient().get(`/invites/${token}`)
+};
+
 // Default export for convenience
 export default {
   auth: authAPI,
@@ -535,5 +547,6 @@ export default {
   classification: classificationAPI,
   alerts: alertsAPI,
   notifications: notificationsAPI,
+  invites: invitesAPI,
   initializeAPIClient
 };

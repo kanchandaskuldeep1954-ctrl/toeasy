@@ -3,7 +3,7 @@ import { Dialog, Transition } from '@headlessui/react';
 import { Fragment } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { useWorkspace } from '../../hooks/useWorkspace';
-import axios from 'axios';
+import { invitesAPI, userAPI } from '../../services/api';
 import { Check, ChevronRight, Loader2, Users, Briefcase, Rocket } from 'lucide-react';
 
 export const OnboardingWizard = () => {
@@ -41,10 +41,9 @@ export const OnboardingWizard = () => {
             setError(null);
             try {
                 const emails = inviteEmails.split(',').map(e => e.trim()).filter(Boolean);
-                await axios.post(
-                    `${import.meta.env.VITE_BACKEND_URL}/api/invites/send`,
-                    { emails, workspaceId: localStorage.getItem('active_workspace_id') || undefined }, // Backend should handle current workspace context or we pass it
-                    { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+                await invitesAPI.send(
+                    emails,
+                    localStorage.getItem('active_workspace_id') || undefined
                 );
             } catch (err: any) {
                 console.error('Failed to send invites:', err);
@@ -59,11 +58,7 @@ export const OnboardingWizard = () => {
     const handleComplete = async () => {
         setIsLoading(true);
         try {
-            await axios.put(
-                `${import.meta.env.VITE_BACKEND_URL}/api/users/me`,
-                { onboarding_completed: true },
-                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-            );
+            await userAPI.updateProfile({ onboarding_completed: true });
             await refreshProfile();
             setIsOpen(false);
         } catch (err) {
