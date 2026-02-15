@@ -11,16 +11,16 @@
 
 import React, { useState, useCallback } from 'react';
 import Sidebar from './Sidebar';
-import WorkspaceTabs from '../WorkspaceTabs';
+import DatasetToolTabs from './DatasetToolTabs';
 import { ActivityFeed } from '../Activity/ActivityFeed';
 import NotificationCenter from '../Notifications/NotificationCenter';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDataset } from '../../hooks/useDataset';
 import { useAuth } from '../../hooks/useAuth';
-import { Activity, X, Bell, Sparkles, ChevronRight, MessageCircle } from 'lucide-react';
+import { Activity, X, Bell, ChevronRight, MessageCircle } from 'lucide-react';
 import { FilterProvider } from '../../context/FilterContext';
 import AICopilotPanel from '../AICopilot/AICopilotPanel';
-import FloatingCopilot from '../AICopilot/FloatingCopilot';
+// FloatingCopilot removed — AI is now opt-in via "Ask AI" button only
 import { GroqService } from '../../services/groqService';
 import { useTheme } from '../../hooks/useTheme';
 
@@ -102,14 +102,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                                 <span className="hidden sm:inline">Ask AI</span>
                             </button>
 
-                            {/* AI Status Indicator */}
-                            <div className={`hidden lg:flex items-center gap-2 px-3 py-1.5 border rounded-full shadow-sm transition-all duration-500 ${theme === 'dark'
-                                ? 'bg-indigo-500/10 border-indigo-500/20 shadow-indigo-500/5'
-                                : 'bg-indigo-50 border-indigo-200 shadow-indigo-500/10'
-                                }`}>
-                                <Sparkles className="w-4 h-4 text-indigo-500 animate-pulse" />
-                                <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 tracking-tight uppercase">AI Ready</span>
-                            </div>
+                            {/* AI Status Indicator — removed for cleaner header */}
 
                             {/* Notifications */}
                             <NotificationCenter />
@@ -133,9 +126,9 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         </div>
                     </header>
 
-                    {/* Perspective Tabs Bar - Premium Style */}
-                    <div className={`flex items-center border-b ${theme === 'dark' ? 'bg-slate-900/50 border-white/5' : 'bg-white border-slate-200'}`}>
-                        <WorkspaceTabs />
+                    {/* Dataset Tool Tabs — shows Sheets|Dashboard|Report|Clean|Playground when a dataset is active */}
+                    <div className={`border-b ${theme === 'dark' ? 'border-white/5' : 'border-slate-200'}`}>
+                        <DatasetToolTabs />
                     </div>
 
                     {/* Main Content Area with Premium Background */}
@@ -189,11 +182,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     onAsk={handleAskAI}
                 />
 
-                {/* Floating AI Copilot (enhanced, always visible) */}
-                <FloatingCopilot
-                    context={activeDataset ? 'sheets' : 'general'}
-                    contextData={activeDataset}
-                />
+                {/* FloatingCopilot removed — AI is opt-in via Ask AI button */}
             </div>
         </FilterProvider>
     );

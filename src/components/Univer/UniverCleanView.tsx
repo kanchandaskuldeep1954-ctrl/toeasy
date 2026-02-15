@@ -153,77 +153,66 @@ const UniverCleanView: React.FC = () => {
         hydrateOnce();
     }, [datasetId, workspaceId, setActiveDataset]);
 
-    // Initialize AI analysis when dataset loads
-    useEffect(() => {
-        const init = async () => {
-            if (!dataset || initializedRef.current === Number(dataset.id)) {
-                return;
-            }
-            if (!dataset || !dataset.data || dataset.data.length === 0) return;
+    // Manual AI analysis trigger — NO auto-run on page load
+    const [shouldAnalyze, setShouldAnalyze] = useState(false);
 
-            // If we already have rules and issues, we might not need a re-analyze unless requested
-            if (validationRules.length > 0 && issues.length > 0) {
-                console.log(`[UniverCleanView] Dataset ${dataset.id} already has rules/issues, skipping automatic re-analysis.`);
-                initializedRef.current = Number(dataset.id);
-                return;
-            }
+    const handleStartAnalysis = useCallback(async () => {
+        if (!dataset || !dataset.data || dataset.data.length === 0) return;
+        if (isLoading || isProcessing) return;
 
-            // Critical check: don't re-run if we already did THIS dataset on THIS render cycle
-            if (initializedRef.current === Number(dataset.id)) return;
+        console.log(`[UniverCleanView] User triggered AI Analysis for dataset: ${dataset.id}`);
+        initializedRef.current = Number(dataset.id);
+        setIsLoading(true);
+        setShouldAnalyze(false);
 
-            console.log(`[UniverCleanView] Starting AI Analysis for dataset: ${dataset.id}`);
-            initializedRef.current = Number(dataset.id);
-            setIsLoading(true);
-
-            try {
-                // Step 1: Semantic Analysis
-                let semanticResult = semantics;
-                if (!semanticResult) {
-                    setLoadingStep('🔍 Deep Semantic Analysis...');
-                    try {
-                        semanticResult = await analyzeDatasetSemantics(dataset);
-                        setSemantics(semanticResult || null);
-                    } catch (err) {
-                        console.warn('Semantic analysis failed:', err);
-                        // Continue without semantics
-                    }
+        try {
+            // Step 1: Semantic Analysis
+            let semanticResult = semantics;
+            if (!semanticResult) {
+                setLoadingStep('🔍 Deep Semantic Analysis...');
+                try {
+                    semanticResult = await analyzeDatasetSemantics(dataset);
+                    setSemantics(semanticResult || null);
+                } catch (err) {
+                    console.warn('Semantic analysis failed:', err);
                 }
-
-                // Step 2: Generate Recovery Plans
-                if (!issues || issues.length === 0) {
-                    setLoadingStep('🧠 Generating Recovery Plans...');
-                    const plans = generateRecoveryPlans(dataset.data || [], dataset.headers || [], semanticResult);
-                    const cellIssues = plans ? recoveryPlansToCellIssues(plans, dataset.headers || []) : [];
-                    setIssues(cellIssues || []);
-                }
-
-                // Step 3: Generate Validation Rules
-                setLoadingStep('⚒️ Creating Validation Rules...');
-                if (!dataset.validationRules || dataset.validationRules.length === 0) {
-                    const rules = await GroqService.suggestValidationRules(dataset, semanticResult);
-                    setValidationRules(rules || []);
-                    // Only update if it's genuinely missing from the DB
-                    if (rules && rules.length > 0) {
-                        updateDataset(Number(dataset.id), { validationRules: rules } as any);
-                    }
-                } else if (!validationRules || validationRules.length === 0) {
-                    setValidationRules(dataset.validationRules || []);
-                }
-
-                setLoadingStep('');
-            } catch (e) {
-                console.error('Initialization failed:', e);
-                setLoadingStep('Initialization error (partial load)');
-                // Don't leave it loading forever
-            } finally {
-                setIsLoading(false);
             }
-        };
 
-        if (dataset?.data?.length > 0) {
-            init();
+            // Step 2: Generate Recovery Plans
+            if (!issues || issues.length === 0) {
+                setLoadingStep('🧠 Generating Recovery Plans...');
+                const plans = generateRecoveryPlans(dataset.data || [], dataset.headers || [], semanticResult);
+                const cellIssues = plans ? recoveryPlansToCellIssues(plans, dataset.headers || []) : [];
+                setIssues(cellIssues || []);
+            }
+
+            // Step 3: Generate Validation Rules
+            setLoadingStep('⚒️ Creating Validation Rules...');
+            if (!dataset.validationRules || dataset.validationRules.length === 0) {
+                const rules = await GroqService.suggestValidationRules(dataset, semanticResult);
+                setValidationRules(rules || []);
+                if (rules && rules.length > 0) {
+                    updateDataset(Number(dataset.id), { validationRules: rules } as any);
+                }
+            } else if (!validationRules || validationRules.length === 0) {
+                setValidationRules(dataset.validationRules || []);
+            }
+
+            setLoadingStep('');
+        } catch (e) {
+            console.error('Analysis failed:', e);
+            setLoadingStep('Analysis error (partial load)');
+        } finally {
+            setIsLoading(false);
         }
-    }, [dataset?.id, dataset?.data?.length]); // Re-run if ID stays same but data arrives
+    }, [dataset, semantics, issues, validationRules, isLoading, isProcessing, updateDataset]);
+
+    // When user explicitly requests analysis
+    useEffect(() => {
+        if (shouldAnalyze && dataset?.data?.length > 0) {
+            handleStartAnalysis();
+        }
+    }, [shouldAnalyze, dataset?.data?.length, handleStartAnalysis]);
 
     // Display headers (exclude metadata)
     const displayHeaders = useMemo(() => {
@@ -921,6 +910,33 @@ const UniverCleanView: React.FC = () => {
 
                     {/* Action Buttons */}
                     <div className="flex items-center gap-2">
+                        {/* Analyze Data Quality — Manual Trigger */}
+                        <button
+                            onClick={() => setShouldAnalyze(true)}
+                            disabled={isLoading || !dataset?.data?.length}
+                            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${isLoading
+                                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 cursor-wait'
+                                    : issues.length > 0
+                                        ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-200 dark:hover:bg-emerald-900/50'
+                                        : 'bg-blue-600 text-white hover:bg-blue-500 shadow-lg shadow-blue-500/30'
+                                }`}
+                            title={issues.length > 0 ? 'Re-analyze data quality' : 'Run AI-powered data quality analysis'}
+                        >
+                            {isLoading ? (
+                                <>
+                                    <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    {loadingStep || 'Analyzing...'}
+                                </>
+                            ) : issues.length > 0 ? (
+                                <>🔄 Re-Analyze ({issues.length} issues)</>
+                            ) : (
+                                <>🔍 Analyze Data Quality</>
+                            )}
+                        </button>
+
                         {/* Version Badge */}
                         <VersionBadge
                             version={currentVersion}

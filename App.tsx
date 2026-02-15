@@ -69,37 +69,57 @@ const AppLayout: React.FC = () => {
       <UrlSync />
       <React.Suspense fallback={<div className="flex items-center justify-center h-full w-full"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}>
         <Routes>
-          {/* Workspace & Dataset Management */}
+          {/* =========================================================
+              CORE WORKSPACE
+             ========================================================= */}
+          <Route path="/" element={<Navigate to="home" replace />} />
+          <Route path="home" element={<HomeView />} />
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
 
-          {/* Unified Work OS Routes */}
-          <Route path="home" element={<HomeView />} />
-          <Route path="chat" element={<ChatView />} />
-          <Route path="chat/:channelId" element={<ChatView />} />
-          <Route path="tasks" element={<TasksView />} />
-          <Route path="docs" element={<DocsView />} />
-          <Route path="docs/:id" element={<DocsView />} />
-          <Route path="forms" element={<FormsView />} />
-          <Route path="forms/:id" element={<FormsView />} />
-          <Route path="files" element={<FilesView />} />
-
-          {/* Data Operations */}
+          {/* Connect & Upload */}
+          <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
           <Route path="upload" element={<SourceHubView />} />
           <Route path="upload-file" element={<UploadViewPhase3 />} />
           <Route path="connect/:providerId" element={<ConnectorSetupView />} />
           <Route path="explore-connection/:integrationId" element={<ConnectorExplorerView />} />
-          <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
-          <Route path="clean" element={<UniverCleanView />} />
-          {/* Sheets View - Data editing with auto-cleaning */}
+
+          {/* Collaboration */}
+          <Route path="chat" element={<ChatView />} />
+          <Route path="chat/:channelId" element={<ChatView />} />
+          <Route path="docs" element={<DocsView />} />
+          <Route path="docs/:id" element={<DocsView />} />
+
+          {/* =========================================================
+              DATASET TOOLS (Tabbed Tool Views)
+             ========================================================= */}
+          {/* The "Sheet" View — Excel-like Editing */}
           <Route path="sheets" element={<SpreadsheetViewIntegrated />} />
-          <Route path="playground" element={<PlaygroundViewIntegrated />} />
+
+          {/* The "Clean" View — AI Data Quality */}
+          <Route path="clean" element={<UniverCleanView />} />
+
+          {/* The "Dashboard" View — Visualization */}
           <Route path="dashboard" element={<DashboardViewIntegrated />} />
-          <Route path="dashboards" element={<DashboardLibrary />} />
+
+          {/* The "Report" View — Doc-style Reporting */}
           <Route path="report" element={<ReportViewIntegrated />} />
-          <Route path="reports" element={<ReportLibrary />} />
+
+          {/* The "Playground" View — Code/SQL */}
+          <Route path="playground" element={<PlaygroundViewIntegrated />} />
+
+
+          {/* =========================================================
+              LEGACY / FEATURE ROUTES (Kept for compatibility)
+             ========================================================= */}
+          <Route path="tasks" element={<TasksView />} />
+          <Route path="forms" element={<FormsView />} />
+          <Route path="forms/:id" element={<FormsView />} />
+          <Route path="files" element={<FilesView />} />
           <Route path="war-room" element={<TheWarRoom />} />
+          <Route path="dashboards" element={<DashboardLibrary />} />
+          <Route path="reports" element={<ReportLibrary />} />
           <Route path="queries" element={<QueryHistory />} />
           <Route path="preview" element={<DataPreview />} />
           <Route path="rules" element={<ValidationRulesManager />} />
@@ -109,9 +129,6 @@ const AppLayout: React.FC = () => {
           <Route path="dataflows" element={<DataflowBuilder workspaceId={String(activeWorkspace?.id || '')} />} />
           <Route path="alerts" element={<AlertsManager workspaceId={String(activeWorkspace?.id || '')} />} />
           <Route path="billing" element={<BillingViewIntegrated />} />
-
-          {/* Default route */}
-          <Route path="/" element={<Navigate to="workspaces" replace />} />
         </Routes>
       </React.Suspense>
     </MainLayout>

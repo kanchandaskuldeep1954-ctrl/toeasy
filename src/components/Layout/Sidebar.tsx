@@ -20,47 +20,12 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
     const { buildPath } = useDatasetNavigation(); // Use the navigation hook
     const [collapsed, setCollapsed] = useState(false);
 
-    const navGroups = [
-        {
-            title: 'Workspace',
-            items: [
-                { name: 'Home', path: '/app/home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-                { name: 'Datasets', path: buildPath('/app/datasets'), icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
-                { name: 'Connect', path: buildPath('/app/create'), icon: 'M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1' },
-            ]
-        },
-        {
-            title: 'Collaborate',
-            items: [
-                { name: 'Chat', path: buildPath('/app/chat'), icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
-                { name: 'Tasks', path: buildPath('/app/tasks'), icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4' },
-                { name: 'Docs', path: buildPath('/app/docs'), icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-                { name: 'Forms', path: buildPath('/app/forms'), icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01' },
-                { name: 'Files', path: buildPath('/app/files'), icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
-            ]
-        },
-        {
-            title: 'Operations',
-            items: [
-                { name: 'Dashboard', path: buildPath('/app/dashboard'), icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z' },
-                { name: 'Report', path: buildPath('/app/report'), icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-                { name: 'War Room', path: buildPath('/app/war-room'), icon: 'M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4' },
-                { name: 'Sheets', path: buildPath('/app/sheets'), icon: 'M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h9a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z' },
-                { name: 'Dataflows', path: buildPath('/app/dataflows'), icon: 'M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15' },
-                { name: 'Rules', path: buildPath('/app/rules'), icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
-                { name: 'Quarantine', path: buildPath('/app/quarantine'), icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
-                { name: 'Metrics', path: buildPath('/app/metrics'), icon: 'M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 002 2h2a2 2 0 002-2z' },
-                { name: 'Alerts', path: buildPath('/app/alerts'), icon: 'M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9' },
-                { name: 'Playground', path: buildPath('/app/playground'), icon: 'M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4' },
-            ]
-        },
-        {
-            title: 'System',
-            items: [
-                { name: 'Billing', path: buildPath('/app/billing'), icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' },
-                { name: 'Settings', path: buildPath('/app/profile'), icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
-            ]
-        }
+    const navItems = [
+        { name: 'Home', path: '/app/home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+        { name: 'Data', path: buildPath('/app/datasets'), icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
+        { name: 'Chat', path: buildPath('/app/chat'), icon: 'M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z' },
+        { name: 'Docs', path: buildPath('/app/docs'), icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
+        { name: 'Settings', path: buildPath('/app/profile'), icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
     ];
 
     return (
@@ -129,41 +94,54 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                     </div>
                 </div>
 
-                {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto px-3 py-2 space-y-6 custom-scrollbar">
-                    {navGroups.map((group, idx) => (
-                        <div key={idx}>
-                            {!collapsed && <h3 className="px-3 text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2">{group.title}</h3>}
-                            <div className="space-y-1">
-                                {group.items.map(item => {
-                                    // Important: Check active status against absolute path (ignoring params)
-                                    const pathBase = (item.path || '').split('?')[0];
-                                    const active = pathBase && location.pathname.includes(pathBase);
-                                    return (
-                                        <NavLink
-                                            key={item.name} // Use name as key since path is dynamic
-                                            to={item.path}
-                                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${active
-                                                ? 'bg-blue-600 text-white'
-                                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
-                                                }`}
-                                            title={collapsed ? item.name : ''}
-                                        >
-                                            <svg className={`w-5 h-5 shrink-0 ${active ? 'animate-pulse' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
-                                            </svg>
-                                            {!collapsed && (
-                                                <span className="text-sm font-bold tracking-tight">{item.name}</span>
-                                            )}
-                                            {active && !collapsed && (
-                                                <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-white shadow-sm"></div>
-                                            )}
-                                        </NavLink>
-                                    );
-                                })}
-                            </div>
+                {/* Navigation — Clean & Focused */}
+                <nav className="flex-1 overflow-y-auto px-3 py-4 custom-scrollbar">
+                    {/* Primary Nav */}
+                    <div className="space-y-1">
+                        {navItems.map(item => {
+                            const pathBase = (item.path || '').split('?')[0];
+                            const active = pathBase && location.pathname.includes(pathBase);
+                            return (
+                                <NavLink
+                                    key={item.name}
+                                    to={item.path}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative ${active
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20'
+                                        : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                        }`}
+                                    title={collapsed ? item.name : ''}
+                                >
+                                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                                    </svg>
+                                    {!collapsed && (
+                                        <span className="text-sm font-bold tracking-tight">{item.name}</span>
+                                    )}
+                                    {active && !collapsed && (
+                                        <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-white shadow-sm"></div>
+                                    )}
+                                </NavLink>
+                            );
+                        })}
+                    </div>
+
+                    {/* Divider */}
+                    {!collapsed && (
+                        <div className="my-4 mx-3 border-t border-slate-800"></div>
+                    )}
+
+                    {/* Pinned Section */}
+                    {!collapsed && (
+                        <div>
+                            <h3 className="px-3 text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2 flex items-center gap-1.5">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                                </svg>
+                                Pinned
+                            </h3>
+                            <p className="px-3 text-[10px] text-slate-600 italic">No pinned items yet</p>
                         </div>
-                    ))}
+                    )}
                 </nav>
 
                 {/* User Profile Footer */}
@@ -218,7 +196,7 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                 >
                     <svg className={`w-3 h-3 transition-transform ${collapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                 </button>
-            </aside>
+            </aside >
         </>
     );
 };

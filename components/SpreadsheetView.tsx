@@ -222,10 +222,9 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
                 <Workbook
                     data={workbookData as any}
                     onChange={(data) => setWorkbookData(data as any)}
-                    settings={{
-                        showInfobar: false,
-                        showSheetTabs: true,
-                    }}
+                    showToolbar
+                    showFormulaBar
+                    showSheetTabs
                 />
             </div>
         </div>
