@@ -6,8 +6,8 @@ import { validateChartSpec, assessDataQuality, generateChartInsights } from '../
 import {
     ResponsiveContainer, LineChart, Line
 } from 'recharts';
-import DashboardGrid from './Dashboard/DashboardGrid';
-import DashboardChart from './Dashboard/DashboardChart';
+import DashboardGrid from '../src/components/Dashboard/DashboardGrid';
+import DashboardChart from '../src/components/Dashboard/DashboardChart';
 import { aggregateData } from '../utils/dashboardUtils';
 
 interface DashboardViewProps {
