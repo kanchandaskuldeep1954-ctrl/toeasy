@@ -272,6 +272,34 @@ const ReportViewIntegrated: React.FC = () => {
                         History ({versions.length})
                     </button>
 
+                    {/* Cross-Module Navigation */}
+                    <div className="hidden md:flex items-center gap-1.5 border-l border-slate-700 pl-3">
+                        <button
+                            onClick={() => navigate(`/app/sheets?workspace=${workspaceId}&dataset=${datasetId}`)}
+                            className="px-2.5 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                            📋 Sheets
+                        </button>
+                        <button
+                            onClick={() => navigate(`/app/dashboard?workspace=${workspaceId}&dataset=${datasetId}`)}
+                            className="px-2.5 py-1 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                            📊 Dashboard
+                        </button>
+                        <button
+                            onClick={() => navigate(`/app/clean?workspace=${workspaceId}&dataset=${datasetId}`)}
+                            className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                            🧹 Clean
+                        </button>
+                        <button
+                            onClick={() => navigate(`/app/playground?workspace=${workspaceId}&dataset=${datasetId}`)}
+                            className="px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+                        >
+                            ⚡ Playground
+                        </button>
+                    </div>
+
                     <div className="flex gap-2">
                         <input
                             type="text"

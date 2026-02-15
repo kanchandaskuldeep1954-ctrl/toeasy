@@ -288,6 +288,38 @@ const DashboardViewIntegrated: React.FC = () => {
             </div>
           )}
 
+          {/* Cross-Module Navigation */}
+          <div className="hidden md:flex items-center gap-1.5 border-l border-slate-700 pl-4 ml-1">
+            <button
+              onClick={() => navigate(`/app/sheets?workspace=${workspaceId}&dataset=${datasetId}`)}
+              className="px-2.5 py-1 bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+              title="Edit data in Spreadsheet"
+            >
+              📋 Sheets
+            </button>
+            <button
+              onClick={() => navigate(`/app/clean?workspace=${workspaceId}&dataset=${datasetId}`)}
+              className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+              title="Clean data quality"
+            >
+              🧹 Clean
+            </button>
+            <button
+              onClick={() => navigate(`/app/playground?workspace=${workspaceId}&dataset=${datasetId}`)}
+              className="px-2.5 py-1 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+              title="Write queries and scripts"
+            >
+              ⚡ Playground
+            </button>
+            <button
+              onClick={() => navigate(`/app/report?workspace=${workspaceId}&dataset=${datasetId}`)}
+              className="px-2.5 py-1 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 rounded text-[9px] font-black uppercase tracking-wider transition-all"
+              title="Generate report"
+            >
+              📝 Report
+            </button>
+          </div>
+
           <span className="hidden md:inline text-[9px] font-black text-indigo-500 uppercase tracking-widest animate-pulse">Live Sync Active</span>
         </div>
       </div>

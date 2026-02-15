@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
 import { useDataset } from '../hooks/useDataset';
@@ -7,8 +7,11 @@ import { Dataset } from '../context/DatasetContext';
 import {
   Play, Save, Database, Table, BarChart2, MessageSquare,
   ChevronLeft, ChevronRight, X, Download, Terminal,
-  Sparkles, History, MoreVertical, Layout, Trash2, Search
+  Sparkles, History, MoreVertical, Layout, Trash2, Search,
+  LayoutDashboard, Sheet, ArrowRight, Pin
 } from 'lucide-react';
+import { dashboardAPI } from '../services/api';
+import { ChartSpec, DashboardConfig } from '../../types';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
   XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, Legend
@@ -39,6 +42,7 @@ interface SavedQuery {
 
 const PlaygroundViewIntegrated: React.FC = () => {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const workspaceId = searchParams.get('workspace');
   const datasetId = searchParams.get('dataset');
@@ -78,6 +82,13 @@ const PlaygroundViewIntegrated: React.FC = () => {
   const [loadingSaved, setLoadingSaved] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveForm, setSaveForm] = useState({ name: '', description: '' });
+
+  // Pin to Dashboard State
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [dashboards, setDashboards] = useState<(DashboardConfig & { id: string })[]>([]);
+  const [selectedDashboardId, setSelectedDashboardId] = useState<string>('');
+  const [isPinning, setIsPinning] = useState(false);
+  const [pinSuccess, setPinSuccess] = useState(false);
 
   // No local datasetData state - use context!
 
@@ -321,6 +332,75 @@ df = pd.DataFrame(raw_data)
     }
   };
 
+
+
+  const loadDashboards = async () => {
+    if (!workspaceId) return;
+    try {
+      const res = await dashboardAPI.list(workspaceId);
+      setDashboards(res.data || []);
+      if (res.data && res.data.length > 0) {
+        setSelectedDashboardId(res.data[0].id);
+      }
+    } catch (e) {
+      console.error("Failed to load dashboards", e);
+    }
+  };
+
+  const handlePinClick = () => {
+    loadDashboards();
+    setShowPinModal(true);
+    setPinSuccess(false);
+  };
+
+  const executePin = async () => {
+    if (!selectedDashboardId || !results.length) return;
+    setIsPinning(true);
+    try {
+      // 1. Get current dashboard
+      const dashboard = dashboards.find(d => String(d.id || '') === String(selectedDashboardId)); // match by ID
+      // Note: In real app, might need to fetch full detail if list doesn't have it
+      // For now assuming list has enough or we just append to a list endpoint if API supports it.
+      // Better: Fetch full dashboard to get current charts
+      const fullDashboardRes = await dashboardAPI.get(workspaceId!, selectedDashboardId);
+      const fullDashboard = fullDashboardRes.data;
+
+      // 2. Create new ChartSpec from results
+      // Simple heuristic: 1st string = X, 1st number = Y
+      const headers = Object.keys(results[0]);
+      const xCol = headers.find(h => typeof results[0][h] === 'string') || headers[0];
+      const yCol = headers.find(h => typeof results[0][h] === 'number') || headers[1] || headers[0];
+
+      const newChart: ChartSpec = {
+        id: `chart-${Date.now()}`,
+        type: 'bar',
+        title: query || 'Playground Analysis',
+        description: `Generated from Playground execution at ${new Date().toLocaleTimeString()}`,
+        xAxis: xCol,
+        yAxis: yCol,
+        priority: 'medium',
+        size: 'medium',
+        data: results.slice(0, 50), // Embed sample data or rely on dataset
+        // In a real unified system, we'd reference the dataset/query. 
+        // For "Pin", we usually embed a Snapshot or link to a Query ID.
+        // Here we'll try to embed the data logic if possible, or just the config.
+        reasoning: "Pinned from Playground"
+      };
+
+      // 3. Update dashboard
+      const updatedCharts = [...(fullDashboard.charts || []), newChart];
+      await dashboardAPI.update(workspaceId!, selectedDashboardId, { ...fullDashboard, charts: updatedCharts });
+
+      setPinSuccess(true);
+      setTimeout(() => setShowPinModal(false), 1500);
+    } catch (e) {
+      console.error("Failed to pin", e);
+      alert("Failed to pin to dashboard");
+    } finally {
+      setIsPinning(false);
+    }
+  };
+
   const saveQuery = async () => {
     if (!saveForm.name || !workspaceId || !datasetId) return;
 
@@ -421,6 +501,44 @@ df = pd.DataFrame(raw_data)
       alert("Version committed successfully! 🚀");
     } catch (err: any) {
       alert(`Failed to commit version: ${err.message}`);
+    }
+  };
+
+  const handleOpenInSheets = async () => {
+    if (!results.length) return;
+
+    // 1. Auto-commit version
+    const versionName = `Playground Analysis ${new Date().toLocaleTimeString()}`;
+    const payload = {
+      versionName,
+      description: "Auto-generated from Open in Sheets",
+      data: results,
+      headers: Object.keys(results[0]),
+      tool: 'playground',
+      script: editorMode === 'script' ? scriptCode : (editorMode === 'ask' ? generatedSql : sqlQuery)
+    };
+
+    try {
+      const res = await axios.post(
+        `${backendUrl}/workspaces/${workspaceId}/datasets/${datasetId}/versions`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      const versionId = res.data.id || res.data.versionId;
+
+      const params = new URLSearchParams({
+        workspace: workspaceId || '',
+        dataset: datasetId || '',
+        version: String(versionId)
+      });
+      navigate(`/app/sheets?${params.toString()}`);
+
+    } catch (e) {
+      console.error("Failed to auto-commit version", e);
+      // Fallback: Open without version (raw data)
+      const params = new URLSearchParams({ workspace: workspaceId || '', dataset: datasetId || '' });
+      navigate(`/app/sheets?${params.toString()}`);
     }
   };
 
@@ -677,6 +795,32 @@ df = pd.DataFrame(raw_data)
               {results.length > 0 && activeTab === 'table' && (
                 <>
                   <button
+                    onClick={handleOpenInSheets}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                    title="Open results in Spreadsheet editor"
+                  >
+                    <Sheet className="w-3.5 h-3.5" /> Open in Sheets
+                  </button>
+                  <button
+                    onClick={handlePinClick}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                    title="Pin to Dashboard"
+                  >
+                    <Pin className="w-3.5 h-3.5" /> Pin to Dashboard
+                  </button>
+                  <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                  <button
+                    onClick={() => {
+                      const params = new URLSearchParams({ workspace: workspaceId || '', dataset: datasetId || '' });
+                      navigate(`/app/dashboard?${params.toString()}`);
+                    }}
+                    className="text-slate-400 hover:text-indigo-600 p-1.5 rounded transition-colors"
+                    title="Go to Dashboard"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                  <button
                     onClick={() => setShowVersionModal(true)}
                     className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
                   >
@@ -812,6 +956,64 @@ df = pd.DataFrame(raw_data)
                 Commit Version
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Pin Modal --- */}
+      {showPinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-slate-200 dark:border-slate-800 animate-in fade-in zoom-in duration-200">
+            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+              <Pin className="w-5 h-5 text-violet-500" /> Pin to Dashboard
+            </h3>
+
+            {!pinSuccess ? (
+              <>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] uppercase font-bold text-slate-500 mb-1 block">Select Dashboard</label>
+                    {dashboards.length > 0 ? (
+                      <select
+                        value={selectedDashboardId}
+                        onChange={(e) => setSelectedDashboardId(e.target.value)}
+                        className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm outline-none focus:ring-2 focus:ring-violet-500/20 focus:border-violet-500"
+                      >
+                        {dashboards.map(d => (
+                          <option key={d.id} value={d.id}>{d.name || 'Untitled Dashboard'}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-600 dark:text-yellow-400 text-xs rounded-lg">
+                        No dashboards found. Please create one first.
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-3 mt-6">
+                  <button
+                    onClick={() => setShowPinModal(false)}
+                    className="px-4 py-2 rounded-lg text-xs font-bold text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={executePin}
+                    disabled={!selectedDashboardId || isPinning}
+                    className="px-4 py-2 rounded-lg text-xs font-bold bg-violet-600 text-white hover:bg-violet-500 transition-colors disabled:opacity-50 flex items-center gap-2"
+                  >
+                    {isPinning ? 'Pinning...' : 'Pin Widget'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-8 flex flex-col items-center text-center text-emerald-600 dark:text-emerald-400">
+                <div className="w-12 h-12 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <p className="font-bold">Successfully Pinned!</p>
+              </div>
+            )}
           </div>
         </div>
       )}

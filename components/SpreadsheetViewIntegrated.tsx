@@ -3,7 +3,7 @@ import { useDataset } from '../src/context/DatasetContext';
 import SpreadsheetView from './SpreadsheetView';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { datasetAPI } from '../src/services/api';
-import { Loader2 } from 'lucide-react';
+import { Loader2, LayoutDashboard, Terminal, Sparkles, Brush } from 'lucide-react';
 
 const SpreadsheetViewIntegrated: React.FC = () => {
     const { activeDataset, setActiveDataset } = useDataset();
@@ -55,6 +55,9 @@ const SpreadsheetViewIntegrated: React.FC = () => {
         hydrateDataset();
     }, [workspaceId, datasetId, activeDataset, setActiveDataset]);
 
+    // Build cross-module URL params
+    const buildParams = () => new URLSearchParams({ workspace: workspaceId || '', dataset: datasetId || '' }).toString();
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center h-full bg-slate-900/50 backdrop-blur-sm">
@@ -86,6 +89,44 @@ const SpreadsheetViewIntegrated: React.FC = () => {
 
     return (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            {/* Cross-Module Action Toolbar */}
+            <div className="flex items-center justify-between px-4 py-2 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider mr-2">Navigate to:</span>
+                    <button
+                        onClick={() => navigate(`/app/playground?${buildParams()}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                        title="Analyze this data with SQL, Python, or AI"
+                    >
+                        <Terminal className="w-3.5 h-3.5" /> Playground
+                    </button>
+                    <button
+                        onClick={() => navigate(`/app/dashboard?${buildParams()}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-violet-500/10 text-violet-600 dark:text-violet-400 hover:bg-violet-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                        title="Visualize this data on a dashboard"
+                    >
+                        <LayoutDashboard className="w-3.5 h-3.5" /> Dashboard
+                    </button>
+                    <button
+                        onClick={() => navigate(`/app/clean?${buildParams()}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                        title="Clean and validate this data"
+                    >
+                        <Brush className="w-3.5 h-3.5" /> Clean
+                    </button>
+                    <button
+                        onClick={() => navigate(`/app/report?${buildParams()}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                        title="Generate an AI report from this data"
+                    >
+                        <Sparkles className="w-3.5 h-3.5" /> Report
+                    </button>
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono">
+                    {activeDataset?.row_count || activeDataset?.data?.length || 0} rows × {activeDataset?.column_count || activeDataset?.headers?.length || 0} cols
+                </div>
+            </div>
+
             <SpreadsheetView
                 dataset={activeDataset as any}
                 onUpdate={(updated: any) => setActiveDataset(updated)}

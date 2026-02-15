@@ -4,12 +4,11 @@ import { Dataset, ChartSpec, KPI, DataRow, DashboardConfig, Pattern } from '../t
 import { GroqService } from '../src/services/groqService';
 import { validateChartSpec, assessDataQuality, generateChartInsights } from '../src/utils/chartValidation';
 import {
-    BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
-    XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area,
-    ScatterChart, Scatter, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-    Treemap, ComposedChart, ZAxis, ReferenceLine, RadialBarChart, RadialBar, FunnelChart, Funnel,
-    LabelList, Legend
+    ResponsiveContainer, LineChart, Line
 } from 'recharts';
+import DashboardGrid from './Dashboard/DashboardGrid';
+import DashboardChart from './Dashboard/DashboardChart';
+import { aggregateData } from '../utils/dashboardUtils';
 
 interface DashboardViewProps {
     dataset: Dataset;
@@ -20,33 +19,7 @@ interface DashboardViewProps {
 type DashboardPerspective = 'Overview' | 'Financials' | 'Operational' | 'Forensic' | 'Quality' | 'Patterns';
 type ExportFormat = 'pdf' | 'html' | 'powerbi' | 'tableau' | 'json';
 
-const CustomTooltip = ({ active, payload, label }: any) => {
-    if (active && payload && payload.length) {
-        const data = payload[0];
-        const value = typeof data.value === 'number' ? data.value.toLocaleString() : data.value;
-        const name = data.name || label || data.payload?.name || 'Record';
 
-        return (
-            <div className="bg-slate-900/95 border border-slate-700/50 p-4 rounded-xl shadow-2xl backdrop-blur-md animate-in zoom-in-95 z-[100] min-w-[150px]">
-                <p className="text-[10px] font-black uppercase text-slate-400 mb-2 tracking-[0.2em] border-b border-slate-700 pb-2">{name}</p>
-                <div className="space-y-1">
-                    {payload.map((p: any, idx: number) => (
-                        <p key={idx} className="text-sm font-bold text-white flex justify-between gap-4">
-                            <span style={{ color: p.color }}>{p.name || 'Value'}:</span>
-                            <span className="font-mono">{typeof p.value === 'number' ? p.value.toLocaleString() : p.value}</span>
-                        </p>
-                    ))}
-                </div>
-                {data.payload?.z !== undefined && (
-                    <p className="text-[10px] font-medium text-slate-500 mt-2 pt-2 border-t border-slate-800">
-                        Metric (Z): {typeof data.payload.z === 'number' ? Math.round(data.payload.z).toLocaleString() : data.payload.z}
-                    </p>
-                )}
-            </div>
-        );
-    }
-    return null;
-};
 
 const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUpdate }) => {
     const [perspective, setPerspective] = useState<DashboardPerspective>('Overview');
@@ -190,281 +163,9 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
         });
     };
 
-    const aggregateData = useCallback((chart: ChartSpec) => {
-        if (!filteredData || filteredData.length === 0) return [];
 
-        const xAxis = chart.xAxis;
-        const yAxis = chart.yAxis;
-        const zAxis = chart.zAxis;
 
-        // --- Histogram Logic ---
-        if (chart.type === 'histogram') {
-            const values = filteredData.map(d => Number(d[xAxis])).filter(n => !isNaN(n));
-            if (values.length === 0) return [];
-            const min = Math.min(...values);
-            const max = Math.max(...values);
-            const binCount = 10;
-            const binSize = (max - min) / binCount;
-            const bins = Array.from({ length: binCount }, (_, i) => ({
-                range: `${(min + i * binSize).toFixed(1)} - ${(min + (i + 1) * binSize).toFixed(1)}`,
-                min: min + i * binSize,
-                max: min + (i + 1) * binSize,
-                count: 0
-            }));
 
-            values.forEach(v => {
-                const binIndex = Math.min(Math.floor((v - min) / binSize), binCount - 1);
-                if (bins[binIndex]) bins[binIndex].count++;
-            });
-
-            return bins.map(b => ({ name: b.range, value: b.count }));
-        }
-
-        // --- Scatter / Bubble / Heatmap Logic ---
-        if (chart.type === 'scatter' || chart.type === 'bubble' || chart.type === 'heatmap') {
-            if (chart.type === 'heatmap') {
-                // For heatmap, we treat X and Y as categorical buckets
-                const map = new Map<string, { x: string, y: string, z: number }>();
-                filteredData.forEach(row => {
-                    const xVal = String(row[xAxis] || 'Unknown');
-                    const yVal = String(row[yAxis] || 'Unknown');
-                    const key = `${xVal}::${yVal}`;
-                    const zVal = zAxis ? (Number(row[zAxis]) || 1) : 1; // Count or Sum Z
-
-                    if (map.has(key)) {
-                        map.get(key)!.z += zVal;
-                    } else {
-                        map.set(key, { x: xVal, y: yVal, z: zVal });
-                    }
-                });
-                return Array.from(map.values());
-            }
-
-            // Scatter / Bubble
-            return filteredData.map(row => ({
-                x: Number(row[xAxis]) || 0,
-                y: Number(row[yAxis]) || 0,
-                z: zAxis ? (Number(row[zAxis]) || 100) : 100, // Z determines bubble size
-                name: row[dataset.headers[0]]
-            })).slice(0, 500); // Limit points for performance
-        }
-
-        // --- Treemap Logic ---
-        if (chart.type === 'treemap') {
-            const map = new Map<string, number>();
-            filteredData.forEach(row => {
-                const key = String(row[xAxis] || 'Unknown');
-                const val = chart.aggregation === 'count' ? 1 : (parseFloat(String(row[yAxis])) || 0);
-                map.set(key, (map.get(key) || 0) + val);
-            });
-            return Array.from(map.entries())
-                .map(([name, size]) => ({ name, size }))
-                .sort((a, b) => b.size - a.size)
-                .slice(0, 20);
-        }
-
-        // --- Standard Aggregation (Bar, Line, Area, Pie, Radar, Funnel, Gauge) ---
-        // IMPROVED: Use smart aggregation for high-cardinality data with automatic "Top N + Other" grouping
-        const limit = chart.limit || (chart.type === 'pie' ? 10 : 20);
-        const showOther = chart.showOther !== false; // Default true
-
-        // Use smart aggregation from GroqService for intelligent grouping
-        const smartData = GroqService.smartAggregateData(
-            filteredData,
-            xAxis,
-            yAxis,
-            chart.aggregation || 'sum',
-            limit,
-            showOther
-        );
-
-        // Handle truncation of labels for readability
-        let result = smartData.map(item => ({
-            name: item.label.length > 20 ? item.label.substring(0, 18) + '...' : item.label,
-            value: Number(item.value.toFixed(2))
-        }));
-
-        // Sorting typically helps standard charts (already done by smartAggregateData)
-        // Only re-sort if this is a time-series chart
-        if (chart.type === 'line' || chart.type === 'area') {
-            // For time-series, check if data looks like dates
-            if (result.length > 0 && !isNaN(Date.parse(result[0].name))) {
-                result.sort((a, b) => new Date(a.name).getTime() - new Date(b.name).getTime());
-            }
-        }
-
-        return result || [];
-    }, [filteredData, dataset?.headers]);
-
-    // --- Rendering Logic ---
-    const renderChartContent = (chart: ChartSpec, data: any[], isPreview = false) => {
-        const color = isPreview ? '#6366f1' : (perspective === 'Forensic' ? '#f43f5e' : '#6366f1');
-        // Helper for gradients
-        const gradientId = `grad-${chart.id}`;
-
-        const CommonGrid = () => <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />;
-        const CommonX = () => <XAxis dataKey={chart.type === 'scatter' || chart.type === 'bubble' ? 'x' : 'name'} fontSize={10} axisLine={false} tickLine={false} tick={{ dy: 10, fill: '#94a3b8' }} type={chart.type === 'scatter' || chart.type === 'bubble' ? 'number' : 'category'} hide={chart.type === 'heatmap'} />;
-        const CommonY = () => <YAxis fontSize={10} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8' }} type={chart.type === 'scatter' || chart.type === 'bubble' ? 'number' : 'number'} hide={chart.type === 'heatmap'} />;
-
-        switch (chart.type) {
-            case 'bar_horizontal':
-                return (
-                    <BarChart layout="vertical" data={data} margin={{ left: 20 }}>
-                        <CommonGrid />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={80} fontSize={10} tickLine={false} axisLine={false} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: 'transparent' }} />
-                        <Bar dataKey="value" fill={color} radius={[0, 4, 4, 0]} barSize={20} />
-                    </BarChart>
-                );
-
-            case 'scatter':
-            case 'bubble':
-                return (
-                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                        <CommonGrid />
-                        <XAxis type="number" dataKey="x" name={chart.xAxis} fontSize={10} domain={['auto', 'auto']} />
-                        <YAxis type="number" dataKey="y" name={chart.yAxis} fontSize={10} domain={['auto', 'auto']} />
-                        {chart.type === 'bubble' && <ZAxis type="number" dataKey="z" range={[50, 1000]} name={chart.zAxis} />}
-                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
-                        <Scatter name={chart.title} data={data} fill={color} fillOpacity={0.6} />
-                    </ScatterChart>
-                );
-
-            case 'heatmap':
-                // Simulated Heatmap using Scatter with custom shape
-                return (
-                    <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 60 }}>
-                        <XAxis type="category" dataKey="x" name={chart.xAxis} fontSize={10} />
-                        <YAxis type="category" dataKey="y" name={chart.yAxis} fontSize={10} />
-                        <ZAxis type="number" dataKey="z" range={[0, 500]} name={chart.zAxis} /> // Z maps to opacity/size conceptually
-                        <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomTooltip />} />
-                        <Scatter data={data} shape={(props: any) => {
-                            const { cx, cy, payload } = props;
-                            // Simple intensity scaling based on Z value relative to max Z in data would be better
-                            // For now, random opacity or fixed size
-                            const opacity = Math.min(1, Math.max(0.2, (payload.z / (Math.max(...data.map(d => d.z)) || 1))));
-                            return <rect x={cx - 15} y={cy - 15} width={30} height={30} fill={color} fillOpacity={opacity} rx={4} />;
-                        }} />
-                    </ScatterChart>
-                );
-
-            case 'pie':
-            case 'donut':
-                return (
-                    <PieChart>
-                        <Pie
-                            data={data}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={chart.type === 'donut' ? '60%' : '0%'}
-                            outerRadius="80%"
-                            paddingAngle={2}
-                            stroke="none"
-                        >
-                            {data.map((_, idx) => <Cell key={idx} fill={colors[idx % colors.length]} />)}
-                        </Pie>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" iconSize={8} wrapperStyle={{ fontSize: '10px' }} />
-                    </PieChart>
-                );
-
-            case 'radar':
-                return (
-                    <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-                        <PolarGrid strokeOpacity={0.1} />
-                        <PolarAngleAxis dataKey="name" fontSize={10} />
-                        <PolarRadiusAxis angle={30} domain={[0, 'auto']} opacity={0} />
-                        <Radar name={chart.yAxis} dataKey="value" stroke={color} fill={color} fillOpacity={0.4} />
-                        <Tooltip content={<CustomTooltip />} />
-                    </RadarChart>
-                );
-
-            case 'funnel':
-                return (
-                    <FunnelChart>
-                        <Tooltip content={<CustomTooltip />} />
-                        <Funnel data={data} dataKey="value" nameKey="name" fill={color}>
-                            <LabelList position="right" fill="#000" stroke="none" dataKey="name" />
-                        </Funnel>
-                    </FunnelChart>
-                );
-
-            case 'gauge':
-                return (
-                    <RadialBarChart cx="50%" cy="50%" innerRadius="60%" outerRadius="100%" barSize={20} data={data.slice(0, 1)} startAngle={180} endAngle={0}>
-                        <RadialBar label={{ position: 'insideStart', fill: '#fff' }} background dataKey="value" fill={color} cornerRadius={10} />
-                        <Legend iconSize={10} layout="vertical" verticalAlign="middle" wrapperStyle={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }} />
-                        <Tooltip content={<CustomTooltip />} />
-                    </RadialBarChart>
-                );
-
-            case 'treemap':
-                return (
-                    <ResponsiveContainer>
-                        <Treemap data={data} dataKey="size" aspectRatio={4 / 3} stroke="#fff" fill={color} animationDuration={800}>
-                            <Tooltip content={<CustomTooltip />} />
-                        </Treemap>
-                    </ResponsiveContainer>
-                );
-
-            case 'line':
-                return (
-                    <LineChart data={data}>
-                        <CommonGrid />
-                        <CommonX />
-                        <CommonY />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Line type="monotone" dataKey="value" stroke={color} strokeWidth={3} dot={{ r: 3, fill: '#fff', strokeWidth: 2 }} activeDot={{ r: 6 }} />
-                    </LineChart>
-                );
-
-            case 'area':
-                return (
-                    <AreaChart data={data}>
-                        <defs>
-                            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor={color} stopOpacity={0.3} />
-                                <stop offset="95%" stopColor={color} stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CommonGrid />
-                        <CommonX />
-                        <CommonY />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="value" stroke={color} fill={`url(#${gradientId})`} strokeWidth={3} />
-                    </AreaChart>
-                );
-
-            case 'composed':
-                return (
-                    <ComposedChart data={data}>
-                        <CommonGrid />
-                        <CommonX />
-                        <CommonY />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} barSize={20} fillOpacity={0.6} />
-                        <Line type="monotone" dataKey="value" stroke={colors[1]} strokeWidth={3} dot={{ r: 4, fill: '#fff' }} />
-                    </ComposedChart>
-                );
-
-            case 'bar':
-            case 'histogram':
-            default:
-                return (
-                    <BarChart data={data} barCategoryGap={chart.type === 'histogram' ? 1 : '10%'}>
-                        <CommonGrid />
-                        <CommonX />
-                        <CommonY />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Bar dataKey="value" fill={color} radius={[4, 4, 0, 0]} />
-                        {chart.type !== 'histogram' && <ReferenceLine y={data.reduce((a, b) => a + b.value, 0) / (data.length || 1)} stroke="orange" strokeDasharray="3 3" opacity={0.5} label={{ value: 'AVG', position: 'insideTopRight', fill: 'orange', fontSize: 9 }} />}
-                    </BarChart>
-                );
-        }
-    };
 
     // --- Editing Functions ---
 
@@ -911,61 +612,19 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                     </div>
                 )}
 
-                {/* Charts Masonry Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-8">
-                    {visibleCharts.map((chart, i) => {
-                        const data = aggregateData(chart, dataset, filteredData);
-                        const validation = chartValidations[chart.id];
-                        if (data.length === 0) return null;
-                        const isWide = i % 3 === 0; // Every 3rd chart spans 2 cols on large screens
-                        const hasWarnings = validation && (validation.warnings.length > 0 || !validation.valid);
-                        const insights = data.length > 0 ? generateChartInsights(data, chart.type) : [];
-
-                        return (
-                            <div key={i} className={`bg-white dark:bg-slate-900 p-8 rounded-[32px] border transition-all ${hasWarnings
-                                ? 'border-yellow-200 dark:border-yellow-900/30 shadow-md'
-                                : 'border-slate-200 dark:border-slate-800'
-                                } shadow-sm flex flex-col h-[400px] hover:shadow-xl transition-shadow ${isWide ? 'md:col-span-2' : ''} group relative`}>
-                                <div className="flex justify-between items-start mb-6">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <h3 className="text-sm font-bold text-slate-900 dark:text-white">{chart.title}</h3>
-                                            {hasWarnings && (
-                                                <div className="px-2 py-0.5 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300 rounded text-[8px] font-bold uppercase tracking-wide">
-                                                    ⚠️ {validation.warnings.length} warning{validation.warnings.length !== 1 ? 's' : ''}
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 mt-1">{chart.description}</p>
-                                    </div>
-                                    <button
-                                        onClick={() => openEditor(chart)}
-                                        className="opacity-0 group-hover:opacity-100 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-[10px] font-bold uppercase tracking-wide text-indigo-600 hover:bg-indigo-50 transition-all no-print flex items-center gap-1"
-                                    >
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                                        Edit
-                                    </button>
-                                </div>
-
-                                <div className="flex-1 w-full relative min-h-0 cursor-crosshair">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        {renderChartContent(chart, data)}
-                                    </ResponsiveContainer>
-                                </div>
-
-                                {/* Chart Insights Footer */}
-                                {insights.length > 0 && (
-                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                        <p className="text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">Insights:</p>
-                                        <p className="text-[9px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                                            {insights.slice(0, 2).join(' • ')}
-                                        </p>
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
-                </div>
+                {/* Charts Grid - Replaced with DashboardGrid */}
+                <DashboardGrid
+                    config={config}
+                    dataset={dataset}
+                    perspective={perspective}
+                    onLayoutChange={(newConfig) => {
+                        setConfig(newConfig);
+                        if (onUpdate) onUpdate({ ...dataset, dashboardConfig: newConfig });
+                    }}
+                    onEditChart={openEditor}
+                    filteredData={filteredData}
+                    chartValidations={chartValidations}
+                />
 
                 {/* Patterns/Insights Section */}
                 {perspective === 'Patterns' && config.patterns.length > 0 && (
@@ -1023,7 +682,12 @@ const DashboardView: React.FC<DashboardViewProps> = ({ dataset, onAIAction, onUp
                                     if (previewData.length === 0) return <div className="flex items-center justify-center h-full text-slate-400 font-medium">Invalid Configuration or Empty Data</div>;
                                     return (
                                         <ResponsiveContainer width="100%" height="100%">
-                                            {renderChartContent(editedChart, previewData, true)}
+                                            <DashboardChart
+                                                chart={editedChart}
+                                                data={previewData}
+                                                colors={colors}
+                                                isPreview={true}
+                                            />
                                         </ResponsiveContainer>
                                     );
                                 })()}
