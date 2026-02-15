@@ -8,7 +8,7 @@ export const tierLimits = {
     maxRowsPerDataset: 500,
     maxGenerateRows: 500,
     aiQueriesPerDay: 10,
-    maxWorkspaces: 1,
+    maxWorkspaces: 2,
     maxConnectors: 1,
   },
   pro: {
