@@ -6,6 +6,7 @@ export interface User {
   name: string;
   avatar_url?: string;
   tier: 'basic' | 'pro' | 'enterprise';
+  onboarding_completed?: boolean;
 }
 
 export interface AuthContextType {
@@ -16,7 +17,7 @@ export interface AuthContextType {
   error: string | null;
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, name: string) => Promise<any>;
-  verifyOTP: (email: string, otp: string) => Promise<void>;
+  verifyOTP: (email: string, otp: string, inviteToken?: string | null) => Promise<{ joinedWorkspaceId?: string } | void>;
   resendOTP: (email: string) => Promise<void>;
   logout: () => void;
   refreshAuthToken: () => Promise<void>;
@@ -128,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const verifyOTP = useCallback(async (email: string, otp: string) => {
+  const verifyOTP = useCallback(async (email: string, otp: string, inviteToken?: string | null) => {
     setIsLoading(true);
     setError(null);
 
@@ -136,7 +137,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await fetch(`${BACKEND_URL}/auth/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, otp })
+        body: JSON.stringify({ email, otp, inviteToken })
       });
 
       if (!response.ok) {
@@ -144,7 +145,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(data.error || 'OTP verification failed');
       }
 
-      const data: LoginResponse = await response.json();
+      const data: LoginResponse & { joinedWorkspaceId?: string } = await response.json();
 
       setUser(data.user);
       setToken(data.accessToken);
@@ -153,6 +154,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem(USER_KEY, JSON.stringify(data.user));
       localStorage.setItem(TOKEN_KEY, data.accessToken);
       localStorage.setItem(REFRESH_TOKEN_KEY, data.refreshToken);
+
+      return data;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'OTP verification failed';
       setError(message);

@@ -10,7 +10,7 @@ const router = Router();
 router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
     const result = await query(
-      `SELECT u.id, u.email, u.full_name, u.avatar_url, u.created_at, s.tier 
+      `SELECT u.id, u.email, u.full_name, u.avatar_url, u.created_at, u.onboarding_completed, s.tier 
        FROM users u
        LEFT JOIN subscriptions s ON u.id = s.user_id AND s.status = 'active'
        WHERE u.id = $1
@@ -35,11 +35,11 @@ router.get('/me', authenticateToken, async (req: AuthRequest, res) => {
 // Update user profile
 router.put('/me', authenticateToken, async (req: AuthRequest, res) => {
   try {
-    const { full_name, name, avatarUrl } = req.body;
+    const { full_name, name, avatarUrl, onboarding_completed } = req.body;
 
     const result = await query(
-      'UPDATE users SET full_name = COALESCE($1, full_name), avatar_url = COALESCE($2, avatar_url), updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, avatar_url',
-      [full_name || name || null, avatarUrl || null, req.user!.id]
+      'UPDATE users SET full_name = COALESCE($1, full_name), avatar_url = COALESCE($2, avatar_url), onboarding_completed = COALESCE($3, onboarding_completed), updated_at = NOW() WHERE id = $4 RETURNING id, email, full_name, avatar_url, onboarding_completed',
+      [full_name || name || null, avatarUrl || null, onboarding_completed !== undefined ? onboarding_completed : null, req.user!.id]
     );
 
     if (result.rows.length === 0) {

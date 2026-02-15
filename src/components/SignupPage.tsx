@@ -58,9 +58,19 @@ export const SignupPage: React.FC = () => {
     }
 
     try {
-      await verifyOTP(email, otp);
-      navigate('/app/workspaces');
-    } catch (err) {
+      // Check for invite token in URL
+      const searchParams = new URLSearchParams(window.location.search);
+      const inviteToken = searchParams.get('invite');
+
+      const response = await verifyOTP(email, otp, inviteToken) as any;
+
+      // If we joined a workspace via invite, go there
+      if (response && response.joinedWorkspaceId) {
+        navigate(`/app/workspaces/${response.joinedWorkspaceId}`);
+      } else {
+        navigate('/app/workspaces');
+      }
+    } catch (err: any) {
       setFormError(error || 'Verification failed. Please check the OTP.');
     }
   };

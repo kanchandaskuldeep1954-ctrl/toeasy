@@ -9,22 +9,37 @@ const router = Router();
 router.use(authenticateToken);
 router.use(checkSubscription);
 
-// List workspaces for user
+// List workspaces for user (owned + shared)
 router.get('/', async (req: AuthRequest, res) => {
   try {
     const limit = Math.min(parseInt(req.query.limit as string) || 100, 500);
     const offset = parseInt(req.query.offset as string) || 0;
+    const userId = req.user!.id;
 
-    const countResult = await query(
-      'SELECT COUNT(*) as total FROM workspaces WHERE user_id = $1 AND is_archived = false',
-      [req.user!.id]
-    );
+    const countQuery = `
+      SELECT COUNT(DISTINCT w.id) as total 
+      FROM workspaces w
+      LEFT JOIN workspace_members wm ON w.id = wm.workspace_id
+      WHERE (w.user_id = $1 OR wm.user_id = $1) AND w.is_archived = false
+    `;
+
+    const countResult = await query(countQuery, [userId]);
     const total = parseInt(countResult.rows[0].total);
 
-    const result = await query(
-      'SELECT id, name, description, created_at FROM workspaces WHERE user_id = $1 AND is_archived = false ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-      [req.user!.id, limit, offset]
-    );
+    const listQuery = `
+      SELECT DISTINCT w.id, w.name, w.description, w.created_at, w.user_id as owner_id,
+      CASE 
+        WHEN w.user_id = $1 THEN 'admin'
+        ELSE wm.role
+      END as role
+      FROM workspaces w
+      LEFT JOIN workspace_members wm ON w.id = wm.workspace_id AND wm.user_id = $1
+      WHERE (w.user_id = $1 OR wm.user_id = $1) AND w.is_archived = false
+      ORDER BY w.created_at DESC 
+      LIMIT $2 OFFSET $3
+    `;
+
+    const result = await query(listQuery, [userId, limit, offset]);
 
     res.json({
       data: result.rows,
@@ -63,13 +78,25 @@ router.post('/', checkTierLimit('maxWorkspaces'), async (req: AuthRequest, res) 
 // Get workspace details
 router.get('/:id', async (req: AuthRequest, res) => {
   try {
-    const result = await query(
-      'SELECT id, name, description, created_at FROM workspaces WHERE id = $1 AND user_id = $2',
-      [req.params.id, req.user!.id]
-    );
+    const userId = req.user!.id;
+    const workspaceId = req.params.id;
+
+    const queryStr = `
+      SELECT 
+        w.id, w.name, w.description, w.created_at, w.user_id as owner_id,
+        CASE 
+          WHEN w.user_id = $2 THEN 'admin' 
+          ELSE wm.role 
+        END as role
+      FROM workspaces w
+      LEFT JOIN workspace_members wm ON w.id = wm.workspace_id AND wm.user_id = $2
+      WHERE w.id = $1 AND (w.user_id = $2 OR wm.user_id = $2)
+    `;
+
+    const result = await query(queryStr, [workspaceId, userId]);
 
     if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Workspace not found' });
+      return res.status(404).json({ error: 'Workspace not found or access denied' });
     }
 
     res.json(result.rows[0]);

@@ -67,7 +67,7 @@ router.post('/register', validateResource(registerSchema), async (req, res) => {
 
 router.post('/verify-otp', async (req, res) => {
   try {
-    const { email, otp } = req.body;
+    const { email, otp, inviteToken } = req.body;
 
     if (!email || !otp) {
       return res.status(400).json({ error: 'Email and OTP required' });
@@ -98,11 +98,47 @@ router.post('/verify-otp', async (req, res) => {
       [user.id]
     );
 
+    let joinedWorkspaceId = null;
+
+    // Handle Invite Token if present
+    if (inviteToken) {
+      const inviteRes = await query(
+        `SELECT id, workspace_id, role, status, expires_at 
+         FROM invitations 
+         WHERE token = $1`,
+        [inviteToken]
+      );
+
+      if (inviteRes.rows.length > 0) {
+        const invite = inviteRes.rows[0];
+
+        // Only accept if pending and not expired
+        if (invite.status === 'pending' && new Date(invite.expires_at) > new Date()) {
+          // Add to workspace members
+          await query(
+            `INSERT INTO workspace_members (workspace_id, user_id, role, invited_by)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role`,
+            [invite.workspace_id, user.id, invite.role, invite.invited_by]
+          );
+
+          // Mark invite accepted
+          await query(
+            `UPDATE invitations SET status = 'accepted' WHERE id = $1`,
+            [invite.id]
+          );
+
+          joinedWorkspaceId = invite.workspace_id;
+        }
+      }
+    }
+
     // Initial check for subscription
     const subCheck = await query('SELECT id FROM subscriptions WHERE user_id = $1', [user.id]);
 
     if (subCheck.rows.length === 0) {
-      // Create default workspace
+      // Create default workspace ONLY if they didn't join one via invite? 
+      // Actually, let's ALWAYS create a personal workspace so they have a sandbox.
       await query(
         'INSERT INTO workspaces (user_id, name) VALUES ($1, $2)',
         [user.id, 'My First Workspace']
@@ -124,6 +160,7 @@ router.post('/verify-otp', async (req, res) => {
       accessToken: token,
       refreshToken: refreshToken,
       user: { id: user.id, email: user.email, tier: 'basic' },
+      joinedWorkspaceId // Frontend can redirect here if present
     });
   } catch (err) {
     console.error('Verify OTP error:', err);

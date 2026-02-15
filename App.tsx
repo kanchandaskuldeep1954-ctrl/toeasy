@@ -61,11 +61,13 @@ import PrivacyPolicy from './src/components/Legal/PrivacyPolicy';
 import RefundPolicy from './src/components/Legal/RefundPolicy';
 import PublicShareView from './src/components/PublicShareView';
 import FAQ from './src/components/FAQ';
+import { OnboardingWizard } from './src/components/Onboarding/OnboardingWizard';
 
 const AppLayout: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
   return (
     <MainLayout>
+      <OnboardingWizard />
       <UrlSync />
       <React.Suspense fallback={<div className="flex items-center justify-center h-full w-full"><div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>}>
         <Routes>

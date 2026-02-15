@@ -10,6 +10,7 @@ export interface Workspace {
   is_archived: boolean;
   created_at: string;
   updated_at: string;
+  role?: 'admin' | 'editor' | 'viewer';
 }
 
 export interface WorkspaceContextType {

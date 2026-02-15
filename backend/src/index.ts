@@ -28,6 +28,7 @@ import cleaningRoutes from './routes/cleaning.js';
 import dataflowRoutes from './routes/dataflows.js';
 import integrationRoutes from './routes/integrations.js';
 import sharingRoutes from './routes/sharing.js';
+import invitesRoutes from './routes/invites.js';
 import tabsRoutes from './routes/tabs.js';
 import activityRoutes from './routes/activity.js';
 import metricsRoutes from './routes/metrics.js';
@@ -160,6 +161,7 @@ app.use('/api/forms', formsRoutes);
 app.use('/api/files', authenticateToken, filesRoutes);
 app.use('/api/alerts', authenticateToken, alertsRoutes);
 app.use('/api/notifications', authenticateToken, notificationsRoutes);
+app.use('/api/invites', invitesRoutes); // invites has its own auth middleware inside
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

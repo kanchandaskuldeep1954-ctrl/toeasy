@@ -19,6 +19,11 @@ export interface Dataset {
   analysis_result?: any;
   created_at: string;
   updated_at: string;
+  // Compatibility fields (mapped in fetchDatasets)
+  createdAt: string;
+  rowCount: number;
+  sourceType: string;
+  dataQualitySource?: string;
 }
 
 export interface DatasetContextType {
@@ -64,8 +69,20 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
       setLoading(true);
       const response = await datasetAPI.list(workspaceId, limit, offset);
       // The API returns { data: [...], total, ... }
-      const data = Array.isArray(response.data) ? response.data : (response.data?.data || []);
-      const count = response.data?.total || data.length;
+      const rawData = Array.isArray(response.data) ? response.data : (response.data?.data || []);
+      const count = response.data?.total || rawData.length;
+
+      // Map to ensure camelCase compatibility for types.ts consumers
+      const data = rawData.map((d: any) => ({
+        ...d,
+        createdAt: d.created_at,
+        rowCount: d.row_count,
+        sourceType: d.source_type || 'csv',
+        dataQualitySource: d.data_quality_source || 'RAW_ORIGINAL',
+        headers: d.headers || [],
+        data: d.data || []
+      }));
+
       setDatasets(data);
       setTotal(count);
 

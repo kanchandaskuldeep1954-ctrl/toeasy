@@ -7,8 +7,11 @@ import { Dataset } from '../context/DatasetContext';
 import { dashboardAPI, datasetAPI } from '../services/api';
 import { useDataset } from '../hooks/useDataset';
 
+import { useWorkspaceRole } from '../hooks/useWorkspaceRole';
+
 const DashboardViewIntegrated: React.FC = () => {
   const { token } = useAuth();
+  const { isEditor } = useWorkspaceRole();
   const { activeDataset, setActiveDataset, updateDataset: updateDatasetCtx } = useDataset();
   const dataset = activeDataset as unknown as Dataset;
   const [searchParams] = useSearchParams();
@@ -249,12 +252,14 @@ const DashboardViewIntegrated: React.FC = () => {
                         <span className="truncate">{sib.name}</span>
                       </button>
                     ))}
-                    <button
-                      onClick={() => navigate(`/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}&new=true`)}
-                      className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-600/10 transition-all mt-2 border-t border-white/5 pt-3"
-                    >
-                      + New Version
-                    </button>
+                    {isEditor && (
+                      <button
+                        onClick={() => navigate(`/app/dashboards?workspace=${workspaceId}&dataset=${datasetId}&new=true`)}
+                        className="w-full text-left px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest text-indigo-400 hover:bg-indigo-600/10 transition-all mt-2 border-t border-white/5 pt-3"
+                      >
+                        + New Version
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
