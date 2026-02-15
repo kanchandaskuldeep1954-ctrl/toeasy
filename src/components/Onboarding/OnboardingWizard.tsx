@@ -8,7 +8,7 @@ import { Check, ChevronRight, Loader2, Users, Briefcase, Rocket } from 'lucide-r
 
 export const OnboardingWizard = () => {
     const { user, refreshProfile } = useAuth();
-    const { addWorkspace } = useWorkspace();
+    const { addWorkspace, workspaces } = useWorkspace();
     const [isOpen, setIsOpen] = useState(true);
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(false);
@@ -17,6 +17,13 @@ export const OnboardingWizard = () => {
     // Form States
     const [workspaceName, setWorkspaceName] = useState('');
     const [inviteEmails, setInviteEmails] = useState('');
+
+    // If user already has a workspace (other than default), skip to step 2
+    React.useEffect(() => {
+        if (workspaces.length > 1 && step === 1) {
+            setStep(2);
+        }
+    }, [workspaces, step]);
 
     if (!user || user.onboarding_completed) return null;
 
