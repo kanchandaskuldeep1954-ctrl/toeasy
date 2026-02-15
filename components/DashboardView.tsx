@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import DashboardGrid from '../src/components/Dashboard/DashboardGrid';
 import DashboardChart from '../src/components/Dashboard/DashboardChart';
-import { aggregateData } from '../utils/dashboardUtils';
+import { aggregateData } from '../src/utils/dashboardUtils';
 
 interface DashboardViewProps {
     dataset: Dataset;
