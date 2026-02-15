@@ -121,8 +121,8 @@ export interface SavedQuery {
 }
 
 export interface Dataset {
-  id: string;
-  workspace_id?: string;
+  id: number;
+  workspace_id?: number;
   createdAt: string;
   rowCount: number;
   name: string;
@@ -149,6 +149,7 @@ export interface Dataset {
   dashboardConfig?: DashboardConfig;
   dataQualitySource?: 'PRO_CLEANED' | 'RAW_ORIGINAL' | 'VERSION';
   savedQueries?: SavedQuery[];
+  raw_data?: DataRow[];
 }
 
 export interface ColumnStats {

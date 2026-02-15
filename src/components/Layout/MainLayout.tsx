@@ -17,12 +17,13 @@ import NotificationCenter from '../Notifications/NotificationCenter';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDataset } from '../../hooks/useDataset';
 import { useAuth } from '../../hooks/useAuth';
-import { Activity, X, Bell, ChevronRight, MessageCircle } from 'lucide-react';
+import { Activity, X, Bell, ChevronRight, MessageCircle, Search } from 'lucide-react';
 import { FilterProvider } from '../../context/FilterContext';
 import AICopilotPanel from '../AICopilot/AICopilotPanel';
 // FloatingCopilot removed — AI is now opt-in via "Ask AI" button only
 import { GroqService } from '../../services/groqService';
 import { useTheme } from '../../hooks/useTheme';
+import CommandPalette from '../CommandPalette/CommandPalette';
 
 interface MainLayoutProps {
     children: React.ReactNode;
@@ -32,10 +33,23 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
     const [mobileOpen, setMobileOpen] = useState(false);
     const [showActivity, setShowActivity] = useState(false);
     const [showCopilot, setShowCopilot] = useState(false);
+    const [showPalette, setShowPalette] = useState(false);
     const { activeWorkspace } = useWorkspace();
     const { activeDataset } = useDataset();
     const { user } = useAuth();
     const { theme } = useTheme();
+
+    // Global Command Palette Shortcut (⌘K)
+    React.useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+                e.preventDefault();
+                setShowPalette(prev => !prev);
+            }
+        };
+        document.addEventListener('keydown', handleKeyDown);
+        return () => document.removeEventListener('keydown', handleKeyDown);
+    }, []);
 
     // Handle AI queries
     const handleAskAI = useCallback(async (query: string): Promise<string> => {
@@ -92,7 +106,19 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                         </div>
 
                         {/* Right Side Actions */}
-                        <div className="ml-auto flex items-center gap-2">
+                        <button
+                            onClick={() => setShowPalette(true)}
+                            className={`hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm mr-2 transition-colors border ${theme === 'dark'
+                                    ? 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-slate-600'
+                                    : 'bg-slate-100 border-slate-200 text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                }`}
+                        >
+                            <Search className="w-4 h-4" />
+                            <span>Search...</span>
+                            <kbd className="hidden lg:inline px-1.5 py-0.5 text-xs bg-slate-200 dark:bg-slate-700 rounded border border-slate-300 dark:border-slate-600">⌘K</kbd>
+                        </button>
+
+                        <div className="flex items-center gap-2">
                             {/* AI Copilot Button */}
                             <button
                                 onClick={() => setShowCopilot(true)}
@@ -182,7 +208,11 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
                     onAsk={handleAskAI}
                 />
 
-                {/* FloatingCopilot removed — AI is opt-in via Ask AI button */}
+                {/* Global Command Palette */}
+                <CommandPalette
+                    isOpen={showPalette}
+                    onClose={() => setShowPalette(false)}
+                />
             </div>
         </FilterProvider>
     );

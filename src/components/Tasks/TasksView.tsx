@@ -18,6 +18,8 @@ import { Task } from './TaskCard';
 import { Button, Input, Modal, Badge, Avatar } from '../UI';
 import { tasksService } from '../../services/workOsService';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { WorkspaceIntelligence } from './WorkspaceIntelligence';
+import { useActivity } from '../../context/ActivityContext';
 
 interface TasksViewProps {
     workspaceId?: string;
@@ -53,7 +55,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
             setLoading(true);
             try {
                 const data = await tasksService.getAll(workspaceId);
-                // Transform API data to component format
                 const transformedTasks: Task[] = (data || []).map((t: any) => ({
                     id: t.id,
                     title: t.title,
@@ -76,7 +77,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
         fetchTasks();
     }, [workspaceId]);
 
-    // Map API status to component status
     const mapApiStatus = (status: string): Task['status'] => {
         const statusMap: Record<string, Task['status']> = {
             'backlog': 'backlog',
@@ -88,7 +88,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
         return statusMap[status] || 'backlog';
     };
 
-    // Map component status to API status
     const mapToApiStatus = (status: Task['status']): string => {
         const statusMap: Record<Task['status'], string> = {
             'backlog': 'backlog',
@@ -122,7 +121,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                 workspace_id: workspaceId
             });
 
-            // Add to local state
             const transformedTask: Task = {
                 id: newTask.id,
                 title: newTask.title,
@@ -134,7 +132,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
             };
             setTasks(prev => [...prev, transformedTask]);
 
-            // Reset form
             setShowCreateTask(false);
             setNewTaskTitle('');
             setNewTaskDescription('');
@@ -149,7 +146,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
     };
 
     const handleUpdateTaskStatus = async (taskId: string, newStatus: Task['status']) => {
-        // Optimistic update
         setTasks(prev => prev.map(t =>
             t.id === taskId ? { ...t, status: newStatus } : t
         ));
@@ -158,11 +154,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
             await tasksService.update(taskId, { status: mapToApiStatus(newStatus) });
         } catch (error) {
             console.error('Failed to update task:', error);
-            // Revert on error - would need to store previous state
         }
     };
 
-    // Filter tasks
     const filteredTasks = tasks.filter(task => {
         const matchesSearch = task.title.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesPriority = !filterPriority || task.priority === filterPriority;
@@ -186,8 +180,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
             <header className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-bold text-white">Tasks</h1>
-
-                    {/* Search */}
                     <div className="w-64">
                         <Input
                             placeholder="Search tasks..."
@@ -200,16 +192,13 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* Filters */}
                     <Button variant="ghost" size="sm" leftIcon={<Filter className="w-4 h-4" />}>
                         Filter
                     </Button>
-
                     <Button variant="ghost" size="sm" leftIcon={<SortAsc className="w-4 h-4" />}>
                         Sort
                     </Button>
 
-                    {/* View Toggle */}
                     <div className="flex items-center border border-slate-700 rounded-lg overflow-hidden">
                         <button
                             onClick={() => setView('kanban')}
@@ -250,7 +239,9 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
             </header>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-hidden p-6">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar p-6">
+                <WorkspaceIntelligence />
+
                 {view === 'kanban' && (
                     <KanbanBoard
                         tasks={filteredTasks}
@@ -272,7 +263,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                 )}
             </main>
 
-            {/* Create Task Modal */}
             <Modal
                 isOpen={showCreateTask}
                 onClose={() => setShowCreateTask(false)}
@@ -287,14 +277,12 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                         value={newTaskTitle}
                         onChange={(e) => setNewTaskTitle(e.target.value)}
                     />
-
                     <Input
                         label="Description (optional)"
                         placeholder="Add more details..."
                         value={newTaskDescription}
                         onChange={(e) => setNewTaskDescription(e.target.value)}
                     />
-
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1.5">
@@ -311,7 +299,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                                 <option value="urgent">Urgent</option>
                             </select>
                         </div>
-
                         <div>
                             <label className="block text-sm font-medium text-slate-300 mb-1.5">
                                 Due Date
@@ -324,7 +311,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                             />
                         </div>
                     </div>
-
                     <div className="flex justify-end gap-3 pt-4">
                         <Button variant="secondary" onClick={() => setShowCreateTask(false)}>
                             Cancel
@@ -339,7 +325,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                 </div>
             </Modal>
 
-            {/* Task Detail Slide-over */}
             {selectedTask && (
                 <motion.div
                     initial={{ x: '100%' }}
@@ -361,17 +346,14 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                         <h3 className="text-lg font-medium text-white">
                             {selectedTask.title}
                         </h3>
-
                         {selectedTask.description && (
                             <p className="text-slate-400">{selectedTask.description}</p>
                         )}
-
                         <div className="space-y-3">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-slate-500">Status</span>
                                 <Badge variant="primary">{selectedTask.status}</Badge>
                             </div>
-
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-slate-500">Priority</span>
                                 <Badge variant={
@@ -382,7 +364,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                                     {selectedTask.priority}
                                 </Badge>
                             </div>
-
                             {selectedTask.assignee && (
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-slate-500">Assignee</span>
@@ -394,7 +375,6 @@ export const TasksView: React.FC<TasksViewProps> = ({ workspaceId: propWorkspace
                                     </div>
                                 </div>
                             )}
-
                             {selectedTask.dueDate && (
                                 <div className="flex items-center justify-between">
                                     <span className="text-sm text-slate-500">Due Date</span>

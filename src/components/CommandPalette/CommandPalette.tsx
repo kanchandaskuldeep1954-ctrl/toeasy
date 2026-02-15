@@ -43,32 +43,47 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
 
     // Define all commands
     const commands: CommandItem[] = useMemo(() => [
-        // Navigation
-        { id: 'go-home', label: 'Go to Home', icon: FolderOpen, category: 'navigation', action: () => navigate('/app') },
-        { id: 'go-docs', label: 'Go to Docs', icon: FileText, category: 'navigation', action: () => navigate('/app/docs') },
-        { id: 'go-sheets', label: 'Go to Sheets', icon: Table2, category: 'navigation', action: () => navigate('/app/sheets') },
-        { id: 'go-boards', label: 'Go to Dashboards', icon: BarChart3, category: 'navigation', action: () => navigate('/app/boards') },
-        { id: 'go-tasks', label: 'Go to Tasks', icon: CheckSquare, category: 'navigation', action: () => navigate('/app/tasks') },
+        // Navigation (Core)
+        { id: 'go-home', label: 'Go to Home', icon: FolderOpen, category: 'navigation', action: () => navigate('/app/home') },
+        { id: 'go-data', label: 'Go to Data Hub', icon: Table2, category: 'navigation', action: () => navigate('/app/datasets') },
         { id: 'go-chat', label: 'Go to Chat', icon: MessageCircle, category: 'navigation', action: () => navigate('/app/chat') },
-        { id: 'go-flows', label: 'Go to Flows', icon: Zap, category: 'navigation', action: () => navigate('/app/flows') },
+        { id: 'go-docs', label: 'Go to Docs', icon: FileText, category: 'navigation', action: () => navigate('/app/docs') },
+        { id: 'go-settings', label: 'Go to Settings', icon: CheckSquare, category: 'navigation', action: () => navigate('/app/settings/profile') },
 
-        // Create
+        // Create / Actions
         { id: 'new-doc', label: 'New Document', description: 'Create a blank document', icon: FileText, category: 'create', action: () => navigate('/app/docs/new') },
-        { id: 'new-sheet', label: 'New Sheet', description: 'Create a blank spreadsheet', icon: Table2, category: 'create', action: () => navigate('/app/sheets/new') },
-        { id: 'new-board', label: 'New Dashboard', description: 'Create a new dashboard', icon: BarChart3, category: 'create', action: () => navigate('/app/boards/new') },
-        { id: 'new-task', label: 'New Task', description: 'Create a new task', icon: CheckSquare, category: 'create', shortcut: 'T', action: () => navigate('/app/tasks/new') },
-        { id: 'new-flow', label: 'New Automation', description: 'Create a new workflow', icon: Zap, category: 'create', action: () => navigate('/app/flows/new') },
+        { id: 'import-data', label: 'Import Data', description: 'Upload or connect a new dataset', icon: Table2, category: 'create', action: () => navigate('/app/upload') },
 
-        // AI
-        { id: 'ai-ask', label: 'Ask AI anything...', description: 'Get help with AI', icon: Sparkles, category: 'ai', action: () => { } },
-        { id: 'ai-analyze', label: 'AI: Analyze my data', icon: Sparkles, category: 'ai', action: () => { } },
-        { id: 'ai-summarize', label: 'AI: Summarize this', icon: Sparkles, category: 'ai', action: () => { } },
-        { id: 'ai-write', label: 'AI: Help me write', icon: Sparkles, category: 'ai', action: () => { } },
+        // AI Actions
+        {
+            id: 'ai-analyze',
+            label: 'AI: Analyze my data',
+            description: 'Start a data analysis chat',
+            icon: Sparkles,
+            category: 'ai',
+            action: () => navigate('/app/chat/new?q=Analyze%20my%20data')
+        },
+        {
+            id: 'ai-clean',
+            label: 'AI: Clean this dataset',
+            description: 'Ask AI to find data quality issues',
+            icon: Sparkles,
+            category: 'ai',
+            action: () => navigate('/app/chat/new?q=Help%20me%20clean%20this%20data')
+        },
+        {
+            id: 'ai-chart',
+            label: 'AI: Create a chart',
+            description: 'Ask AI to visualize data',
+            icon: Sparkles,
+            category: 'ai',
+            action: () => navigate('/app/chat/new?q=Create%20a%20chart%20for%20me')
+        },
 
-        // Recent (would be dynamic in real app)
-        { id: 'recent-1', label: 'Sales Data Q1', description: 'Sheet • Edited 2 hours ago', icon: Table2, category: 'recent', action: () => navigate('/app/sheets/1') },
-        { id: 'recent-2', label: 'Revenue Dashboard', description: 'Board • Edited yesterday', icon: BarChart3, category: 'recent', action: () => navigate('/app/boards/1') },
-        { id: 'recent-3', label: 'Project Plan', description: 'Doc • Edited 3 days ago', icon: FileText, category: 'recent', action: () => navigate('/app/docs/1') },
+        // Tools (Contextual - would ideally be dynamic based on active route/dataset)
+        { id: 'tool-sheets', label: 'Open Sheets', icon: Table2, category: 'navigation', action: () => { /* Logic to find active dataset or go to library */ navigate('/app/datasets'); } },
+        { id: 'tool-reporting', label: 'Open Reports', icon: FileText, category: 'navigation', action: () => navigate('/app/reports') },
+
     ], [navigate]);
 
     // Filter commands based on query
@@ -88,21 +103,37 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
     // Group commands by category
     const groupedCommands = useMemo(() => {
         const groups: Record<string, CommandItem[]> = {};
+
+        // Custom sort order for categories
+        const categoryOrder = ['ai', 'navigation', 'create'];
+
+        // Initialize groups
+        categoryOrder.forEach(cat => groups[cat] = []);
+        groups['other'] = [];
+
         filteredCommands.forEach(cmd => {
-            if (!groups[cmd.category]) {
-                groups[cmd.category] = [];
+            if (groups[cmd.category]) {
+                groups[cmd.category].push(cmd);
+            } else {
+                groups['other'].push(cmd);
             }
-            groups[cmd.category].push(cmd);
         });
+
+        // Remove empty groups
+        Object.keys(groups).forEach(key => {
+            if (groups[key].length === 0) delete groups[key];
+        });
+
         return groups;
     }, [filteredCommands]);
 
     const categoryLabels: Record<string, string> = {
         recent: 'Recent',
-        navigation: 'Go to',
+        navigation: 'Navigate',
         create: 'Create',
-        ai: 'AI Actions',
-        search: 'Search Results'
+        ai: 'Ask AI',
+        search: 'Search Results',
+        other: 'Other'
     };
 
     // Handle keyboard navigation

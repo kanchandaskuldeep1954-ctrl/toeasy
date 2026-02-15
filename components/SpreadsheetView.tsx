@@ -7,6 +7,8 @@ import { Sheet } from "@fortune-sheet/core";
 import { Save, Sparkles, Table2, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { datasetAPI } from '../src/services/api';
+import { MagicColumnModal } from '../src/components/Sheets/MagicColumnModal';
+import { GroqService } from '../src/services/groqService';
 
 interface SpreadsheetViewProps {
     dataset: Dataset;
@@ -16,6 +18,7 @@ interface SpreadsheetViewProps {
 const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) => {
     const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
+    const [isMagicModalOpen, setIsMagicModalOpen] = useState(false);
 
     // Transform Dataset to FortuneSheet format
     const initialData = useMemo(() => {
@@ -183,6 +186,57 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
         }
     };
 
+    // Magic Column Handler
+    const handleMagicColumnGeneration = async (newColName: string, instruction: string, contextCols: string[]) => {
+        try {
+            const { headers, rows } = extractRowsFromWorkbook();
+
+            // Prepare batches (mocking 5 rows for demo speed, real world would be larger)
+            const rowsToProcess = rows.map(r => {
+                const context: any = {};
+                contextCols.forEach(c => context[c] = r[c]);
+                return context;
+            });
+
+            // Call AI Service
+            const newValues = await GroqService.enrichData(rowsToProcess, instruction);
+
+            // Merge new column into rows
+            const updatedRows = rows.map((row, i) => ({
+                ...row,
+                [newColName]: newValues[i] || ""
+            }));
+
+            const updatedHeaders = [...headers, newColName];
+
+            // Update local state immediately for UX
+            // (Re-running the memoized transformation by updating dataset prop is harder, 
+            // so we might need to force a refresh or update the workbook directly. 
+            // For now, let's update the dataset object and trigger onUpdate)
+
+            const workspaceId = (dataset as any)?.workspace_id;
+            const datasetId = (dataset as any)?.id;
+
+            if (workspaceId && datasetId) {
+                await datasetAPI.update(String(workspaceId), String(datasetId), {
+                    raw_data: updatedRows,
+                    headers: updatedHeaders
+                });
+
+                onUpdate?.({
+                    ...dataset,
+                    headers: updatedHeaders,
+                    data: updatedRows,
+                    raw_data: updatedRows
+                });
+            }
+
+        } catch (e) {
+            console.error("Magic Column failed:", e);
+            alert("Failed to generate column. See console for details.");
+        }
+    };
+
     return (
         <div className="flex flex-col h-full w-full bg-white dark:bg-slate-950 overflow-hidden">
             {/* Toolbar */}
@@ -203,9 +257,12 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <button className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-100 transition-colors">
+                    <button
+                        onClick={() => setIsMagicModalOpen(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 text-[10px] font-black uppercase tracking-widest rounded-lg hover:bg-indigo-100 transition-colors"
+                    >
                         <Sparkles className="w-4 h-4" />
-                        AI Formulas
+                        Magic Column
                     </button>
                     <button
                         onClick={handleSave}
@@ -217,7 +274,6 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
                 </div>
             </div>
 
-            {/* Grid Area */}
             <div className="flex-1 overflow-hidden relative w-full h-full bg-slate-50 dark:bg-slate-900">
                 <Workbook
                     data={workbookData as any}
@@ -227,6 +283,13 @@ const SpreadsheetView: React.FC<SpreadsheetViewProps> = ({ dataset, onUpdate }) 
                     showSheetTabs
                 />
             </div>
+
+            <MagicColumnModal
+                isOpen={isMagicModalOpen}
+                onClose={() => setIsMagicModalOpen(false)}
+                columns={(dataset.headers || [])}
+                onGenerate={handleMagicColumnGeneration}
+            />
         </div>
     );
 };
