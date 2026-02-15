@@ -62,6 +62,7 @@ import RefundPolicy from './src/components/Legal/RefundPolicy';
 import PublicShareView from './src/components/PublicShareView';
 import FAQ from './src/components/FAQ';
 import { OnboardingWizard } from './src/components/Onboarding/OnboardingWizard';
+import TeamView from './src/components/TeamView';
 
 const AppLayout: React.FC = () => {
   const { activeWorkspace } = useWorkspace();
@@ -79,6 +80,7 @@ const AppLayout: React.FC = () => {
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="team" element={<TeamView />} />
 
           {/* Connect & Upload */}
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
