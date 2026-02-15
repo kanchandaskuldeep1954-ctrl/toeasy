@@ -1,12 +1,12 @@
 
-exports.up = function (knex) {
+export async function up(knex) {
     return knex.schema.table('users', function (table) {
         table.boolean('onboarding_completed').defaultTo(false);
     });
-};
+}
 
-exports.down = function (knex) {
+export async function down(knex) {
     return knex.schema.table('users', function (table) {
         table.dropColumn('onboarding_completed');
     });
-};
+}
