@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 // @ts-ignore
-import { Responsive, WidthProvider } from 'react-grid-layout';
+import { Responsive } from 'react-grid-layout';
+import WidthProvider from './WidthProvider';
 import { ResponsiveContainer } from 'recharts';
 import { ChartSpec, DashboardConfig, Dataset } from '@/types';
 import DashboardChart from './DashboardChart';
 import { aggregateData } from '@/src/utils/dashboardUtils';
 import { generateChartInsights } from '@/src/utils/chartValidation';
 
-const ResponsiveGridLayout = WidthProvider(Responsive);
+const ResponsiveGridLayout = (WidthProvider as any)(Responsive);
 
 interface DashboardGridProps {
     config: DashboardConfig;
