@@ -40,7 +40,7 @@ const DashboardViewIntegrated: React.FC = () => {
   // Edit Mode State
   const [isEditable, setIsEditable] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showAddWidget, setShowAddWidget] = useState(false);
+  const [showAddWidgetModal, setShowAddWidgetModal] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Agent State
