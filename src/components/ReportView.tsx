@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Dataset, StrategicReport, ReportSection, ChartSpec } from '../../types';
+import { Dataset, StrategicReport, ReportSection, ChartSpec, ReportBlock, ReportBlockType } from '../../types';
 import { GroqService } from '../services/groqService';
 import { FileText, Database, Presentation, Share2, Download, RefreshCw, Layout, AlignLeft } from 'lucide-react';
 import { ExportService } from '../services/exportService';
@@ -11,20 +11,12 @@ import { useSearchParams } from 'react-router-dom';
 import ExportModal from './ExportHub/ExportModal';
 import { ReportSectionEditor } from './Report/ReportSectionEditor';
 import mermaid from 'mermaid';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // Initialize mermaid
 mermaid.initialize({
     startOnLoad: false,
     theme: 'base',
-    suppressError: true, // Prevent Mermaid from throwing bomb icons into the DOM if possible
-    themeVariables: {
-        primaryColor: '#6366f1',
-        primaryTextColor: '#fff',
-        primaryBorderColor: '#4f46e5',
-        lineColor: '#6366f1',
-        secondaryColor: '#f8fafc',
-        tertiaryColor: '#fff'
-    },
     // New v10+ specific error handling
     logLevel: 5 // Fatal only
 });
@@ -357,7 +349,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
             // 1. Gather Extra Context (Boss Move)
             let activityLogs: any[] = [];
             try {
-                const actRes = await activityAPI.list(workspaceId || '', dataset.id, 10);
+                const actRes = await activityAPI.list(workspaceId || '', String(dataset.id), 10);
                 activityLogs = actRes.data.data;
             } catch (actErr) {
                 console.warn('Failed to fetch activity logs for report context', actErr);
@@ -429,23 +421,86 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
         if (!instruction.trim() || !report || !dataset) return;
 
         setCopilotLoading(true);
-        // Optimistic UI for chat
         const userMsg = { role: 'user' as const, content: instruction };
         setCopilotMessages(prev => [...prev, userMsg]);
         setCopilotInput('');
 
         try {
-            const updatedReport = await GroqService.modifyReport(dataset, report, instruction);
-            setReport(updatedReport);
-            if (onUpdate) onUpdate({ ...dataset, strategicReport: updatedReport });
+            const lowerInstr = instruction.toLowerCase();
+            let newBlock: ReportBlock | null = null;
+            let responseMsg = '';
 
-            // Add a proper explanatory message instead of hardcoded generic one
-            setCopilotMessages(prev => [...prev,
-            {
-                role: 'assistant',
-                content: `Report updated successfully. I've restructured the analysis focusing on "${instruction}". You can see the new insights in the report view.`
+            // INTENT DETECTOR: Check for specific block generation requests
+            if (lowerInstr.includes('add chart') || lowerInstr.includes('create chart') || lowerInstr.includes('visualize')) {
+                // Generate Chart Block
+                const chartSpec = await GroqService.generateChartFromPrompt(dataset, instruction);
+                newBlock = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    type: 'chart',
+                    content: chartSpec
+                };
+                responseMsg = `I've created a new chart based on your request: "${chartSpec.title}".`;
             }
-            ]);
+            else if (lowerInstr.includes('add kpi') || lowerInstr.includes('create kpi') || lowerInstr.includes('key metric')) {
+                // Generate KPI Block
+                // We'll extract KPIs and pick the most relevant one, or create a specific one
+                const kpis = await GroqService.extractKPIs(dataset, dataset.data || []);
+                // Simple heuristic: pick the first one or the one matching terms. 
+                // For now, let's pick the first one as demo, or if we can filter by instructions.
+                const kpi = kpis[0] || { title: 'New KPI', value: 0 };
+                newBlock = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    type: 'kpi',
+                    content: kpi
+                };
+                responseMsg = `I've added a KPI card for ${kpi.title}.`;
+            }
+            else if (lowerInstr.includes('add table') || lowerInstr.includes('show data') || lowerInstr.includes('add grid')) {
+                // Generate Table Block
+                newBlock = {
+                    id: Math.random().toString(36).substr(2, 9),
+                    type: 'table',
+                    content: { title: 'Data View' } // DataGridWidget handles data binding
+                };
+                responseMsg = "I've added a data table to the report.";
+            }
+
+            if (newBlock) {
+                // Insert the new block into the ACTIVE section, or the last section
+                const targetSectionId = activeSection || report.sections?.[0]?.id;
+
+                if (targetSectionId) {
+                    const newSections = report.sections.map(sec => {
+                        if (sec.id === targetSectionId) {
+                            return {
+                                ...sec,
+                                blocks: [...(sec.blocks || []), newBlock!]
+                            };
+                        }
+                        return sec;
+                    });
+
+                    const updatedReport = { ...report, sections: newSections };
+                    setReport(updatedReport);
+                    if (onUpdate) onUpdate({ ...dataset, strategicReport: updatedReport });
+
+                    setCopilotMessages(prev => [...prev, { role: 'assistant', content: responseMsg }]);
+                } else {
+                    setCopilotMessages(prev => [...prev, { role: 'assistant', content: "I couldn't find a section to add the block to. Please select a section first." }]);
+                }
+            } else {
+                // Fallback to full report modification (slow but powerful)
+                const updatedReport = await GroqService.modifyReport(dataset, report, instruction);
+                setReport(updatedReport);
+                if (onUpdate) onUpdate({ ...dataset, strategicReport: updatedReport });
+
+                setCopilotMessages(prev => [...prev,
+                {
+                    role: 'assistant',
+                    content: `Report updated successfully. I've restructured the analysis focusing on "${instruction}".`
+                }
+                ]);
+            }
 
             contentRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         } catch (e) {
@@ -466,7 +521,7 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
 
         try {
             // We'll use a new consultAgent endpoint for report-specific context
-            const response = await GroqService.consultAgent(dataset, input, { reportContext: report }, copilotMessages.map(m => ({ role: m.role, text: m.content })));
+            const response = await GroqService.consultVerifiedAgent(dataset, input, { reportContext: report }, copilotMessages.map(m => ({ role: m.role, text: m.content })));
             setCopilotMessages(prev => [...prev, { role: 'assistant', content: response }]);
         } catch (e) {
             console.error('Chat failed:', e);

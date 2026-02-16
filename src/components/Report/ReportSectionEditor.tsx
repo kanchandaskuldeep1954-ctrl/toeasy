@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ReportSection, ReportBlock, ReportBlockType, Dataset } from '../../types';
+import { ReportSection, ReportBlock, ReportBlockType, Dataset } from '../../../types';
 import { ReportBlockRenderer } from './ReportBlockRenderer';
 import { BlockAddMenu } from './BlockAddMenu';
 import { Trash2 } from 'lucide-react';
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 interface ReportSectionEditorProps {
     section: ReportSection;
@@ -84,8 +86,8 @@ export const ReportSectionEditor: React.FC<ReportSectionEditorProps> = ({
         handleUpdateBlocks([...blocks, newBlock]);
     };
 
-    const updateBlock = (id: string, content: any) => {
-        const newBlocks = blocks.map(b => b.id === id ? { ...b, content } : b);
+    const updateBlock = (id: string, content: any, type?: ReportBlockType) => {
+        const newBlocks = blocks.map(b => b.id === id ? { ...b, content, type: type || b.type } : b);
         handleUpdateBlocks(newBlocks);
     };
 
@@ -119,6 +121,29 @@ export const ReportSectionEditor: React.FC<ReportSectionEditorProps> = ({
         }
     };
 
+    // DnD Sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    const handleDragEnd = (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (over && active.id !== over.id) {
+            setBlocks((items) => {
+                const oldIndex = items.findIndex((item) => item.id === active.id);
+                const newIndex = items.findIndex((item) => item.id === over.id);
+                const newItems = arrayMove(items, oldIndex, newIndex);
+                // Defer parent update to avoid jitter, or update immediately. 
+                // Updating parent immediately for simplicity.
+                onUpdate({ ...section, blocks: newItems });
+                return newItems;
+            });
+        }
+    };
+
     return (
         <section className="mb-12 group/section relative border-l-4 border-transparent hover:border-slate-200 dark:hover:border-slate-800 pl-4 -ml-5 transition-colors duration-300">
             {/* Section Header */}
@@ -143,20 +168,31 @@ export const ReportSectionEditor: React.FC<ReportSectionEditorProps> = ({
 
             {/* Blocks */}
             <div className="space-y-2">
-                {blocks.map((block, index) => (
-                    <ReportBlockRenderer
-                        key={block.id}
-                        block={block}
-                        index={index}
-                        totalBlocks={blocks.length}
-                        dataset={dataset}
-                        readOnly={readOnly}
-                        onUpdate={updateBlock}
-                        onDelete={deleteBlock}
-                        onMoveUp={(idx) => moveBlock(idx, 'up')}
-                        onMoveDown={(idx) => moveBlock(idx, 'down')}
-                    />
-                ))}
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                >
+                    <SortableContext
+                        items={blocks.map(b => b.id)}
+                        strategy={verticalListSortingStrategy}
+                    >
+                        {blocks.map((block, index) => (
+                            <ReportBlockRenderer
+                                key={block.id}
+                                block={block}
+                                index={index}
+                                totalBlocks={blocks.length}
+                                dataset={dataset}
+                                readOnly={readOnly}
+                                onUpdate={updateBlock}
+                                onDelete={deleteBlock}
+                                onMoveUp={(idx) => moveBlock(idx, 'up')}
+                                onMoveDown={(idx) => moveBlock(idx, 'down')}
+                            />
+                        ))}
+                    </SortableContext>
+                </DndContext>
 
                 {blocks.length === 0 && (
                     <div className="text-slate-400 text-sm italic p-4 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
