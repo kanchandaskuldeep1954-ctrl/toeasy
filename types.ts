@@ -78,11 +78,13 @@ export interface UserUsage {
 
 export interface KPI {
   id: string;
-  label: string;
+  title: string;
   value: string | number;
   unit?: string;
-  trend?: number;
-  trendDirection?: 'up' | 'down' | 'neutral' | 'flat';
+  trend?: {
+    value: number;
+    direction: 'up' | 'down' | 'neutral' | 'flat';
+  };
   category?: 'financial' | 'quality' | 'operational' | 'efficiency' | 'growth' | 'volume';
   status?: 'on_track' | 'at_risk' | 'off_track';
   sparklineData?: number[];
@@ -150,6 +152,7 @@ export interface Dataset {
   dataQualitySource?: 'PRO_CLEANED' | 'RAW_ORIGINAL' | 'VERSION';
   savedQueries?: SavedQuery[];
   raw_data?: DataRow[];
+  savedCharts?: ChartSpec[]; // Charts created in Sheets/Playground
 }
 
 export interface ColumnStats {
@@ -260,6 +263,14 @@ export interface ChartSpec {
     x?: number;
     y?: number;
   };
+
+  // Deep Integration Metadata
+  sourceQuery?: string; // SQL or NL query that generated this chart
+  sourceModule?: 'sheets' | 'dashboard' | 'report' | 'playground' | 'ai';
+  isWidget?: boolean; // If true, renders in "widget mode" (simplified)
+  createdBy?: string; // User ID
+  createdAt?: string;
+  datasetId?: string; // Link back to source dataset
 }
 
 export interface FilterSpec {
@@ -336,6 +347,7 @@ export interface CalculatedDataFrame {
 
 export interface StrategicReport {
   title: string;
+  subtitle?: string;
   executiveSummary: string;
   sections: ReportSection[];
   dataFrames?: CalculatedDataFrame[];
