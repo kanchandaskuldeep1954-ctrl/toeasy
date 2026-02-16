@@ -31,6 +31,17 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
     const [editMode, setEditMode] = useState(false);
     const [localSpec, setLocalSpec] = useState<ChartSpec>(chart);
 
+    // Guard against undefined chart prop
+    if (!chart) {
+        return (
+            <div className="flex items-center justify-center p-4 bg-gray-50 border border-gray-200 rounded-lg" style={{ height }}>
+                <div className="text-center text-gray-500">
+                    <p>No chart configuration</p>
+                </div>
+            </div>
+        );
+    }
+
     // Use data from props or from the chart spec itself (if embedded)
     const chartData = dataOverride || chart.data || [];
 

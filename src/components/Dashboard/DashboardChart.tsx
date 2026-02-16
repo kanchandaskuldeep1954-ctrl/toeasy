@@ -45,8 +45,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 };
 
 const DashboardChart: React.FC<DashboardChartProps> = ({ chart, data, colors, perspective = 'Overview', isPreview = false }) => {
+    if (!chart || !data || !Array.isArray(data)) return null;
+
     const color = isPreview ? '#6366f1' : (perspective === 'Forensic' ? '#f43f5e' : '#6366f1');
-    const gradientId = `grad-${chart.id}`;
+    const gradientId = `grad-${chart.id || 'unknown'}`;
 
     const CommonGrid = () => <CartesianGrid strokeDasharray="3 3" vertical={false} strokeOpacity={0.1} />;
     const CommonX = () => <XAxis dataKey={chart.type === 'scatter' || chart.type === 'bubble' ? 'x' : 'name'} fontSize={10} axisLine={false} tickLine={false} tick={{ dy: 10, fill: '#94a3b8' }} type={chart.type === 'scatter' || chart.type === 'bubble' ? 'number' : 'category'} hide={chart.type === 'heatmap'} />;

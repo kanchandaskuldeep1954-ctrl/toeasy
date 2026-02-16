@@ -11,6 +11,15 @@ interface KPIWidgetProps {
 }
 
 export const KPIWidget: React.FC<KPIWidgetProps> = ({ kpi, sparklineData, onClick, width = '100%' }) => {
+    // Guard against undefined/null kpi prop
+    if (!kpi) {
+        return (
+            <div className="bg-white rounded-lg p-4 border border-gray-100 text-center text-gray-400" style={{ width }}>
+                <p className="text-sm font-medium">No KPI Data</p>
+            </div>
+        );
+    }
+
     // Determine trend color
     const isPositive = kpi.trend?.direction === 'up';
     const trendColor = isPositive ? 'text-green-600' : 'text-red-600';

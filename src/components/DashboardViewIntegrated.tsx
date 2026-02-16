@@ -50,7 +50,7 @@ const DashboardViewIntegrated: React.FC = () => {
   const [isAgentOpen, setIsAgentOpen] = useState(false);
 
   useEffect(() => {
-    if (workspaceId && (datasetId || initialDashboardId)) {
+    if (workspaceId && datasetId) {
       loadAll();
     }
   }, [workspaceId, datasetId, initialDashboardId, selectedDataVersionId]);
@@ -60,69 +60,92 @@ const DashboardViewIntegrated: React.FC = () => {
       setLoading(true);
 
       let targetDatasetId = datasetId;
-      let currentDashboard = null;
 
-      // 1. Fetch Dashboard if ID present
+      const safeParse = (val: any) => {
+        if (!val) return undefined;
+        if (typeof val === 'string') {
+          try {
+            const first = JSON.parse(val);
+            return typeof first === 'string' ? JSON.parse(first) : first;
+          } catch (e) { return undefined; }
+        }
+        return val;
+      };
+
+      // 1. Always hydrate dataset first
+      if (targetDatasetId && workspaceId) {
+        try {
+          if (!dataset || String(dataset.id) !== String(targetDatasetId)) {
+            const dsRes = await datasetAPI.get(workspaceId, targetDatasetId);
+            const dsData = dsRes.data?.data || dsRes.data;
+
+            const rawData = safeParse(dsData?.raw_data || dsData?.data) || [];
+            const headers = safeParse(dsData?.headers) || (rawData && rawData[0] ? Object.keys(rawData[0]) : []);
+
+            setActiveDataset({
+              ...dsData,
+              data: rawData,
+              headers: headers,
+            });
+          }
+        } catch (dsErr) {
+          console.error('Failed to load dataset:', dsErr);
+        }
+      }
+
+      // 2. Fetch specific dashboard if ID present
+      let currentDashboard: any = null;
       if (initialDashboardId) {
-        const dRes = await dashboardAPI.get(workspaceId, initialDashboardId);
-        currentDashboard = dRes.data.data || dRes.data;
-        setDashboardEntity(currentDashboard);
-        // Initialize config from entity
-        if (currentDashboard.configuration) {
-          setDashboardConfig(currentDashboard.configuration);
-        } else if (dataset?.dashboardConfig) {
-          // Fallback to dataset config if dashboard entity doesn't have it (legacy)
-          setDashboardConfig(dataset.dashboardConfig);
-        } else {
-          // Initialize with empty but valid structure
-          setDashboardConfig({ charts: [], kpis: [], patterns: [], widgets: [] });
+        try {
+          const dRes = await dashboardAPI.get(workspaceId, initialDashboardId);
+          currentDashboard = dRes.data?.data || dRes.data;
+          setDashboardEntity(currentDashboard);
+          if (currentDashboard?.configuration) {
+            setDashboardConfig(currentDashboard.configuration);
+          }
+        } catch (dErr) {
+          console.error('Failed to load dashboard by ID:', dErr);
         }
+      }
 
-        // 2. Hydrate Dataset in Context if not already active
-        if (!dataset || String(dataset.id) !== String(targetDatasetId)) {
-          const dsRes = await datasetAPI.get(workspaceId, targetDatasetId);
-          const dsData = dsRes.data;
-
-          const safeParse = (val: any) => {
-            if (!val) return undefined;
-            if (typeof val === 'string') {
-              try {
-                const first = JSON.parse(val);
-                return typeof first === 'string' ? JSON.parse(first) : first;
-              } catch (e) { return undefined; }
-            }
-            return val;
-          };
-
-          const rawData = safeParse(dsData.raw_data || dsData.data) || [];
-          const headers = safeParse(dsData.headers) || (rawData && rawData[0] ? Object.keys(rawData[0]) : []);
-
-          setActiveDataset({
-            ...dsData,
-            data: rawData,
-            headers: headers,
-          });
-        }
-
-        // 3. Fetch Siblings and Versions
+      // 3. Fetch sibling dashboards + versions (always do this)
+      try {
         const backendUrl = (import.meta as any).env.VITE_BACKEND_URL || 'http://localhost:3000/api';
         const [siblingsRes, versionsRes] = await Promise.all([
-          dashboardAPI.list(workspaceId),
-          axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, { headers: { Authorization: `Bearer ${token}` } })
+          dashboardAPI.list(workspaceId).catch(() => ({ data: { data: [] } })),
+          axios.get(`${backendUrl}/workspaces/${workspaceId}/datasets/${targetDatasetId}/versions`, {
+            headers: { Authorization: `Bearer ${token}` }
+          }).catch(() => ({ data: { data: [] } }))
         ]);
 
         const allDashboards = siblingsRes?.data?.data || siblingsRes?.data || [];
+        const safeDashboards = Array.isArray(allDashboards) ? allDashboards : [];
         const versions = versionsRes?.data?.data || (Array.isArray(versionsRes?.data) ? versionsRes.data : []);
         setDataVersions(versions);
 
-        const dashSiblings = allDashboards.filter((d: any) => d && String(d.dataset_id) === String(targetDatasetId));
+        const dashSiblings = safeDashboards.filter((d: any) => d && String(d.dataset_id) === String(targetDatasetId));
         setSiblings(dashSiblings);
 
-        if (!initialDashboardId && !currentDashboard) {
-          const primary = dashSiblings.find((d: any) => d.is_primary);
-          if (primary) setDashboardEntity(primary);
+        // 4. If no dashboard loaded yet, discover one for this dataset
+        if (!currentDashboard && dashSiblings.length > 0) {
+          const primary = dashSiblings.find((d: any) => d.is_primary) || dashSiblings[0];
+          if (primary) {
+            currentDashboard = primary;
+            setDashboardEntity(primary);
+            if (primary.configuration) {
+              setDashboardConfig(primary.configuration);
+            }
+          }
         }
+      } catch (sibErr) {
+        console.error('Failed to load siblings/versions:', sibErr);
       }
+
+      // 5. Ensure config is always valid
+      if (!currentDashboard) {
+        setDashboardConfig({ charts: [], kpis: [], patterns: [], widgets: [] });
+      }
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load dashboard');
@@ -178,7 +201,7 @@ const DashboardViewIntegrated: React.FC = () => {
       widgets: (prev.widgets || []).filter(w => w.id !== widgetId),
       // Also filter legacy if present in widget list (UniversalGrid handles this merger, but best to keep state clean)
       charts: (prev.charts || []).filter(c => c.id !== widgetId),
-      kpis: (prev.kpis || []).filter(k => (k.id || `kpi-${prev.kpis.indexOf(k)}`) !== widgetId)
+      kpis: (prev.kpis || []).filter((k, i) => (k?.id || `kpi-${i}`) !== widgetId)
     }));
   };
 
@@ -190,16 +213,17 @@ const DashboardViewIntegrated: React.FC = () => {
   };
 
   const handleGenerateReport = async () => {
-    if (!dataset || !dashboardConfig.widgets.length) return;
+    const widgets = dashboardConfig?.widgets || [];
+    if (!dataset || !widgets.length) return;
     setIsGeneratingReport(true);
     try {
       // Serialize widgets for context
-      const widgetSummary = dashboardConfig.widgets.map(w => ({
-        type: w.type,
-        title: w.title,
-        description: w.description,
-        content: w.type === 'text' ? (w as any).content : undefined,
-        kpiValue: w.type === 'kpi' ? (w as any).kpi?.value : undefined
+      const widgetSummary = widgets.map(w => ({
+        type: w?.type,
+        title: w?.title || 'Untitled',
+        description: w?.description,
+        content: w?.type === 'text' ? (w as any).content : undefined,
+        kpiValue: w?.type === 'kpi' ? (w as any).kpi?.value : undefined
       }));
 
       const report = await GroqService.generateReport(dataset, 'strategic', {

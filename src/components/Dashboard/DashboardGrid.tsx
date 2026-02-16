@@ -31,7 +31,9 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({
 }) => {
     // Current visible charts based on perspective
     const visibleCharts = useMemo(() => {
+        if (!config.charts || !Array.isArray(config.charts)) return [];
         return config.charts.filter(c => {
+            if (!c) return false;
             if (perspective === 'Overview') return c.priority === 'critical' || c.priority === 'high';
             if (perspective === 'Forensic') return c.category === 'Forensic' || c.category === 'Patterns';
             return c.category === perspective;
