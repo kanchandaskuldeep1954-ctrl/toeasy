@@ -17,8 +17,8 @@ export interface PivotWidgetProps {
 }
 
 export const PivotWidget: React.FC<PivotWidgetProps> = ({
-    data,
-    fields,
+    data = [],
+    fields = [],
     config: initialConfig,
     onConfigChange,
     height = 500
@@ -79,7 +79,7 @@ export const PivotWidget: React.FC<PivotWidgetProps> = ({
 
     // Compute Pivot Logic
     const pivotData = useMemo(() => {
-        if (!data.length || (!config.rows.length && !config.columns.length && !config.values.length)) return [];
+        if (!data || !data.length || (!config.rows.length && !config.columns.length && !config.values.length)) return [];
 
         // Grouping
         const groups: Record<string, any[]> = {};

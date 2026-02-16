@@ -9,13 +9,13 @@ interface StatsPanelProps {
     onClose: () => void;
 }
 
-export const StatsPanel: React.FC<StatsPanelProps> = ({ data, columns, isOpen, onClose }) => {
+export const StatsPanel: React.FC<StatsPanelProps> = ({ data = [], columns = [], isOpen, onClose }) => {
     const stats = useMemo(() => {
-        if (!data.length) return {};
+        if (!data || !data.length || !columns || !columns.length) return {};
 
         const computed: Record<string, any> = {};
 
-        columns.forEach(col => {
+        (columns || []).forEach(col => {
             const values = data.map(row => row[col]);
             const validValues = values.filter(v => v !== null && v !== undefined && v !== '');
             const numValues = validValues.filter(v => typeof v === 'number');
@@ -85,7 +85,7 @@ export const StatsPanel: React.FC<StatsPanelProps> = ({ data, columns, isOpen, o
                     Analysis of {data.length} rows
                 </div>
 
-                {columns.map(col => {
+                {(columns || []).map(col => {
                     const stat = stats[col];
                     if (!stat) return null;
 

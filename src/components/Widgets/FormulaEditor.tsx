@@ -9,7 +9,7 @@ interface FormulaEditorProps {
     workspaceId?: string;
 }
 
-export const FormulaEditor: React.FC<FormulaEditorProps> = ({ columns, onSave, onCancel, datasetId, workspaceId }) => {
+export const FormulaEditor: React.FC<FormulaEditorProps> = ({ columns = [], onSave, onCancel, datasetId, workspaceId }) => {
     const [name, setName] = useState('');
     const [formula, setFormula] = useState('');
     const [nlPrompt, setNlPrompt] = useState('');
@@ -96,7 +96,7 @@ export const FormulaEditor: React.FC<FormulaEditorProps> = ({ columns, onSave, o
                     )}
 
                     <div className="mt-2 text-xs text-gray-400">
-                        Available: {columns.slice(0, 5).join(', ')}{columns.length > 5 && '...'}
+                        Available: {(columns || []).slice(0, 5).join(', ')}{(columns || []).length > 5 && '...'}
                     </div>
                 </div>
 

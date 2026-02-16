@@ -73,6 +73,9 @@ const DashboardViewIntegrated: React.FC = () => {
         } else if (dataset?.dashboardConfig) {
           // Fallback to dataset config if dashboard entity doesn't have it (legacy)
           setDashboardConfig(dataset.dashboardConfig);
+        } else {
+          // Initialize with empty but valid structure
+          setDashboardConfig({ charts: [], kpis: [], patterns: [], widgets: [] });
         }
 
         // 2. Hydrate Dataset in Context if not already active

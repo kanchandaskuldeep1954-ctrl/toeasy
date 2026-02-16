@@ -42,13 +42,13 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
         let widgets = [...(config.widgets || [])];
 
         // Back-compat: Add legacy charts if not already in widgets
-        if (config.charts) {
+        if (config.charts && Array.isArray(config.charts)) {
             config.charts.forEach(c => {
-                if (!widgets.find(w => w.id === c.id)) {
+                if (c && c.id && !widgets.find(w => w.id === c.id)) {
                     widgets.push({
                         id: c.id,
                         type: 'chart',
-                        title: c.title,
+                        title: c.title || 'Chart',
                         description: c.description,
                         layout: c.layout || { w: 6, h: 4, x: 0, y: 0 },
                         chart: c
@@ -58,17 +58,19 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
         }
 
         // Back-compat: KPIs
-        if (config.kpis) {
+        if (config.kpis && Array.isArray(config.kpis)) {
             config.kpis.forEach((k, i) => {
-                const kpiId = k.id || `kpi-${i}`;
-                if (!widgets.find(w => w.id === kpiId)) {
-                    widgets.push({
-                        id: kpiId,
-                        type: 'kpi',
-                        title: k.title,
-                        layout: { w: 4, h: 2, x: (i * 4) % 12, y: Infinity },
-                        kpi: k
-                    });
+                if (k) {
+                    const kpiId = k.id || `kpi-${i}`;
+                    if (!widgets.find(w => w.id === kpiId)) {
+                        widgets.push({
+                            id: kpiId,
+                            type: 'kpi',
+                            title: k.title || 'KPI',
+                            layout: { w: 4, h: 2, x: (i * 4) % 12, y: Infinity },
+                            kpi: k
+                        });
+                    }
                 }
             });
         }
@@ -117,7 +119,7 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
             case 'chart':
                 // We need to aggregate data for the chart
                 // Assuming widget.chart has the spec
-                if ('chart' in widget) {
+                if ('chart' in widget && widget.chart) {
                     const aggData = aggregateData(widget.chart, dataset.data || [], dataset.headers || []);
                     return (
                         <ChartWidget
@@ -133,13 +135,13 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
                         />
                     );
                 }
-                return <div>Invalid Chart Config</div>;
+                return <div className="p-4 text-center text-gray-500">Invalid Chart Config</div>;
 
             case 'kpi':
-                if ('kpi' in widget) {
+                if ('kpi' in widget && widget.kpi) {
                     return <KPIWidget kpi={widget.kpi} />;
                 }
-                return <div>Invalid KPI Config</div>;
+                return <div className="p-4 text-center text-gray-500">Invalid KPI Config</div>;
 
             case 'table':
                 return (

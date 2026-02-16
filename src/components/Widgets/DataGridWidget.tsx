@@ -20,7 +20,7 @@ interface DataGridWidgetProps {
 }
 
 export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
-    data,
+    data = [],
     columns: propColumns,
     height = 400,
     editable = false,
@@ -49,7 +49,7 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
 
     // Sort and Filter logic
     const processedData = useMemo(() => {
-        let result = [...data];
+        let result = [...(data || [])];
 
         if (filterText) {
             const lowerFilter = filterText.toLowerCase();
