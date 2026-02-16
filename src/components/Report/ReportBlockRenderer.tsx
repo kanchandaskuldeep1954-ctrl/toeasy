@@ -1,24 +1,4 @@
-import { QueryConsole } from '../Widgets/QueryConsole';
-
-// ... (existing imports)
-
-// ... inside renderContent switch
-            case 'query':
-return (
-    <div className="my-6 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-slate-50 dark:bg-slate-900">
-        <QueryConsole
-            workspaceId={dataset.workspace_id ? String(dataset.workspace_id) : ''}
-            datasetId={String(dataset.id)}
-            initialQuery={block.content?.query || ''}
-            height={400}
-            // We could sync query state back to block content if needed
-            // but QueryConsole handles its own state. 
-            // Ideally, we passed an onUpdate to save the query string.
-            onQueryChange={(q) => onUpdate(block.id, { ...block.content, query: q })}
-        />
-    </div>
-);
-// ...
+import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
