@@ -11,7 +11,13 @@ import {
   LayoutDashboard, Sheet, ArrowRight, Pin
 } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
-import { ChartSpec, DashboardConfig } from '../../types';
+import { ChartSpec, DashboardConfig, KPI } from '../../types';
+import { DataGridWidget } from './Widgets/DataGridWidget';
+import { ChartWidget } from './Widgets/ChartWidget';
+import { KPIWidget } from './Widgets/KPIWidget';
+import { PivotWidget, PivotConfig } from './Widgets/PivotWidget';
+import ReactMarkdown from 'react-markdown';
+import { GroqService } from '../services/groqService';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
   XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, Legend
@@ -57,7 +63,7 @@ const PlaygroundViewIntegrated: React.FC = () => {
 
   // Layout
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState<'table' | 'chart' | 'messages'>('table');
+  const [activeTab, setActiveTab] = useState<'table' | 'chart' | 'pivot' | 'report' | 'messages'>('table');
   const [editorMode, setEditorMode] = useState<'ask' | 'sql' | 'script' | 'python'>('ask');
   const [pyodide, setPyodide] = useState<any>(null);
   const [isPythonLoading, setIsPythonLoading] = useState(false);
@@ -76,6 +82,13 @@ const PlaygroundViewIntegrated: React.FC = () => {
   const [generatedSql, setGeneratedSql] = useState<string | null>(null);
   const [executionTime, setExecutionTime] = useState<number | null>(null);
   const [rowCount, setRowCount] = useState<number>(0);
+
+  // Widget States
+  const [playgroundCharts, setPlaygroundCharts] = useState<ChartSpec[]>([]);
+  const [playgroundKPIs, setPlaygroundKPIs] = useState<KPI[]>([]);
+  const [playgroundPivotConfig, setPlaygroundPivotConfig] = useState<PivotConfig>({ rows: [], columns: [], values: [] });
+  const [playgroundReport, setPlaygroundReport] = useState<string | null>(null);
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   // Library
   const [savedQueries, setSavedQueries] = useState<SavedQuery[]>([]);
@@ -129,6 +142,63 @@ const PlaygroundViewIntegrated: React.FC = () => {
       loadSpecificQuery();
     }
   }, [workspaceId, queryId, token]);
+
+  // Auto-generate Chart Spec when results change
+  useEffect(() => {
+    if (results.length > 0 && playgroundCharts.length === 0) {
+      const numericKeys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
+      const labelKey = Object.keys(results[0]).find(k => typeof results[0][k] === 'string') || Object.keys(results[0])[0];
+
+      if (numericKeys.length > 0) {
+        setPlaygroundCharts([{
+          id: `chart-${Date.now()}`,
+          type: 'bar',
+          title: 'Analysis Result',
+          xAxis: labelKey,
+          yAxis: numericKeys[0],
+          color: '#6366f1',
+          description: 'Auto-generated from query results'
+        }]);
+
+        // Generate KPIs
+        const newKPIs: KPI[] = [
+          {
+            id: 'kpi-rows',
+            title: 'Total Rows',
+            value: results.length,
+            trend: { value: 0, direction: 'neutral' }, // Placeholder
+          }
+        ];
+
+        // Add Sum/Avg for first numeric column
+        const keyCol = numericKeys[0];
+        const sum = results.reduce((acc, r) => acc + (Number(r[keyCol]) || 0), 0);
+        const avg = sum / results.length;
+
+        newKPIs.push({
+          id: `kpi-${keyCol}`,
+          title: `Total ${keyCol}`,
+          value: sum.toLocaleString(undefined, { maximumFractionDigits: 0 }),
+          trend: { value: 12, direction: 'up' }, // Mock trend
+        });
+
+        newKPIs.push({
+          id: `kpi-avg-${keyCol}`,
+          title: `Avg ${keyCol}`,
+          value: avg.toLocaleString(undefined, { maximumFractionDigits: 1 }),
+        });
+
+        setPlaygroundKPIs(newKPIs);
+      } else {
+        // Just row count
+        setPlaygroundKPIs([{
+          id: 'kpi-rows',
+          title: 'Total Rows',
+          value: results.length,
+        }]);
+      }
+    }
+  }, [results]);
 
   // --- API Functions ---
 
@@ -213,6 +283,8 @@ const PlaygroundViewIntegrated: React.FC = () => {
     setResults([]);
     setExecutionTime(null);
     setExplanation(null);
+    setPlaygroundCharts([]); // Clear charts on new run
+    setPlaygroundKPIs([]);   // Clear KPIs
 
     // Auto-switch to table view on new execution
     setActiveTab('table');
@@ -542,6 +614,78 @@ df = pd.DataFrame(raw_data)
     }
   };
 
+  const handleGenerateReport = async () => {
+    if (!dataset || results.length === 0) return;
+    setIsGeneratingReport(true);
+    try {
+      const report = await GroqService.generateReport(dataset as any, 'analytical', {
+        query: editorMode === 'ask' ? query : sqlQuery,
+        resultsSummary: results.slice(0, 10), // Send first 10 rows as context
+        rowCount
+      });
+
+      let markdownContent = '';
+      if (typeof report === 'string') {
+        markdownContent = report;
+      } else if (report && (report.title || report.executiveSummary)) {
+        markdownContent = `# ${report.title || 'Analysis Report'}\n\n`;
+        if (report.subtitle) markdownContent += `> ${report.subtitle}\n\n`;
+        if (report.executiveSummary) markdownContent += `## Executive Summary\n${report.executiveSummary}\n\n`;
+
+        if (report.sections) {
+          report.sections.forEach(section => {
+            markdownContent += `## ${section.title}\n${section.content}\n\n`;
+          });
+        }
+      } else {
+        markdownContent = 'Report generated successfully but format is unrecognized.';
+        console.log('Unrecognized report format:', report);
+      }
+
+      setPlaygroundReport(markdownContent);
+    } catch (e) {
+      console.error("Failed to generate report", e);
+      setError("Failed to generate report");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const handleCreateDashboard = async () => {
+    if (!workspaceId || !dataset) return;
+    try {
+      // Create dashboard
+      const dashConfig = await GroqService.suggestDashboard(dataset as any, query || 'Analysis Results');
+
+      // Merge current playground charts if any
+      if (playgroundCharts.length > 0) {
+        const playgroundWidgets = playgroundCharts.map((chart, idx) => ({
+          id: chart.id || `pg-chart-${Date.now()}-${idx}`,
+          type: 'chart' as const,
+          title: chart.title,
+          description: chart.description,
+          chart: chart,
+          layout: { w: 2, h: 2, x: 0, y: 0 }
+        }));
+
+        dashConfig.widgets = [...(dashConfig.widgets || []), ...playgroundWidgets as any[]];
+      }
+
+      const res = await dashboardAPI.create(workspaceId, {
+        name: saveForm.name || query || 'New Dashboard',
+        description: 'Created from Playground Analysis',
+        configuration: dashConfig,
+        dataset_id: dataset.id
+      });
+
+      // Navigate
+      navigate(`/app/dashboard?workspace=${workspaceId}&id=${res.data.id || res.data._id}`);
+    } catch (e) {
+      console.error("Failed to create dashboard", e);
+      alert("Failed to create dashboard");
+    }
+  };
+
   // --- Render Helpers ---
 
   const renderChart = () => {
@@ -552,27 +696,49 @@ df = pd.DataFrame(raw_data)
       </div>
     );
 
-    // Auto-detect numeric columns
-    const numericKeys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
-    const labelKey = Object.keys(results[0]).find(k => typeof results[0][k] === 'string') || Object.keys(results[0])[0];
-
-    if (numericKeys.length === 0) return <div className="p-8 text-center text-slate-500">No numeric data to visualize</div>;
-
     return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={results.slice(0, 50)}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey={labelKey} tick={{ fontSize: 10 }} interval={0} angle={-45} textAnchor="end" height={60} />
-          <YAxis tick={{ fontSize: 10 }} />
-          <Tooltip
-            contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-          />
-          <Legend />
-          {numericKeys.slice(0, 3).map((key, i) => (
-            <Bar key={key} dataKey={key} fill={['#6366f1', '#8b5cf6', '#ec4899'][i % 3]} radius={[4, 4, 0, 0]} />
+      <div className="h-full overflow-y-auto p-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
+          {playgroundCharts.map((chart, idx) => (
+            <div key={chart.id} className="h-80 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative group">
+              <ChartWidget
+                chart={chart}
+                data={results}
+                isEditing={true}
+                onUpdate={(updated) => {
+                  setPlaygroundCharts(prev => prev.map(c => c.id === chart.id ? updated : c));
+                }}
+                onDelete={() => {
+                  setPlaygroundCharts(prev => prev.filter(c => c.id !== chart.id));
+                }}
+                height="100%"
+              />
+            </div>
           ))}
-        </BarChart>
-      </ResponsiveContainer>
+
+          {/* Add Chart Button Tile */}
+          <button
+            onClick={() => {
+              const numericKeys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
+              const labelKey = Object.keys(results[0]).find(k => typeof results[0][k] === 'string') || Object.keys(results[0])[0];
+              setPlaygroundCharts(prev => [...prev, {
+                id: `chart-${Date.now()}`,
+                type: 'line',
+                title: 'New Chart',
+                xAxis: labelKey,
+                yAxis: numericKeys[1] || numericKeys[0] || labelKey,
+                color: '#10b981'
+              }]);
+            }}
+            className="h-80 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all gap-2"
+          >
+            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full group-hover:scale-110 transition-transform">
+              <BarChart2 className="w-6 h-6" />
+            </div>
+            <span className="font-bold text-sm">Add Visualization</span>
+          </button>
+        </div>
+      </div>
     );
   };
 
@@ -765,6 +931,17 @@ df = pd.DataFrame(raw_data)
         {/* --- Bottom Half: Results Area --- */}
         <div className="flex-1 flex flex-col min-h-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800">
 
+          {/* KPI Summary Bar */}
+          {playgroundKPIs.length > 0 && (
+            <div className="flex items-center gap-4 overflow-x-auto px-6 py-4 bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800 shrink-0">
+              {playgroundKPIs.map(kpi => (
+                <div key={kpi.id} className="min-w-[200px]">
+                  <KPIWidget kpi={kpi} />
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Result Tabs */}
           <div className="flex items-center justify-between px-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50">
             <div className="flex gap-1">
@@ -789,6 +966,22 @@ df = pd.DataFrame(raw_data)
                 <MessageSquare className="w-4 h-4" />
                 Execution Details
               </button>
+              <button
+                onClick={() => setActiveTab('pivot')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'pivot' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <Layout className="w-4 h-4" />
+                Pivot Table
+              </button>
+              <button
+                onClick={() => setActiveTab('report')}
+                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'report' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+              >
+                <div className="flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  <span>Report</span>
+                </div>
+              </button>
             </div>
 
             <div className="flex items-center gap-2">
@@ -809,6 +1002,14 @@ df = pd.DataFrame(raw_data)
                     <Pin className="w-3.5 h-3.5" /> Pin to Dashboard
                   </button>
                   <div className="w-px h-5 bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                  <button
+                    onClick={handleCreateDashboard}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/20 rounded-lg text-[10px] font-black uppercase tracking-wider transition-colors"
+                    title="Create Dashboard from Analysis"
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5" /> Create Dashboard
+                  </button>
+
                   <button
                     onClick={() => {
                       const params = new URLSearchParams({ workspace: workspaceId || '', dataset: datasetId || '' });
@@ -842,28 +1043,14 @@ df = pd.DataFrame(raw_data)
             {activeTab === 'table' && (
               <div className="absolute inset-0 overflow-auto">
                 {results.length > 0 ? (
-                  <table className="w-full text-left text-xs border-separate border-spacing-0">
-                    <thead className="sticky top-0 z-10">
-                      <tr className="bg-slate-50 dark:bg-slate-800 shadow-sm">
-                        {Object.keys(results[0]).map((h, i) => (
-                          <th key={i} className="px-6 py-3 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 whitespace-nowrap bg-slate-50 dark:bg-slate-800">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
-                      {results.map((row, i) => (
-                        <tr key={i} className="hover:bg-indigo-50/10 dark:hover:bg-indigo-900/10 transition-colors">
-                          {Object.values(row).map((val: any, j) => (
-                            <td key={j} className="px-6 py-3 text-slate-600 dark:text-slate-300 border-b border-slate-50 dark:border-slate-800/50 truncate max-w-[200px]">
-                              {String(val ?? '-')}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                  <div className="h-full w-full p-0">
+                    <DataGridWidget
+                      data={results}
+                      height="100%"
+                      title={`Query Results (${results.length} rows)`}
+                      editable={false}
+                    />
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full text-slate-400">
                     <Database className="w-16 h-16 mb-4 opacity-10" />
@@ -908,6 +1095,64 @@ df = pd.DataFrame(raw_data)
                     </div>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === 'pivot' && (
+              <div className="absolute inset-0 p-4 bg-slate-50 dark:bg-slate-900 overflow-hidden">
+                {results.length > 0 ? (
+                  <PivotWidget
+                    data={results}
+                    fields={Object.keys(results[0])}
+                    config={playgroundPivotConfig}
+                    onConfigChange={setPlaygroundPivotConfig}
+                    height="100%"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-slate-400">
+                    <Layout className="w-12 h-12 mb-4 opacity-20" />
+                    <p>Run a query to use Pivot Table</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'report' && (
+              <div className="absolute inset-0 p-8 overflow-auto bg-white dark:bg-slate-900">
+                <div className="max-w-4xl mx-auto">
+                  {!playgroundReport ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-center">
+                      <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mb-6">
+                        <Sparkles className="w-8 h-8 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                      <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Generate Analytical Report</h3>
+                      <p className="text-slate-500 max-w-md mb-8">
+                        Use AI to analyze your query results and generate a comprehensive report with insights and recommendations.
+                      </p>
+                      <button
+                        onClick={handleGenerateReport}
+                        disabled={isGeneratingReport || results.length === 0}
+                        className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/25 transition-all disabled:opacity-50 disabled:shadow-none flex items-center gap-2"
+                      >
+                        {isGeneratingReport ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Analyzing Data...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-4 h-4" />
+                            Generate AI Report
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="prose dark:prose-invert max-w-none">
+                      <ReactMarkdown>{playgroundReport}</ReactMarkdown>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

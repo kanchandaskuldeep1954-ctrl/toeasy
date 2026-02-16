@@ -9,6 +9,7 @@ import { SmartChart } from '../../components/Dashboard/SmartChart';
 import { sharingAPI, activityAPI } from '../services/api';
 import { useSearchParams } from 'react-router-dom';
 import ExportModal from './ExportHub/ExportModal';
+import { ReportSectionEditor } from './Report/ReportSectionEditor';
 import mermaid from 'mermaid';
 
 // Initialize mermaid
@@ -1120,110 +1121,78 @@ const ReportView: React.FC<ReportViewProps> = ({ dataset, onAIAction, onUpdate }
                         {report.sections && Array.isArray(report.sections) && report.sections.map((section, idx) => {
                             if (!section) return null;
                             return (
-                                <section key={section.id || idx} id={section.id} className="scroll-mt-12 break-after-page">
-                                    <div className="flex items-baseline gap-4 mb-8">
-                                        <span className="text-6xl font-black text-slate-200 dark:text-slate-800 select-none">{idx + 1}</span>
-                                        <h2 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">{section.title}</h2>
+                                <div key={section.id || idx} id={section.id} className="scroll-mt-12 break-after-page relative group/outer">
+                                    <div className="absolute -left-12 top-0 text-6xl font-black text-slate-100 dark:text-slate-800 select-none -z-10 transition-colors group-hover/outer:text-slate-200 dark:group-hover/outer:text-slate-700">
+                                        {idx + 1}
                                     </div>
 
-                                    {/* Key Takeaways */}
-                                    {section.keyTakeaways && section.keyTakeaways.length > 0 && (
-                                        <div className="mb-8 flex flex-wrap gap-3">
-                                            {(section.keyTakeaways || []).map((takeaway, k) => (
-                                                <span key={k} className="px-4 py-2 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 text-xs font-bold rounded-lg border border-indigo-100 dark:border-indigo-900/30">
-                                                    ✦ {takeaway}
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
+                                    <ReportSectionEditor
+                                        section={section}
+                                        dataset={dataset}
+                                        onUpdate={(updatedSection) => {
+                                            const newSections = [...(report.sections || [])];
+                                            newSections[idx] = updatedSection;
+                                            const newReport = { ...report, sections: newSections };
+                                            setReport(newReport);
+                                            if (onUpdate) onUpdate({ ...dataset, strategicReport: newReport } as any);
+                                        }}
+                                        onDelete={() => {
+                                            if (!confirm('Delete this section?')) return;
+                                            const newSections = (report.sections || []).filter((_, i) => i !== idx);
+                                            const newReport = { ...report, sections: newSections };
+                                            setReport(newReport);
+                                            if (onUpdate) onUpdate({ ...dataset, strategicReport: newReport } as any);
+                                        }}
+                                    />
 
-                                    {/* KPIs Grid */}
-                                    {section.kpis && section.kpis.length > 0 && (
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10 break-inside-avoid">
-                                            {(section.kpis || []).map((kpi, k) => (
-                                                <div key={k} className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm print:border group relative cursor-help">
-                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-wider mb-1">{kpi.label}</p>
-                                                    <p className="text-xl font-black text-slate-900 dark:text-white">{kpi.value}</p>
-                                                    <div className="flex items-center justify-between mt-1">
-                                                        <p className={`text-[10px] font-bold ${kpi.status === 'on_track' ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                                            {kpi.status?.replace('_', ' ').toUpperCase()}
-                                                        </p>
-                                                        {kpi.validation?.status === 'verified' && (
-                                                            <span className="text-emerald-500 animate-pulse">✓</span>
-                                                        )}
-                                                    </div>
+                                    {/* Legacy Modules Preservation */}
+                                    <div className="pl-4 border-l-2 border-slate-100 dark:border-slate-800 ml-2 space-y-8">
+                                        {/* Key Takeaways */}
+                                        {section.keyTakeaways && section.keyTakeaways.length > 0 && (
+                                            <div className="flex flex-wrap gap-3">
+                                                {(section.keyTakeaways || []).map((takeaway, k) => (
+                                                    <span key={k} className="px-3 py-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-wider rounded-lg">
+                                                        ✦ {takeaway}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        )}
 
-                                                    {/* Reasoning Tooltip / Hallucination Shield */}
-                                                    <div className="absolute top-full left-0 mt-2 hidden group-hover:block w-72 p-6 bg-slate-900 text-white rounded-[2rem] shadow-4xl z-[100] border border-white/10 animate-in fade-in zoom-in-95">
-                                                        <div className="flex items-center gap-2 mb-4">
-                                                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                                            <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Grounded Insight</span>
-                                                        </div>
-                                                        <p className="text-[11px] font-medium leading-relaxed opacity-90 mb-4">
-                                                            "{kpi.reasoning || 'Aggregated insight derived from multi-dimensional analysis of the source dataset.'}"
-                                                        </p>
-                                                        <div className="pt-4 border-t border-white/5 space-y-2">
-                                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">Data Source Anchor</p>
-                                                            <code className="text-[10px] text-indigo-400 font-bold block bg-black/30 p-2 rounded-lg">
-                                                                {kpi.validation?.dataSourceAnchor || `SELECT ${kpi.calculation?.operation || 'COUNT'}(*) FROM Source WHERE ...`}
-                                                            </code>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                        {/* Section Reasoning (First Principles) */}
+                                        {(section as any).reasoning && (
+                                            <div className="p-6 bg-slate-50 dark:bg-slate-800/20 rounded-2xl border-l-4 border-indigo-600">
+                                                <h6 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-2">Strategic Reasoning</h6>
+                                                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
+                                                    "{(section as any).reasoning}"
+                                                </p>
+                                            </div>
+                                        )}
 
-                                    {/* Narrative Content */}
-                                    <div className="prose prose-slate dark:prose-invert prose-lg max-w-none prose-headings:font-black prose-headings:tracking-tight prose-p:text-slate-600 dark:prose-p:text-slate-300 prose-p:font-medium">
-                                        <ReactMarkdown>{section.content}</ReactMarkdown>
+                                        {/* Mermaid Logic Path (Brain Logic) */}
+                                        {section.logicPath && (
+                                            <div>
+                                                <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Logic Flow</h5>
+                                                <Mermaid chart={section.logicPath} fallbackLogic={section.reasoning} />
+                                            </div>
+                                        )}
+
+                                        {/* Strategic Modules */}
+                                        {section.swot && renderSWOT(section.swot)}
+                                        {section.recommendations && renderRecommendations(section.recommendations)}
+                                        {section.risks && renderRisks(section.risks)}
+
+                                        {/* Calculated DataFrames (First Principles) */}
+                                        {(section as any).dataFrames && (section as any).dataFrames.length > 0 && (
+                                            <div className="space-y-8">
+                                                {((section as any).dataFrames || []).map((df: any, d: number) => (
+                                                    <React.Fragment key={d}>
+                                                        {renderDataFrame(df)}
+                                                    </React.Fragment>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
-
-                                    {/* Section Reasoning (First Principles) */}
-                                    {(section as any).reasoning && (
-                                        <div className="my-8 p-6 bg-slate-50 dark:bg-slate-800/20 rounded-3xl border-l-4 border-indigo-600 shadow-sm">
-                                            <h6 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-2">Strategic Reasoning</h6>
-                                            <p className="text-sm font-medium text-slate-600 dark:text-slate-400 italic leading-relaxed">
-                                                "{(section as any).reasoning}"
-                                            </p>
-                                        </div>
-                                    )}
-
-                                    {/* Mermaid Logic Path (Brain Logic) */}
-                                    {section.logicPath && (
-                                        <div className="my-10">
-                                            <h5 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6 px-1">Analytical Logic Flow</h5>
-                                            <Mermaid chart={section.logicPath} fallbackLogic={section.reasoning} />
-                                        </div>
-                                    )}
-
-                                    {/* Strategic Modules */}
-                                    {section.swot && renderSWOT(section.swot)}
-                                    {section.recommendations && renderRecommendations(section.recommendations)}
-                                    {section.risks && renderRisks(section.risks)}
-
-                                    {/* Calculated DataFrames (First Principles) */}
-                                    {(section as any).dataFrames && (section as any).dataFrames.length > 0 && (
-                                        <div className="mt-10 mb-12 space-y-8">
-                                            {((section as any).dataFrames || []).map((df: any, d: number) => (
-                                                <React.Fragment key={d}>
-                                                    {renderDataFrame(df)}
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* Embedded Visuals */}
-                                    {section.charts && section.charts.length > 0 && (
-                                        <div className="mt-10 grid grid-cols-1 gap-8">
-                                            {(section.charts || []).map((chart, c) => (
-                                                <React.Fragment key={c}>
-                                                    {renderChart(chart)}
-                                                </React.Fragment>
-                                            ))}
-                                        </div>
-                                    )}
-                                </section>
+                                </div>
                             );
                         })}
                     </div>

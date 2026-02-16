@@ -7,12 +7,13 @@ import {
 import { ChartSpec } from '../../../types';
 import { SendToMenu } from './SendToMenu';
 
-interface ChartWidgetProps {
+export interface ChartWidgetProps {
     chart: ChartSpec;
     data?: any[]; // Allow overriding data (e.g. for drilldown or playground)
     isEditing?: boolean;
     onUpdate?: (updatedChart: ChartSpec) => void;
     onDelete?: () => void;
+    onPointClick?: (data: any, index: number) => void;
     height?: number | string;
 }
 
@@ -24,6 +25,7 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
     isEditing = false,
     onUpdate,
     onDelete,
+    onPointClick,
     height = 300
 }) => {
     const [editMode, setEditMode] = useState(false);
@@ -43,11 +45,19 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
         );
     }
 
+    const handleClick = (data: any, index: number) => {
+        if (onPointClick) onPointClick(data, index);
+    };
+
     const renderChart = () => {
         switch (localSpec.type) {
             case 'bar':
                 return (
-                    <BarChart data={chartData}>
+                    <BarChart data={chartData} onClick={(e) => {
+                        if (e && e.activePayload && e.activePayload.length > 0) {
+                            handleClick(e.activePayload[0].payload, e.activeTooltipIndex || 0);
+                        }
+                    }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                         <XAxis dataKey={localSpec.xAxis} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
@@ -56,13 +66,23 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             cursor={{ fill: '#f3f4f6' }}
                         />
                         <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                        <Bar dataKey={localSpec.yAxis} fill={localSpec.color || COLORS[0]} radius={[4, 4, 0, 0]} name={localSpec.title} />
+                        <Bar
+                            dataKey={localSpec.yAxis}
+                            fill={localSpec.color || COLORS[0]}
+                            radius={[4, 4, 0, 0]}
+                            name={localSpec.title}
+                            onClick={handleClick} // Direct click on bar
+                        />
                     </BarChart>
                 );
 
             case 'line':
                 return (
-                    <LineChart data={chartData}>
+                    <LineChart data={chartData} onClick={(e) => {
+                        if (e && e.activePayload && e.activePayload.length > 0) {
+                            handleClick(e.activePayload[0].payload, e.activeTooltipIndex || 0);
+                        }
+                    }}>
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                         <XAxis dataKey={localSpec.xAxis} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
@@ -83,7 +103,11 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
 
             case 'area':
                 return (
-                    <AreaChart data={chartData}>
+                    <AreaChart data={chartData} onClick={(e) => {
+                        if (e && e.activePayload && e.activePayload.length > 0) {
+                            handleClick(e.activePayload[0].payload, e.activeTooltipIndex || 0);
+                        }
+                    }}>
                         <defs>
                             <linearGradient id={`color${localSpec.id}`} x1="0" y1="0" x2="0" y2="1">
                                 <stop offset="5%" stopColor={localSpec.color || COLORS[0]} stopOpacity={0.3} />
@@ -124,6 +148,7 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             paddingAngle={2}
                             dataKey={localSpec.yAxis || 'value'} // Fallback for pure aggregates
                             nameKey={localSpec.xAxis || 'name'}
+                            onClick={handleClick}
                         >
                             {chartData.map((entry: any, index: number) => (
                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

@@ -1,21 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { queryAPI, aiAPI } from '../../services/api';
 import { DataGridWidget } from './DataGridWidget';
 
-interface QueryConsoleProps {
+export interface QueryConsoleProps {
     workspaceId: string;
     datasetId: string;
+    initialQuery?: string;
     height?: number | string;
     onResults?: (results: any[]) => void;
+    onQueryChange?: (query: string) => void;
 }
 
-export const QueryConsole: React.FC<QueryConsoleProps> = ({ workspaceId, datasetId, height = 400, onResults }) => {
-    const [query, setQuery] = useState('');
+export const QueryConsole: React.FC<QueryConsoleProps> = ({
+    workspaceId,
+    datasetId,
+    initialQuery = '',
+    height = 400,
+    onResults,
+    onQueryChange
+}) => {
+    const [query, setQuery] = useState(initialQuery);
     const [mode, setMode] = useState<'sql' | 'nl'>('sql');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [results, setResults] = useState<any[]>([]);
     const [executedSQL, setExecutedSQL] = useState<string | null>(null);
+
+    // Sync if initialQuery updates? Maybe not needed if we treat it as just initial.
+    // But if we want to support external updates later, we could add useEffect.
+
+    const handleQueryChange = (val: string) => {
+        setQuery(val);
+        if (onQueryChange) onQueryChange(val);
+    };
 
     const handleExecute = async () => {
         if (!query.trim()) return;
@@ -98,7 +115,7 @@ export const QueryConsole: React.FC<QueryConsoleProps> = ({ workspaceId, dataset
             <div className="flex-1 flex flex-col min-h-0">
                 <textarea
                     value={query}
-                    onChange={e => setQuery(e.target.value)}
+                    onChange={e => handleQueryChange(e.target.value)}
                     onKeyDown={handleKeyDown}
                     placeholder={mode === 'sql' ? "SELECT * FROM dataset WHERE..." : "Ask a question about your data..."}
                     className="flex-1 w-full p-4 font-mono text-sm resize-none focus:outline-none"

@@ -292,9 +292,59 @@ export interface Pattern {
   recommendation: string;
 }
 
+export type WidgetType = 'chart' | 'kpi' | 'table' | 'query' | 'pivot' | 'text';
+
+export interface BaseWidgetSpec {
+  id: string;
+  type: WidgetType;
+  title: string;
+  description?: string;
+  layout?: {
+    w: number;
+    h: number;
+    x?: number;
+    y?: number;
+  };
+  sourceModule?: 'sheets' | 'dashboard' | 'report' | 'playground' | 'ai';
+}
+
+export interface ChartWidgetSpec extends BaseWidgetSpec {
+  type: 'chart';
+  chart: ChartSpec;
+}
+
+export interface KPIWidgetSpec extends BaseWidgetSpec {
+  type: 'kpi';
+  kpi: KPI;
+}
+
+export interface TableWidgetSpec extends BaseWidgetSpec {
+  type: 'table';
+  datasetId?: string; // Optional override
+}
+
+export interface QueryWidgetSpec extends BaseWidgetSpec {
+  type: 'query';
+  initialQuery?: string;
+}
+
+export interface PivotWidgetSpec extends BaseWidgetSpec {
+  type: 'pivot';
+  state?: any;
+}
+
+export interface TextWidgetSpec extends BaseWidgetSpec {
+  type: 'text';
+  content: string;
+}
+
+export type WidgetSpec = ChartWidgetSpec | KPIWidgetSpec | TableWidgetSpec | QueryWidgetSpec | PivotWidgetSpec | TextWidgetSpec;
+
 export interface DashboardConfig {
   name?: string;
   description?: string;
+  widgets: WidgetSpec[]; // Unified widget list
+  // Backward compatibility (deprecated but kept for now)
   charts: ChartSpec[];
   kpis: KPI[];
   patterns: Pattern[];
@@ -305,9 +355,19 @@ export interface DashboardConfig {
   theme?: 'indigo' | 'emerald' | 'vibrant' | 'minimal' | 'dark' | 'light';
 }
 
+export type ReportBlockType = 'text' | 'heading1' | 'heading2' | 'heading3' | 'bullet' | 'ordered' | 'divider' | 'chart' | 'kpi' | 'table' | 'pivot' | 'query' | 'image' | 'callout';
+
+export interface ReportBlock {
+  id: string;
+  type: ReportBlockType;
+  content: any; // text string, ChartSpec, KPI, etc.
+  metadata?: any;
+}
+
 export interface ReportSection {
   id: string;
   title: string;
+  blocks?: ReportBlock[]; // New block-based structure
   content: string; // Markdown
   charts: ChartSpec[];
   kpis: KPI[];

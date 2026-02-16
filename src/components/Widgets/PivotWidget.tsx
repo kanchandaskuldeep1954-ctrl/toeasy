@@ -1,59 +1,80 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { DataRow } from '../../../types';
 import { DataGridWidget } from './DataGridWidget';
 
-interface PivotWidgetProps {
-    data: DataRow[];
-    fields: string[];
-    height?: number | string;
-}
-
-interface PivotConfig {
+export interface PivotConfig {
     rows: string[];
     columns: string[];
     values: { field: string; agg: 'sum' | 'count' | 'avg' | 'min' | 'max' }[];
 }
 
-export const PivotWidget: React.FC<PivotWidgetProps> = ({ data, fields, height = 500 }) => {
-    const [config, setConfig] = useState<PivotConfig>({
+export interface PivotWidgetProps {
+    data: DataRow[];
+    fields: string[];
+    config?: PivotConfig;
+    onConfigChange?: (config: PivotConfig) => void;
+    height?: number | string;
+}
+
+export const PivotWidget: React.FC<PivotWidgetProps> = ({
+    data,
+    fields,
+    config: initialConfig,
+    onConfigChange,
+    height = 500
+}) => {
+    const [config, setConfig] = useState<PivotConfig>(initialConfig || {
         rows: [],
         columns: [],
         values: []
     });
 
-    const [availableFields, setAvailableFields] = useState<string[]>(fields);
+    // Sync if initialConfig updates externally
+    useEffect(() => {
+        if (initialConfig) {
+            setConfig(prev => (JSON.stringify(prev) !== JSON.stringify(initialConfig) ? initialConfig : prev));
+        }
+    }, [initialConfig]);
+
+    const updateConfig = (newConfig: PivotConfig) => {
+        setConfig(newConfig);
+        if (onConfigChange) onConfigChange(newConfig);
+    };
 
     const handleAddField = (field: string, target: 'rows' | 'columns' | 'values') => {
-        setConfig(prev => {
-            const newConfig = { ...prev };
-            if (target === 'values') {
-                newConfig.values.push({ field, agg: 'sum' });
-            } else {
-                newConfig[target].push(field);
-            }
-            return newConfig;
-        });
+        const newConfig = { ...config };
+        // Simple clone for arrays
+        newConfig.rows = [...config.rows];
+        newConfig.columns = [...config.columns];
+        newConfig.values = [...config.values];
+
+        if (target === 'values') {
+            newConfig.values.push({ field, agg: 'sum' });
+        } else {
+            newConfig[target].push(field);
+        }
+        updateConfig(newConfig);
     };
 
     const handleRemoveField = (index: number, target: 'rows' | 'columns' | 'values') => {
-        setConfig(prev => {
-            const newConfig = { ...prev };
-            if (target === 'values') {
-                newConfig.values.splice(index, 1);
-            } else {
-                newConfig[target].splice(index, 1);
-            }
-            return newConfig;
-        });
-        // Logic to return to availableFields if needed, but for now we allow duplicate usage or just keep list static
+        const newConfig = { ...config };
+        newConfig.rows = [...config.rows];
+        newConfig.columns = [...config.columns];
+        newConfig.values = [...config.values];
+
+        if (target === 'values') {
+            newConfig.values.splice(index, 1);
+        } else {
+            newConfig[target].splice(index, 1);
+        }
+        updateConfig(newConfig);
     };
 
     const handleAggChange = (index: number, agg: string) => {
-        setConfig(prev => {
-            const newConfig = { ...prev };
-            newConfig.values[index].agg = agg as any;
-            return newConfig;
-        });
+        const newConfig = { ...config };
+        newConfig.values = [...config.values];
+        newConfig.values[index] = { ...newConfig.values[index], agg: agg as any };
+        updateConfig(newConfig);
     };
 
     // Compute Pivot Logic
@@ -158,7 +179,7 @@ export const PivotWidget: React.FC<PivotWidgetProps> = ({ data, fields, height =
     }
 
     return (
-        <div className="flexh-full bg-white rounded-lg border border-gray-200 overflow-hidden" style={{ height }}>
+        <div className="flex h-full bg-white rounded-lg border border-gray-200 overflow-hidden" style={{ height }}>
             {/* Config Panel */}
             <div className="w-64 bg-gray-50 border-r border-gray-200 flex flex-col overflow-y-auto">
                 <div className="p-3 font-bold text-gray-700 text-sm border-b border-gray-200">Fields</div>
