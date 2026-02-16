@@ -153,10 +153,10 @@ const SpreadsheetViewIntegrated: React.FC = () => {
 
     if (isLoading) {
         return (
-            <div className="flex flex-col items-center justify-center h-full bg-slate-900/50 backdrop-blur-sm">
+            <div className="flex flex-col items-center justify-center h-full bg-white dark:bg-slate-950 transition-colors">
                 <Loader2 className="w-10 h-10 text-indigo-500 animate-spin mb-4" />
-                <p className="text-slate-400 font-bold animate-pulse uppercase tracking-widest text-xs">
-                    Hydrating Spreadsheet...
+                <p className="text-slate-500 dark:text-slate-400 font-bold animate-pulse uppercase tracking-widest text-xs">
+                    Loading Spreadsheet...
                 </p>
             </div>
         );
@@ -164,11 +164,11 @@ const SpreadsheetViewIntegrated: React.FC = () => {
 
     if (!activeDataset || (activeDataset.id !== Number(datasetId) && datasetId)) {
         return (
-            <div className="flex flex-col items-center justify-center h-full space-y-4 px-4 text-center">
-                <div className="w-16 h-16 bg-slate-800 rounded-2xl flex items-center justify-center mb-2">
+            <div className="flex flex-col items-center justify-center h-full space-y-4 px-4 text-center bg-white dark:bg-slate-950 transition-colors">
+                <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-2">
                     <span className="text-3xl">📊</span>
                 </div>
-                <h3 className="text-lg font-black text-white">No Dataset Active</h3>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">No Dataset Active</h3>
                 <button
                     onClick={() => navigate('/app/datasets')}
                     className="mt-4 px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black shadow-lg shadow-indigo-500/25 transition-all active:scale-95"
@@ -233,21 +233,21 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => { setShowRightPanel(!showRightPanel); setRightPanelMode('stats'); }}
-                        className={`p-2 rounded-lg transition-colors ${showRightPanel && rightPanelMode === 'stats' ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-500'}`}
+                        className={`p-2 rounded-lg transition-colors ${showRightPanel && rightPanelMode === 'stats' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
                         title="Column Statistics"
                     >
                         <ChartBar className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => { setShowRightPanel(!showRightPanel); setRightPanelMode('charts'); }}
-                        className={`p-2 rounded-lg transition-colors ${showRightPanel && rightPanelMode === 'charts' ? 'bg-indigo-100 text-indigo-600' : 'hover:bg-slate-100 text-slate-500'}`}
+                        className={`p-2 rounded-lg transition-colors ${showRightPanel && rightPanelMode === 'charts' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400' : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500'}`}
                         title="Charts"
                     >
                         <LayoutDashboard className="w-4 h-4" />
                     </button>
                     <button
                         onClick={() => setShowBottomDrawer(!showBottomDrawer)}
-                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${showBottomDrawer ? 'bg-slate-100 border-slate-300 text-slate-700' : 'border-slate-200 text-slate-500 hover:border-indigo-300 hover:text-indigo-600'}`}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${showBottomDrawer ? 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-200' : 'border-slate-200 dark:border-slate-700 text-slate-500 hover:border-indigo-300 dark:hover:border-indigo-600 hover:text-indigo-600 dark:hover:text-indigo-400'}`}
                     >
                         <Terminal className="w-3.5 h-3.5" /> Query
                     </button>
@@ -263,7 +263,6 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                             <PivotWidget
                                 data={activeDataset.data || []}
                                 fields={displayHeaders}
-                                onUpdate={() => { }}
                             />
                         </div>
                     ) : (
@@ -282,9 +281,9 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                             </div>
                             <div className="flex-1 overflow-hidden">
                                 <QueryConsole
+                                    workspaceId={workspaceId || ''}
                                     datasetId={String(activeDataset.id)}
                                     initialQuery={`SELECT * FROM "${activeDataset.name}" LIMIT 10`}
-                                    onRunQuery={() => { }}
                                 />
                             </div>
                         </div>
@@ -303,20 +302,22 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-4">
                             {rightPanelMode === 'stats' ? (
                                 <StatsPanel
-                                    dataset={activeDataset as any}
+                                    data={activeDataset.data || []}
                                     columns={displayHeaders}
+                                    isOpen={true}
+                                    onClose={() => setShowRightPanel(false)}
                                 />
                             ) : (
                                 <div className="space-y-6">
                                     <button className="w-full py-2 border-2 border-dashed border-slate-200 rounded-xl text-slate-400 text-xs font-bold hover:border-indigo-400 hover:text-indigo-500 transition-colors">
                                         + Add New Chart
                                     </button>
-                                    {sheetCharts.map((chart, i) => (
-                                        <div key={chart.id || i} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm">
+                                    {sheetCharts.map((chartSpec, i) => (
+                                        <div key={chartSpec.id || i} className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-3 shadow-sm">
                                             <ChartWidget
-                                                config={chart}
-                                                data={chart.data || activeDataset.data || []}
-                                                onEdit={() => { }}
+                                                chart={chartSpec}
+                                                data={chartSpec.data || activeDataset.data || []}
+                                                height={200}
                                             />
                                         </div>
                                     ))}
@@ -365,7 +366,7 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-8 prose dark:prose-invert max-w-none">
                             <div className="bg-amber-50 dark:bg-amber-900/10 border-l-4 border-amber-500 p-4 mb-8 rounded-r-lg">
                                 <h4 className="text-amber-800 dark:text-amber-400 font-bold m-0">Executive Summary</h4>
-                                <p className="text-amber-700 dark:text-amber-300 mt-1">{generatedReport.summary}</p>
+                                <p className="text-amber-700 dark:text-amber-300 mt-1">{(generatedReport as any).summary || generatedReport.title}</p>
                             </div>
                             {generatedReport.sections.map((section, idx) => (
                                 <div key={idx} className="mb-8">
@@ -373,7 +374,7 @@ const SpreadsheetViewIntegrated: React.FC = () => {
                                         <span className="w-6 h-6 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xs">
                                             {idx + 1}
                                         </span>
-                                        {section.heading}
+                                        {(section as any).heading || (section as any).title || `Section ${idx + 1}`}
                                     </h3>
                                     <div className="pl-8 text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
                                         {section.content}

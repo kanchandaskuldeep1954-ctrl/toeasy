@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
     BarChart, Bar, LineChart, Line, PieChart, Pie, AreaChart, Area,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
@@ -9,7 +9,7 @@ import { SendToMenu } from './SendToMenu';
 
 export interface ChartWidgetProps {
     chart: ChartSpec;
-    data?: any[]; // Allow overriding data (e.g. for drilldown or playground)
+    data?: any[];
     isEditing?: boolean;
     onUpdate?: (updatedChart: ChartSpec) => void;
     onDelete?: () => void;
@@ -17,7 +17,12 @@ export interface ChartWidgetProps {
     height?: number | string;
 }
 
-const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
+const COLORS = ['#6366f1', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316', '#84cc16'];
+
+const DARK_GRID = '#334155';
+const LIGHT_GRID = '#e5e7eb';
+const DARK_AXIS = '#94a3b8';
+const LIGHT_AXIS = '#6b7280';
 
 export const ChartWidget: React.FC<ChartWidgetProps> = ({
     chart,
@@ -31,26 +36,38 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
     const [editMode, setEditMode] = useState(false);
     const [localSpec, setLocalSpec] = useState<ChartSpec>(chart);
 
+    // Detect dark mode from DOM
+    const isDark = useMemo(() => {
+        if (typeof window !== 'undefined') {
+            return document.documentElement.classList.contains('dark');
+        }
+        return false;
+    }, []);
+
+    const gridColor = isDark ? DARK_GRID : LIGHT_GRID;
+    const axisColor = isDark ? DARK_AXIS : LIGHT_AXIS;
+    const tooltipBg = isDark ? '#1e293b' : '#fff';
+    const tooltipBorder = isDark ? '#334155' : '#e5e7eb';
+
     // Guard against undefined chart prop
     if (!chart) {
         return (
-            <div className="flex items-center justify-center p-4 bg-gray-50 border border-gray-200 rounded-lg" style={{ height }}>
-                <div className="text-center text-gray-500">
-                    <p>No chart configuration</p>
+            <div className="flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg" style={{ height }}>
+                <div className="text-center text-slate-400">
+                    <p className="text-sm font-medium">No chart configuration</p>
                 </div>
             </div>
         );
     }
 
-    // Use data from props or from the chart spec itself (if embedded)
     const chartData = dataOverride || chart.data || [];
 
     if (!chartData || chartData.length === 0) {
         return (
-            <div className="flex items-center justify-center p-4 bg-gray-50 border border-gray-200 rounded-lg" style={{ height }}>
-                <div className="text-center text-gray-500">
-                    <p>No data available</p>
-                    <p className="text-xs mt-1">Try refreshing the dataset</p>
+            <div className="flex items-center justify-center p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg" style={{ height }}>
+                <div className="text-center text-slate-400">
+                    <p className="text-sm font-medium">No data available</p>
+                    <p className="text-xs mt-1 text-slate-400">Try refreshing the dataset</p>
                 </div>
             </div>
         );
@@ -58,6 +75,15 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
 
     const handleClick = (data: any, index: number) => {
         if (onPointClick) onPointClick(data, index);
+    };
+
+    const tooltipStyle = {
+        backgroundColor: tooltipBg,
+        borderRadius: '12px',
+        border: `1px solid ${tooltipBorder}`,
+        boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.15)',
+        padding: '8px 12px',
+        fontSize: '12px'
     };
 
     const renderChart = () => {
@@ -69,20 +95,17 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             handleClick(e.activePayload[0].payload, e.activeTooltipIndex || 0);
                         }
                     }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey={localSpec.xAxis} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                            cursor={{ fill: '#f3f4f6' }}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={localSpec.xAxis || 'name'} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? '#1e293b' : '#f3f4f6' }} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
                         <Bar
-                            dataKey={localSpec.yAxis}
+                            dataKey={localSpec.yAxis || 'value'}
                             fill={localSpec.color || COLORS[0]}
-                            radius={[4, 4, 0, 0]}
+                            radius={[6, 6, 0, 0]}
                             name={localSpec.title}
-                            onClick={handleClick} // Direct click on bar
+                            onClick={handleClick}
                         />
                     </BarChart>
                 );
@@ -94,20 +117,18 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             handleClick(e.activePayload[0].payload, e.activeTooltipIndex || 0);
                         }
                     }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey={localSpec.xAxis} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={localSpec.xAxis || 'name'} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
                         <Line
                             type="monotone"
-                            dataKey={localSpec.yAxis}
+                            dataKey={localSpec.yAxis || 'value'}
                             stroke={localSpec.color || COLORS[0]}
-                            strokeWidth={2}
-                            dot={{ r: 4, fill: '#fff', strokeWidth: 2 }}
-                            activeDot={{ r: 6 }}
+                            strokeWidth={2.5}
+                            dot={{ r: 3, fill: isDark ? '#1e293b' : '#fff', strokeWidth: 2 }}
+                            activeDot={{ r: 6, fill: localSpec.color || COLORS[0] }}
                         />
                     </LineChart>
                 );
@@ -125,16 +146,14 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                                 <stop offset="95%" stopColor={localSpec.color || COLORS[0]} stopOpacity={0} />
                             </linearGradient>
                         </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                        <XAxis dataKey={localSpec.xAxis} stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={localSpec.xAxis || 'name'} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
                         <Area
                             type="monotone"
-                            dataKey={localSpec.yAxis}
+                            dataKey={localSpec.yAxis || 'value'}
                             stroke={localSpec.color || COLORS[0]}
                             fillOpacity={1}
                             fill={`url(#color${localSpec.id})`}
@@ -146,10 +165,8 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
             case 'donut':
                 return (
                     <PieChart>
-                        <Tooltip
-                            contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)' }}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
                         <Pie
                             data={chartData}
                             cx="50%"
@@ -157,7 +174,7 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             innerRadius={localSpec.type === 'donut' ? 60 : 0}
                             outerRadius={80}
                             paddingAngle={2}
-                            dataKey={localSpec.yAxis || 'value'} // Fallback for pure aggregates
+                            dataKey={localSpec.yAxis || 'value'}
                             nameKey={localSpec.xAxis || 'name'}
                             onClick={handleClick}
                         >
@@ -168,11 +185,10 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                     </PieChart>
                 );
 
-            // Fallback for types not yet implemented
             default:
                 return (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                        Chart type '{localSpec.type}' not yet supported in Widget
+                    <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
+                        Chart type '{localSpec.type}' not yet supported
                     </div>
                 );
         }
@@ -186,22 +202,22 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
     };
 
     return (
-        <div className={`bg-white rounded-lg p-4 transition-all duration-200 ${isEditing ? 'ring-2 ring-indigo-500' : 'hover:shadow-md'}`}>
-            <div className="flex justify-between items-start mb-4">
+        <div className={`bg-white dark:bg-slate-900 rounded-xl p-4 transition-all duration-200 h-full flex flex-col ${isEditing ? 'ring-2 ring-indigo-500' : ''}`}>
+            <div className="flex justify-between items-start mb-3 shrink-0">
                 {editMode ? (
                     <div className="flex-1 space-y-2">
                         <input
                             type="text"
                             value={localSpec.title}
                             onChange={e => setLocalSpec({ ...localSpec, title: e.target.value })}
-                            className="block w-full px-2 py-1 border rounded text-sm font-semibold"
+                            className="block w-full px-2 py-1 border border-slate-200 dark:border-slate-700 rounded text-sm font-semibold bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                             placeholder="Chart Title"
                         />
                         <div className="flex gap-2">
                             <select
                                 value={localSpec.type}
                                 onChange={e => setLocalSpec({ ...localSpec, type: e.target.value })}
-                                className="block px-2 py-1 border rounded text-xs"
+                                className="block px-2 py-1 border border-slate-200 dark:border-slate-700 rounded text-xs bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                             >
                                 <option value="bar">Bar</option>
                                 <option value="line">Line</option>
@@ -218,17 +234,17 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                         </div>
                     </div>
                 ) : (
-                    <div>
-                        <h3 className="font-semibold text-gray-800">{chart.title}</h3>
-                        <p className="text-xs text-gray-400">{chartData.length} data points</p>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm truncate">{chart.title}</h3>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium">{chartData.length} data points</p>
                     </div>
                 )}
 
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0 ml-2">
                     {editMode ? (
                         <button
                             onClick={handleSaveEdit}
-                            className="text-xs bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700"
+                            className="text-xs bg-indigo-600 text-white px-2.5 py-1 rounded-md hover:bg-indigo-700 font-bold"
                         >
                             Save
                         </button>
@@ -237,7 +253,7 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             {isEditing && (
                                 <button
                                     onClick={() => setEditMode(true)}
-                                    className="p-1.5 text-gray-400 hover:text-indigo-600 rounded"
+                                    className="p-1.5 text-slate-400 hover:text-indigo-500 rounded transition-colors"
                                     title="Edit Chart"
                                 >
                                     ✎
@@ -247,7 +263,7 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                             {onDelete && isEditing && (
                                 <button
                                     onClick={onDelete}
-                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded"
+                                    className="p-1.5 text-slate-400 hover:text-red-500 rounded transition-colors"
                                     title="Remove"
                                 >
                                     ✕
@@ -258,16 +274,16 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                 </div>
             </div>
 
-            <div className="w-full" style={{ height: typeof height === 'number' ? height - 60 : `calc(${height} - 60px)` }} id={`chart-export-${chart.id}`}>
+            <div className="flex-1 min-h-0 w-full" id={`chart-export-${chart.id}`}>
                 <ResponsiveContainer width="100%" height="100%">
                     {renderChart()}
                 </ResponsiveContainer>
             </div>
 
             {localSpec.sourceModule && (
-                <div className="mt-2 text-xs text-gray-400 flex items-center gap-1">
+                <div className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 shrink-0">
                     <span>Source: {localSpec.sourceModule}</span>
-                    {localSpec.isWidget && <span className="px-1.5 py-0.5 bg-gray-100 rounded-full text-[10px]">Widget</span>}
+                    {localSpec.isWidget && <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-full">Widget</span>}
                 </div>
             )}
         </div>

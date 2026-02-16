@@ -5,7 +5,7 @@ import { SendToMenu } from './SendToMenu';
 
 interface KPIWidgetProps {
     kpi: KPI;
-    sparklineData?: any[]; // Array of { date, value } or similar
+    sparklineData?: any[];
     onClick?: () => void;
     width?: string | number;
 }
@@ -14,31 +14,29 @@ export const KPIWidget: React.FC<KPIWidgetProps> = ({ kpi, sparklineData, onClic
     // Guard against undefined/null kpi prop
     if (!kpi) {
         return (
-            <div className="bg-white rounded-lg p-4 border border-gray-100 text-center text-gray-400" style={{ width }}>
+            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 border border-slate-100 dark:border-slate-700 text-center text-slate-400" style={{ width }}>
                 <p className="text-sm font-medium">No KPI Data</p>
             </div>
         );
     }
 
-    // Determine trend color
     const isPositive = kpi.trend?.direction === 'up';
-    const trendColor = isPositive ? 'text-green-600' : 'text-red-600';
-    const trendBg = isPositive ? 'bg-green-50' : 'bg-red-50';
+    const trendColor = isPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400';
+    const trendBg = isPositive ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-red-50 dark:bg-red-900/20';
     const TrendIcon = isPositive ? '↗' : '↘';
+    const lineColor = isPositive ? '#10b981' : '#ef4444';
 
-    // Mock sparkline if not provided but requested
     const data = sparklineData || [
         { v: 10 }, { v: 15 }, { v: 13 }, { v: 20 }, { v: 25 }, { v: 22 }, { v: 30 }
     ];
 
     return (
         <div
-            className="bg-white rounded-lg p-4 border border-gray-100 hover:shadow-md transition-shadow relative group"
+            className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-100 dark:border-slate-800 hover:shadow-lg dark:hover:shadow-slate-900/50 transition-all duration-200 relative group cursor-pointer"
             style={{ width }}
             onClick={onClick}
         >
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                {/* We wrap KPI in a mock ChartSpec-like object for SendToMenu compatibility, or allow SendToMenu to accept KPIs in V2 */}
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                 <SendToMenu
                     chart={{
                         id: kpi.id,
@@ -51,12 +49,12 @@ export const KPIWidget: React.FC<KPIWidgetProps> = ({ kpi, sparklineData, onClic
             </div>
 
             <div id={`kpi-${kpi.id}`}>
-                <h3 className="text-sm font-medium text-gray-500 mb-1">{kpi.title}</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">{kpi.title}</h3>
 
                 <div className="flex items-end gap-2 mb-2">
-                    <span className="text-2xl font-bold text-gray-900">{kpi.value}</span>
+                    <span className="text-2xl font-black text-slate-900 dark:text-white">{kpi.value}</span>
                     {kpi.trend && (
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium ${trendBg} ${trendColor}`}>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold ${trendBg} ${trendColor}`}>
                             {TrendIcon} {kpi.trend.value}%
                         </span>
                     )}
@@ -67,14 +65,14 @@ export const KPIWidget: React.FC<KPIWidgetProps> = ({ kpi, sparklineData, onClic
                         <AreaChart data={data}>
                             <defs>
                                 <linearGradient id={`grad-${kpi.id}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0.3} />
-                                    <stop offset="95%" stopColor={isPositive ? '#10b981' : '#ef4444'} stopOpacity={0} />
+                                    <stop offset="5%" stopColor={lineColor} stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor={lineColor} stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <Area
                                 type="monotone"
                                 dataKey="v"
-                                stroke={isPositive ? '#10b981' : '#ef4444'}
+                                stroke={lineColor}
                                 strokeWidth={2}
                                 fill={`url(#grad-${kpi.id})`}
                             />
