@@ -15,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { datasetAPI, classificationAPI } from '../services/api';
 import { getJourneyForSourceType, JOURNEYS, Journey, SourceType } from '../config/journeys';
+import { ExcelService } from '../services/excelService';
 
 // Type definitions
 interface ClassificationResult {
@@ -86,9 +87,12 @@ export const UploadViewPhase3: React.FC = () => {
 
   // Handle file selection
   const handleFileSelect = async (selectedFile: File) => {
-    if (!selectedFile.type.includes('csv') && !selectedFile.type.includes('json') &&
-      !selectedFile.name.endsWith('.csv') && !selectedFile.name.endsWith('.json')) {
-      setError('Please upload a CSV or JSON file');
+    const isExcel = selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls');
+    const isCsvJson = selectedFile.type.includes('csv') || selectedFile.type.includes('json') ||
+      selectedFile.name.endsWith('.csv') || selectedFile.name.endsWith('.json');
+
+    if (!isCsvJson && !isExcel) {
+      setError('Please upload a CSV, JSON, or Excel (.xlsx) file');
       return;
     }
 
@@ -98,26 +102,48 @@ export const UploadViewPhase3: React.FC = () => {
     setStep('parsing');
 
     try {
-      // Parse file
-      const fileText = await selectedFile.text();
       let data: any[] = [];
       let hdrs: string[] = [];
 
-      if (selectedFile.type.includes('csv') || selectedFile.name.endsWith('.csv')) {
-        const lines = fileText.trim().split('\n');
-        if (lines.length === 0) throw new Error('CSV file is empty');
+      if (isExcel) {
+        // Parse Excel
+        const sheets = await ExcelService.parseExcel(selectedFile);
+        if (sheets.length === 0) throw new Error('No valid sheets found in Excel file');
 
-        hdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-        data = lines.slice(1).map(line => {
-          const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-          const obj: any = {};
-          hdrs.forEach((header, i) => { obj[header] = values[i] || null; });
-          return obj;
-        });
+        // Use first sheet for now
+        // TODO: Add sheet selector UI in next phase
+        const firstSheet = sheets[0];
+        data = firstSheet.data;
+        hdrs = firstSheet.headers;
+
+        if (sheets.length > 1) {
+          // Append sheet name to dataset name if multiple
+          setDatasetName(`${selectedFile.name.replace(/\.[^.]+$/, '')} - ${firstSheet.sheetName}`);
+        }
       } else {
-        data = JSON.parse(fileText);
-        if (!Array.isArray(data)) data = [data];
-        if (data.length > 0) hdrs = Object.keys(data[0]);
+        // Parse CSV/JSON
+        const fileText = await selectedFile.text();
+
+        if (selectedFile.type.includes('csv') || selectedFile.name.endsWith('.csv')) {
+          const lines = fileText.trim().split('\n');
+          if (lines.length === 0) throw new Error('CSV file is empty');
+
+          hdrs = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+          data = lines.slice(1).map(line => {
+            const values = line.split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+            const obj: any = {};
+            hdrs.forEach((header, i) => { obj[header] = values[i] || null; });
+            return obj;
+          });
+        } else { // JSON
+          try {
+            data = JSON.parse(fileText);
+            if (!Array.isArray(data)) data = [data];
+            if (data.length > 0) hdrs = Object.keys(data[0]);
+          } catch (e) {
+            throw new Error('Invalid JSON format');
+          }
+        }
       }
 
       if (data.length === 0) throw new Error('File contains no data');
@@ -256,13 +282,14 @@ export const UploadViewPhase3: React.FC = () => {
               </div>
               <div className="flex justify-center gap-3">
                 <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">CSV</span>
+                <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">Excel</span>
                 <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">JSON</span>
                 <span className="px-3 py-1 bg-slate-700 rounded-full text-xs text-slate-300">Up to 500MB</span>
               </div>
             </div>
             <input
               type="file"
-              accept=".csv,.json"
+              accept=".csv,.json,.xlsx,.xls"
               onChange={handleFileChange}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
             />

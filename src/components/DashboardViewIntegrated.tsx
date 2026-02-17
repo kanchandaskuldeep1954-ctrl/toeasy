@@ -7,7 +7,7 @@ import { Dataset, DashboardConfig, WidgetSpec, WidgetType, ChartSpec } from '../
 import { dashboardAPI, datasetAPI } from '../services/api';
 import { useDataset } from '../hooks/useDataset';
 import { useWorkspaceRole } from '../hooks/useWorkspaceRole';
-import { Plus, LayoutTemplate, Save, Edit3, X, FileText, Sparkles, BarChart3, PieChart, TrendingUp, Table2, RefreshCw } from 'lucide-react';
+import { Plus, LayoutTemplate, Save, Edit3, X, FileText, Sparkles, BarChart3, PieChart, TrendingUp, Table2, RefreshCw, Trash2, Share2 } from 'lucide-react';
 import { GroqService } from '../services/groqService';
 import { reportsAPI } from '../services/api';
 import { KPIWidget } from './Widgets/KPIWidget';
@@ -548,23 +548,65 @@ const DashboardViewIntegrated: React.FC = () => {
           )}
 
           {!isEditable && (
-            <button
-              onClick={handleGenerateReport}
-              disabled={isGeneratingReport}
-              className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 shadow-sm shadow-indigo-500/20"
-            >
-              {isGeneratingReport ? (
-                <>
-                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-3.5 h-3.5" />
-                  Generate Report
-                </>
-              )}
-            </button>
+            <>
+              <button
+                onClick={handleGenerateReport}
+                disabled={isGeneratingReport}
+                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all disabled:opacity-50 shadow-sm shadow-indigo-500/20"
+              >
+                {isGeneratingReport ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-3.5 h-3.5" />
+                    Generate Report
+                  </>
+                )}
+              </button>
+              <button
+                onClick={async () => {
+                  if (!dashboardEntity || !dataset) return;
+                  try {
+                    // Create a shareable snapshot
+                    const snapshot = {
+                      configuration: dashboardConfig,
+                      datasetName: dataset.name,
+                      generatedAt: new Date().toISOString()
+                    };
+
+                    const res = await sharingAPI.create({
+                      resourceType: 'dashboard',
+                      resourceId: dashboardEntity.id || dataset.id,
+                      title: dashboardEntity.name || dataset.name,
+                      workspaceId,
+                      snapshot
+                    });
+
+                    if (res.data?.publicUrl) {
+                      // Simple prompt for now, can be upgraded to modal later
+                      navigator.clipboard.writeText(res.data.publicUrl);
+                      alert(`Shareable link copied to clipboard!\n\n${res.data.publicUrl}`);
+                    } else {
+                      // Fallback if API doesn't return URL (e.g. mock mode)
+                      const url = window.location.href;
+                      navigator.clipboard.writeText(url);
+                      alert('Link copied to clipboard!');
+                    }
+                  } catch (e) {
+                    console.error("Share failed", e);
+                    alert("Failed to create share link. Copied current URL instead.");
+                    navigator.clipboard.writeText(window.location.href);
+                  }
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 rounded-lg text-xs font-bold transition-all"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                Share
+              </button>
+            </>
           )}
           {isEditable ? (
             <>

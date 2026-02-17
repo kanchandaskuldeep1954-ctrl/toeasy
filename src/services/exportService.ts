@@ -1,5 +1,8 @@
 
 import { Dataset, StrategicReport } from '../../types';
+import { ExcelService } from './excelService';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 export class ExportService {
 
@@ -7,12 +10,38 @@ export class ExportService {
      * Trigger browser print for PDF export
      * Relies on CSS @media print rules
      */
-    static exportToPDF(title: string) {
-        // Optional: Set document title temporarily for filename inference by browser
-        const oldTitle = document.title;
-        document.title = title;
-        window.print();
-        document.title = oldTitle;
+    static async exportToPDF(elementId: string, filename: string) {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            console.error(`Element not found: ${elementId}`);
+            return;
+        }
+
+        try {
+            const canvas = await html2canvas(element, {
+                scale: 2, // High resolution
+                useCORS: true,
+                logging: false
+                // ignoreElements: (el) => el.classList.contains('no-print')
+            });
+
+            const imgData = canvas.toDataURL('image/png');
+            const pdf = new jsPDF('p', 'mm', 'a4');
+            const pdfWidth = pdf.internal.pageSize.getWidth();
+            const pdfHeight = pdf.internal.pageSize.getHeight();
+            const imgWidth = canvas.width;
+            const imgHeight = canvas.height;
+            const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight);
+            const imgX = (pdfWidth - imgWidth * ratio) / 2;
+            const imgY = 30;
+
+            pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+            pdf.save(`${filename}.pdf`);
+        } catch (error) {
+            console.error('PDF export failed:', error);
+            // Fallback
+            window.print();
+        }
     }
 
     /**
@@ -93,7 +122,22 @@ export class ExportService {
     }
 
     /**
-     * Export raw data to CSV
+     * Export raw data to Excel (or CSV fallback)
+     */
+    static exportToExcel(dataset: Dataset, filenameSuffix: string = 'data') {
+        if (!dataset.data || dataset.data.length === 0) return;
+
+        // Use ExcelService for real .xlsx
+        try {
+            ExcelService.exportDatasetToExcel(dataset);
+        } catch (e) {
+            console.error("Excel export failed, falling back to CSV", e);
+            this.exportToCSV(dataset, filenameSuffix);
+        }
+    }
+
+    /**
+     * Export raw data to CSV (Fallback)
      */
     static exportToCSV(dataset: Dataset, filenameSuffix: string = 'data') {
         if (!dataset.data || dataset.data.length === 0) return;
