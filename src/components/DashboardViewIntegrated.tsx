@@ -185,7 +185,7 @@ const DashboardViewIntegrated: React.FC = () => {
       const hydratedCharts: ChartSpec[] = (dashConfig.charts || []).map((c: any, i: number) => ({
         ...c,
         id: c.id || `auto-chart-${Date.now()}-${i}`,
-        data: c.data || GroqService.transformChartData(dataset.data || [], c),
+        data: c.data || aggregateData(c, dataset.data || [], dataset.headers || []),
         sourceModule: 'ai' as const
       }));
 
@@ -529,6 +529,23 @@ const DashboardViewIntegrated: React.FC = () => {
             <RefreshCw className={`w-3.5 h-3.5 ${isAutoGenerating ? 'animate-spin' : ''}`} />
             Regenerate
           </button>
+
+          {isEditable && (
+            <button
+              onClick={async () => {
+                if (window.confirm("This will wipe the current dashboard and recreate it from scratch. Are you sure?")) {
+                  setDashboardConfig({ charts: [], kpis: [], patterns: [], widgets: [] });
+                  await handleAutoGenerate();
+                }
+              }}
+              disabled={isAutoGenerating}
+              className="flex items-center gap-2 px-3 py-1.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-lg text-xs font-bold transition-all disabled:opacity-50"
+              title="Wipe and recreate from scratch"
+            >
+              <Trash2 className={`w-3.5 h-3.5 ${isAutoGenerating ? 'animate-spin' : ''}`} />
+              Recreate
+            </button>
+          )}
 
           {!isEditable && (
             <button
