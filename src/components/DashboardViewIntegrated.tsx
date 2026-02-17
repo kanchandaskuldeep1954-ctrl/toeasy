@@ -4,13 +4,14 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import UniversalDashboardGrid from './Dashboard/UniversalDashboardGrid';
 import { Dataset, DashboardConfig, WidgetSpec, WidgetType, ChartSpec } from '../../types';
-import { dashboardAPI, datasetAPI } from '../services/api';
+import { dashboardAPI, datasetAPI, sharingAPI } from '../services/api';
 import { useDataset } from '../hooks/useDataset';
 import { useWorkspaceRole } from '../hooks/useWorkspaceRole';
 import { Plus, LayoutTemplate, Save, Edit3, X, FileText, Sparkles, BarChart3, PieChart, TrendingUp, Table2, RefreshCw, Trash2, Share2 } from 'lucide-react';
 import { GroqService } from '../services/groqService';
 import { reportsAPI } from '../services/api';
 import { KPIWidget } from './Widgets/KPIWidget';
+import { aggregateData } from '../utils/dashboardUtils';
 
 const DashboardViewIntegrated: React.FC = () => {
   const { token } = useAuth();
@@ -75,8 +76,31 @@ const DashboardViewIntegrated: React.FC = () => {
             const dsRes = await datasetAPI.get(workspaceId, targetDatasetId);
             const dsData = dsRes.data?.data || dsRes.data;
 
-            const rawData = safeParse(dsData?.raw_data || dsData?.data) || [];
-            const headers = safeParse(dsData?.headers) || (rawData && rawData[0] ? Object.keys(rawData[0]) : []);
+            let rawData = safeParse(dsData?.raw_data || dsData?.data) || [];
+            let headers = safeParse(dsData?.headers) || (rawData && rawData[0] ? Object.keys(rawData[0]) : []);
+
+            // --- FIX: TRANSFORM 2D ARRAYS TO OBJECTS ---
+            if (Array.isArray(rawData) && rawData.length > 0 && Array.isArray(rawData[0])) {
+              // It's a 2D array (e.g. [['col1', 'col2'], ['val1', 'val2']])
+              // Assume first row is headers if headers are empty or match length
+              const potentialHeaders = rawData[0];
+              const dataRows = rawData.slice(1);
+
+              if (headers.length === 0) headers = potentialHeaders;
+
+              rawData = dataRows.map((row: any[]) => {
+                const obj: any = {};
+                headers.forEach((h: string, i: number) => {
+                  obj[h] = row[i];
+                });
+                return obj;
+              });
+            }
+
+            // --- FIX: ENSURE HEADERS EXIST ---
+            if (headers.length === 0 && rawData.length > 0 && typeof rawData[0] === 'object') {
+              headers = Object.keys(rawData[0]);
+            }
 
             setActiveDataset({
               ...dsData,
@@ -181,13 +205,48 @@ const DashboardViewIntegrated: React.FC = () => {
     try {
       const dashConfig = await GroqService.suggestDashboard(dataset);
 
+      // --- FIX: VALIDATE AI SPECS AGAINST ACTUAL HEADERS ---
+      const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/_/g, '');
+      const availableHeaders = dataset.headers || [];
+
+      const validateSpec = (spec: any) => {
+        if (!spec) return spec;
+
+        // Validate X-Axis
+        if (spec.xAxis && !availableHeaders.includes(spec.xAxis)) {
+          const match = availableHeaders.find(h => normalize(h) === normalize(spec.xAxis));
+          if (match) {
+            spec.xAxis = match;
+          } else {
+            // Fallback
+            spec.xAxis = availableHeaders[0] || 'unknown';
+          }
+        }
+
+        // Validate Y-Axis
+        if (spec.yAxis && !availableHeaders.includes(spec.yAxis)) {
+          const match = availableHeaders.find(h => normalize(h) === normalize(spec.yAxis));
+          if (match) {
+            spec.yAxis = match;
+          } else {
+            // Fallback to first numeric
+            const numeric = availableHeaders.find(h => dataset.data && typeof dataset.data[0]?.[h] === 'number');
+            spec.yAxis = numeric || availableHeaders[1] || 'value';
+          }
+        }
+        return spec;
+      };
+
       // Hydrate the charts with real data
-      const hydratedCharts: ChartSpec[] = (dashConfig.charts || []).map((c: any, i: number) => ({
-        ...c,
-        id: c.id || `auto-chart-${Date.now()}-${i}`,
-        data: c.data || aggregateData(c, dataset.data || [], dataset.headers || []),
-        sourceModule: 'ai' as const
-      }));
+      const hydratedCharts: ChartSpec[] = (dashConfig.charts || []).map((c: any, i: number) => {
+        const validatedSpec = validateSpec(c);
+        return {
+          ...validatedSpec,
+          id: c.id || `auto-chart-${Date.now()}-${i}`,
+          data: c.data || aggregateData(validatedSpec, dataset.data || [], dataset.headers || []),
+          sourceModule: 'ai' as const
+        };
+      });
 
       const hydratedKpis = (dashConfig.kpis || []).map((k: any, i: number) => ({
         ...k,
@@ -570,10 +629,15 @@ const DashboardViewIntegrated: React.FC = () => {
                 onClick={async () => {
                   if (!dashboardEntity || !dataset) return;
                   try {
-                    // Create a shareable snapshot
+                    // Create a shareable snapshot with PRE-AGGREGATED DATA
                     const snapshot = {
                       configuration: dashboardConfig,
                       datasetName: dataset.name,
+                      charts: (dashboardConfig.charts || []).map(c => ({
+                        ...c,
+                        data: aggregateData(c, dataset.data || [], dataset.headers || [])
+                      })),
+                      kpis: dashboardConfig.kpis || [],
                       generatedAt: new Date().toISOString()
                     };
 

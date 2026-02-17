@@ -295,7 +295,7 @@ export class GroqService {
   }
 
   // Generate report
-  static async generateReport(dataset: Dataset, reportType: string = 'strategic', extraContext?: { cleaningHistory?: any[], activityLogs?: any[], webData?: any }): Promise<StrategicReport> {
+  static async generateReport(dataset: Dataset, reportType: string = 'strategic', extraContext?: { cleaningHistory?: any[], activityLogs?: any[], webData?: any, query?: string, resultsSummary?: any[], rowCount?: number }): Promise<StrategicReport> {
     return await this.callApi<StrategicReport>('generate-report', 'POST', { dataset, reportType, extraContext });
   }
 
@@ -387,10 +387,29 @@ export class GroqService {
 
       const aggregated: { [key: string]: any } = {};
 
+      // --- ROBUST COLUMN MATCHING ---
+      let effectiveX = xColumn;
+      let effectiveY = yColumn;
+
+      const sampleRow = data[0];
+      if (sampleRow) {
+        const keys = Object.keys(sampleRow);
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/_/g, '');
+
+        if (!Object.prototype.hasOwnProperty.call(sampleRow, xColumn)) {
+          const match = keys.find(k => normalize(k) === normalize(xColumn));
+          if (match) effectiveX = match;
+        }
+        if (!Object.prototype.hasOwnProperty.call(sampleRow, yColumn)) {
+          const match = keys.find(k => normalize(k) === normalize(yColumn));
+          if (match) effectiveY = match;
+        }
+      }
+
       // Group data
       for (const row of data) {
-        const xVal = String(row[xColumn] || 'Unknown').trim();
-        const yVal = Number(row[yColumn]) || 0;
+        const xVal = String(row[effectiveX] || 'Unknown').trim();
+        const yVal = Number(row[effectiveY]) || 0;
 
         if (!aggregated[xVal]) {
           aggregated[xVal] = {

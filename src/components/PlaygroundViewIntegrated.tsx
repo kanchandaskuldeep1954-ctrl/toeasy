@@ -18,10 +18,7 @@ import { KPIWidget } from './Widgets/KPIWidget';
 import { PivotWidget, PivotConfig } from './Widgets/PivotWidget';
 import ReactMarkdown from 'react-markdown';
 import { GroqService } from '../services/groqService';
-import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, ResponsiveContainer,
-  XAxis, YAxis, Tooltip, CartesianGrid, Cell, AreaChart, Area, Legend
-} from 'recharts';
+// Recharts imports removed - Use Dashboard for visualization
 
 // --- Types ---
 interface QueryResult {
@@ -688,59 +685,6 @@ df = pd.DataFrame(raw_data)
 
   // --- Render Helpers ---
 
-  const renderChart = () => {
-    if (!results.length) return (
-      <div className="flex flex-col items-center justify-center h-full text-slate-400">
-        <BarChart2 className="w-12 h-12 mb-4 opacity-20" />
-        <p>Run a query to see visualization</p>
-      </div>
-    );
-
-    return (
-      <div className="h-full overflow-y-auto p-4">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pb-20">
-          {playgroundCharts.map((chart, idx) => (
-            <div key={chart.id} className="h-80 bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative group">
-              <ChartWidget
-                chart={chart}
-                data={results}
-                isEditing={true}
-                onUpdate={(updated) => {
-                  setPlaygroundCharts(prev => prev.map(c => c.id === chart.id ? updated : c));
-                }}
-                onDelete={() => {
-                  setPlaygroundCharts(prev => prev.filter(c => c.id !== chart.id));
-                }}
-                height="100%"
-              />
-            </div>
-          ))}
-
-          {/* Add Chart Button Tile */}
-          <button
-            onClick={() => {
-              const numericKeys = Object.keys(results[0]).filter(k => typeof results[0][k] === 'number');
-              const labelKey = Object.keys(results[0]).find(k => typeof results[0][k] === 'string') || Object.keys(results[0])[0];
-              setPlaygroundCharts(prev => [...prev, {
-                id: `chart-${Date.now()}`,
-                type: 'line',
-                title: 'New Chart',
-                xAxis: labelKey,
-                yAxis: numericKeys[1] || numericKeys[0] || labelKey,
-                color: '#10b981'
-              }]);
-            }}
-            className="h-80 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl flex flex-col items-center justify-center text-slate-400 hover:text-indigo-600 hover:border-indigo-400 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all gap-2"
-          >
-            <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-full group-hover:scale-110 transition-transform">
-              <BarChart2 className="w-6 h-6" />
-            </div>
-            <span className="font-bold text-sm">Add Visualization</span>
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-slate-50 dark:bg-slate-950 font-sans">
@@ -952,13 +896,7 @@ df = pd.DataFrame(raw_data)
                 <Table className="w-4 h-4" />
                 Results ({rowCount})
               </button>
-              <button
-                onClick={() => setActiveTab('chart')}
-                className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'chart' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
-              >
-                <BarChart2 className="w-4 h-4" />
-                Visualization
-              </button>
+              {/* Visualization Tab Removed - Use Dashboard */}
               <button
                 onClick={() => setActiveTab('messages')}
                 className={`flex items-center gap-2 px-4 py-3 text-xs font-bold border-b-2 transition-colors ${activeTab === 'messages' ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900' : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
@@ -1061,11 +999,7 @@ df = pd.DataFrame(raw_data)
               </div>
             )}
 
-            {activeTab === 'chart' && (
-              <div className="absolute inset-0 p-6">
-                {renderChart()}
-              </div>
-            )}
+            {/* Visualization Content Removed */}
 
             {activeTab === 'messages' && (
               <div className="absolute inset-0 overflow-auto p-6 space-y-6">

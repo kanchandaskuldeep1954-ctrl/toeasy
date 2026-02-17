@@ -5,9 +5,51 @@ export const aggregateData = (chart: ChartSpec, filteredData: any[], headers: st
     try {
         if (!chart || !filteredData || filteredData.length === 0) return [];
 
-        const xAxis = chart.xAxis || 'name';
-        const yAxis = chart.yAxis || 'value';
+        // --- ROBUST COLUMN MATCHING ---
+        // 1. Try exact match
+        // 2. Try case-insensitive match
+        // 3. Fallback to first string (for X) or first number (for Y)
+        const normalize = (s: string) => (s || '').toLowerCase().trim().replace(/_/g, '');
+
+        let xAxis = chart.xAxis || 'name';
+        let yAxis = chart.yAxis || 'value';
         const zAxis = chart.zAxis;
+
+        // Verify key existence
+        const sampleRow = filteredData[0];
+        if (sampleRow) {
+            const keys = Object.keys(sampleRow);
+
+            // Fix X-Axis
+            if (!Object.prototype.hasOwnProperty.call(sampleRow, xAxis)) {
+                const match = keys.find(k => normalize(k) === normalize(xAxis));
+                if (match) {
+                    xAxis = match;
+                } else {
+                    // Fallback: Use first categorical column or first column
+                    const fallback = keys.find(k => typeof sampleRow[k] === 'string') || keys[0];
+                    if (fallback) {
+                        console.warn(`Chart X-Axis "${chart.xAxis}" not found. Falling back to "${fallback}"`);
+                        xAxis = fallback;
+                    }
+                }
+            }
+
+            // Fix Y-Axis (only if not a histogram/treemap which might count rows)
+            if (chart.type !== 'histogram' && chart.aggregation !== 'count' && !Object.prototype.hasOwnProperty.call(sampleRow, yAxis)) {
+                const match = keys.find(k => normalize(k) === normalize(yAxis));
+                if (match) {
+                    yAxis = match;
+                } else {
+                    // Fallback: Use first numeric column
+                    const fallback = keys.find(k => typeof sampleRow[k] === 'number') || keys.find(k => !isNaN(Number(sampleRow[k])));
+                    if (fallback) {
+                        console.warn(`Chart Y-Axis "${chart.yAxis}" not found. Falling back to "${fallback}"`);
+                        yAxis = fallback;
+                    }
+                }
+            }
+        }
 
         // --- Histogram Logic ---
         if (chart.type === 'histogram') {
