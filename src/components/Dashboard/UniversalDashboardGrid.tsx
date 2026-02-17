@@ -135,13 +135,13 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
                         />
                     );
                 }
-                return <div className="p-4 text-center text-gray-500">Invalid Chart Config</div>;
+                return <div className="p-4 text-center text-slate-400 dark:text-slate-500 text-sm">Invalid Chart Config</div>;
 
             case 'kpi':
                 if ('kpi' in widget && widget.kpi) {
                     return <KPIWidget kpi={widget.kpi} />;
                 }
-                return <div className="p-4 text-center text-gray-500">Invalid KPI Config</div>;
+                return <div className="p-4 text-center text-slate-400 dark:text-slate-500 text-sm">Invalid KPI Config</div>;
 
             case 'table':
                 return (
@@ -208,23 +208,33 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
             margin={[16, 16]}
         >
             {allWidgets.map(widget => (
-                <div key={widget.id} className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm transition-shadow flex flex-col overflow-hidden group ${isEditable ? 'hover:shadow-md' : ''}`}>
-                    {/* Header / Drag Handle */}
-                    {isEditable && (
-                        <div className="h-8 bg-slate-50 dark:bg-slate-800 flex items-center justify-between px-2 border-b border-slate-100 dark:border-slate-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <div className="drag-handle cursor-move p-1 text-slate-400 hover:text-indigo-500">
-                                <GripHorizontal className="w-4 h-4" />
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <button onClick={() => onEditWidget(widget)} className="p-1 text-slate-400 hover:text-blue-500">
+                <div
+                    key={widget.id}
+                    className={`bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-700/60 shadow-sm hover:shadow-lg dark:hover:shadow-slate-900/60 transition-all duration-300 flex flex-col overflow-hidden group animate-in fade-in ${isEditable ? 'ring-1 ring-transparent hover:ring-indigo-400/30' : ''}`}
+                >
+                    {/* Always-visible title bar */}
+                    <div className={`flex items-center justify-between px-3 border-b border-slate-100 dark:border-slate-800 flex-shrink-0 ${isEditable ? 'h-9 bg-slate-50/80 dark:bg-slate-800/50' : 'h-8 bg-transparent'}`}>
+                        <div className="flex items-center gap-2 min-w-0">
+                            {isEditable && (
+                                <div className="drag-handle cursor-move p-0.5 text-slate-300 dark:text-slate-600 hover:text-indigo-500 dark:hover:text-indigo-400 transition-colors">
+                                    <GripHorizontal className="w-4 h-4" />
+                                </div>
+                            )}
+                            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 truncate uppercase tracking-wider">
+                                {widget.title || widget.type}
+                            </span>
+                        </div>
+                        {isEditable && (
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button onClick={() => onEditWidget(widget)} className="p-1 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
                                     <Edit2 className="w-3.5 h-3.5" />
                                 </button>
-                                <button onClick={() => onRemoveWidget(widget.id)} className="p-1 text-slate-400 hover:text-red-500">
+                                <button onClick={() => onRemoveWidget(widget.id)} className="p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors rounded-md hover:bg-slate-100 dark:hover:bg-slate-800">
                                     <Trash2 className="w-3.5 h-3.5" />
                                 </button>
                             </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
 
                     {/* Content */}
                     <div className="flex-1 min-h-0 overflow-hidden relative p-1">
@@ -237,3 +247,4 @@ const UniversalDashboardGrid: React.FC<UniversalDashboardGridProps> = ({
 };
 
 export default UniversalDashboardGrid;
+

@@ -185,11 +185,83 @@ export const ChartWidget: React.FC<ChartWidgetProps> = ({
                     </PieChart>
                 );
 
-            default:
+            case 'stacked':
+            case 'stacked_bar': {
+                // Stacked bar chart: detect all numeric keys except xAxis as series
+                const xKey = localSpec.xAxis || 'name';
+                const yKey = localSpec.yAxis || 'value';
+                const allKeys = chartData.length > 0 ? Object.keys(chartData[0]).filter(k => k !== xKey && typeof chartData[0][k] === 'number') : [yKey];
+                const seriesKeys = allKeys.length > 0 ? allKeys : [yKey];
+
                 return (
-                    <div className="flex items-center justify-center h-full text-slate-400 dark:text-slate-500 text-sm">
-                        Chart type '{localSpec.type}' not yet supported
-                    </div>
+                    <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={xKey} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? '#1e293b' : '#f3f4f6' }} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
+                        {seriesKeys.map((key, i) => (
+                            <Bar key={key} dataKey={key} stackId="stack" fill={COLORS[i % COLORS.length]} radius={i === seriesKeys.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]} />
+                        ))}
+                    </BarChart>
+                );
+            }
+
+            case 'scatter': {
+                const xKey = localSpec.xAxis || 'name';
+                const yKey = localSpec.yAxis || 'value';
+                return (
+                    <ScatterChart>
+                        <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                        <XAxis dataKey={xKey} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} name={xKey} />
+                        <YAxis dataKey={yKey} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} name={yKey} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ strokeDasharray: '3 3' }} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
+                        <Scatter name={localSpec.title || 'Data'} data={chartData} fill={localSpec.color || COLORS[0]} />
+                    </ScatterChart>
+                );
+            }
+
+            case 'composed':
+            case 'combo': {
+                const xKey = localSpec.xAxis || 'name';
+                const yKey = localSpec.yAxis || 'value';
+                const allKeys = chartData.length > 0 ? Object.keys(chartData[0]).filter(k => k !== xKey && typeof chartData[0][k] === 'number') : [yKey];
+                const barKey = allKeys[0] || yKey;
+                const lineKey = allKeys[1] || barKey;
+
+                return (
+                    <ComposedChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={xKey} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
+                        <Bar dataKey={barKey} fill={COLORS[0]} radius={[4, 4, 0, 0]} />
+                        {lineKey !== barKey && (
+                            <Line type="monotone" dataKey={lineKey} stroke={COLORS[1]} strokeWidth={2.5} dot={{ r: 3, fill: isDark ? '#1e293b' : '#fff', strokeWidth: 2 }} />
+                        )}
+                    </ComposedChart>
+                );
+            }
+
+            default:
+                // Fallback to bar chart instead of showing unsupported message
+                return (
+                    <BarChart data={chartData}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={gridColor} />
+                        <XAxis dataKey={localSpec.xAxis || 'name'} stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <YAxis stroke={axisColor} fontSize={11} tickLine={false} axisLine={false} />
+                        <Tooltip contentStyle={tooltipStyle} cursor={{ fill: isDark ? '#1e293b' : '#f3f4f6' }} />
+                        <Legend wrapperStyle={{ paddingTop: '12px', fontSize: '11px' }} />
+                        <Bar
+                            dataKey={localSpec.yAxis || 'value'}
+                            fill={localSpec.color || COLORS[0]}
+                            radius={[6, 6, 0, 0]}
+                            name={localSpec.title}
+                            onClick={handleClick}
+                        />
+                    </BarChart>
                 );
         }
     };

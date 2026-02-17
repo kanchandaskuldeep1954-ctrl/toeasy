@@ -11,7 +11,7 @@ interface DataGridColumn {
 
 interface DataGridWidgetProps {
     data: any[];
-    columns?: DataGridColumn[]; // If not provided, will be inferred from data
+    columns?: DataGridColumn[];
     height?: number | string;
     editable?: boolean;
     onCellEdit?: (rowIndex: number, columnKey: string, newValue: any) => void;
@@ -37,7 +37,6 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
         if (propColumns) return propColumns;
         if (!data || data.length === 0) return [];
 
-        // Get all unique keys from first few rows
         const keys = Array.from(new Set(data.slice(0, 5).flatMap(Object.keys)));
         return keys.map(key => ({
             key,
@@ -99,57 +98,57 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
     };
 
     return (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex flex-col overflow-hidden" style={{ height }}>
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col overflow-hidden" style={{ height }}>
             {/* Header Bar */}
-            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center flex-shrink-0">
-                <h3 className="font-semibold text-gray-700">{title || `Data Grid (${processedData.length} rows)`}</h3>
+            <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/60 flex justify-between items-center flex-shrink-0">
+                <h3 className="font-semibold text-slate-700 dark:text-slate-200">{title || `Data Grid (${processedData.length} rows)`}</h3>
                 <div className="flex gap-2">
                     <input
                         type="text"
                         placeholder="Search..."
                         value={filterText}
                         onChange={e => setFilterText(e.target.value)}
-                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                        className="px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500"
                     />
                 </div>
             </div>
 
             {/* Table Container */}
             <div className="flex-1 overflow-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50 sticky top-0 z-10">
+                <table className="min-w-full divide-y divide-slate-200 dark:divide-slate-700">
+                    <thead className="bg-slate-50 dark:bg-slate-800/80 sticky top-0 z-10">
                         <tr>
                             {columns.map(col => (
                                 <th
                                     key={col.key}
-                                    className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 select-none"
+                                    className="px-4 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-700/50 select-none transition-colors"
                                     onClick={() => handleSort(col.key)}
                                     style={{ width: col.width }}
                                 >
                                     <div className="flex items-center gap-1">
                                         {col.label}
                                         {sortConfig?.key === col.key && (
-                                            <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                                            <span className="text-indigo-500">{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
                                         )}
                                     </div>
                                 </th>
                             ))}
                         </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-slate-100 dark:divide-slate-800">
                         {processedData.map((row, rowIndex) => (
                             <tr
                                 key={rowIndex}
-                                className={`hover:bg-gray-50 ${onRowClick ? 'cursor-pointer' : ''}`}
+                                className={`hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
                                 onClick={() => onRowClick && onRowClick(row, rowIndex)}
                             >
                                 {columns.map(col => (
                                     <td
                                         key={`${rowIndex}-${col.key}`}
-                                        className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap"
+                                        className="px-4 py-3 text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap"
                                         onClick={(e) => {
                                             if (editable && col.editable !== false) {
-                                                e.stopPropagation(); // Prevent row click when editing
+                                                e.stopPropagation();
                                                 setEditingCell({ rowIndex, key: col.key, value: row[col.key] });
                                             }
                                         }}
@@ -162,10 +161,10 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
                                                 onBlur={handleCellBlur}
                                                 onKeyDown={handleKeyDown}
                                                 autoFocus
-                                                className="w-full px-1 py-0.5 border border-indigo-500 rounded focus:outline-none"
+                                                className="w-full px-1 py-0.5 border border-indigo-500 rounded focus:outline-none bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
                                             />
                                         ) : (
-                                            <span className={editable && col.editable !== false ? "hover:border-b hover:border-gray-400 border-b border-transparent" : ""}>
+                                            <span className={editable && col.editable !== false ? "hover:border-b hover:border-slate-400 dark:hover:border-slate-500 border-b border-transparent" : ""}>
                                                 {String(row[col.key] ?? '')}
                                             </span>
                                         )}
@@ -175,7 +174,7 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
                         ))}
                         {processedData.length === 0 && (
                             <tr>
-                                <td colSpan={columns.length} className="px-4 py-8 text-center text-gray-400 italic">
+                                <td colSpan={columns.length} className="px-4 py-8 text-center text-slate-400 dark:text-slate-500 italic">
                                     No data found
                                 </td>
                             </tr>
@@ -183,7 +182,7 @@ export const DataGridWidget: React.FC<DataGridWidgetProps> = ({
                     </tbody>
                 </table>
             </div>
-            <div className="px-3 py-1 bg-gray-50 border-t border-gray-200 text-xs text-gray-400 flex justify-between">
+            <div className="px-3 py-1.5 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-700 text-xs text-slate-400 dark:text-slate-500 flex justify-between">
                 <span>{processedData.length} rows visible</span>
                 <span>{editable ? 'Double-click to edit' : 'Read only'}</span>
             </div>

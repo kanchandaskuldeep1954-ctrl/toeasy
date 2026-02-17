@@ -40,6 +40,9 @@ export interface DatasetContextType {
   fetchDatasets: (workspaceId: string, limit?: number, offset?: number) => Promise<void>;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
+  // View-state cache: survives navigation between tabs
+  getViewState: (datasetId: string | number, viewKey: string) => any;
+  setViewState: (datasetId: string | number, viewKey: string, state: any) => void;
 }
 
 
@@ -62,6 +65,33 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const lastFetchedWorkspaceId = useRef<string | null>(null);
+
+  // View-state cache: in-memory cache that survives tab navigation
+  // Structure: { [datasetId]: { [viewKey]: any } }
+  const viewStateCacheRef = useRef<Record<string, Record<string, any>>>({});
+
+  // Initialize from sessionStorage on mount
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('viewStateCache');
+      if (saved) viewStateCacheRef.current = JSON.parse(saved);
+    } catch { /* ignore parse errors */ }
+  }, []);
+
+  const getViewState = useCallback((datasetId: string | number, viewKey: string) => {
+    const dsKey = String(datasetId);
+    return viewStateCacheRef.current[dsKey]?.[viewKey] ?? null;
+  }, []);
+
+  const setViewState = useCallback((datasetId: string | number, viewKey: string, state: any) => {
+    const dsKey = String(datasetId);
+    if (!viewStateCacheRef.current[dsKey]) viewStateCacheRef.current[dsKey] = {};
+    viewStateCacheRef.current[dsKey][viewKey] = state;
+    // Persist to sessionStorage (survives page refreshes within session)
+    try {
+      sessionStorage.setItem('viewStateCache', JSON.stringify(viewStateCacheRef.current));
+    } catch { /* storage quota exceeded — ok, memory cache still works */ }
+  }, []);
 
   const fetchDatasets = useCallback(async (workspaceId: string, limit: number = 50, offset: number = 0) => {
     if (!token || !workspaceId) return;
@@ -220,7 +250,9 @@ export const DatasetProvider: React.FC<{ children: React.ReactNode }> = ({ child
         removeDataset,
         fetchDatasets,
         setLoading,
-        setError
+        setError,
+        getViewState,
+        setViewState
       }}
     >
 
