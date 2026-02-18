@@ -490,7 +490,10 @@ export const analyticsAPI = {
     getClient().get(`/analytics/workspace-stats/${workspaceId}`),
 
   trackEvent: (event: string, metadata: any) =>
-    getClient().post('/analytics/events', { event, metadata })
+    getClient().post('/analytics/events', { event, metadata }),
+
+  getMvpKpis: (workspaceId: string, days: number = 30) =>
+    getClient().get(`/analytics/workspaces/${workspaceId}/mvp-kpis`, { params: { days } })
 };
 
 // ============================================

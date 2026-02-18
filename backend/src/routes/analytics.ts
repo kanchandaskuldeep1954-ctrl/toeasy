@@ -10,6 +10,202 @@ const router = Router();
 router.use(authenticateToken);
 router.use(checkSubscription);
 
+const MVP_EVIDENCE_TYPES = ['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief'];
+
+const median = (values: number[]) => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+};
+
+const percentile = (values: number[], p: number) => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.min(sorted.length - 1, Math.max(0, Math.ceil((p / 100) * sorted.length) - 1));
+  return sorted[index];
+};
+
+const parseJsonMaybe = (value: any, fallback: Record<string, any> = {}) => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+// Telemetry sink for product events
+router.post('/events', async (req: AuthRequest, res) => {
+  try {
+    const eventType = String(req.body?.event || req.body?.eventType || '').trim();
+    if (!eventType) {
+      return res.status(400).json({ error: 'event is required' });
+    }
+
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object' ? req.body.metadata : {};
+    const workspaceIdRaw = req.body?.workspaceId ?? metadata.workspaceId ?? null;
+    const roomIdRaw = req.body?.roomId ?? metadata.roomId ?? null;
+    const workspaceId = workspaceIdRaw && Number.isFinite(Number(workspaceIdRaw)) ? Number(workspaceIdRaw) : null;
+    const roomId = roomIdRaw && Number.isFinite(Number(roomIdRaw)) ? Number(roomIdRaw) : null;
+
+    if (workspaceId) {
+      // Soft ownership check for telemetry writes
+      const ownerCheck = await query(
+        `SELECT id FROM workspaces WHERE id = $1 AND user_id = $2 LIMIT 1`,
+        [workspaceId, req.user!.id]
+      );
+      if (ownerCheck.rows.length === 0) {
+        return res.status(403).json({ error: 'Unauthorized workspace for telemetry event' });
+      }
+    }
+
+    await query(
+      `
+      INSERT INTO analytics_events (workspace_id, room_id, user_id, event_type, metadata, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      `,
+      [workspaceId, roomId, req.user!.id, eventType, JSON.stringify(metadata)]
+    );
+
+    return res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error('Track analytics event error:', err);
+    return res.status(500).json({ error: 'Failed to track analytics event' });
+  }
+});
+
+// Decision Room MVP KPI snapshot
+router.get('/workspaces/:workspaceId/mvp-kpis', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const days = Math.min(365, Math.max(1, Number(req.query.days || 30)));
+
+    const eventResult = await query(
+      `
+      SELECT room_id, event_type, metadata, created_at
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND created_at >= NOW() - ($2::text || ' days')::interval
+      ORDER BY created_at ASC
+      `,
+      [workspaceId, days]
+    );
+
+    const events = eventResult.rows.map((row) => ({
+      roomId: row.room_id ? Number(row.room_id) : null,
+      eventType: String(row.event_type),
+      metadata: parseJsonMaybe(row.metadata, {}),
+      createdAt: new Date(row.created_at)
+    }));
+
+    const eventsByRoom = new Map<number, typeof events>();
+    events.forEach((event) => {
+      if (!event.roomId) return;
+      const roomEvents = eventsByRoom.get(event.roomId) || [];
+      roomEvents.push(event);
+      eventsByRoom.set(event.roomId, roomEvents);
+    });
+
+    const firstInsightMinutes: number[] = [];
+    const insightToActionMinutes: number[] = [];
+
+    eventsByRoom.forEach((roomEvents) => {
+      const start = roomEvents.find((event) => event.eventType === 'decision_room_flow_started');
+      const firstInsight = roomEvents.find((event) =>
+        event.eventType === 'decision_room_first_insight' || event.eventType === 'decision_room_run_completed'
+      );
+      const firstActionSync = roomEvents.find((event) => event.eventType === 'decision_room_actions_synced');
+
+      if (start && firstInsight) {
+        firstInsightMinutes.push((firstInsight.createdAt.getTime() - start.createdAt.getTime()) / (1000 * 60));
+      }
+      if (firstInsight && firstActionSync) {
+        insightToActionMinutes.push((firstActionSync.createdAt.getTime() - firstInsight.createdAt.getTime()) / (1000 * 60));
+      }
+    });
+
+    const autoStatusDrafts = events.filter((event) => event.eventType === 'decision_room_status_draft_generated').length;
+    const manualStatusUpdates = events.filter((event) => event.eventType === 'decision_room_manual_status_update').length;
+    const statusUpdateReductionPct = (autoStatusDrafts + manualStatusUpdates) > 0
+      ? (autoStatusDrafts / (autoStatusDrafts + manualStatusUpdates)) * 100
+      : null;
+
+    const actionCoverageResult = await query(
+      `
+      WITH action_items AS (
+        SELECT id
+        FROM artifacts
+        WHERE workspace_id = $1
+          AND artifact_type = 'action_item'
+          AND created_at >= NOW() - ($2::text || ' days')::interval
+      ),
+      covered AS (
+        SELECT DISTINCT le.child_artifact_id
+        FROM lineage_edges le
+        JOIN artifacts parent ON parent.id = le.parent_artifact_id
+        WHERE le.workspace_id = $1
+          AND le.child_artifact_id IN (SELECT id FROM action_items)
+          AND parent.artifact_type = ANY($3::text[])
+      )
+      SELECT
+        (SELECT COUNT(*)::int FROM action_items) AS total_actions,
+        (SELECT COUNT(*)::int FROM covered) AS covered_actions
+      `,
+      [workspaceId, days, MVP_EVIDENCE_TYPES]
+    );
+
+    const totalActions = Number(actionCoverageResult.rows[0]?.total_actions || 0);
+    const coveredActions = Number(actionCoverageResult.rows[0]?.covered_actions || 0);
+    const evidenceCoverageRatio = totalActions > 0 ? coveredActions / totalActions : 0;
+
+    const weeklyActiveRoomsResult = await query(
+      `
+      SELECT COUNT(DISTINCT room_id)::int AS count
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND room_id IS NOT NULL
+        AND created_at >= NOW() - INTERVAL '7 days'
+      `,
+      [workspaceId]
+    );
+
+    const weeklyActiveRooms = Number(weeklyActiveRoomsResult.rows[0]?.count || 0);
+
+    return res.json({
+      generatedAt: new Date().toISOString(),
+      windowDays: days,
+      metrics: {
+        timeToFirstInsightMedianMinutes: median(firstInsightMinutes),
+        timeToFirstInsightP90Minutes: percentile(firstInsightMinutes, 90),
+        timeFromInsightToActionMedianMinutes: median(insightToActionMinutes),
+        timeFromInsightToActionP90Minutes: percentile(insightToActionMinutes, 90),
+        manualStatusUpdateReductionPct: statusUpdateReductionPct,
+        evidenceCoverageRatio,
+        weeklyActiveRooms
+      },
+      counters: {
+        trackedRooms: eventsByRoom.size,
+        firstInsightSamples: firstInsightMinutes.length,
+        insightToActionSamples: insightToActionMinutes.length,
+        totalActions,
+        coveredActions,
+        autoStatusDrafts,
+        manualStatusUpdates
+      }
+    });
+  } catch (err) {
+    console.error('Get MVP KPI snapshot error:', err);
+    return res.status(500).json({ error: 'Failed to fetch MVP KPI snapshot' });
+  }
+});
+
 // Get workspace statistics
 router.get('/:workspaceId/stats', verifyWorkspaceOwnership, async (req: AuthRequest, res) => {
   try {

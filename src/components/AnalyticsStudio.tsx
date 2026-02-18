@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useDataset } from '../hooks/useDataset';
-import { datasetAPI, NextBestStep, RoomGuideStep, StatusDraft, studioAPI } from '../services/api';
+import { analyticsAPI, datasetAPI, NextBestStep, RoomGuideStep, StatusDraft, studioAPI } from '../services/api';
 import { DataGridWidget } from './Widgets/DataGridWidget';
 import { PivotConfig, PivotWidget } from './Widgets/PivotWidget';
 
@@ -28,6 +28,19 @@ interface StudioArtifact {
   title: string;
   payload?: any;
   created_at: string;
+}
+
+interface MvpKpiSnapshot {
+  metrics?: {
+    timeToFirstInsightMedianMinutes?: number | null;
+    timeFromInsightToActionMedianMinutes?: number | null;
+    manualStatusUpdateReductionPct?: number | null;
+    evidenceCoverageRatio?: number | null;
+    weeklyActiveRooms?: number | null;
+  };
+  counters?: {
+    trackedRooms?: number;
+  };
 }
 
 const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'report', 'actions'];
@@ -105,6 +118,10 @@ const AnalyticsStudio: React.FC = () => {
   const [actionDueDate, setActionDueDate] = useState('');
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<number[]>([]);
   const [statusDraft, setStatusDraft] = useState<StatusDraft | null>(null);
+  const [mvpKpis, setMvpKpis] = useState<MvpKpiSnapshot | null>(null);
+  const [slackChannel, setSlackChannel] = useState('#revops');
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [slackBotToken, setSlackBotToken] = useState('');
 
   const datasetRows = useMemo(() => {
     const rows = (activeDataset as any)?.data || (activeDataset as any)?.raw_data || [];
@@ -144,6 +161,16 @@ const AnalyticsStudio: React.FC = () => {
     setNextBestStep(guideResponse.data?.nextBestStep || null);
     setGuideCompletionRatio(Number(guideResponse.data?.completionRatio || 0));
   }, [workspaceId, selectedRoomId]);
+
+  const refreshMvpKpis = useCallback(async () => {
+    if (!workspaceId) return;
+    try {
+      const response = await analyticsAPI.getMvpKpis(workspaceId, 30);
+      setMvpKpis(response.data || null);
+    } catch (error) {
+      console.error('Failed to fetch MVP KPIs:', error);
+    }
+  }, [workspaceId]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -215,6 +242,12 @@ const AnalyticsStudio: React.FC = () => {
       console.error('Failed to refresh room state:', error);
     });
   }, [refreshRoomState]);
+
+  useEffect(() => {
+    refreshMvpKpis().catch((error) => {
+      console.error('Failed to refresh MVP KPI snapshot:', error);
+    });
+  }, [refreshMvpKpis, selectedRoomId]);
 
   useEffect(() => {
     setSelectedEvidenceIds([]);
@@ -367,6 +400,7 @@ const AnalyticsStudio: React.FC = () => {
       });
       setStatusMessage(response.data?.message || 'Actions synced.');
       await refreshRoomState();
+      await refreshMvpKpis();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
@@ -379,6 +413,7 @@ const AnalyticsStudio: React.FC = () => {
       setStatusDraft(response.data?.draft || null);
       setStatusMessage('Status draft generated from room execution logs.');
       await refreshRoomState();
+      await refreshMvpKpis();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
@@ -616,7 +651,42 @@ const AnalyticsStudio: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => studioAPI.connectSlack(workspaceId, { name: 'Slack Workspace', credentials: { channel: '#revops' } })} className="px-3 py-1 text-xs rounded border">
+                <input
+                  value={slackChannel}
+                  onChange={(e) => setSlackChannel(e.target.value)}
+                  placeholder="#revops"
+                  className="px-2 py-1 text-xs rounded border w-28"
+                />
+                <input
+                  value={slackWebhookUrl}
+                  onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                  placeholder="Slack Webhook URL"
+                  className="px-2 py-1 text-xs rounded border w-64"
+                />
+                <input
+                  value={slackBotToken}
+                  onChange={(e) => setSlackBotToken(e.target.value)}
+                  placeholder="xoxb-... (optional if webhook set)"
+                  className="px-2 py-1 text-xs rounded border w-56"
+                />
+                <button
+                  onClick={async () => {
+                    try {
+                      await studioAPI.connectSlack(workspaceId, {
+                        name: 'Slack Workspace',
+                        credentials: {
+                          channel: slackChannel || '#revops',
+                          webhookUrl: slackWebhookUrl || undefined,
+                          botToken: slackBotToken || undefined
+                        }
+                      });
+                      setStatusMessage('Slack integration saved.');
+                    } catch (error: any) {
+                      setStatusMessage(toErrorMessage(error));
+                    }
+                  }}
+                  className="px-3 py-1 text-xs rounded border"
+                >
                   Connect Slack
                 </button>
                 <button onClick={() => studioAPI.connectSheets(workspaceId, { name: 'Google Sheets', credentials: { mode: 'oauth' } })} className="px-3 py-1 text-xs rounded border">
@@ -665,6 +735,15 @@ const AnalyticsStudio: React.FC = () => {
             <div>Execution: {runInfo.executionMs || 0}ms</div>
             {runInfo.generatedSql && <pre className="text-[10px] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded p-2">{runInfo.generatedSql}</pre>}
             {runInfo.explanation && <p className="text-[10px]">{runInfo.explanation}</p>}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">MVP KPI Snapshot</h3>
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1">
+            <div>Tracked Rooms: {mvpKpis?.counters?.trackedRooms ?? 0}</div>
+            <div>Median Time to Insight: {mvpKpis?.metrics?.timeToFirstInsightMedianMinutes != null ? `${mvpKpis.metrics.timeToFirstInsightMedianMinutes.toFixed(1)} min` : 'n/a'}</div>
+            <div>Median Insight to Action: {mvpKpis?.metrics?.timeFromInsightToActionMedianMinutes != null ? `${mvpKpis.metrics.timeFromInsightToActionMedianMinutes.toFixed(1)} min` : 'n/a'}</div>
+            <div>Evidence Coverage: {mvpKpis?.metrics?.evidenceCoverageRatio != null ? `${(mvpKpis.metrics.evidenceCoverageRatio * 100).toFixed(0)}%` : 'n/a'}</div>
+            <div>Status Automation: {mvpKpis?.metrics?.manualStatusUpdateReductionPct != null ? `${mvpKpis.metrics.manualStatusUpdateReductionPct.toFixed(0)}%` : 'n/a'}</div>
           </div>
 
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Checklist</h3>

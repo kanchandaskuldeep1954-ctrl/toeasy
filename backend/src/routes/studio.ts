@@ -75,6 +75,28 @@ interface RoomRunContext {
   [key: string]: any;
 }
 
+interface AnalyticsEventInput {
+  workspaceId?: number | null;
+  roomId?: number | null;
+  userId: string;
+  eventType: string;
+  metadata?: Record<string, any>;
+}
+
+interface SlackConnection {
+  id: number;
+  name: string;
+  credentials: Record<string, any>;
+}
+
+interface SlackDeliveryResult {
+  posted: boolean;
+  attempts: number;
+  destination: string;
+  messageTs?: string | null;
+  error?: string;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -584,6 +606,205 @@ async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]) 
   };
 }
 
+async function recordAnalyticsEvent(input: AnalyticsEventInput) {
+  try {
+    await query(
+      `
+      INSERT INTO analytics_events (workspace_id, room_id, user_id, event_type, metadata, created_at)
+      VALUES ($1, $2, $3, $4, $5, NOW())
+      `,
+      [
+        input.workspaceId ?? null,
+        input.roomId ?? null,
+        input.userId,
+        input.eventType,
+        JSON.stringify(input.metadata || {})
+      ]
+    );
+  } catch (err) {
+    // Telemetry must not break product paths.
+    console.warn('Analytics event capture skipped:', err);
+  }
+}
+
+async function getSlackConnection(workspaceId: number, userId: string): Promise<SlackConnection | null> {
+  const result = await query(
+    `
+    SELECT id, name, credentials
+    FROM integrations
+    WHERE workspace_id = $1
+      AND provider = 'slack'
+      AND status = 'active'
+    ORDER BY CASE WHEN user_id = $2 THEN 0 ELSE 1 END, updated_at DESC
+    LIMIT 1
+    `,
+    [workspaceId, userId]
+  );
+
+  if (result.rows.length === 0) return null;
+
+  const row = result.rows[0];
+  return {
+    id: Number(row.id),
+    name: String(row.name || 'Slack Workspace'),
+    credentials: parseJsonMaybe<Record<string, any>>(row.credentials, {})
+  };
+}
+
+function normalizeSlackCredentials(credentials: Record<string, any>) {
+  return {
+    webhookUrl: String(
+      credentials?.webhookUrl ||
+      credentials?.webhook_url ||
+      credentials?.incomingWebhookUrl ||
+      credentials?.url ||
+      ''
+    ).trim(),
+    botToken: String(credentials?.botToken || credentials?.bot_token || credentials?.token || '').trim(),
+    channel: String(credentials?.channel || credentials?.channelId || credentials?.channel_id || '#general').trim() || '#general'
+  };
+}
+
+function buildSlackActionSyncPayload(params: {
+  roomName: string;
+  actionItems: Array<{ id: number; title: string; payload?: any }>;
+  syncedCount: number;
+  evidenceCount: number;
+}) {
+  const lines = params.actionItems.slice(0, 10).map((action) => {
+    const owner = action.payload?.owner || action.payload?.assigneeName || 'Unassigned';
+    const due = action.payload?.dueDate ? ` | due ${action.payload.dueDate}` : '';
+    const status = action.payload?.status ? ` | ${action.payload.status}` : '';
+    return `• ${action.title} — ${owner}${due}${status}`;
+  });
+
+  const summaryText = [
+    `Decision Room "${params.roomName}" synced ${params.syncedCount} action item(s).`,
+    `${params.evidenceCount} evidence artifact(s) linked.`,
+    lines.length ? lines.join('\n') : 'No action details found.'
+  ].join('\n');
+
+  return {
+    text: summaryText,
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `Decision Room Sync: ${params.roomName}`,
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${params.syncedCount}* action item(s) synced\n*${params.evidenceCount}* evidence artifact(s) linked`
+        }
+      },
+      ...(lines.length
+        ? [{
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: lines.join('\n')
+            }
+          }]
+        : []),
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Synced at ${new Date().toISOString()}`
+          }
+        ]
+      }
+    ]
+  };
+}
+
+async function postSlackWithRetry(params: {
+  webhookUrl?: string;
+  botToken?: string;
+  channel: string;
+  payload: { text: string; blocks: any[] };
+}): Promise<SlackDeliveryResult> {
+  const hasWebhook = Boolean(params.webhookUrl);
+  const hasToken = Boolean(params.botToken);
+  if (!hasWebhook && !hasToken) {
+    return {
+      posted: false,
+      attempts: 0,
+      destination: params.channel,
+      error: 'Slack credentials missing webhookUrl or botToken.'
+    };
+  }
+
+  const maxAttempts = 3;
+  let lastError = 'Unknown Slack error';
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      if (hasWebhook) {
+        const response = await fetch(String(params.webhookUrl), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params.payload)
+        });
+        if (!response.ok) {
+          const details = await response.text().catch(() => '');
+          throw new Error(`Slack webhook ${response.status}: ${details || response.statusText}`);
+        }
+
+        return {
+          posted: true,
+          attempts: attempt,
+          destination: params.channel,
+          messageTs: null
+        };
+      }
+
+      const response = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${params.botToken}`
+        },
+        body: JSON.stringify({
+          channel: params.channel,
+          text: params.payload.text,
+          blocks: params.payload.blocks
+        })
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || data?.ok === false) {
+        throw new Error(`Slack API error: ${data?.error || response.statusText || 'unknown_error'}`);
+      }
+
+      return {
+        posted: true,
+        attempts: attempt,
+        destination: params.channel,
+        messageTs: data?.ts || null
+      };
+    } catch (err: any) {
+      lastError = err?.message || 'Slack delivery failed';
+      if (attempt < maxAttempts) {
+        await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      }
+    }
+  }
+
+  return {
+    posted: false,
+    attempts: maxAttempts,
+    destination: params.channel,
+    error: lastError
+  };
+}
+
 async function createArtifact(params: {
   workspaceId: number;
   projectId?: number | null;
@@ -712,7 +933,20 @@ router.post('/:workspaceId/projects/:projectId/rooms', async (req: WorkspaceRequ
       [workspaceId, projectId, name.trim(), description || null, normalizedStage, JSON.stringify(runContext || {}), req.user!.id]
     );
 
-    return res.status(201).json({ data: result.rows[0] });
+    const room = result.rows[0];
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: Number(room.id),
+      userId: req.user!.id,
+      eventType: 'decision_room_flow_started',
+      metadata: {
+        projectId,
+        stage: normalizedStage,
+        hasDatasetContext: Boolean(runContext?.datasetId || runContext?.datasetVersionId)
+      }
+    });
+
+    return res.status(201).json({ data: room });
   } catch (err) {
     console.error('Create room failed:', err);
     return res.status(500).json({ error: 'Failed to create analysis room' });
@@ -902,6 +1136,18 @@ router.post('/:workspaceId/rooms/:roomId/guide/complete-step', async (req: Works
     const updatedArtifacts = await listRoomArtifacts(workspaceId, roomId, 500);
     const updatedGuide = await buildRoomGuide(workspaceId, updatedRoom, updatedArtifacts);
 
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_guide_step_completed',
+      metadata: {
+        stepId,
+        roomStage: updatedRoom.stage,
+        completionRatio: updatedGuide.completionRatio
+      }
+    });
+
     return res.json({
       roomId,
       roomStage: updatedRoom.stage,
@@ -1013,6 +1259,23 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
         createdBy: req.user!.id
       });
     }
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_status_draft_generated',
+      metadata: {
+        persisted: persist,
+        artifactId: artifact ? Number(artifact.id) : null,
+        actionItems: actionItems.length,
+        completedActions: completedActions.length,
+        blockedActions: blockedActions.length,
+        evidenceCoverageRatio: actionItems.length
+          ? evidenceArtifactIds.length / actionItems.length
+          : 0
+      }
+    });
 
     return res.json({
       draft: statusDraft,
@@ -1205,6 +1468,53 @@ router.post('/:workspaceId/rooms/:roomId/run', async (req: WorkspaceRequest, res
       }
     }
 
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_run_completed',
+      metadata: {
+        mode,
+        executionMs,
+        rowCount: rows.length,
+        persisted: persistPolicy !== 'none',
+        artifactId
+      }
+    });
+
+    if (persistPolicy !== 'none') {
+      const runCountResult = await query(
+        `
+        SELECT COUNT(*)::int AS count
+        FROM artifacts
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND artifact_type = 'query_run'
+        `,
+        [workspaceId, roomId]
+      );
+
+      const runCount = Number(runCountResult.rows[0]?.count || 0);
+      if (runCount === 1) {
+        const firstInsightDelayMinutes = Math.max(
+          0,
+          (Date.now() - new Date(room.created_at).getTime()) / (1000 * 60)
+        );
+
+        await recordAnalyticsEvent({
+          workspaceId,
+          roomId,
+          userId: req.user!.id,
+          eventType: 'decision_room_first_insight',
+          metadata: {
+            mode,
+            artifactId,
+            minutesFromRoomStart: Number(firstInsightDelayMinutes.toFixed(2))
+          }
+        });
+      }
+    }
+
     return res.status(201).json({
       runId,
       rows,
@@ -1290,6 +1600,21 @@ router.post('/:workspaceId/rooms/:roomId/artifacts', async (req: WorkspaceReques
         );
         lineageEdges.push(...edgeResult.rows);
       }
+    }
+
+    if (String(artifactType) === 'action_item' || String(artifactType) === 'decision_brief') {
+      await recordAnalyticsEvent({
+        workspaceId,
+        roomId,
+        userId: req.user!.id,
+        eventType: String(artifactType) === 'action_item'
+          ? 'decision_room_action_created'
+          : 'decision_room_brief_published',
+        metadata: {
+          artifactId: Number(artifact.id),
+          lineageEdgeCount: lineageEdges.length
+        }
+      });
     }
 
     return res.status(201).json({
@@ -1453,6 +1778,18 @@ router.post('/:workspaceId/rooms/:roomId/briefs/generate', async (req: Workspace
       );
     }
 
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_brief_published',
+      metadata: {
+        artifactId: Number(briefArtifact.id),
+        evidenceArtifacts: sourceArtifacts.length,
+        rowsAnalyzed: totalRowsFromRuns
+      }
+    });
+
     return res.status(201).json({
       artifact: {
         ...briefArtifact,
@@ -1526,11 +1863,63 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       });
     }
 
+    const normalizedChannel = String(channel).toLowerCase();
+    let slackConnection: SlackConnection | null = null;
+    let slackDestination = '#general';
+    let slackWebhookUrl = '';
+    let slackBotToken = '';
+
+    if (normalizedChannel === 'slack') {
+      slackConnection = await getSlackConnection(workspaceId, req.user!.id);
+      if (!slackConnection) {
+        return res.status(400).json({
+          error: 'Slack integration is not connected. Connect Slack before syncing actions.'
+        });
+      }
+
+      const credentials = normalizeSlackCredentials(slackConnection.credentials);
+      slackDestination = credentials.channel || '#general';
+      slackWebhookUrl = credentials.webhookUrl;
+      slackBotToken = credentials.botToken;
+
+      if (!slackWebhookUrl && !slackBotToken) {
+        return res.status(400).json({
+          error: 'Slack integration is connected but missing webhookUrl/botToken credentials.'
+        });
+      }
+    }
+
     const createdTaskIds: string[] = [];
+    const skippedTaskIds: string[] = [];
     if (createTasks) {
       for (const action of actionItems) {
         try {
           const taskPayload = action.payload || {};
+          const dedupeTag = `room-action:${action.id}`;
+          const existingTask = await query(
+            `
+            SELECT id
+            FROM tasks
+            WHERE workspace_id = $1
+              AND tags ? $2
+            ORDER BY created_at DESC
+            LIMIT 1
+            `,
+            [workspaceId, dedupeTag]
+          );
+
+          if (existingTask.rows.length > 0) {
+            skippedTaskIds.push(existingTask.rows[0].id);
+            continue;
+          }
+
+          const normalizedTags = Array.isArray(taskPayload.tags)
+            ? [...new Set(taskPayload.tags.map((tag: any) => String(tag)))]
+            : [];
+          normalizedTags.push('room-sync');
+          normalizedTags.push(dedupeTag);
+          normalizedTags.push(`room:${roomId}`);
+
           const taskInsert = await query(
             `
             INSERT INTO tasks (workspace_id, title, description, status, priority, assignee_id, created_by, due_date, tags)
@@ -1546,13 +1935,59 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
               taskPayload.assigneeId || null,
               req.user!.id,
               taskPayload.dueDate || null,
-              JSON.stringify(taskPayload.tags || ['room-sync'])
+              JSON.stringify(normalizedTags)
             ]
           );
           createdTaskIds.push(taskInsert.rows[0].id);
         } catch (taskErr) {
           console.warn('Task sync failed for action item, skipping:', taskErr);
         }
+      }
+    }
+
+    let slackDelivery: SlackDeliveryResult = {
+      posted: false,
+      attempts: 0,
+      destination: String(channel),
+      error: 'Slack delivery not attempted.'
+    };
+
+    if (normalizedChannel === 'slack') {
+      const payload = buildSlackActionSyncPayload({
+        roomName: room.name,
+        actionItems: actionItems.map((item) => ({ id: Number(item.id), title: String(item.title), payload: item.payload })),
+        syncedCount: actionItems.length,
+        evidenceCount: evidenceArtifactIds.length
+      });
+
+      slackDelivery = await postSlackWithRetry({
+        webhookUrl: slackWebhookUrl,
+        botToken: slackBotToken,
+        channel: slackDestination,
+        payload
+      });
+
+      if (!slackDelivery.posted) {
+        await recordAnalyticsEvent({
+          workspaceId,
+          roomId,
+          userId: req.user!.id,
+          eventType: 'decision_room_actions_sync_failed',
+          metadata: {
+            channel: 'slack',
+            error: slackDelivery.error || 'Slack delivery failed',
+            createdTasks: createdTaskIds.length,
+            skippedTasks: skippedTaskIds.length
+          }
+        });
+
+        return res.status(502).json({
+          error: `Slack delivery failed: ${slackDelivery.error || 'unknown error'}`,
+          createdTasks: createdTaskIds.length,
+          skippedTasks: skippedTaskIds.length,
+          createdTaskIds,
+          skippedTaskIds
+        });
       }
     }
 
@@ -1584,11 +2019,30 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       [JSON.stringify(updatedRunContext), 'done', roomId, workspaceId]
     );
 
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_actions_synced',
+      metadata: {
+        channel,
+        syncedCount: actionItems.length,
+        createdTasks: createdTaskIds.length,
+        skippedTasks: skippedTaskIds.length,
+        evidenceArtifacts: evidenceArtifactIds.length,
+        slackPosted: slackDelivery.posted,
+        slackAttempts: slackDelivery.attempts
+      }
+    });
+
     return res.json({
       syncedCount: actionItems.length,
       createdTasks: createdTaskIds.length,
       createdTaskIds,
+      skippedTasks: skippedTaskIds.length,
+      skippedTaskIds,
       evidenceArtifactIds,
+      slackDelivery,
       channel,
       message: `Synced ${actionItems.length} action item(s) for ${String(channel).toUpperCase()} handoff.`
     });
