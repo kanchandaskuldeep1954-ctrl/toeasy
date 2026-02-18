@@ -17,8 +17,8 @@ router.use('/:workspaceId', verifyWorkspaceOwnership);
 // Execute query on dataset
 router.post('/:workspaceId/datasets/:datasetId/query', checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {
   try {
-    // Accept both query_text (from frontend) and queryText (from internal calls)
-    const queryText = req.body.query_text || req.body.queryText;
+    // Accept query_text / queryText / sql for compatibility.
+    const queryText = req.body.query_text || req.body.queryText || req.body.sql;
     const type = req.body.type || 'sql';
 
     if (!queryText) {

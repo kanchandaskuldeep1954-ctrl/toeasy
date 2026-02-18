@@ -34,6 +34,7 @@ import activityRoutes from './routes/activity.js';
 import metricsRoutes from './routes/metrics.js';
 import reportRoutes from './routes/reports.js';
 import classificationRoutes from './routes/classification.js';
+import studioRoutes from './routes/studio.js';
 
 // Work OS Modules
 import chatRoutes from './routes/chat.js';
@@ -139,6 +140,7 @@ app.use('/api/workspaces', dashboardRoutes);
 app.use('/api/workspaces', reportRoutes);
 app.use('/api/workspaces', queryRoutes); // includes /workspaces/:id/datasets/:id/query
 app.use('/api/workspaces', validationRoutes);
+app.use('/api/workspaces', studioRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/users', userRoutes);

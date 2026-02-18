@@ -9,7 +9,6 @@ import { VersionProvider } from './src/context/VersionContext';
 import { ActivityProvider } from './src/context/ActivityContext';
 import { ProtectedRoute } from './src/routes/ProtectedRoute';
 import { PublicRoute } from './src/routes/PublicRoute';
-import { SourceType } from './types';
 
 // Auth Pages
 import { LoginPage } from './src/components/LoginPage';
@@ -26,15 +25,11 @@ import SourceHubView from './src/components/SourceHubView';
 import ConnectorSetupView from './src/components/ConnectorSetupView';
 import ConnectorExplorerView from './src/components/ConnectorExplorerView';
 import { QueryHistory } from './src/components/QueryHistory';
-import { DashboardLibrary } from './src/components/DashboardLibrary';
-import ReportLibrary from './src/components/ReportLibrary';
-import ReportViewIntegrated from './src/components/ReportViewIntegrated';
 import TheWarRoom from './src/components/TheWarRoom';
-const DashboardViewIntegrated = React.lazy(() => import('./src/components/DashboardViewIntegrated'));
-const SpreadsheetViewIntegrated = React.lazy(() => import('./components/SpreadsheetViewIntegrated'));
+import AnalyticsStudio from './src/components/AnalyticsStudio';
+import StudioLegacyRedirect from './src/components/StudioLegacyRedirect';
 const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
-import PlaygroundViewIntegrated from './src/components/PlaygroundViewIntegrated';
 import DatasetCreatorView from './components/DatasetCreatorView';
 import DataPreview from './src/components/DataPreview';
 import ValidationRulesManager from './src/components/ValidationRulesManager';
@@ -81,6 +76,7 @@ const AppLayout: React.FC = () => {
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="team" element={<TeamView />} />
+          <Route path="studio" element={<AnalyticsStudio />} />
 
           {/* Connect & Upload */}
           <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
@@ -99,19 +95,19 @@ const AppLayout: React.FC = () => {
               DATASET TOOLS (Tabbed Tool Views)
              ========================================================= */}
           {/* The "Sheet" View — Excel-like Editing */}
-          <Route path="sheets" element={<SpreadsheetViewIntegrated />} />
+          <Route path="sheets" element={<StudioLegacyRedirect panel="sheets" />} />
 
           {/* The "Clean" View — AI Data Quality */}
           <Route path="clean" element={<UniverCleanView />} />
 
           {/* The "Dashboard" View — Visualization */}
-          <Route path="dashboard" element={<DashboardViewIntegrated />} />
+          <Route path="dashboard" element={<StudioLegacyRedirect panel="visuals" />} />
 
           {/* The "Report" View — Doc-style Reporting */}
-          <Route path="report" element={<ReportViewIntegrated />} />
+          <Route path="report" element={<StudioLegacyRedirect panel="report" />} />
 
           {/* The "Playground" View — Code/SQL */}
-          <Route path="playground" element={<PlaygroundViewIntegrated />} />
+          <Route path="playground" element={<StudioLegacyRedirect panel="query" />} />
 
 
           {/* =========================================================
@@ -122,8 +118,8 @@ const AppLayout: React.FC = () => {
           <Route path="forms/:id" element={<FormsView />} />
           <Route path="files" element={<FilesView />} />
           <Route path="war-room" element={<TheWarRoom />} />
-          <Route path="dashboards" element={<DashboardLibrary />} />
-          <Route path="reports" element={<ReportLibrary />} />
+          <Route path="dashboards" element={<StudioLegacyRedirect panel="visuals" />} />
+          <Route path="reports" element={<StudioLegacyRedirect panel="report" />} />
           <Route path="queries" element={<QueryHistory />} />
           <Route path="preview" element={<DataPreview />} />
           <Route path="rules" element={<ValidationRulesManager />} />

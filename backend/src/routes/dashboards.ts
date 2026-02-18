@@ -60,10 +60,14 @@ router.get('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
       [...params, limit, offset]
     );
 
-    const dashboards = result.rows.map(d => ({
-      ...d,
-      layout: safeParse(d.layout)
-    }));
+    const dashboards = result.rows.map(d => {
+      const parsedLayout = safeParse(d.layout);
+      return {
+        ...d,
+        layout: parsedLayout,
+        configuration: parsedLayout
+      };
+    });
 
     res.json({
       data: dashboards,
@@ -81,15 +85,16 @@ router.get('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
 // Create dashboard
 router.post('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
   try {
-    const { name, description, layout, dataset_id, is_primary } = req.body;
+    const { name, description, layout, configuration, dataset_id, is_primary } = req.body;
 
     if (!name) {
       return res.status(400).json({ error: 'Dashboard name required' });
     }
 
+    const configInput = configuration ?? layout;
     let layoutJson = '[]';
-    if (layout) {
-      layoutJson = typeof layout === 'string' ? JSON.stringify({ type: layout }) : JSON.stringify(layout);
+    if (configInput) {
+      layoutJson = typeof configInput === 'string' ? JSON.stringify({ type: configInput }) : JSON.stringify(configInput);
     }
 
     const result = await query(
@@ -100,9 +105,11 @@ router.post('/:workspaceId/dashboards', async (req: AuthRequest, res) => {
     );
 
     const dashboard = result.rows[0];
+    const parsedLayout = safeParse(dashboard.layout);
     res.status(201).json({
       ...dashboard,
-      layout: safeParse(dashboard.layout)
+      layout: parsedLayout,
+      configuration: parsedLayout
     });
   } catch (err) {
     console.error('Create dashboard error:', err);
@@ -125,9 +132,11 @@ router.get('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
     }
 
     const dashboard = result.rows[0];
+    const parsedLayout = safeParse(dashboard.layout);
     res.json({
       ...dashboard,
-      layout: safeParse(dashboard.layout)
+      layout: parsedLayout,
+      configuration: parsedLayout
     });
   } catch (err) {
     console.error('Get dashboard error:', err);
@@ -138,11 +147,12 @@ router.get('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
 // Update dashboard
 router.put('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res) => {
   try {
-    const { name, description, layout, is_primary } = req.body;
+    const { name, description, layout, configuration, is_primary } = req.body;
+    const configInput = configuration ?? layout;
 
     let layoutJson = '[]';
-    if (layout) {
-      layoutJson = typeof layout === 'string' ? JSON.stringify({ type: layout }) : JSON.stringify(layout);
+    if (configInput) {
+      layoutJson = typeof configInput === 'string' ? JSON.stringify({ type: configInput }) : JSON.stringify(configInput);
     }
 
     const result = await query(
@@ -154,7 +164,7 @@ router.put('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
            updated_at = NOW() 
        WHERE id = $5 AND workspace_id = $6 
        RETURNING id, name, description, layout, dataset_id, is_primary, updated_at`,
-      [name || null, description || null, layout ? layoutJson : null, is_primary !== undefined ? is_primary : null, req.params.dashboardId, req.params.workspaceId]
+      [name || null, description || null, configInput ? layoutJson : null, is_primary !== undefined ? is_primary : null, req.params.dashboardId, req.params.workspaceId]
     );
 
     if (result.rows.length === 0) {
@@ -162,9 +172,11 @@ router.put('/:workspaceId/dashboards/:dashboardId', async (req: AuthRequest, res
     }
 
     const dashboard = result.rows[0];
+    const parsedLayout = safeParse(dashboard.layout);
     res.json({
       ...dashboard,
-      layout: safeParse(dashboard.layout)
+      layout: parsedLayout,
+      configuration: parsedLayout
     });
   } catch (err) {
     console.error('Update dashboard error:', err);

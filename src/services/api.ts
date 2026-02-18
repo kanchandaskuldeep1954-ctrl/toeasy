@@ -274,12 +274,86 @@ export const reportsAPI = {
 };
 
 // ============================================
+// Studio / Decision OS Endpoints
+// ============================================
+
+export const studioAPI = {
+  listProjects: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/projects`),
+
+  createProject: (workspaceId: string, data: { name: string; description?: string; objective?: string }) =>
+    getClient().post(`/workspaces/${workspaceId}/projects`, data),
+
+  listRooms: (workspaceId: string, projectId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/projects/${projectId}/rooms`),
+
+  createRoom: (workspaceId: string, projectId: string, data: { name: string; description?: string; stage?: string; runContext?: any }) =>
+    getClient().post(`/workspaces/${workspaceId}/projects/${projectId}/rooms`, data),
+
+  getRoomState: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/state`),
+
+  run: (workspaceId: string, roomId: string, input: {
+    roomId?: string | number;
+    mode: 'sql' | 'nl' | 'script_js' | 'sheet_op';
+    datasetVersionId?: string | number;
+    payload?: any;
+    persistPolicy?: 'persist' | 'none';
+  }) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/run`, input),
+
+  createArtifact: (workspaceId: string, roomId: string, data: {
+    artifactType: 'dataset_version' | 'query_run' | 'chart' | 'pivot' | 'report_block' | 'decision_brief' | 'action_item';
+    title: string;
+    description?: string;
+    payload?: any;
+    metadata?: any;
+    parentArtifactIds?: (string | number)[];
+    datasetVersionId?: string | number;
+    sourceDatasetId?: string | number;
+  }) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/artifacts`, data),
+
+  getLineage: (workspaceId: string, roomId: string, artifactId: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/artifacts/${artifactId}/lineage`),
+
+  generateBrief: (workspaceId: string, roomId: string, data?: { title?: string; objective?: string }) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/briefs/generate`, data || {}),
+
+  syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean }) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/actions/sync`, data || {}),
+
+  createAutomation: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/automations`, data),
+
+  executeAutomation: (workspaceId: string, automationId: string | number, data?: any) =>
+    getClient().post(`/workspaces/${workspaceId}/automations/${automationId}/execute`, data || {}),
+
+  respondApproval: (workspaceId: string, approvalId: string | number, data: { decision: 'approved' | 'rejected'; note?: string }) =>
+    getClient().post(`/workspaces/${workspaceId}/approvals/${approvalId}/respond`, data),
+
+  connectSlack: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/integrations/slack/connect`, data),
+
+  connectSheets: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/integrations/sheets/connect`, data),
+
+  connectSQL: (workspaceId: string, data: any) =>
+    getClient().post(`/workspaces/${workspaceId}/integrations/sql/connect`, data),
+
+  getExecutiveDigest: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/digests/executive`)
+};
+
+// ============================================
 // Query Endpoints
 // ============================================
 
 export const queryAPI = {
   execute: (workspaceId: string, datasetId: string, sql: string) =>
-    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/query`, { sql }),
+    getClient().post(`/workspaces/${workspaceId}/datasets/${datasetId}/query`, {
+      sql,
+      query_text: sql,
+      queryText: sql
+    }),
 
   list: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/queries`),
@@ -534,6 +608,7 @@ export default {
   validation: validationAPI,
   analysis: analysisAPI,
   dashboard: dashboardAPI,
+  studio: studioAPI,
   query: queryAPI,
   ai: aiAPI,
   user: userAPI,

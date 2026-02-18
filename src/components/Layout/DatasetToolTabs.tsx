@@ -1,104 +1,75 @@
-/**
- * DatasetToolTabs — Replaces WorkspaceTabs
- * 
- * When a dataset is active, shows tool tabs: Sheets | Dashboard | Report | Clean | Playground
- * Each tab navigates to the corresponding tool view with the current dataset context.
- * 
- * This is the "Tableau/Power BI" inspired approach:
- * one dataset, multiple tool views, all connected.
- */
-
 import React from 'react';
-import { NavLink, useSearchParams, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
+import { Table2, Search, Braces, GitBranch, BarChart3, FileText, CheckSquare } from 'lucide-react';
 import { useDataset } from '../../hooks/useDataset';
 import { useWorkspace } from '../../hooks/useWorkspace';
-import {
-    Table2,
-    BarChart3,
-    FileText,
-    Sparkles,
-    Code2,
-} from 'lucide-react';
 import { useTheme } from '../../hooks/useTheme';
 
 interface ToolTab {
-    id: string;
-    label: string;
-    icon: React.ReactNode;
-    path: string;
+  panel: string;
+  label: string;
+  icon: React.ReactNode;
+  path: string;
 }
 
 const DatasetToolTabs: React.FC = () => {
-    const { activeDataset } = useDataset();
-    const { activeWorkspace } = useWorkspace();
-    const { theme } = useTheme();
-    const location = useLocation();
-    const [searchParams] = useSearchParams();
+  const { activeDataset } = useDataset();
+  const { activeWorkspace } = useWorkspace();
+  const { theme } = useTheme();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
 
-    const workspaceId = activeWorkspace?.id;
-    const datasetId = searchParams.get('dataset') || (activeDataset as any)?.id;
+  const workspaceId = activeWorkspace?.id;
+  const datasetId = searchParams.get('dataset') || (activeDataset as any)?.id;
 
-    // Only show tool tabs when a dataset is active
-    if (!datasetId || !workspaceId) return null;
+  if (!workspaceId || !datasetId) return null;
 
-    const queryString = `?workspace=${workspaceId}&dataset=${datasetId}`;
+  const queryPrefix = `?workspace=${workspaceId}&dataset=${datasetId}`;
+  const tools: ToolTab[] = [
+    { panel: 'sheets', label: 'Sheets', icon: <Table2 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=sheets` },
+    { panel: 'query', label: 'Query', icon: <Search className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=query` },
+    { panel: 'script', label: 'Script', icon: <Braces className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=script` },
+    { panel: 'pivot', label: 'Pivot', icon: <GitBranch className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=pivot` },
+    { panel: 'visuals', label: 'Visuals', icon: <BarChart3 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=visuals` },
+    { panel: 'report', label: 'Report', icon: <FileText className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=report` },
+    { panel: 'actions', label: 'Actions', icon: <CheckSquare className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=actions` }
+  ];
 
-    const tools: ToolTab[] = [
-        { id: 'sheets', label: 'Sheets', icon: <Table2 className="w-4 h-4" />, path: `/app/sheets${queryString}` },
-        { id: 'dashboard', label: 'Dashboard', icon: <BarChart3 className="w-4 h-4" />, path: `/app/dashboard${queryString}` },
-        { id: 'report', label: 'Report', icon: <FileText className="w-4 h-4" />, path: `/app/report${queryString}` },
-        { id: 'clean', label: 'Clean', icon: <Sparkles className="w-4 h-4" />, path: `/app/clean${queryString}` },
-        { id: 'playground', label: 'Playground', icon: <Code2 className="w-4 h-4" />, path: `/app/playground${queryString}` },
-    ];
+  const isActive = (panel: string) =>
+    location.pathname.includes('/app/studio') && searchParams.get('panel') === panel;
 
-    const isActive = (tab: ToolTab) => {
-        return location.pathname.includes(`/app/${tab.id}`);
-    };
+  return (
+    <div className={`flex items-center gap-1 px-4 h-10 ${theme === 'dark' ? 'bg-slate-900/60' : 'bg-white'}`}>
+      <div className={`flex items-center gap-2 mr-3 pr-3 border-r ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`}>
+        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+        <span className={`text-xs font-bold truncate max-w-[150px] ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}`}>
+          {(activeDataset as any)?.name || `Dataset #${datasetId}`}
+        </span>
+      </div>
 
-    return (
-        <div className={`flex items-center gap-1 px-4 h-10 select-none ${theme === 'dark' ? 'bg-slate-900/50' : 'bg-white'
-            }`}>
-            {/* Dataset Name Label */}
-            <div className={`flex items-center gap-2 mr-3 pr-3 border-r ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'
-                }`}>
-                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-                <span className={`text-xs font-bold truncate max-w-[150px] ${theme === 'dark' ? 'text-slate-300' : 'text-slate-700'
-                    }`}>
-                    {(activeDataset as any)?.name || `Dataset #${datasetId}`}
-                </span>
-            </div>
-
-            {/* Tool Tabs */}
-            {tools.map((tab) => {
-                const active = isActive(tab);
-                return (
-                    <NavLink
-                        key={tab.id}
-                        to={tab.path}
-                        className={`
-                            flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold
-                            transition-all duration-200 relative
-                            ${active
-                                ? theme === 'dark'
-                                    ? 'bg-blue-600/20 text-blue-400 border border-blue-500/30'
-                                    : 'bg-blue-50 text-blue-700 border border-blue-200'
-                                : theme === 'dark'
-                                    ? 'text-slate-400 hover:text-white hover:bg-slate-800/50 border border-transparent'
-                                    : 'text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-transparent'
-                            }
-                        `}
-                    >
-                        {tab.icon}
-                        <span className="hidden sm:inline">{tab.label}</span>
-                        {active && (
-                            <div className={`absolute -bottom-[11px] left-2 right-2 h-[2px] rounded-full ${theme === 'dark' ? 'bg-blue-500' : 'bg-blue-600'
-                                }`} />
-                        )}
-                    </NavLink>
-                );
-            })}
-        </div>
-    );
+      {tools.map((tab) => {
+        const active = isActive(tab.panel);
+        return (
+          <NavLink
+            key={tab.panel}
+            to={tab.path}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
+              active
+                ? theme === 'dark'
+                  ? 'bg-blue-600/20 text-blue-300 border-blue-500/30'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+                : theme === 'dark'
+                  ? 'text-slate-400 border-transparent hover:bg-slate-800 hover:text-white'
+                  : 'text-slate-500 border-transparent hover:bg-slate-100 hover:text-slate-900'
+            }`}
+          >
+            {tab.icon}
+            <span className="hidden sm:inline">{tab.label}</span>
+          </NavLink>
+        );
+      })}
+    </div>
+  );
 };
 
 export default DatasetToolTabs;
