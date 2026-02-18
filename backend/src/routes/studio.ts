@@ -28,6 +28,53 @@ interface DatasetResolution {
   sourceDatasetId: number | null;
 }
 
+type RoomStage = 'ingest' | 'profile' | 'analyze' | 'brief' | 'action' | 'done';
+
+interface RoomGuideStep {
+  id: string;
+  stage: RoomStage;
+  label: string;
+  requiredArtifacts: string[];
+  completed: boolean;
+  completedAt: string | null;
+  blockingIssues: string[];
+}
+
+interface NextBestStep {
+  stepId: string;
+  reason: string;
+  blockingIssues: string[];
+}
+
+interface StatusDraft {
+  summary: string;
+  completedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
+  blockedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null; reason: string | null }>;
+  inProgressActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
+  evidenceArtifactIds: number[];
+  roomStage: RoomStage;
+  generatedAt: string;
+  metrics: {
+    queryRuns: number;
+    rowsAnalyzed: number;
+    actionItems: number;
+    completedActions: number;
+    blockedActions: number;
+  };
+}
+
+interface RoomRunContext {
+  datasetId?: number | string;
+  sourceDatasetId?: number | string;
+  datasetVersionId?: number | string;
+  mvpGuide?: {
+    completedStepIds?: string[];
+    stepCompletedAt?: Record<string, string>;
+    lastActionSyncAt?: string;
+  };
+  [key: string]: any;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -40,6 +87,15 @@ const ARTIFACT_TYPES = new Set([
 
 const ROOM_STAGES = new Set(['ingest', 'profile', 'analyze', 'brief', 'action', 'done']);
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
+const ROOM_STAGE_ORDER: RoomStage[] = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
+const EVIDENCE_ARTIFACT_TYPES = ['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief'];
+const GUIDED_ROOM_STEPS: Array<{ id: string; stage: RoomStage; label: string; requiredArtifacts: string[] }> = [
+  { id: 'connect_data', stage: 'ingest', label: 'Connect data source', requiredArtifacts: [] },
+  { id: 'analyze_data', stage: 'analyze', label: 'Run analysis', requiredArtifacts: ['query_run'] },
+  { id: 'build_brief', stage: 'brief', label: 'Create decision brief', requiredArtifacts: ['decision_brief'] },
+  { id: 'assign_actions', stage: 'action', label: 'Assign action items with evidence', requiredArtifacts: ['action_item'] },
+  { id: 'sync_actions', stage: 'done', label: 'Sync actions and publish status', requiredArtifacts: ['action_item'] }
+];
 
 router.use(authenticateToken);
 router.use(checkSubscription);
@@ -352,6 +408,182 @@ async function getRoom(workspaceId: number, roomId: number) {
   return result.rows[0] || null;
 }
 
+function parseRoomRunContext(rawContext: any): RoomRunContext {
+  const context = parseJsonMaybe<RoomRunContext>(rawContext, {});
+  const mvpGuide = context.mvpGuide || {};
+  return {
+    ...context,
+    mvpGuide: {
+      completedStepIds: Array.isArray(mvpGuide.completedStepIds) ? mvpGuide.completedStepIds : [],
+      stepCompletedAt: mvpGuide.stepCompletedAt && typeof mvpGuide.stepCompletedAt === 'object' ? mvpGuide.stepCompletedAt : {},
+      lastActionSyncAt: typeof mvpGuide.lastActionSyncAt === 'string' ? mvpGuide.lastActionSyncAt : undefined
+    }
+  };
+}
+
+function getRoomStageIndex(stage?: string | null): number {
+  const normalized = String(stage || 'ingest') as RoomStage;
+  const index = ROOM_STAGE_ORDER.indexOf(normalized);
+  return index >= 0 ? index : 0;
+}
+
+async function listRoomArtifacts(workspaceId: number, roomId: number, limit: number = 400) {
+  const result = await query(
+    `
+    SELECT id, artifact_type, title, description, payload, metadata, created_at, updated_at
+    FROM artifacts
+    WHERE workspace_id = $1 AND room_id = $2
+    ORDER BY created_at DESC
+    LIMIT $3
+    `,
+    [workspaceId, roomId, limit]
+  );
+
+  return result.rows.map((artifact) => ({
+    ...artifact,
+    payload: parseJsonMaybe(artifact.payload, {}),
+    metadata: parseJsonMaybe(artifact.metadata, {})
+  }));
+}
+
+async function getActionEvidenceMap(workspaceId: number, roomId: number, actionArtifactIds: number[]) {
+  const evidenceByAction = new Map<number, number>();
+  const evidenceArtifactIds = new Set<number>();
+
+  if (!actionArtifactIds.length) {
+    return { evidenceByAction, evidenceArtifactIds: Array.from(evidenceArtifactIds) };
+  }
+
+  const evidenceRows = await query(
+    `
+    SELECT le.child_artifact_id, le.parent_artifact_id
+    FROM lineage_edges le
+    JOIN artifacts parent ON parent.id = le.parent_artifact_id
+    WHERE le.workspace_id = $1
+      AND le.room_id = $2
+      AND le.child_artifact_id = ANY($3::int[])
+      AND parent.artifact_type = ANY($4::text[])
+    `,
+    [workspaceId, roomId, actionArtifactIds, EVIDENCE_ARTIFACT_TYPES]
+  );
+
+  evidenceRows.rows.forEach((row) => {
+    const childId = Number(row.child_artifact_id);
+    const parentId = Number(row.parent_artifact_id);
+    evidenceByAction.set(childId, (evidenceByAction.get(childId) || 0) + 1);
+    evidenceArtifactIds.add(parentId);
+  });
+
+  return { evidenceByAction, evidenceArtifactIds: Array.from(evidenceArtifactIds) };
+}
+
+async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]) {
+  const runContext = parseRoomRunContext(room.run_context);
+  const completedStepIds = new Set(runContext.mvpGuide?.completedStepIds || []);
+  const stepCompletedAt = runContext.mvpGuide?.stepCompletedAt || {};
+  const artifactsByType = new Map<string, any[]>();
+  const latestByType = new Map<string, string>();
+
+  artifacts.forEach((artifact) => {
+    const type = String(artifact.artifact_type);
+    const bucket = artifactsByType.get(type) || [];
+    bucket.push(artifact);
+    artifactsByType.set(type, bucket);
+    if (!latestByType.has(type)) {
+      latestByType.set(type, artifact.created_at);
+    }
+  });
+
+  const hasDataConnection = Boolean(
+    runContext.datasetId ||
+    runContext.sourceDatasetId ||
+    runContext.datasetVersionId ||
+    (artifactsByType.get('dataset_version') || []).length ||
+    (artifactsByType.get('query_run') || []).length
+  );
+
+  const actionArtifacts = artifactsByType.get('action_item') || [];
+  const actionArtifactIds = actionArtifacts.map((artifact) => Number(artifact.id));
+  const { evidenceByAction } = await getActionEvidenceMap(workspaceId, Number(room.id), actionArtifactIds);
+  const actionsMissingEvidence = actionArtifacts.filter((artifact) => (evidenceByAction.get(Number(artifact.id)) || 0) === 0);
+
+  const stepReasonMap: Record<string, string> = {
+    connect_data: 'Select and attach the data source context for this room.',
+    analyze_data: 'Run at least one query and validate trends before briefing.',
+    build_brief: 'Publish a decision brief tied to evidence artifacts.',
+    assign_actions: 'Create action items with explicit evidence links and owners.',
+    sync_actions: 'Sync actions to Slack and publish a status draft.'
+  };
+
+  const steps: RoomGuideStep[] = GUIDED_ROOM_STEPS.map((stepDef) => {
+    const blockingIssues: string[] = [];
+    let autoCompleted = false;
+    let autoCompletedAt: string | null = null;
+
+    if (stepDef.id === 'connect_data') {
+      autoCompleted = hasDataConnection;
+      autoCompletedAt = latestByType.get('dataset_version') || latestByType.get('query_run') || null;
+      if (!autoCompleted) {
+        blockingIssues.push('No dataset context selected. Add datasetId in room context or run first query.');
+      }
+    } else if (stepDef.id === 'analyze_data') {
+      const hasAnalysis = (artifactsByType.get('query_run') || []).length > 0;
+      autoCompleted = hasAnalysis;
+      autoCompletedAt = latestByType.get('query_run') || null;
+      if (!autoCompleted) {
+        blockingIssues.push('Run at least one SQL/NL/sheet analysis to continue.');
+      }
+    } else if (stepDef.id === 'build_brief') {
+      autoCompleted = (artifactsByType.get('decision_brief') || []).length > 0;
+      autoCompletedAt = latestByType.get('decision_brief') || null;
+      if (!autoCompleted) {
+        blockingIssues.push('Generate a decision brief from room evidence.');
+      }
+    } else if (stepDef.id === 'assign_actions') {
+      autoCompleted = actionArtifacts.length > 0 && actionsMissingEvidence.length === 0;
+      autoCompletedAt = latestByType.get('action_item') || null;
+      if (actionArtifacts.length === 0) {
+        blockingIssues.push('Add at least one action item.');
+      }
+      if (actionsMissingEvidence.length > 0) {
+        blockingIssues.push(`Action items missing evidence linkage: ${actionsMissingEvidence.map((a) => a.id).join(', ')}`);
+      }
+    } else if (stepDef.id === 'sync_actions') {
+      autoCompleted = Boolean(runContext.mvpGuide?.lastActionSyncAt);
+      autoCompletedAt = runContext.mvpGuide?.lastActionSyncAt || null;
+      if (!autoCompleted) {
+        blockingIssues.push('Sync action items and generate a status draft.');
+      }
+    }
+
+    const completed = completedStepIds.has(stepDef.id) || autoCompleted;
+    return {
+      id: stepDef.id,
+      stage: stepDef.stage,
+      label: stepDef.label,
+      requiredArtifacts: stepDef.requiredArtifacts,
+      completed,
+      completedAt: stepCompletedAt[stepDef.id] || autoCompletedAt || null,
+      blockingIssues: completed ? [] : blockingIssues
+    };
+  });
+
+  const next = steps.find((step) => !step.completed);
+  const completionRatio = steps.length ? steps.filter((step) => step.completed).length / steps.length : 0;
+
+  return {
+    steps,
+    nextBestStep: next
+      ? {
+          stepId: next.id,
+          reason: stepReasonMap[next.id] || 'Complete this step to advance the room.',
+          blockingIssues: next.blockingIssues
+        }
+      : null,
+    completionRatio
+  };
+}
+
 async function createArtifact(params: {
   workspaceId: number;
   projectId?: number | null;
@@ -567,6 +799,234 @@ router.get('/:workspaceId/rooms/:roomId/state', async (req: WorkspaceRequest, re
   } catch (err) {
     console.error('Fetch room state failed:', err);
     return res.status(500).json({ error: 'Failed to fetch room state' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/guide', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+
+    return res.json({
+      roomId,
+      roomStage: room.stage,
+      completionRatio: guide.completionRatio,
+      steps: guide.steps,
+      nextBestStep: guide.nextBestStep
+    });
+  } catch (err) {
+    console.error('Fetch room guide failed:', err);
+    return res.status(500).json({ error: 'Failed to fetch room guide' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/guide/complete-step', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const stepId = String(req.body?.stepId || '').trim();
+    if (!stepId) {
+      return res.status(400).json({ error: 'stepId is required' });
+    }
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const step = guide.steps.find((entry) => entry.id === stepId);
+    if (!step) {
+      return res.status(404).json({ error: `Guide step "${stepId}" not found` });
+    }
+
+    if (step.blockingIssues.length > 0) {
+      return res.status(400).json({
+        error: `Cannot complete "${step.label}" until blockers are resolved.`,
+        blockingIssues: step.blockingIssues
+      });
+    }
+
+    const nowIso = new Date().toISOString();
+    const currentContext = parseRoomRunContext(room.run_context);
+    const completedStepIds = new Set(currentContext.mvpGuide?.completedStepIds || []);
+    completedStepIds.add(stepId);
+
+    const stepCompletedAt: Record<string, string> = {
+      ...(currentContext.mvpGuide?.stepCompletedAt || {}),
+      [stepId]: nowIso
+    };
+
+    const nextContext: RoomRunContext = {
+      ...currentContext,
+      mvpGuide: {
+        ...(currentContext.mvpGuide || {}),
+        completedStepIds: Array.from(completedStepIds),
+        stepCompletedAt,
+        lastActionSyncAt:
+          stepId === 'sync_actions'
+            ? nowIso
+            : currentContext.mvpGuide?.lastActionSyncAt
+      }
+    };
+
+    const targetStageIndex = getRoomStageIndex(step.stage);
+    const currentStageIndex = getRoomStageIndex(room.stage);
+    const nextStage = targetStageIndex > currentStageIndex ? step.stage : (String(room.stage) as RoomStage);
+
+    await query(
+      `
+      UPDATE analysis_rooms
+      SET run_context = $1,
+          stage = $2,
+          updated_at = NOW()
+      WHERE id = $3 AND workspace_id = $4
+      `,
+      [JSON.stringify(nextContext), nextStage, roomId, workspaceId]
+    );
+
+    const updatedRoom = await getRoom(workspaceId, roomId);
+    const updatedArtifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const updatedGuide = await buildRoomGuide(workspaceId, updatedRoom, updatedArtifacts);
+
+    return res.json({
+      roomId,
+      roomStage: updatedRoom.stage,
+      completionRatio: updatedGuide.completionRatio,
+      steps: updatedGuide.steps,
+      nextBestStep: updatedGuide.nextBestStep
+    });
+  } catch (err) {
+    console.error('Complete room guide step failed:', err);
+    return res.status(500).json({ error: 'Failed to complete room guide step' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const queryRuns = artifacts.filter((artifact) => artifact.artifact_type === 'query_run');
+    const actionItems = artifacts.filter((artifact) => artifact.artifact_type === 'action_item');
+    const latestBrief = artifacts.find((artifact) => artifact.artifact_type === 'decision_brief') || null;
+
+    const completedActions = actionItems
+      .filter((artifact) => ['done', 'completed', 'closed'].includes(String(artifact.payload?.status || '').toLowerCase()))
+      .map((artifact) => ({
+        id: Number(artifact.id),
+        title: String(artifact.title),
+        owner: String(artifact.payload?.owner || artifact.payload?.assigneeName || artifact.payload?.assigneeId || 'Unassigned'),
+        dueDate: artifact.payload?.dueDate ? String(artifact.payload.dueDate) : null
+      }));
+
+    const blockedActions = actionItems
+      .filter((artifact) => ['blocked', 'at_risk', 'needs_input'].includes(String(artifact.payload?.status || '').toLowerCase()))
+      .map((artifact) => ({
+        id: Number(artifact.id),
+        title: String(artifact.title),
+        owner: String(artifact.payload?.owner || artifact.payload?.assigneeName || artifact.payload?.assigneeId || 'Unassigned'),
+        dueDate: artifact.payload?.dueDate ? String(artifact.payload.dueDate) : null,
+        reason: artifact.payload?.blocker || artifact.payload?.reason || null
+      }));
+
+    const inProgressActions = actionItems
+      .filter((artifact) => {
+        const status = String(artifact.payload?.status || '').toLowerCase();
+        return !['done', 'completed', 'closed', 'blocked', 'at_risk', 'needs_input'].includes(status);
+      })
+      .map((artifact) => ({
+        id: Number(artifact.id),
+        title: String(artifact.title),
+        owner: String(artifact.payload?.owner || artifact.payload?.assigneeName || artifact.payload?.assigneeId || 'Unassigned'),
+        dueDate: artifact.payload?.dueDate ? String(artifact.payload.dueDate) : null
+      }));
+
+    const { evidenceArtifactIds } = await getActionEvidenceMap(
+      workspaceId,
+      roomId,
+      actionItems.map((artifact) => Number(artifact.id))
+    );
+
+    const rowsAnalyzed = queryRuns.reduce((acc, artifact) => acc + Number(artifact.payload?.rowCount || 0), 0);
+    const summary = [
+      `Room "${room.name}" is in ${room.stage} stage.`,
+      `${queryRuns.length} analysis run(s) processed ${rowsAnalyzed} row(s).`,
+      `${actionItems.length} action item(s): ${completedActions.length} completed, ${inProgressActions.length} in progress, ${blockedActions.length} blocked.`,
+      latestBrief ? `Latest brief: ${latestBrief.title}.` : 'Decision brief is still missing.',
+      evidenceArtifactIds.length > 0
+        ? `${evidenceArtifactIds.length} evidence artifact(s) are linked to actions.`
+        : 'No evidence linked to action items yet.'
+    ].join(' ');
+
+    const statusDraft: StatusDraft = {
+      summary,
+      completedActions,
+      blockedActions,
+      inProgressActions,
+      evidenceArtifactIds,
+      roomStage: String(room.stage || 'ingest') as RoomStage,
+      generatedAt: new Date().toISOString(),
+      metrics: {
+        queryRuns: queryRuns.length,
+        rowsAnalyzed,
+        actionItems: actionItems.length,
+        completedActions: completedActions.length,
+        blockedActions: blockedActions.length
+      }
+    };
+
+    const persist = Boolean(req.body?.persist);
+    let artifact = null;
+    if (persist) {
+      artifact = await createArtifact({
+        workspaceId,
+        projectId: room.project_id,
+        roomId,
+        artifactType: 'report_block',
+        title: `Weekly Status Draft - ${new Date().toLocaleDateString()}`,
+        description: 'Auto-generated room status draft.',
+        payload: statusDraft as unknown as Record<string, any>,
+        metadata: { generatedBy: 'status_draft_endpoint' },
+        createdBy: req.user!.id
+      });
+    }
+
+    return res.json({
+      draft: statusDraft,
+      artifact: artifact
+        ? {
+            ...artifact,
+            payload: parseJsonMaybe(artifact.payload, {}),
+            metadata: parseJsonMaybe(artifact.metadata, {})
+          }
+        : null
+    });
+  } catch (err) {
+    console.error('Generate status draft failed:', err);
+    return res.status(500).json({ error: 'Failed to generate status draft' });
   }
 });
 
@@ -1038,6 +1498,34 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       payload: parseJsonMaybe(artifact.payload, {})
     }));
 
+    if (actionItems.length === 0) {
+      return res.status(400).json({ error: 'No action items found to sync.' });
+    }
+
+    const actionItemIds = actionItems.map((artifact) => Number(artifact.id));
+    const { evidenceByAction, evidenceArtifactIds } = await getActionEvidenceMap(workspaceId, roomId, actionItemIds);
+    const missingEvidenceActionIds = actionItemIds.filter((id) => (evidenceByAction.get(id) || 0) === 0);
+    if (missingEvidenceActionIds.length > 0) {
+      return res.status(400).json({
+        error: 'Cannot sync actions. Every action item must include at least one linked evidence artifact.',
+        missingEvidenceActionIds
+      });
+    }
+
+    const roomArtifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, roomArtifacts);
+    const requiredForSync = new Set(['connect_data', 'analyze_data', 'build_brief', 'assign_actions']);
+    const missingGuideSteps = guide.steps
+      .filter((step) => requiredForSync.has(step.id) && !step.completed)
+      .map((step) => ({ stepId: step.id, blockingIssues: step.blockingIssues }));
+
+    if (missingGuideSteps.length > 0) {
+      return res.status(400).json({
+        error: 'Cannot sync actions until required guide steps are complete.',
+        missingGuideSteps
+      });
+    }
+
     const createdTaskIds: string[] = [];
     if (createTasks) {
       for (const action of actionItems) {
@@ -1068,10 +1556,39 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       }
     }
 
+    const nowIso = new Date().toISOString();
+    const currentContext = parseRoomRunContext(room.run_context);
+    const completedStepIds = new Set(currentContext.mvpGuide?.completedStepIds || []);
+    completedStepIds.add('sync_actions');
+    const updatedRunContext: RoomRunContext = {
+      ...currentContext,
+      mvpGuide: {
+        ...(currentContext.mvpGuide || {}),
+        completedStepIds: Array.from(completedStepIds),
+        stepCompletedAt: {
+          ...(currentContext.mvpGuide?.stepCompletedAt || {}),
+          sync_actions: nowIso
+        },
+        lastActionSyncAt: nowIso
+      }
+    };
+
+    await query(
+      `
+      UPDATE analysis_rooms
+      SET run_context = $1,
+          stage = $2,
+          updated_at = NOW()
+      WHERE id = $3 AND workspace_id = $4
+      `,
+      [JSON.stringify(updatedRunContext), 'done', roomId, workspaceId]
+    );
+
     return res.json({
       syncedCount: actionItems.length,
       createdTasks: createdTaskIds.length,
       createdTaskIds,
+      evidenceArtifactIds,
       channel,
       message: `Synced ${actionItems.length} action item(s) for ${String(channel).toUpperCase()} handoff.`
     });

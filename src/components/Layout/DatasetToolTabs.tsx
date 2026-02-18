@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
-import { Table2, Search, Braces, GitBranch, BarChart3, FileText, CheckSquare } from 'lucide-react';
+import { Table2, Search, GitBranch, FileText, CheckSquare } from 'lucide-react';
 import { useDataset } from '../../hooks/useDataset';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useTheme } from '../../hooks/useTheme';
@@ -28,9 +28,7 @@ const DatasetToolTabs: React.FC = () => {
   const tools: ToolTab[] = [
     { panel: 'sheets', label: 'Sheets', icon: <Table2 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=sheets` },
     { panel: 'query', label: 'Query', icon: <Search className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=query` },
-    { panel: 'script', label: 'Script', icon: <Braces className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=script` },
     { panel: 'pivot', label: 'Pivot', icon: <GitBranch className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=pivot` },
-    { panel: 'visuals', label: 'Visuals', icon: <BarChart3 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=visuals` },
     { panel: 'report', label: 'Report', icon: <FileText className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=report` },
     { panel: 'actions', label: 'Actions', icon: <CheckSquare className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=actions` }
   ];

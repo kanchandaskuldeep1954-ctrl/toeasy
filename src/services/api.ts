@@ -277,6 +277,39 @@ export const reportsAPI = {
 // Studio / Decision OS Endpoints
 // ============================================
 
+export interface RoomGuideStep {
+  id: string;
+  stage: 'ingest' | 'profile' | 'analyze' | 'brief' | 'action' | 'done';
+  label: string;
+  requiredArtifacts: string[];
+  completed: boolean;
+  completedAt: string | null;
+  blockingIssues: string[];
+}
+
+export interface NextBestStep {
+  stepId: string;
+  reason: string;
+  blockingIssues: string[];
+}
+
+export interface StatusDraft {
+  summary: string;
+  completedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
+  blockedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null; reason: string | null }>;
+  inProgressActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
+  evidenceArtifactIds: number[];
+  roomStage: 'ingest' | 'profile' | 'analyze' | 'brief' | 'action' | 'done';
+  generatedAt: string;
+  metrics: {
+    queryRuns: number;
+    rowsAnalyzed: number;
+    actionItems: number;
+    completedActions: number;
+    blockedActions: number;
+  };
+}
+
 export const studioAPI = {
   listProjects: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/projects`),
@@ -292,6 +325,12 @@ export const studioAPI = {
 
   getRoomState: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/state`),
+
+  getGuide: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/guide`),
+
+  completeGuideStep: (workspaceId: string, roomId: string, stepId: string) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/guide/complete-step`, { stepId }),
 
   run: (workspaceId: string, roomId: string, input: {
     roomId?: string | number;
@@ -320,6 +359,9 @@ export const studioAPI = {
 
   syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/actions/sync`, data || {}),
+
+  generateStatusDraft: (workspaceId: string, roomId: string, data?: { persist?: boolean }) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/status/draft`, data || {}),
 
   createAutomation: (workspaceId: string, data: any) =>
     getClient().post(`/workspaces/${workspaceId}/automations`, data),

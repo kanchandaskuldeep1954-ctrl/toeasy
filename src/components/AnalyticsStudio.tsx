@@ -1,14 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChartSpec } from '../../types';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useDataset } from '../hooks/useDataset';
-import { datasetAPI, studioAPI } from '../services/api';
+import { datasetAPI, NextBestStep, RoomGuideStep, StatusDraft, studioAPI } from '../services/api';
 import { DataGridWidget } from './Widgets/DataGridWidget';
 import { PivotConfig, PivotWidget } from './Widgets/PivotWidget';
-import { ChartWidget } from './Widgets/ChartWidget';
 
-type StudioPanel = 'sheets' | 'query' | 'script' | 'pivot' | 'visuals' | 'report' | 'actions';
+type StudioPanel = 'sheets' | 'query' | 'pivot' | 'report' | 'actions';
+type RunMode = 'sql' | 'nl' | 'sheet_op';
 
 interface StudioProject {
   id: number;
@@ -31,12 +30,17 @@ interface StudioArtifact {
   created_at: string;
 }
 
-const PANELS: StudioPanel[] = ['sheets', 'query', 'script', 'pivot', 'visuals', 'report', 'actions'];
+const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'report', 'actions'];
+const EVIDENCE_ARTIFACT_TYPES = new Set(['dataset_version', 'query_run', 'pivot', 'report_block', 'decision_brief']);
 
 const parseDatasetRows = (rawData: any, headers?: string[]) => {
   if (!rawData) return [];
   const parsed = typeof rawData === 'string' ? (() => {
-    try { return JSON.parse(rawData); } catch { return []; }
+    try {
+      return JSON.parse(rawData);
+    } catch {
+      return [];
+    }
   })() : rawData;
   if (!Array.isArray(parsed)) return [];
   if (parsed.length === 0) return [];
@@ -54,28 +58,37 @@ const parseDatasetRows = (rawData: any, headers?: string[]) => {
   return parsed;
 };
 
+const stageOrder = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
+
+const toErrorMessage = (error: any) =>
+  error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Request failed';
+
 const AnalyticsStudio: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeWorkspace } = useWorkspace();
   const { activeDataset, setActiveDataset } = useDataset();
 
   const workspaceId = searchParams.get('workspace') || String(activeWorkspace?.id || '');
-  const datasetId = searchParams.get('dataset') || String(activeDataset?.id || '');
+  const datasetId = searchParams.get('dataset') || String((activeDataset as any)?.id || '');
   const panel = (searchParams.get('panel') as StudioPanel) || 'sheets';
 
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [rooms, setRooms] = useState<StudioRoom[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>(searchParams.get('project') || '');
   const [selectedRoomId, setSelectedRoomId] = useState<string>(searchParams.get('room') || '');
+  const [roomStage, setRoomStage] = useState<string>('ingest');
 
   const [artifacts, setArtifacts] = useState<StudioArtifact[]>([]);
   const [lineage, setLineage] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string>('');
 
+  const [guideSteps, setGuideSteps] = useState<RoomGuideStep[]>([]);
+  const [nextBestStep, setNextBestStep] = useState<NextBestStep | null>(null);
+  const [guideCompletionRatio, setGuideCompletionRatio] = useState<number>(0);
+
   const [sqlInput, setSqlInput] = useState('SELECT * FROM dataset LIMIT 50');
-  const [nlInput, setNlInput] = useState('Show top trends in this dataset');
-  const [scriptInput, setScriptInput] = useState('return data.slice(0, 100);');
+  const [nlInput, setNlInput] = useState('Show top pipeline trends by owner and stage');
   const [runRows, setRunRows] = useState<any[]>([]);
   const [runInfo, setRunInfo] = useState<{ executionMs?: number; generatedSql?: string; explanation?: string }>({});
 
@@ -84,14 +97,14 @@ const AnalyticsStudio: React.FC = () => {
   const [sheetOperator, setSheetOperator] = useState<'eq' | 'contains' | 'gt' | 'lt'>('eq');
 
   const [pivotConfig, setPivotConfig] = useState<PivotConfig>({ rows: [], columns: [], values: [] });
-
-  const [chartType, setChartType] = useState('bar');
-  const [chartX, setChartX] = useState('');
-  const [chartY, setChartY] = useState('');
   const [reportText, setReportText] = useState('');
 
   const [actionTitle, setActionTitle] = useState('');
   const [actionDescription, setActionDescription] = useState('');
+  const [actionOwner, setActionOwner] = useState('');
+  const [actionDueDate, setActionDueDate] = useState('');
+  const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<number[]>([]);
+  const [statusDraft, setStatusDraft] = useState<StatusDraft | null>(null);
 
   const datasetRows = useMemo(() => {
     const rows = (activeDataset as any)?.data || (activeDataset as any)?.raw_data || [];
@@ -106,23 +119,41 @@ const AnalyticsStudio: React.FC = () => {
     return Array.from(keys);
   }, [currentRows]);
 
-  const visualChart: ChartSpec = useMemo(() => ({
-    id: `studio-chart-${Date.now()}`,
-    type: chartType,
-    title: 'Studio Visual',
-    xAxis: chartX || fields[0],
-    yAxis: chartY || fields.find((f) => typeof currentRows?.[0]?.[f] === 'number') || fields[1] || fields[0],
-    color: '#3b82f6',
-    sourceModule: 'playground'
-  }), [chartType, chartX, chartY, fields, currentRows]);
+  const evidenceArtifacts = useMemo(
+    () => artifacts.filter((artifact) => EVIDENCE_ARTIFACT_TYPES.has(artifact.artifact_type)),
+    [artifacts]
+  );
+
+  const actionArtifacts = useMemo(
+    () => artifacts.filter((artifact) => artifact.artifact_type === 'action_item'),
+    [artifacts]
+  );
+
+  const refreshRoomState = useCallback(async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    const [stateResponse, guideResponse] = await Promise.all([
+      studioAPI.getRoomState(workspaceId, selectedRoomId),
+      studioAPI.getGuide(workspaceId, selectedRoomId)
+    ]);
+
+    const roomArtifacts = stateResponse.data?.artifacts || [];
+    setArtifacts(roomArtifacts);
+    setRoomStage(stateResponse.data?.room?.stage || 'ingest');
+
+    setGuideSteps(guideResponse.data?.steps || []);
+    setNextBestStep(guideResponse.data?.nextBestStep || null);
+    setGuideCompletionRatio(Number(guideResponse.data?.completionRatio || 0));
+  }, [workspaceId, selectedRoomId]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     if (workspaceId && !searchParams.get('workspace')) next.set('workspace', workspaceId);
     if (datasetId && !searchParams.get('dataset')) next.set('dataset', datasetId);
     if (!PANELS.includes(panel)) next.set('panel', 'sheets');
+    if (selectedProjectId) next.set('project', selectedProjectId);
+    if (selectedRoomId) next.set('room', selectedRoomId);
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [workspaceId, datasetId, panel, searchParams, setSearchParams]);
+  }, [workspaceId, datasetId, panel, selectedProjectId, selectedRoomId, searchParams, setSearchParams]);
 
   useEffect(() => {
     const hydrateDataset = async () => {
@@ -180,18 +211,25 @@ const AnalyticsStudio: React.FC = () => {
   }, [workspaceId, selectedProjectId, selectedRoomId]);
 
   useEffect(() => {
-    const loadRoomState = async () => {
-      if (!workspaceId || !selectedRoomId) return;
-      try {
-        const response = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-        const roomArtifacts = response.data?.artifacts || [];
-        setArtifacts(roomArtifacts);
-      } catch (error) {
-        console.error('Failed to load room state:', error);
-      }
-    };
-    loadRoomState();
-  }, [workspaceId, selectedRoomId]);
+    refreshRoomState().catch((error) => {
+      console.error('Failed to refresh room state:', error);
+    });
+  }, [refreshRoomState]);
+
+  useEffect(() => {
+    setSelectedEvidenceIds([]);
+    setStatusDraft(null);
+    setLineage(null);
+    setRunRows([]);
+    setRunInfo({});
+  }, [selectedRoomId]);
+
+  useEffect(() => {
+    if (!selectedRoomId) return;
+    if (selectedEvidenceIds.length > 0) return;
+    const defaults = evidenceArtifacts.slice(0, 3).map((artifact) => artifact.id);
+    setSelectedEvidenceIds(defaults);
+  }, [selectedRoomId, evidenceArtifacts, selectedEvidenceIds.length]);
 
   const setPanel = (nextPanel: StudioPanel) => {
     const next = new URLSearchParams(searchParams);
@@ -205,7 +243,7 @@ const AnalyticsStudio: React.FC = () => {
     if (!workspaceId) return;
     const name = window.prompt('Project name');
     if (!name) return;
-    const result = await studioAPI.createProject(workspaceId, { name });
+    const result = await studioAPI.createProject(workspaceId, { name, objective: 'Weekly RevOps decision cycle' });
     const created = result.data?.data;
     setProjects((prev) => [created, ...prev]);
     setSelectedProjectId(String(created.id));
@@ -214,11 +252,11 @@ const AnalyticsStudio: React.FC = () => {
 
   const createRoom = async () => {
     if (!workspaceId || !selectedProjectId) return;
-    const name = window.prompt('Analysis Room name');
+    const name = window.prompt('Decision Room name');
     if (!name) return;
     const result = await studioAPI.createRoom(workspaceId, selectedProjectId, {
       name,
-      stage: 'analyze',
+      stage: 'ingest',
       runContext: { datasetId: datasetId ? Number(datasetId) : null }
     });
     const created = result.data?.data;
@@ -227,7 +265,7 @@ const AnalyticsStudio: React.FC = () => {
     setStatusMessage(`Room "${created.name}" created.`);
   };
 
-  const runExecution = async (mode: 'sql' | 'nl' | 'script_js' | 'sheet_op', payload: any) => {
+  const runExecution = async (mode: RunMode, payload: any) => {
     if (!workspaceId || !selectedRoomId) return;
     setLoading(true);
     try {
@@ -246,38 +284,37 @@ const AnalyticsStudio: React.FC = () => {
         explanation: result.data?.explanation
       });
       setStatusMessage(`Run completed in ${result.data?.executionMs || 0}ms.`);
-      const state = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-      setArtifacts(state.data?.artifacts || []);
+      await refreshRoomState();
     } catch (error: any) {
-      setStatusMessage(error?.message || 'Run failed');
+      setStatusMessage(toErrorMessage(error));
     } finally {
       setLoading(false);
     }
   };
 
-  const saveChartArtifact = async () => {
+  const savePivotArtifact = async () => {
     if (!workspaceId || !selectedRoomId) return;
     await studioAPI.createArtifact(workspaceId, selectedRoomId, {
-      artifactType: 'chart',
-      title: `Chart - ${visualChart.type}`,
+      artifactType: 'pivot',
+      title: `Pivot - ${pivotConfig.rows.join(', ') || 'summary'}`,
       payload: {
-        chart: visualChart,
-        sampleRows: currentRows.slice(0, 300)
-      }
+        config: pivotConfig,
+        previewRows: currentRows.slice(0, 200)
+      },
+      parentArtifactIds: evidenceArtifacts.slice(0, 3).map((artifact) => artifact.id)
     });
-    const state = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-    setArtifacts(state.data?.artifacts || []);
-    setStatusMessage('Chart artifact saved.');
+    await refreshRoomState();
+    setStatusMessage('Pivot artifact saved with lineage.');
   };
 
   const generateBrief = async () => {
     if (!workspaceId || !selectedRoomId) return;
     const result = await studioAPI.generateBrief(workspaceId, selectedRoomId, {
-      title: `Decision Brief - ${new Date().toLocaleDateString()}`
+      title: `Decision Brief - ${new Date().toLocaleDateString()}`,
+      objective: 'Weekly RevOps decision cycle and action alignment'
     });
     setReportText(result.data?.brief || '');
-    const state = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-    setArtifacts(state.data?.artifacts || []);
+    await refreshRoomState();
     setStatusMessage('Decision brief generated.');
   };
 
@@ -286,39 +323,79 @@ const AnalyticsStudio: React.FC = () => {
     await studioAPI.createArtifact(workspaceId, selectedRoomId, {
       artifactType: 'report_block',
       title: 'Report Block',
-      payload: { markdown: reportText }
+      payload: { markdown: reportText },
+      parentArtifactIds: evidenceArtifacts.slice(0, 5).map((artifact) => artifact.id)
     });
-    const state = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-    setArtifacts(state.data?.artifacts || []);
+    await refreshRoomState();
     setStatusMessage('Report block saved.');
   };
 
   const createAction = async () => {
     if (!workspaceId || !selectedRoomId || !actionTitle.trim()) return;
+    if (!selectedEvidenceIds.length) {
+      setStatusMessage('Select at least one evidence artifact before creating an action item.');
+      return;
+    }
+
     await studioAPI.createArtifact(workspaceId, selectedRoomId, {
       artifactType: 'action_item',
       title: actionTitle,
       description: actionDescription,
       payload: {
         description: actionDescription,
+        owner: actionOwner || 'Unassigned',
+        dueDate: actionDueDate || null,
         status: 'todo',
         priority: 'medium'
-      }
+      },
+      parentArtifactIds: selectedEvidenceIds
     });
     setActionTitle('');
     setActionDescription('');
-    const state = await studioAPI.getRoomState(workspaceId, selectedRoomId);
-    setArtifacts(state.data?.artifacts || []);
-    setStatusMessage('Action item created.');
+    setActionOwner('');
+    setActionDueDate('');
+    await refreshRoomState();
+    setStatusMessage('Action item created with evidence links.');
   };
 
   const syncActions = async () => {
     if (!workspaceId || !selectedRoomId) return;
-    const response = await studioAPI.syncActions(workspaceId, selectedRoomId, {
-      channel: 'slack',
-      createTasks: true
-    });
-    setStatusMessage(response.data?.message || 'Actions synced.');
+    try {
+      const response = await studioAPI.syncActions(workspaceId, selectedRoomId, {
+        channel: 'slack',
+        createTasks: true
+      });
+      setStatusMessage(response.data?.message || 'Actions synced.');
+      await refreshRoomState();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const generateStatusDraft = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const response = await studioAPI.generateStatusDraft(workspaceId, selectedRoomId, { persist: true });
+      setStatusDraft(response.data?.draft || null);
+      setStatusMessage('Status draft generated from room execution logs.');
+      await refreshRoomState();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const completeGuideStep = async (stepId: string) => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const response = await studioAPI.completeGuideStep(workspaceId, selectedRoomId, stepId);
+      setGuideSteps(response.data?.steps || []);
+      setNextBestStep(response.data?.nextBestStep || null);
+      setGuideCompletionRatio(Number(response.data?.completionRatio || 0));
+      setRoomStage(response.data?.roomStage || roomStage);
+      setStatusMessage(`Step "${stepId}" marked complete.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
   };
 
   const openLineage = async (artifactId: number) => {
@@ -327,10 +404,18 @@ const AnalyticsStudio: React.FC = () => {
     setLineage(response.data);
   };
 
+  const toggleEvidenceSelection = (artifactId: number) => {
+    setSelectedEvidenceIds((prev) =>
+      prev.includes(artifactId) ? prev.filter((id) => id !== artifactId) : [...prev, artifactId]
+    );
+  };
+
+  const roomStageProgress = stageOrder.indexOf(roomStage) + 1;
+
   if (!workspaceId || !datasetId) {
     return (
       <div className="h-full flex items-center justify-center text-slate-500 dark:text-slate-400">
-        Select a workspace and dataset to start Studio.
+        Select a workspace and dataset to start Decision Room.
       </div>
     );
   }
@@ -338,7 +423,7 @@ const AnalyticsStudio: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-slate-50 dark:bg-slate-950">
       <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold uppercase text-slate-500">Analytics Studio</span>
+        <span className="text-xs font-bold uppercase text-slate-500">Decision Room Studio</span>
         <select
           value={selectedProjectId}
           onChange={(e) => setSelectedProjectId(e.target.value)}
@@ -360,7 +445,16 @@ const AnalyticsStudio: React.FC = () => {
             <option key={room.id} value={room.id}>{room.name}</option>
           ))}
         </select>
-        <button onClick={createRoom} disabled={!selectedProjectId} className="px-2 py-1 text-xs rounded bg-indigo-600 text-white disabled:opacity-50">+ Room</button>
+        <button
+          onClick={createRoom}
+          disabled={!selectedProjectId}
+          className="px-2 py-1 text-xs rounded bg-indigo-600 text-white disabled:opacity-50"
+        >
+          + Room
+        </button>
+        <span className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+          Stage {roomStageProgress}/{stageOrder.length}: {roomStage}
+        </span>
         <span className="ml-auto text-xs text-slate-500">{statusMessage}</span>
       </div>
 
@@ -380,7 +474,42 @@ const AnalyticsStudio: React.FC = () => {
         ))}
       </div>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_280px]">
+      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-bold uppercase text-slate-500">Guided Flow</h3>
+          <span className="text-xs text-slate-500">{Math.round(guideCompletionRatio * 100)}% complete</span>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+          {guideSteps.map((step) => (
+            <button
+              key={step.id}
+              onClick={() => !step.completed && step.blockingIssues.length === 0 && completeGuideStep(step.id)}
+              className={`text-left p-2 rounded border ${
+                step.completed
+                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                  : step.blockingIssues.length > 0
+                    ? 'border-amber-300 bg-amber-50 text-amber-700'
+                    : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+              }`}
+            >
+              <div className="text-[11px] font-semibold">{step.label}</div>
+              <div className="text-[10px] uppercase mt-1">{step.stage}</div>
+            </button>
+          ))}
+        </div>
+        {nextBestStep && (
+          <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+            <span className="font-semibold">Next best step:</span> {nextBestStep.reason}
+            {nextBestStep.blockingIssues.length > 0 && (
+              <div className="mt-1 text-[11px] text-amber-700">
+                Blockers: {nextBestStep.blockingIssues.join(' | ')}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_320px]">
         <div className="min-h-0 p-4 overflow-auto">
           {panel === 'sheets' && (
             <div className="space-y-3">
@@ -422,50 +551,18 @@ const AnalyticsStudio: React.FC = () => {
             </div>
           )}
 
-          {panel === 'script' && (
-            <div className="space-y-3">
-              <textarea value={scriptInput} onChange={(e) => setScriptInput(e.target.value)} className="w-full h-40 p-3 text-sm rounded border font-mono" />
-              <button disabled={!selectedRoomId || loading} onClick={() => runExecution('script_js', { script: scriptInput })} className="px-3 py-1.5 text-xs rounded bg-violet-600 text-white disabled:opacity-50">
-                Run Script
-              </button>
-              <DataGridWidget data={currentRows} height={400} title={`Script Output (${currentRows.length})`} />
-            </div>
-          )}
-
           {panel === 'pivot' && (
-            <PivotWidget
-              data={currentRows}
-              fields={fields}
-              config={pivotConfig}
-              onConfigChange={setPivotConfig}
-              height={560}
-            />
-          )}
-
-          {panel === 'visuals' && (
             <div className="space-y-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <select value={chartType} onChange={(e) => setChartType(e.target.value)} className="px-2 py-1 text-xs rounded border">
-                  <option value="bar">Bar</option>
-                  <option value="line">Line</option>
-                  <option value="area">Area</option>
-                  <option value="pie">Pie</option>
-                </select>
-                <select value={chartX} onChange={(e) => setChartX(e.target.value)} className="px-2 py-1 text-xs rounded border">
-                  <option value="">X Field</option>
-                  {fields.map((field) => <option key={field} value={field}>{field}</option>)}
-                </select>
-                <select value={chartY} onChange={(e) => setChartY(e.target.value)} className="px-2 py-1 text-xs rounded border">
-                  <option value="">Y Field</option>
-                  {fields.map((field) => <option key={field} value={field}>{field}</option>)}
-                </select>
-                <button onClick={saveChartArtifact} disabled={!selectedRoomId} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
-                  Save Chart Artifact
-                </button>
-              </div>
-              <div className="h-[480px] bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-700 p-3">
-                <ChartWidget chart={visualChart} data={currentRows} height="100%" />
-              </div>
+              <PivotWidget
+                data={currentRows}
+                fields={fields}
+                config={pivotConfig}
+                onConfigChange={setPivotConfig}
+                height={520}
+              />
+              <button onClick={savePivotArtifact} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
+                Save Pivot Artifact
+              </button>
             </div>
           )}
 
@@ -484,9 +581,28 @@ const AnalyticsStudio: React.FC = () => {
           )}
 
           {panel === 'actions' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Evidence Selection</h3>
+                <div className="flex flex-wrap gap-2">
+                  {evidenceArtifacts.slice(0, 12).map((artifact) => (
+                    <label key={artifact.id} className="text-[11px] px-2 py-1 rounded border flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedEvidenceIds.includes(artifact.id)}
+                        onChange={() => toggleEvidenceSelection(artifact.id)}
+                      />
+                      <span>{artifact.title}</span>
+                      <span className="text-slate-400">({artifact.artifact_type})</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <input value={actionTitle} onChange={(e) => setActionTitle(e.target.value)} placeholder="Action title" className="px-2 py-1 text-xs rounded border w-48" />
+                <input value={actionOwner} onChange={(e) => setActionOwner(e.target.value)} placeholder="Owner" className="px-2 py-1 text-xs rounded border w-36" />
+                <input value={actionDueDate} onChange={(e) => setActionDueDate(e.target.value)} type="date" className="px-2 py-1 text-xs rounded border" />
                 <input value={actionDescription} onChange={(e) => setActionDescription(e.target.value)} placeholder="Action description" className="px-2 py-1 text-xs rounded border w-64" />
                 <button onClick={createAction} disabled={!selectedRoomId || !actionTitle.trim()} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
                   Add Action
@@ -494,9 +610,13 @@ const AnalyticsStudio: React.FC = () => {
                 <button onClick={syncActions} disabled={!selectedRoomId} className="px-3 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
                   Sync Actions
                 </button>
+                <button onClick={generateStatusDraft} disabled={!selectedRoomId} className="px-3 py-1 text-xs rounded bg-violet-600 text-white disabled:opacity-50">
+                  Generate Status Draft
+                </button>
               </div>
+
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={() => studioAPI.connectSlack(workspaceId, { name: 'Slack Workspace', credentials: { channel: '#general' } })} className="px-3 py-1 text-xs rounded border">
+                <button onClick={() => studioAPI.connectSlack(workspaceId, { name: 'Slack Workspace', credentials: { channel: '#revops' } })} className="px-3 py-1 text-xs rounded border">
                   Connect Slack
                 </button>
                 <button onClick={() => studioAPI.connectSheets(workspaceId, { name: 'Google Sheets', credentials: { mode: 'oauth' } })} className="px-3 py-1 text-xs rounded border">
@@ -506,17 +626,33 @@ const AnalyticsStudio: React.FC = () => {
                   Connect SQL
                 </button>
               </div>
+
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
-                <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Action Items</h3>
+                <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Owner Accountability Board</h3>
                 <div className="space-y-2">
-                  {artifacts.filter((artifact) => artifact.artifact_type === 'action_item').map((artifact) => (
-                    <div key={artifact.id} className="text-xs rounded border border-slate-200 dark:border-slate-700 px-2 py-2 flex items-center justify-between">
-                      <span>{artifact.title}</span>
+                  {actionArtifacts.map((artifact) => (
+                    <div key={artifact.id} className="text-xs rounded border border-slate-200 dark:border-slate-700 px-2 py-2 flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-col">
+                        <span className="font-semibold">{artifact.title}</span>
+                        <span className="text-[10px] text-slate-500">
+                          Owner: {artifact.payload?.owner || 'Unassigned'} | Due: {artifact.payload?.dueDate || 'n/a'} | Status: {artifact.payload?.status || 'todo'}
+                        </span>
+                      </div>
                       <button onClick={() => openLineage(artifact.id)} className="text-blue-600">Lineage</button>
                     </div>
                   ))}
                 </div>
               </div>
+
+              {statusDraft && (
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                  <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Latest Status Draft</h3>
+                  <p className="text-xs text-slate-700 dark:text-slate-200">{statusDraft.summary}</p>
+                  <div className="mt-2 text-[11px] text-slate-500">
+                    Evidence IDs: {statusDraft.evidenceArtifactIds.join(', ') || 'none'}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -530,6 +666,22 @@ const AnalyticsStudio: React.FC = () => {
             {runInfo.generatedSql && <pre className="text-[10px] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded p-2">{runInfo.generatedSql}</pre>}
             {runInfo.explanation && <p className="text-[10px]">{runInfo.explanation}</p>}
           </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Checklist</h3>
+          <div className="space-y-2">
+            {guideSteps.map((step) => (
+              <div key={step.id} className="text-xs border rounded p-2">
+                <div className="font-semibold">{step.label}</div>
+                <div className="text-[10px] text-slate-500">
+                  {step.completed ? 'Completed' : `Pending (${step.stage})`}
+                </div>
+                {!step.completed && step.blockingIssues.length > 0 && (
+                  <div className="text-[10px] text-amber-600 mt-1">{step.blockingIssues[0]}</div>
+                )}
+              </div>
+            ))}
+          </div>
+
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Artifacts</h3>
           <div className="space-y-2">
             {artifacts.slice(0, 20).map((artifact) => (
@@ -540,6 +692,7 @@ const AnalyticsStudio: React.FC = () => {
               </div>
             ))}
           </div>
+
           {lineage && (
             <>
               <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Lineage Detail</h3>

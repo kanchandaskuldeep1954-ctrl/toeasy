@@ -70,7 +70,7 @@ const AppLayout: React.FC = () => {
           {/* =========================================================
               CORE WORKSPACE
              ========================================================= */}
-          <Route path="/" element={<Navigate to="home" replace />} />
+          <Route path="/" element={<Navigate to="studio" replace />} />
           <Route path="home" element={<HomeView />} />
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
@@ -101,7 +101,7 @@ const AppLayout: React.FC = () => {
           <Route path="clean" element={<UniverCleanView />} />
 
           {/* The "Dashboard" View — Visualization */}
-          <Route path="dashboard" element={<StudioLegacyRedirect panel="visuals" />} />
+          <Route path="dashboard" element={<StudioLegacyRedirect panel="pivot" />} />
 
           {/* The "Report" View — Doc-style Reporting */}
           <Route path="report" element={<StudioLegacyRedirect panel="report" />} />
@@ -118,7 +118,7 @@ const AppLayout: React.FC = () => {
           <Route path="forms/:id" element={<FormsView />} />
           <Route path="files" element={<FilesView />} />
           <Route path="war-room" element={<TheWarRoom />} />
-          <Route path="dashboards" element={<StudioLegacyRedirect panel="visuals" />} />
+          <Route path="dashboards" element={<StudioLegacyRedirect panel="pivot" />} />
           <Route path="reports" element={<StudioLegacyRedirect panel="report" />} />
           <Route path="queries" element={<QueryHistory />} />
           <Route path="preview" element={<DataPreview />} />
