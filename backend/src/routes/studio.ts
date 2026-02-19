@@ -98,6 +98,12 @@ interface SlackDeliveryResult {
   error?: string;
 }
 
+interface SlackPostMessageResponse {
+  ok?: boolean;
+  error?: string;
+  ts?: string;
+}
+
 interface MentionableUser {
   id: number;
   fullName: string;
@@ -1158,7 +1164,7 @@ async function postSlackWithRetry(params: {
         })
       });
 
-      const data = await response.json().catch(() => ({}));
+      const data = (await response.json().catch(() => ({}))) as SlackPostMessageResponse;
       if (!response.ok || data?.ok === false) {
         throw new Error(`Slack API error: ${data?.error || response.statusText || 'unknown_error'}`);
       }
