@@ -78,6 +78,25 @@ function createStudioQueryMock() {
         created_by: '1',
         created_at: nowIso(),
         updated_at: nowIso()
+      },
+      {
+        id: 103,
+        workspace_id: 1,
+        project_id: 11,
+        room_id: 101,
+        artifact_type: 'decision_brief',
+        title: 'Weekly Decision Brief',
+        description: null,
+        payload: JSON.stringify({
+          reportVersion: 'v2',
+          bundleId: 'bundle_sync_seed'
+        }),
+        metadata: JSON.stringify({}),
+        dataset_version_id: null,
+        source_dataset_id: 99,
+        created_by: '1',
+        created_at: nowIso(),
+        updated_at: nowIso()
       }
     ] as MockRow[],
     lineageEdges: [
@@ -136,7 +155,12 @@ function createStudioQueryMock() {
       return { rows: [] };
     }
 
-    if (sql.includes('from artifacts') && sql.includes('where workspace_id = $1 and room_id = $2') && sql.includes('order by created_at desc')) {
+    if (
+      sql.includes('from artifacts') &&
+      sql.includes('where workspace_id = $1 and room_id = $2') &&
+      sql.includes('order by created_at desc') &&
+      !sql.includes('artifact_type = \'action_item\'')
+    ) {
       const workspaceId = Number(params[0]);
       const roomId = Number(params[1]);
       const limit = Number(params[2] || 500);
@@ -144,6 +168,20 @@ function createStudioQueryMock() {
         .filter((row) => Number(row.workspace_id) === workspaceId && Number(row.room_id) === roomId)
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit);
+      return { rows };
+    }
+
+    if (sql.includes('from artifacts') && sql.includes('artifact_type = \'action_item\'')) {
+      const workspaceId = Number(params[0]);
+      const roomId = Number(params[1]);
+      const rows = state.artifacts
+        .filter(
+          (row) =>
+            Number(row.workspace_id) === workspaceId &&
+            Number(row.room_id) === roomId &&
+            String(row.artifact_type) === 'action_item'
+        )
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
       return { rows };
     }
 
@@ -899,6 +937,49 @@ test('automation schedule endpoint replays deterministic response for same idemp
     assert.equal(second.response.status, 201);
     assert.equal(second.payload.replayed, true);
     assert.equal(second.payload.schedule?.id, first.payload.schedule?.id);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('actions sync endpoint replays deterministic response for same idempotency key', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const first = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/actions/sync',
+      body: {
+        channel: 'in_app',
+        createTasks: false
+      },
+      headers: {
+        'Idempotency-Key': 'actions-sync-idem-1'
+      }
+    });
+    assert.equal(first.response.status, 200, JSON.stringify(first.payload));
+    assert.equal(first.payload.syncedCount, 1);
+
+    const second = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/actions/sync',
+      body: {
+        channel: 'in_app',
+        createTasks: false
+      },
+      headers: {
+        'Idempotency-Key': 'actions-sync-idem-1'
+      }
+    });
+    assert.equal(second.response.status, 200);
+    assert.equal(second.payload.replayed, true);
+    assert.equal(second.payload.syncedCount, first.payload.syncedCount);
   } finally {
     await stopStudioServer(server);
   }

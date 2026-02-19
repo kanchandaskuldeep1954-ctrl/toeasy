@@ -171,6 +171,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - Extended `backend/src/routes/studio.integration.test.ts` with queue-focused route coverage:
     - schedule dedupe behavior for repeated dedupe keys
     - automation runs + queue-state retry/backoff visibility
+    - action sync idempotency replay behavior with deterministic response reuse
   - Standing-MVP queue reliability integration checkbox moved to complete.
 - 2026-02-19 (Studio route integration-test tranche):
   - Added backend route-level integration test harness with query override:
