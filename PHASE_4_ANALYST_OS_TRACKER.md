@@ -165,6 +165,11 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Right-rail separation UX tranche):
+  - Reworked Studio right rail from long stacked feed to segmented views:
+    - `Overview`, `Metrics`, `Comms`, `Artifacts`.
+  - Added explicit separation between operational context and artifact browsing.
+  - Added scrolling cap for artifact list to prevent runaway right-rail length.
 - 2026-02-19 (Studio workspace focus UX tranche):
   - Added Studio workspace controls for analysis depth and screen real-estate:
     - `Focus View` toggle to hide guided/context rails and maximize panel workspace.

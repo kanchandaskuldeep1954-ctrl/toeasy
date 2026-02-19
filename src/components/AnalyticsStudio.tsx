@@ -40,6 +40,7 @@ import { ChartSpec } from '../../types';
 type StudioPanel = 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
 type RunMode = 'sql' | 'nl' | 'sheet_op';
 type MentionPresetKey = 'manager' | 'exec' | 'owner_group';
+type RightRailView = 'overview' | 'metrics' | 'comms' | 'artifacts';
 type StudioFeatureFlags = {
   legacySurfacesEnabled: boolean;
   visualsTabEnabled: boolean;
@@ -385,6 +386,7 @@ const AnalyticsStudio: React.FC = () => {
   const [profileBusy, setProfileBusy] = useState(false);
   const [isContextRailOpen, setIsContextRailOpen] = useState(true);
   const [isFocusMode, setIsFocusMode] = useState(false);
+  const [rightRailView, setRightRailView] = useState<RightRailView>('overview');
   const [pivotPercentOfTotalEnabled, setPivotPercentOfTotalEnabled] = useState(true);
   const [pivotRankEnabled, setPivotRankEnabled] = useState(true);
   const [pivotRankOrder, setPivotRankOrder] = useState<'asc' | 'desc'>('desc');
@@ -3564,6 +3566,34 @@ const AnalyticsStudio: React.FC = () => {
 
         {showContextRail && (
           <aside className="border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto">
+            <div className="rounded border border-slate-200 dark:border-slate-700 p-1 grid grid-cols-2 gap-1 text-[11px] mb-3">
+              <button
+                onClick={() => setRightRailView('overview')}
+                className={`px-2 py-1 rounded ${rightRailView === 'overview' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+              >
+                Overview
+              </button>
+              <button
+                onClick={() => setRightRailView('metrics')}
+                className={`px-2 py-1 rounded ${rightRailView === 'metrics' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+              >
+                Metrics
+              </button>
+              <button
+                onClick={() => setRightRailView('comms')}
+                className={`px-2 py-1 rounded ${rightRailView === 'comms' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+              >
+                Comms
+              </button>
+              <button
+                onClick={() => setRightRailView('artifacts')}
+                className={`px-2 py-1 rounded ${rightRailView === 'artifacts' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300'}`}
+              >
+                Artifacts
+              </button>
+            </div>
+          {rightRailView === 'overview' && (
+            <>
           <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Run Context</h3>
           <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
             <div>Rows: {currentRows.length}</div>
@@ -3676,6 +3706,11 @@ const AnalyticsStudio: React.FC = () => {
             )}
           </div>
 
+            </>
+          )}
+
+          {rightRailView === 'metrics' && (
+            <>
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Persona Preset</h3>
           <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
             <select
@@ -3827,6 +3862,11 @@ const AnalyticsStudio: React.FC = () => {
             )}
           </div>
 
+            </>
+          )}
+
+          {rightRailView === 'comms' && (
+            <>
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Collaboration Snapshot</h3>
           <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
             <div>Threads: {threads.length}</div>
@@ -3841,8 +3881,13 @@ const AnalyticsStudio: React.FC = () => {
             </button>
           </div>
 
+            </>
+          )}
+
+          {rightRailView === 'artifacts' && (
+            <>
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Artifacts</h3>
-          <div className="space-y-2">
+          <div className="space-y-2 max-h-[420px] overflow-auto pr-1">
             {artifacts.slice(0, 20).map((artifact) => (
               <div key={artifact.id} className="text-xs border rounded p-2">
                 <div className="font-semibold">{artifact.title}</div>
@@ -3861,6 +3906,8 @@ const AnalyticsStudio: React.FC = () => {
                   edgeCount: lineage.edges?.length || 0
                 }, null, 2)}
               </div>
+            </>
+          )}
             </>
           )}
           </aside>
