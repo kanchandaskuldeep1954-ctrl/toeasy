@@ -5,7 +5,8 @@ import { logger } from '../utils/logger.js';
 import {
   executeAutomationPolicy,
   parseAutomationRetryPolicy,
-  resolveAutomationActorUserId
+  resolveAutomationActorContext,
+  recordAutomationRunEvent
 } from './automationExecutionService.js';
 
 interface DispatchJobPayload {
@@ -17,14 +18,45 @@ interface ExecuteScheduledJobPayload {
   roomId: number | null;
   automationPolicyId: number;
   actorUserId: number;
+  actorResolutionStrategy: string;
   scheduleId: number;
   source: 'schedule';
+  scheduledFor: string;
+  dispatchReason: string | null;
+  retryPolicy: { maxAttempts: number; backoffMs: number };
   reason?: string;
+}
+
+interface QueueJobCounts {
+  waiting: number;
+  active: number;
+  delayed: number;
+  failed: number;
+  completed: number;
+  paused: number;
 }
 
 interface QueueRuntimeState {
   initialized: boolean;
   enabled: boolean;
+  dispatchInvocations: number;
+  executeFailures: number;
+  executeRetriesScheduled: number;
+  executeTerminalFailures: number;
+  lastDispatchAt: string | null;
+  lastDispatchReason: string | null;
+  lastDispatchError: string | null;
+  lastDispatchResult: {
+    scanned: number;
+    queued: number;
+    skipped: number;
+    duplicates: number;
+    failedEnqueue: number;
+  } | null;
+  queues: {
+    dispatch: QueueJobCounts;
+    execute: QueueJobCounts;
+  };
 }
 
 const DISPATCH_QUEUE_NAME = 'automation-dispatch-queue';
@@ -39,8 +71,85 @@ let dispatchWorker: Worker<DispatchJobPayload> | null = null;
 let executeWorker: Worker<ExecuteScheduledJobPayload> | null = null;
 const queueState: QueueRuntimeState = {
   initialized: false,
-  enabled: false
+  enabled: false,
+  dispatchInvocations: 0,
+  executeFailures: 0,
+  executeRetriesScheduled: 0,
+  executeTerminalFailures: 0,
+  lastDispatchAt: null,
+  lastDispatchReason: null,
+  lastDispatchError: null,
+  lastDispatchResult: null,
+  queues: {
+    dispatch: {
+      waiting: 0,
+      active: 0,
+      delayed: 0,
+      failed: 0,
+      completed: 0,
+      paused: 0
+    },
+    execute: {
+      waiting: 0,
+      active: 0,
+      delayed: 0,
+      failed: 0,
+      completed: 0,
+      paused: 0
+    }
+  }
 };
+
+function normalizeQueueError(err: unknown): string {
+  if (err instanceof Error && err.message) return err.message;
+  return String(err || 'unknown queue error');
+}
+
+function isDuplicateJobError(err: unknown): boolean {
+  const message = normalizeQueueError(err).toLowerCase();
+  return message.includes('jobid') && message.includes('exists');
+}
+
+async function refreshQueueCounts(): Promise<void> {
+  const fallback = {
+    waiting: 0,
+    active: 0,
+    delayed: 0,
+    failed: 0,
+    completed: 0,
+    paused: 0
+  };
+  if (!queueState.enabled || !dispatchQueue || !executeQueue) {
+    queueState.queues.dispatch = { ...fallback };
+    queueState.queues.execute = { ...fallback };
+    return;
+  }
+
+  try {
+    const [dispatchCounts, executeCounts] = await Promise.all([
+      dispatchQueue.getJobCounts('waiting', 'active', 'delayed', 'failed', 'completed', 'paused'),
+      executeQueue.getJobCounts('waiting', 'active', 'delayed', 'failed', 'completed', 'paused')
+    ]);
+    queueState.queues.dispatch = {
+      waiting: Number(dispatchCounts.waiting || 0),
+      active: Number(dispatchCounts.active || 0),
+      delayed: Number(dispatchCounts.delayed || 0),
+      failed: Number(dispatchCounts.failed || 0),
+      completed: Number(dispatchCounts.completed || 0),
+      paused: Number(dispatchCounts.paused || 0)
+    };
+    queueState.queues.execute = {
+      waiting: Number(executeCounts.waiting || 0),
+      active: Number(executeCounts.active || 0),
+      delayed: Number(executeCounts.delayed || 0),
+      failed: Number(executeCounts.failed || 0),
+      completed: Number(executeCounts.completed || 0),
+      paused: Number(executeCounts.paused || 0)
+    };
+  } catch (err) {
+    logger.warn('[AutomationQueue] Failed to refresh queue counts', err);
+  }
+}
 
 function computeNextRunAt(cron: string, timezone: string): Date {
   try {
@@ -74,9 +183,9 @@ function buildQueueConnectionOptions(redisUrl: string): Record<string, any> {
   };
 }
 
-async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number; skipped: number }> {
+async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number; skipped: number; duplicates: number; failedEnqueue: number }> {
   if (!executeQueue) {
-    return { scanned: 0, queued: 0, skipped: 0 };
+    return { scanned: 0, queued: 0, skipped: 0, duplicates: 0, failedEnqueue: 0 };
   }
 
   const dueSchedules = await query(
@@ -90,6 +199,7 @@ async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number;
       s.timezone,
       s.retry_policy,
       s.next_run_at,
+      s.last_run_at,
       s.created_by,
       p.created_by AS policy_created_by
     FROM automation_schedules s
@@ -107,6 +217,8 @@ async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number;
 
   let queued = 0;
   let skipped = 0;
+  let duplicates = 0;
+  let failedEnqueue = 0;
   for (const row of dueSchedules.rows) {
     const scheduleId = Number(row.id);
     const workspaceId = Number(row.workspace_id);
@@ -115,6 +227,23 @@ async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number;
     const cron = String(row.cron || '');
     const timezone = String(row.timezone || 'UTC');
     const nextRunAt = computeNextRunAt(cron, timezone);
+    const scheduledFor = new Date(row.next_run_at).toISOString();
+
+    const actorResolution = await resolveAutomationActorContext(
+      workspaceId,
+      Number(row.created_by || row.policy_created_by || 0) || null
+    );
+    const actorUserId = actorResolution.userId;
+    if (!actorUserId) {
+      logger.warn('[AutomationQueue] Skipping schedule with no actor user', {
+        scheduleId,
+        workspaceId,
+        automationPolicyId,
+        resolutionStrategy: actorResolution.strategy
+      });
+      skipped += 1;
+      continue;
+    }
 
     // Claim this schedule row atomically to avoid duplicate queuing across app instances.
     const claim = await query(
@@ -124,26 +253,14 @@ async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number;
           next_run_at = $1,
           updated_at = NOW()
       WHERE id = $2
+        AND is_active = true
+        AND next_run_at <= NOW()
         AND next_run_at = $3
       RETURNING id
       `,
       [nextRunAt.toISOString(), scheduleId, row.next_run_at]
     );
     if (claim.rows.length === 0) {
-      skipped += 1;
-      continue;
-    }
-
-    const actorUserId = await resolveAutomationActorUserId(
-      workspaceId,
-      Number(row.created_by || row.policy_created_by || 0) || null
-    );
-    if (!actorUserId) {
-      logger.warn('[AutomationQueue] Skipping schedule with no actor user', {
-        scheduleId,
-        workspaceId,
-        automationPolicyId
-      });
       skipped += 1;
       continue;
     }
@@ -162,26 +279,71 @@ async function enqueueDueSchedules(): Promise<{ scanned: number; queued: number;
       removeOnFail: 500
     };
 
-    await executeQueue.add(
-      'execute-scheduled-automation',
-      {
-        workspaceId,
-        roomId,
-        automationPolicyId,
-        actorUserId,
+    try {
+      await executeQueue.add(
+        'execute-scheduled-automation',
+        {
+          workspaceId,
+          roomId,
+          automationPolicyId,
+          actorUserId,
+          actorResolutionStrategy: actorResolution.strategy,
+          scheduleId,
+          source: 'schedule',
+          scheduledFor,
+          dispatchReason: 'dispatch_scan',
+          retryPolicy,
+          reason: `Scheduled execution from schedule #${scheduleId}`
+        },
+        options
+      );
+      queued += 1;
+    } catch (err) {
+      if (isDuplicateJobError(err)) {
+        duplicates += 1;
+        logger.warn('[AutomationQueue] Duplicate execute job skipped', {
+          scheduleId,
+          workspaceId,
+          automationPolicyId,
+          jobId
+        });
+        continue;
+      }
+
+      failedEnqueue += 1;
+      logger.error('[AutomationQueue] Failed to enqueue execute job, reverting schedule claim', {
         scheduleId,
-        source: 'schedule',
-        reason: `Scheduled execution from schedule #${scheduleId}`
-      },
-      options
-    );
-    queued += 1;
+        workspaceId,
+        automationPolicyId,
+        error: normalizeQueueError(err)
+      });
+      try {
+        await query(
+          `
+          UPDATE automation_schedules
+          SET next_run_at = $1,
+              last_run_at = $2,
+              updated_at = NOW()
+          WHERE id = $3
+          `,
+          [row.next_run_at, row.last_run_at || null, scheduleId]
+        );
+      } catch (revertErr) {
+        logger.error('[AutomationQueue] Failed to revert schedule claim after enqueue failure', {
+          scheduleId,
+          workspaceId,
+          error: normalizeQueueError(revertErr)
+        });
+      }
+    }
   }
 
   return {
     scanned: dueSchedules.rows.length,
     queued,
-    skipped
+    skipped,
+    duplicates,
+    failedEnqueue
   };
 }
 
@@ -220,16 +382,35 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
       EXECUTE_QUEUE_NAME,
       async (job) => {
         const data = job.data;
+        const queueAttempt = Math.max(1, Number(job.attemptsMade || 0) + 1);
+        const queueMaxAttempts = Math.max(1, Number(job.opts?.attempts || data.retryPolicy?.maxAttempts || 1));
+        const backoffDelay = typeof job.opts?.backoff === 'number'
+          ? Number(job.opts.backoff)
+          : Number((job.opts?.backoff as any)?.delay || data.retryPolicy?.backoffMs || 0);
+
         const result = await executeAutomationPolicy({
           workspaceId: data.workspaceId,
           automationId: data.automationPolicyId,
           actorUserId: data.actorUserId,
           inputPayload: {
             scheduleId: data.scheduleId,
-            queueJobId: job.id || null
+            queueJobId: job.id || null,
+            scheduledFor: data.scheduledFor || null
           },
           reason: data.reason || null,
-          source: data.source
+          source: data.source,
+          executionAttempt: queueAttempt,
+          executionContext: {
+            queueName: EXECUTE_QUEUE_NAME,
+            queueJobId: job.id || null,
+            queueAttempt,
+            queueMaxAttempts,
+            queueBackoffMs: Number.isFinite(backoffDelay) ? Math.max(0, backoffDelay) : 0,
+            scheduleId: data.scheduleId,
+            dispatchReason: data.dispatchReason || null,
+            actorResolutionStrategy: data.actorResolutionStrategy || null,
+            scheduledFor: data.scheduledFor || null
+          }
         });
         return {
           runId: Number(result.run?.id || 0) || null,
@@ -245,19 +426,113 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
     );
 
     dispatchWorker.on('failed', (job, err) => {
+      queueState.lastDispatchAt = new Date().toISOString();
+      queueState.lastDispatchReason = job?.data?.reason || null;
+      queueState.lastDispatchError = err.message;
       logger.error('[AutomationQueue] Dispatch worker failed', {
         jobId: job?.id || null,
         error: err.message
       });
     });
 
-    executeWorker.on('failed', (job, err) => {
+    dispatchWorker.on('completed', async (job, result) => {
+      queueState.dispatchInvocations += 1;
+      queueState.lastDispatchAt = new Date().toISOString();
+      queueState.lastDispatchReason = job?.data?.reason || null;
+      queueState.lastDispatchError = null;
+      queueState.lastDispatchResult = {
+        scanned: Number(result?.scanned || 0),
+        queued: Number(result?.queued || 0),
+        skipped: Number(result?.skipped || 0),
+        duplicates: Number(result?.duplicates || 0),
+        failedEnqueue: Number(result?.failedEnqueue || 0)
+      };
+      await refreshQueueCounts();
+    });
+
+    executeWorker.on('failed', async (job, err) => {
+      queueState.executeFailures += 1;
+      const attemptsMade = Math.max(1, Number(job?.attemptsMade || 1));
+      const maxAttempts = Math.max(1, Number(job?.opts?.attempts || job?.data?.retryPolicy?.maxAttempts || 1));
+      const retriesRemaining = attemptsMade < maxAttempts;
+      if (retriesRemaining) {
+        queueState.executeRetriesScheduled += 1;
+      } else {
+        queueState.executeTerminalFailures += 1;
+      }
       logger.error('[AutomationQueue] Execute worker failed', {
         jobId: job?.id || null,
         scheduleId: job?.data?.scheduleId || null,
         automationPolicyId: job?.data?.automationPolicyId || null,
+        attemptsMade,
+        maxAttempts,
+        retriesRemaining,
         error: err.message
       });
+
+      try {
+        if (!job?.data?.workspaceId || !job?.data?.automationPolicyId || !job?.id) {
+          await refreshQueueCounts();
+          return;
+        }
+        const runLookup = await query(
+          `
+          SELECT id, room_id, status
+          FROM automation_runs
+          WHERE workspace_id = $1
+            AND automation_policy_id = $2
+            AND COALESCE(input->>'queueJobId', '') = $3
+          ORDER BY created_at DESC
+          LIMIT 1
+          `,
+          [job.data.workspaceId, job.data.automationPolicyId, String(job.id)]
+        );
+        if (runLookup.rows.length > 0) {
+          const run = runLookup.rows[0];
+          const runId = Number(run.id);
+          const roomId = run.room_id ? Number(run.room_id) : (job.data.roomId || null);
+          await recordAutomationRunEvent({
+            workspaceId: Number(job.data.workspaceId),
+            roomId,
+            runId,
+            eventType: retriesRemaining ? 'execution_retry_scheduled' : 'execution_failed_terminal',
+            status: retriesRemaining ? 'retrying' : 'failed',
+            attempt: attemptsMade,
+            error: err.message,
+            metadata: {
+              queueName: EXECUTE_QUEUE_NAME,
+              queueJobId: job.id || null,
+              queueAttempt: attemptsMade,
+              queueMaxAttempts: maxAttempts,
+              scheduleId: job.data.scheduleId || null,
+              actorResolutionStrategy: job.data.actorResolutionStrategy || null,
+              retryBackoffMs: job.data.retryPolicy?.backoffMs || null,
+              retriesRemaining
+            }
+          });
+
+          if (!retriesRemaining) {
+            await query(
+              `
+              UPDATE automation_runs
+              SET status = CASE WHEN status IN ('completed', 'awaiting_approval') THEN status ELSE 'failed' END,
+                  error = COALESCE(error, $1),
+                  completed_at = CASE WHEN status IN ('completed', 'awaiting_approval') THEN completed_at ELSE NOW() END,
+                  updated_at = NOW()
+              WHERE id = $2
+              `,
+              [err.message, runId]
+            );
+          }
+        }
+      } catch (eventErr) {
+        logger.warn('[AutomationQueue] Failed to append execute failure run-event', eventErr);
+      }
+      await refreshQueueCounts();
+    });
+
+    executeWorker.on('completed', async () => {
+      await refreshQueueCounts();
     });
 
     await dispatchQueue.add(
@@ -284,6 +559,7 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
     );
 
     queueState.enabled = true;
+    await refreshQueueCounts();
     logger.info('[AutomationQueue] Initialized');
   } catch (err) {
     queueState.enabled = false;
@@ -296,15 +572,17 @@ export async function requestAutomationDispatch(reason: string = 'manual_nudge')
     return false;
   }
   try {
+    const bucket = Math.floor(Date.now() / 15_000);
     await dispatchQueue.add(
       'scan-due-schedules',
       { reason },
       {
-        jobId: `${DISPATCH_REPEAT_JOB_ID}:${reason}:${Date.now()}`,
+        jobId: `${DISPATCH_REPEAT_JOB_ID}:${reason}:${bucket}`,
         removeOnComplete: 20,
         removeOnFail: 20
       }
     );
+    await refreshQueueCounts();
     return true;
   } catch (err) {
     logger.warn('[AutomationQueue] Failed to enqueue dispatch nudge', err);
@@ -334,11 +612,47 @@ export async function closeAutomationQueue(): Promise<void> {
   redisConnectionOptions = null;
   queueState.initialized = false;
   queueState.enabled = false;
+  queueState.dispatchInvocations = 0;
+  queueState.executeFailures = 0;
+  queueState.executeRetriesScheduled = 0;
+  queueState.executeTerminalFailures = 0;
+  queueState.lastDispatchAt = null;
+  queueState.lastDispatchReason = null;
+  queueState.lastDispatchError = null;
+  queueState.lastDispatchResult = null;
+  queueState.queues.dispatch = {
+    waiting: 0,
+    active: 0,
+    delayed: 0,
+    failed: 0,
+    completed: 0,
+    paused: 0
+  };
+  queueState.queues.execute = {
+    waiting: 0,
+    active: 0,
+    delayed: 0,
+    failed: 0,
+    completed: 0,
+    paused: 0
+  };
 }
 
 export function getAutomationQueueState(): QueueRuntimeState {
   return {
     initialized: queueState.initialized,
-    enabled: queueState.enabled
+    enabled: queueState.enabled,
+    dispatchInvocations: queueState.dispatchInvocations,
+    executeFailures: queueState.executeFailures,
+    executeRetriesScheduled: queueState.executeRetriesScheduled,
+    executeTerminalFailures: queueState.executeTerminalFailures,
+    lastDispatchAt: queueState.lastDispatchAt,
+    lastDispatchReason: queueState.lastDispatchReason,
+    lastDispatchError: queueState.lastDispatchError,
+    lastDispatchResult: queueState.lastDispatchResult,
+    queues: {
+      dispatch: { ...queueState.queues.dispatch },
+      execute: { ...queueState.queues.execute }
+    }
   };
 }

@@ -492,11 +492,54 @@ export interface AutomationRunDetail {
   artifacts: number[];
 }
 
+export interface AutomationRunEvent {
+  id: number;
+  runId: number;
+  eventType: string;
+  status: string;
+  attempt: number;
+  error: string | null;
+  metadata: Record<string, any>;
+  createdAt: string;
+}
+
 export interface AutomationQueueState {
   roomId: number;
   queue: {
     initialized: boolean;
     enabled: boolean;
+    dispatchInvocations?: number;
+    executeFailures?: number;
+    executeRetriesScheduled?: number;
+    executeTerminalFailures?: number;
+    lastDispatchAt?: string | null;
+    lastDispatchReason?: string | null;
+    lastDispatchError?: string | null;
+    lastDispatchResult?: {
+      scanned: number;
+      queued: number;
+      skipped: number;
+      duplicates: number;
+      failedEnqueue: number;
+    } | null;
+    queues?: {
+      dispatch: {
+        waiting: number;
+        active: number;
+        delayed: number;
+        failed: number;
+        completed: number;
+        paused: number;
+      };
+      execute: {
+        waiting: number;
+        active: number;
+        delayed: number;
+        failed: number;
+        completed: number;
+        paused: number;
+      };
+    };
   };
   metrics: {
     activeSchedules: number;

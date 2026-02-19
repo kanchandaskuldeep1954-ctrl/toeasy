@@ -92,11 +92,11 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 
 ## 5) In Progress (Current Slice)
 - [x] Route-level execution unified on shared execution service paths.
-- [ ] Queue-backed runtime stabilization under multi-instance load.
-- [ ] Operational guardrails:
-  - [ ] deterministic dedupe behavior for schedule dispatch
-  - [ ] robust actor resolution for schedule-triggered runs
-  - [ ] retry/backoff observability in run event timeline
+- [x] Queue-backed runtime stabilization under multi-instance load.
+- [x] Operational guardrails:
+  - [x] deterministic dedupe behavior for schedule dispatch
+  - [x] robust actor resolution for schedule-triggered runs
+  - [x] retry/backoff observability in run event timeline
 - [x] Full frontend UX adoption of newly added completion APIs (data trust, review lane, coverage trend, ROI cards).
 - [x] UX polish and flow simplification for review controls (replaced raw ID inputs with role-aware pickers/selectors).
 
@@ -127,7 +127,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] pre-publish review flow UI (draft -> manager approve -> exec notify)
 
 ### Phase E (Weeks 17-20): Automation Reliability
-- [ ] production scheduler with queue monitoring dashboard
+- [x] production scheduler with queue monitoring dashboard
 - [ ] failure taxonomy and operator alerting
 - [x] idempotency key persistence + publish/sync endpoint guards
 - [ ] extend idempotency and dedupe guarantees to remaining mutating endpoints
@@ -165,6 +165,23 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Phase 4 automation reliability tranche):
+  - Hardened BullMQ schedule dispatch for multi-instance behavior:
+    - deterministic schedule dedupe keys from `room+policy+cron+timezone`
+    - dedupe-safe schedule creation returns existing schedule when intent matches
+    - duplicate execute job detection during dispatch and safe skip behavior
+    - schedule-claim revert when enqueue fails to prevent dropped runs
+  - Upgraded actor resolution for scheduled runs:
+    - validates preferred actor membership/ownership before use
+    - deterministic fallback order: admin -> editor -> viewer -> workspace owner
+    - actor resolution strategy now tracked in queue execution metadata
+  - Added retry/backoff observability:
+    - queue attempt/max-attempt/backoff context attached to run events
+    - terminal vs retry-scheduled failure events recorded in `automation_run_events`
+    - execution failure path now marks runs failed with structured event payloads
+  - Expanded queue monitoring surfaces:
+    - dispatch/execute job counts, dispatch history, and failure counters in queue state
+    - Studio Automation panel now renders run-event timeline and queue runtime counters
 - 2026-02-19 (Phase 4 collaboration/annotation polish tranche):
   - Added role-based mention routing presets in Studio for:
     - report publish mentions

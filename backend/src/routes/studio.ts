@@ -2834,6 +2834,27 @@ function parseRetryPolicy(input: any) {
   };
 }
 
+function computeStableKeyHash(input: string): string {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = ((hash << 5) - hash) + input.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+function buildDeterministicScheduleDedupeKey(params: {
+  roomId: number;
+  automationPolicyId: number;
+  cron: string;
+  timezone: string;
+}) {
+  const normalizedCron = String(params.cron || '').trim().replace(/\s+/g, ' ');
+  const normalizedTimezone = String(params.timezone || 'UTC').trim().toLowerCase();
+  const fingerprint = `${params.roomId}|${params.automationPolicyId}|${normalizedCron}|${normalizedTimezone}`;
+  return `room-${params.roomId}-policy-${params.automationPolicyId}-${computeStableKeyHash(fingerprint)}`;
+}
+
 function isLikelyCronExpression(cron: string): boolean {
   const parts = String(cron || '').trim().split(/\s+/g).filter(Boolean);
   return parts.length >= 5 && parts.length <= 6;
@@ -7928,9 +7949,43 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
 
     const timezone = String(req.body?.timezone || 'UTC').trim() || 'UTC';
     const dedupeKeyInput = String(req.body?.dedupeKey || '').trim();
-    const dedupeKey = dedupeKeyInput || `room-${roomId}-policy-${automationPolicyId}-${Date.now()}`;
+    const dedupeKey = dedupeKeyInput || buildDeterministicScheduleDedupeKey({
+      roomId,
+      automationPolicyId,
+      cron,
+      timezone
+    });
     const retryPolicy = parseRetryPolicy(req.body?.retryPolicy);
     const isActive = req.body?.isActive !== false;
+
+    const existingScheduleResult = await query(
+      `
+      SELECT *
+      FROM automation_schedules
+      WHERE workspace_id = $1
+        AND dedupe_key = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [workspaceId, dedupeKey]
+    );
+    if (existingScheduleResult.rows.length > 0) {
+      const existingSchedule = existingScheduleResult.rows[0];
+      const sameIntent = Number(existingSchedule.room_id || 0) === roomId
+        && Number(existingSchedule.automation_policy_id || 0) === automationPolicyId
+        && String(existingSchedule.cron || '') === cron
+        && String(existingSchedule.timezone || 'UTC') === timezone;
+      if (!sameIntent) {
+        return res.status(409).json({
+          error: 'dedupeKey is already used by a different schedule. Use a different dedupeKey.'
+        });
+      }
+      return res.status(200).json({
+        roomId,
+        schedule: toAutomationScheduleRecord(existingSchedule),
+        deduped: true
+      });
+    }
 
     const nextRunAt = computeNextRunAtFromCronExpression(cron, timezone);
     const insert = await query(

@@ -5,6 +5,7 @@ import { useDataset } from '../hooks/useDataset';
 import {
   AutomationQueueState,
   AutomationRunDetail,
+  AutomationRunEvent,
   AutomationSchedule,
   analyticsAPI,
   CoverageTrendPoint,
@@ -263,6 +264,7 @@ const AnalyticsStudio: React.FC = () => {
   const [playbookRecommendations, setPlaybookRecommendations] = useState<PlaybookRecommendation[]>([]);
   const [outcomeAttributions, setOutcomeAttributions] = useState<OutcomeAttribution[]>([]);
   const [automationRuns, setAutomationRuns] = useState<AutomationRunDetail[]>([]);
+  const [automationRunEvents, setAutomationRunEvents] = useState<AutomationRunEvent[]>([]);
   const [automationSchedules, setAutomationSchedules] = useState<AutomationSchedule[]>([]);
   const [automationEventCount, setAutomationEventCount] = useState<number>(0);
   const [automationQueueState, setAutomationQueueState] = useState<AutomationQueueState | null>(null);
@@ -556,6 +558,7 @@ const AnalyticsStudio: React.FC = () => {
       setPlaybookRecommendations([]);
       setOutcomeAttributions([]);
       setAutomationRuns([]);
+      setAutomationRunEvents([]);
       setAutomationSchedules([]);
       setAutomationEventCount(0);
       setAutomationQueueState(null);
@@ -626,6 +629,7 @@ const AnalyticsStudio: React.FC = () => {
       setAutomationRuns(automationResponse.data?.runs || []);
       setAutomationSchedules(automationResponse.data?.schedules || []);
       setAutomationEventCount(Array.isArray(automationResponse.data?.events) ? automationResponse.data.events.length : 0);
+      setAutomationRunEvents(Array.isArray(automationResponse.data?.events) ? automationResponse.data.events : []);
     }
     if (queueStateResponse) {
       setAutomationQueueState(queueStateResponse.data || null);
@@ -883,6 +887,7 @@ const AnalyticsStudio: React.FC = () => {
     setPlaybookRecommendations([]);
     setOutcomeAttributions([]);
     setAutomationRuns([]);
+    setAutomationRunEvents([]);
     setAutomationSchedules([]);
     setAutomationEventCount(0);
     setAutomationQueueState(null);
@@ -2560,8 +2565,45 @@ const AnalyticsStudio: React.FC = () => {
                   Schedules: {automationSchedules.length} | Runs: {automationRuns.length} | Run events: {automationEventCount}
                 </div>
                 {automationQueueState && (
-                  <div className="text-[11px] text-slate-500">
-                    Queue: {automationQueueState.queue.enabled ? 'enabled' : 'disabled'} | Due schedules: {automationQueueState.metrics.dueSchedules} | Running: {automationQueueState.metrics.runningRuns} | Awaiting approval: {automationQueueState.metrics.awaitingApprovalRuns}
+                  <div className="space-y-1 text-[11px] text-slate-500">
+                    <div>
+                      Queue: {automationQueueState.queue.enabled ? 'enabled' : 'disabled'}
+                      {' '}| Due schedules: {automationQueueState.metrics.dueSchedules}
+                      {' '}| Running: {automationQueueState.metrics.runningRuns}
+                      {' '}| Awaiting approval: {automationQueueState.metrics.awaitingApprovalRuns}
+                    </div>
+                    <div>
+                      Dispatches: {automationQueueState.queue.dispatchInvocations || 0}
+                      {' '}| Execute retries: {automationQueueState.queue.executeRetriesScheduled || 0}
+                      {' '}| Execute failures: {automationQueueState.queue.executeFailures || 0}
+                      {' '}| Terminal failures: {automationQueueState.queue.executeTerminalFailures || 0}
+                    </div>
+                    {automationQueueState.queue.lastDispatchAt && (
+                      <div>
+                        Last dispatch: {new Date(automationQueueState.queue.lastDispatchAt).toLocaleString()}
+                        {' '}({automationQueueState.queue.lastDispatchReason || 'n/a'})
+                        {automationQueueState.queue.lastDispatchError
+                          ? ` | error: ${automationQueueState.queue.lastDispatchError}`
+                          : ''}
+                      </div>
+                    )}
+                    {automationQueueState.queue.lastDispatchResult && (
+                      <div>
+                        Last scan -&gt; scanned {automationQueueState.queue.lastDispatchResult.scanned},
+                        {' '}queued {automationQueueState.queue.lastDispatchResult.queued},
+                        {' '}skipped {automationQueueState.queue.lastDispatchResult.skipped},
+                        {' '}duplicates {automationQueueState.queue.lastDispatchResult.duplicates},
+                        {' '}enqueue errors {automationQueueState.queue.lastDispatchResult.failedEnqueue}
+                      </div>
+                    )}
+                    {automationQueueState.queue.queues?.execute && (
+                      <div>
+                        Execute queue -&gt; waiting {automationQueueState.queue.queues.execute.waiting},
+                        {' '}active {automationQueueState.queue.queues.execute.active},
+                        {' '}delayed {automationQueueState.queue.queues.execute.delayed},
+                        {' '}failed {automationQueueState.queue.queues.execute.failed}
+                      </div>
+                    )}
                   </div>
                 )}
                 <div className="space-y-1">
@@ -2574,6 +2616,31 @@ const AnalyticsStudio: React.FC = () => {
                   {automationRuns.length === 0 && (
                     <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
                       No automation runs in this room yet.
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  <div className="text-[11px] font-semibold uppercase text-slate-500">Run Event Timeline</div>
+                  {automationRunEvents.slice(0, 8).map((event) => (
+                    <div key={event.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                      <div className="font-semibold">
+                        Run #{event.runId} - {event.eventType} ({event.status})
+                      </div>
+                      <div className="text-slate-500">
+                        Attempt {event.attempt}
+                        {event.metadata?.queueAttempt ? ` | Queue attempt ${event.metadata.queueAttempt}` : ''}
+                        {event.metadata?.queueMaxAttempts ? `/${event.metadata.queueMaxAttempts}` : ''}
+                        {event.metadata?.retryBackoffMs ? ` | Backoff ${event.metadata.retryBackoffMs}ms` : ''}
+                      </div>
+                      <div className="text-slate-500">
+                        {event.createdAt ? new Date(event.createdAt).toLocaleString() : 'unknown time'}
+                      </div>
+                      {event.error && <div className="text-rose-600">{event.error}</div>}
+                    </div>
+                  ))}
+                  {automationRunEvents.length === 0 && (
+                    <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
+                      No run events captured yet.
                     </div>
                   )}
                 </div>
