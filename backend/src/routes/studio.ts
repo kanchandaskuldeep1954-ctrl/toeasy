@@ -161,6 +161,8 @@ interface ReportQuality {
   unsupportedClaims: number;
   publishBlocked: boolean;
   blockers: string[];
+  metricPolicyBlocked?: boolean;
+  metricPolicyFailures?: MetricPolicyCheck[];
 }
 
 interface ReportInputRequirements {
@@ -197,9 +199,28 @@ interface MetricCatalogItem {
   key: string;
   name: string;
   ownerId: number | null;
+  ownerName: string | null;
   certified: boolean;
+  validationStatus: 'passed' | 'failed' | 'pending' | 'missing';
   formulaSql: string;
   lastValidatedAt: string | null;
+}
+
+interface MetricPolicyCheck {
+  metricKey: string;
+  metricDefinitionId: number | null;
+  ownerId: number | null;
+  ownerName: string | null;
+  status: 'passed' | 'failed' | 'pending' | 'missing_test' | 'not_mapped';
+  blocking: boolean;
+  reason: string;
+  lastValidatedAt: string | null;
+}
+
+interface MetricPolicyEvaluation {
+  checks: MetricPolicyCheck[];
+  publishBlocked: boolean;
+  blockers: string[];
 }
 
 interface VisualBuildSpec {
@@ -2525,6 +2546,128 @@ async function evaluateBundleClaimSupport(workspaceId: number, roomId: number, b
   };
 }
 
+async function evaluateBundleMetricPolicy(workspaceId: number, bundle: ReportV2Bundle): Promise<MetricPolicyEvaluation> {
+  const metricKeys = Array.from(new Set(
+    bundle.sections
+      .flatMap((section) => section.claims || [])
+      .map((claim) => String(claim.metricKey || '').trim())
+      .filter(Boolean)
+  ));
+
+  if (metricKeys.length === 0) {
+    return {
+      checks: [],
+      publishBlocked: false,
+      blockers: []
+    };
+  }
+
+  const metricResult = await query(
+    `
+    SELECT
+      m.id,
+      m.metric_key,
+      m.owner_id,
+      COALESCE(u.full_name, u.email) AS owner_name,
+      latest_test.status AS latest_status,
+      latest_test.last_run_at AS last_validated_at
+    FROM metric_definitions m
+    LEFT JOIN users u ON u.id = m.owner_id
+    LEFT JOIN LATERAL (
+      SELECT status, last_run_at
+      FROM metric_definition_tests t
+      WHERE t.metric_definition_id = m.id
+        AND t.workspace_id = $1
+      ORDER BY last_run_at DESC NULLS LAST, created_at DESC
+      LIMIT 1
+    ) latest_test ON TRUE
+    WHERE m.workspace_id = $1
+      AND m.metric_key = ANY($2::text[])
+    `,
+    [workspaceId, metricKeys]
+  );
+
+  const metricByKey = new Map<string, any>();
+  metricResult.rows.forEach((row) => {
+    metricByKey.set(String(row.metric_key || ''), row);
+  });
+
+  const checks: MetricPolicyCheck[] = metricKeys.map((metricKey) => {
+    const row = metricByKey.get(metricKey);
+    if (!row) {
+      return {
+        metricKey,
+        metricDefinitionId: null,
+        ownerId: null,
+        ownerName: null,
+        status: 'not_mapped',
+        blocking: false,
+        reason: 'Metric key is not mapped to semantic metric definitions in this workspace.',
+        lastValidatedAt: null
+      };
+    }
+
+    const latestStatus = String(row.latest_status || '').toLowerCase();
+    if (!latestStatus) {
+      return {
+        metricKey,
+        metricDefinitionId: Number(row.id),
+        ownerId: row.owner_id ? Number(row.owner_id) : null,
+        ownerName: row.owner_name ? String(row.owner_name) : null,
+        status: 'missing_test',
+        blocking: true,
+        reason: 'Metric has no validation run yet. Run metric validation before publish.',
+        lastValidatedAt: null
+      };
+    }
+
+    if (latestStatus === 'passed') {
+      return {
+        metricKey,
+        metricDefinitionId: Number(row.id),
+        ownerId: row.owner_id ? Number(row.owner_id) : null,
+        ownerName: row.owner_name ? String(row.owner_name) : null,
+        status: 'passed',
+        blocking: false,
+        reason: 'Metric passed latest validation.',
+        lastValidatedAt: row.last_validated_at || null
+      };
+    }
+
+    if (latestStatus === 'failed') {
+      return {
+        metricKey,
+        metricDefinitionId: Number(row.id),
+        ownerId: row.owner_id ? Number(row.owner_id) : null,
+        ownerName: row.owner_name ? String(row.owner_name) : null,
+        status: 'failed',
+        blocking: true,
+        reason: 'Metric failed latest validation and is blocked for publish.',
+        lastValidatedAt: row.last_validated_at || null
+      };
+    }
+
+    return {
+      metricKey,
+      metricDefinitionId: Number(row.id),
+      ownerId: row.owner_id ? Number(row.owner_id) : null,
+      ownerName: row.owner_name ? String(row.owner_name) : null,
+      status: 'pending',
+      blocking: true,
+      reason: `Metric validation status is "${latestStatus}" and must be passed before publish.`,
+      lastValidatedAt: row.last_validated_at || null
+    };
+  });
+
+  const blockingChecks = checks.filter((check) => check.blocking);
+  const blockers = blockingChecks.map((check) => `${check.metricKey}: ${check.reason}`);
+  return {
+    checks,
+    publishBlocked: blockingChecks.length > 0,
+    blockers
+  };
+}
+
 async function resolveRoomRowsAndEvidence(workspaceId: number, room: any) {
   const roomId = Number(room.id);
   const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
@@ -4134,10 +4277,12 @@ router.get('/:workspaceId/rooms/:roomId/metrics/catalog', async (req: WorkspaceR
         m.metric_key,
         m.name,
         m.owner_id,
+        COALESCE(u.full_name, u.email) AS owner_name,
         m.formula,
         latest_test.status AS latest_status,
         latest_test.last_run_at AS last_validated_at
       FROM metric_definitions m
+      LEFT JOIN users u ON u.id = m.owner_id
       LEFT JOIN LATERAL (
         SELECT status, last_run_at
         FROM metric_definition_tests t
@@ -4156,7 +4301,15 @@ router.get('/:workspaceId/rooms/:roomId/metrics/catalog', async (req: WorkspaceR
       key: String(row.metric_key || ''),
       name: String(row.name || row.metric_key || ''),
       ownerId: row.owner_id ? Number(row.owner_id) : null,
+      ownerName: row.owner_name ? String(row.owner_name) : null,
       certified: String(row.latest_status || '').toLowerCase() === 'passed',
+      validationStatus: (() => {
+        const normalized = String(row.latest_status || '').toLowerCase();
+        if (normalized === 'passed' || normalized === 'failed' || normalized === 'pending') {
+          return normalized;
+        }
+        return normalized ? 'pending' : 'missing';
+      })(),
       formulaSql: String(row.formula || ''),
       lastValidatedAt: row.last_validated_at || null
     }));
@@ -4168,6 +4321,116 @@ router.get('/:workspaceId/rooms/:roomId/metrics/catalog', async (req: WorkspaceR
   } catch (err) {
     console.error('Load metric catalog failed:', err);
     return res.status(500).json({ error: 'Failed to load metric catalog' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/metrics/:metricId/owner', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const metricId = Number(req.params.metricId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    if (!Number.isFinite(metricId) || metricId <= 0) {
+      return res.status(400).json({ error: 'Invalid metric id' });
+    }
+
+    const metricResult = await query(
+      `
+      SELECT id, metric_key, name, owner_id
+      FROM metric_definitions
+      WHERE workspace_id = $1
+        AND id = $2
+      LIMIT 1
+      `,
+      [workspaceId, metricId]
+    );
+    if (metricResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Metric definition not found' });
+    }
+
+    const ownerIdRaw = req.body?.ownerId;
+    const ownerId = ownerIdRaw === null || ownerIdRaw === undefined || ownerIdRaw === ''
+      ? null
+      : Number(ownerIdRaw);
+    if (ownerId !== null && (!Number.isFinite(ownerId) || ownerId <= 0)) {
+      return res.status(400).json({ error: 'Invalid ownerId value' });
+    }
+
+    let ownerName: string | null = null;
+    if (ownerId !== null) {
+      const ownerResult = await query(
+        `
+        SELECT u.id, COALESCE(u.full_name, u.email) AS owner_name
+        FROM users u
+        WHERE u.id = $1
+          AND (
+            u.id IN (
+              SELECT wm.user_id
+              FROM workspace_members wm
+              WHERE wm.workspace_id = $2
+            )
+            OR u.id = (
+              SELECT w.user_id
+              FROM workspaces w
+              WHERE w.id = $2
+            )
+          )
+        LIMIT 1
+        `,
+        [ownerId, workspaceId]
+      );
+      if (ownerResult.rows.length === 0) {
+        return res.status(400).json({ error: 'Owner must be a member of this workspace' });
+      }
+      ownerName = ownerResult.rows[0].owner_name ? String(ownerResult.rows[0].owner_name) : null;
+    }
+
+    const updatedResult = await query(
+      `
+      UPDATE metric_definitions
+      SET owner_id = $1,
+          updated_at = NOW()
+      WHERE workspace_id = $2
+        AND id = $3
+      RETURNING id, metric_key, name, owner_id, updated_at
+      `,
+      [ownerId, workspaceId, metricId]
+    );
+
+    const updated = updatedResult.rows[0];
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_metric_owner_updated',
+      metadata: {
+        metricId,
+        metricKey: String(updated.metric_key || ''),
+        ownerId: updated.owner_id ? Number(updated.owner_id) : null
+      }
+    });
+
+    return res.json({
+      roomId,
+      metric: {
+        id: Number(updated.id),
+        key: String(updated.metric_key || ''),
+        name: String(updated.name || updated.metric_key || ''),
+        ownerId: updated.owner_id ? Number(updated.owner_id) : null,
+        ownerName,
+        updatedAt: String(updated.updated_at)
+      }
+    });
+  } catch (err) {
+    console.error('Assign metric owner failed:', err);
+    return res.status(500).json({ error: 'Failed to assign metric owner' });
   }
 });
 
@@ -5516,7 +5779,8 @@ router.get('/:workspaceId/rooms/:roomId/evidence/coverage-trend', async (req: Wo
           AND event_type IN (
             'decision_room_report_v2_generated',
             'decision_room_report_v2_publish_blocked',
-            'decision_room_report_v2_published'
+            'decision_room_report_v2_published',
+            'decision_room_report_v2_quality_checked'
           )
         ORDER BY created_at ASC
         LIMIT 500
@@ -7209,11 +7473,37 @@ router.get('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/quality', async (re
       return res.status(404).json({ error: 'Report V2 bundle not found.' });
     }
 
-    const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+    const [qualityCheck, metricPolicy] = await Promise.all([
+      evaluateBundleClaimSupport(workspaceId, roomId, bundle),
+      evaluateBundleMetricPolicy(workspaceId, bundle)
+    ]);
+    const mergedQuality: ReportQuality = {
+      ...qualityCheck.quality,
+      publishBlocked: qualityCheck.quality.publishBlocked || metricPolicy.publishBlocked,
+      blockers: [...qualityCheck.quality.blockers, ...metricPolicy.blockers],
+      metricPolicyBlocked: metricPolicy.publishBlocked,
+      metricPolicyFailures: metricPolicy.checks.filter((check) => check.blocking)
+    };
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_report_v2_quality_checked',
+      metadata: {
+        bundleId,
+        evidenceCoverageRatio: mergedQuality.evidenceCoverageRatio,
+        unsupportedClaims: mergedQuality.unsupportedClaims,
+        publishBlocked: mergedQuality.publishBlocked,
+        metricPolicyBlocked: metricPolicy.publishBlocked
+      }
+    });
+
     return res.json({
       bundleId,
-      quality: qualityCheck.quality,
-      claimChecks: qualityCheck.claimChecks
+      quality: mergedQuality,
+      claimChecks: qualityCheck.claimChecks,
+      metricPolicy
     });
   } catch (err) {
     console.error('Load Report V2 quality failed:', err);
@@ -7270,7 +7560,17 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       });
     }
 
-    const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+    const [qualityCheck, metricPolicy] = await Promise.all([
+      evaluateBundleClaimSupport(workspaceId, roomId, bundle),
+      evaluateBundleMetricPolicy(workspaceId, bundle)
+    ]);
+    const mergedQuality: ReportQuality = {
+      ...qualityCheck.quality,
+      publishBlocked: qualityCheck.quality.publishBlocked || metricPolicy.publishBlocked,
+      blockers: [...qualityCheck.quality.blockers, ...metricPolicy.blockers],
+      metricPolicyBlocked: metricPolicy.publishBlocked,
+      metricPolicyFailures: metricPolicy.checks.filter((check) => check.blocking)
+    };
 
     const profileThresholdRaw = Number(req.body?.minProfileQualityScore ?? 0.65);
     const profileQualityThreshold = Number.isFinite(profileThresholdRaw)
@@ -7300,7 +7600,7 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
           threshold: profileQualityThreshold,
           profileGeneratedAt: latestProfile.created_at
         },
-        quality: qualityCheck.quality
+        quality: mergedQuality
       };
 
       await recordAnalyticsEvent({
@@ -7328,7 +7628,7 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       return res.status(400).json(profileBlockedResponse);
     }
 
-    if (qualityCheck.quality.publishBlocked) {
+    if (mergedQuality.publishBlocked) {
       await recordAnalyticsEvent({
         workspaceId,
         roomId,
@@ -7336,14 +7636,18 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
         eventType: 'decision_room_report_v2_publish_blocked',
         metadata: {
           bundleId,
-          unsupportedClaims: qualityCheck.quality.unsupportedClaims,
-          blockers: qualityCheck.quality.blockers
+          unsupportedClaims: mergedQuality.unsupportedClaims,
+          blockers: mergedQuality.blockers,
+          metricPolicyBlocked: metricPolicy.publishBlocked
         }
       });
       const blockedResponse = {
-        error: 'Publish blocked due to unsupported claims.',
-        quality: qualityCheck.quality,
-        claimChecks: qualityCheck.claimChecks
+        error: metricPolicy.publishBlocked
+          ? 'Publish blocked due to metric validation policy.'
+          : 'Publish blocked due to unsupported claims.',
+        quality: mergedQuality,
+        claimChecks: qualityCheck.claimChecks,
+        metricPolicy
       };
       await completeIdempotentOperation({
         workspaceId,
@@ -7422,7 +7726,7 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       if (!slackDelivery.posted) {
         const slackFailureResponse = {
           error: `Slack delivery failed: ${slackDelivery.error || 'unknown error'}`,
-          quality: qualityCheck.quality
+          quality: mergedQuality
         };
         await completeIdempotentOperation({
           workspaceId,
@@ -7446,7 +7750,7 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
         channel,
         slackPosted: slackDelivery.posted,
         slackAttempts: slackDelivery.attempts,
-        evidenceCoverageRatio: qualityCheck.quality.evidenceCoverageRatio
+        evidenceCoverageRatio: mergedQuality.evidenceCoverageRatio
       }
     });
 
@@ -7454,14 +7758,14 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       roomId,
       bundleId,
       channel,
-      quality: qualityCheck.quality,
+      quality: mergedQuality,
       slackDelivery
     });
 
     const successResponse = {
       bundleId,
       channel,
-      quality: qualityCheck.quality,
+      quality: mergedQuality,
       slackDelivery,
       publishedAt: new Date().toISOString(),
       message: 'Report V2 published successfully.'

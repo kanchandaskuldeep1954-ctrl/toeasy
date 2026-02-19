@@ -129,6 +129,11 @@ describe('Studio MVP API Contracts', () => {
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/metrics/catalog');
   });
 
+  it('calls metric owner assignment endpoint', () => {
+    studioAPI.assignMetricOwner('12', '77', 9, { ownerId: 15 });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/metrics/9/owner', { ownerId: 15 });
+  });
+
   it('calls metrics validate endpoint', () => {
     studioAPI.validateMetrics('12', '77', { metricIds: [1, 2] });
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/metrics/validate', { metricIds: [1, 2] });

@@ -20,8 +20,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - Current sprint focus: `Phase C + D + E foundations`
 - RAG:
   - Data and query foundation: `Green`
-  - Visualization and analyst exploration depth: `Yellow`
-  - Semantic metrics and evidence contract: `Yellow`
+  - Visualization and analyst exploration depth: `Green`
+  - Semantic metrics and evidence contract: `Green`
   - Collaboration and communication: `Green`
   - Automation reliability and scheduling: `Yellow`
 
@@ -105,20 +105,20 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [ ] connector-native SQL profile management and credential validation depth
 - [x] ingestion profiling API: missingness, duplicates, date continuity, invalid numerics
 - [x] dataset profiling persistence and room trust endpoint
-- [ ] full Studio UI quality card polish for profile/trust
+- [x] full Studio UI quality card polish for profile/trust
 
 ### Phase B (Weeks 5-8): Exploration Depth
 - [x] pivot compute API with calculated outputs (`rank`, `% of total`, formula)
-- [ ] pivot UI depth/polish for calculated workflows
-- [ ] cross-filter interactions between visuals and result tables
+- [x] pivot UI depth/polish for calculated workflows
+- [x] cross-filter interactions between visuals and result tables
 - [x] visual annotation API persistence
 - [x] chart annotation UX/pinned insight polish
-- [ ] RevOps visual template library polish
+- [x] RevOps visual template library polish
 
 ### Phase C (Weeks 9-12): Semantic Metrics + Evidence Contract
-- [ ] metric owner assignment/editing workflows
-- [ ] metric test policy rules and fail-fast publish linkage
-- [ ] room evidence coverage trend telemetry
+- [x] metric owner assignment/editing workflows
+- [x] metric test policy rules and fail-fast publish linkage
+- [x] room evidence coverage trend telemetry
 
 ### Phase D (Weeks 13-16): Collaboration + Communication
 - [x] anchor-level assignment and resolved-state audit timeline
@@ -165,6 +165,30 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Analyst depth + metric policy tranche):
+  - Shipped pivot UX depth controls for calculated workflows:
+    - toggles for `% of total`, rank ordering, custom formula expression
+    - optional pivot filter field/operator/value wiring to `pivots/compute`
+  - Added Visuals cross-filter workflow between chart interactions and result tables:
+    - preview + advanced chart point click applies contextual table filter
+    - clearable filter state with row-count feedback
+  - Added RevOps visual template library in Studio Visuals:
+    - pipeline by owner, stage conversion, weekly trend, segment mix shift presets
+    - template application also seeds pivot defaults for faster analyst flow
+  - Upgraded Data Trust card polish in Studio right rail:
+    - quality grade + threshold progress
+    - issue risk counts by missingness/duplicates/date continuity/invalid numerics
+    - generated timestamp visibility
+  - Added semantic metric owner assignment workflow:
+    - new endpoint `POST /api/workspaces/:id/rooms/:roomId/metrics/:metricId/owner`
+    - owner selector in Studio Semantic Metrics panel with realtime refresh
+  - Added metric-test fail-fast publish linkage for Report V2:
+    - quality endpoint now merges metric policy checks into publish gating
+    - publish endpoint now blocks when mapped metric validations are failed/missing/pending
+    - blocker diagnostics returned in quality and publish responses.
+  - Added evidence coverage telemetry enrichment:
+    - quality-check event `decision_room_report_v2_quality_checked` recorded with coverage + unsupported claim counts
+    - coverage-trend fallback stream now includes quality-check events.
 - 2026-02-19 (Automation idempotency extension tranche):
   - Added idempotency handling to additional mutating automation APIs:
     - `POST /api/workspaces/:id/automations/:automationId/execute`

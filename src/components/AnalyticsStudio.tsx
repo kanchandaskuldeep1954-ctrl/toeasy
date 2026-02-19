@@ -130,6 +130,87 @@ const reportSectionMeaning: Record<string, string> = {
   recommendation: 'Next actions tied to evidence so owners can execute in Slack and action boards.'
 };
 
+type RevOpsVisualTemplate = {
+  key: string;
+  label: string;
+  description: string;
+  chartType: string;
+  xSynonyms: string[];
+  ySynonyms: string[];
+  defaultPivotRows: string[];
+  defaultPivotValues: Array<{ fieldSynonyms: string[]; agg: 'sum' | 'count' | 'avg' | 'min' | 'max' }>;
+};
+
+const REVOPS_VISUAL_TEMPLATES: RevOpsVisualTemplate[] = [
+  {
+    key: 'pipeline_by_owner',
+    label: 'Pipeline by owner',
+    description: 'See pipeline concentration by owner and identify load imbalance.',
+    chartType: 'bar',
+    xSynonyms: ['owner', 'sales_rep', 'account_executive', 'rep'],
+    ySynonyms: ['amount', 'pipeline_amount', 'revenue', 'deal_value', 'value'],
+    defaultPivotRows: ['owner'],
+    defaultPivotValues: [{ fieldSynonyms: ['amount', 'pipeline_amount', 'revenue', 'value'], agg: 'sum' }]
+  },
+  {
+    key: 'stage_conversion',
+    label: 'Stage conversion',
+    description: 'Track deal flow across stages and spot bottlenecks.',
+    chartType: 'bar',
+    xSynonyms: ['stage', 'status', 'deal_stage', 'pipeline_stage'],
+    ySynonyms: ['amount', 'value', 'revenue'],
+    defaultPivotRows: ['stage'],
+    defaultPivotValues: [
+      { fieldSynonyms: ['amount', 'value', 'revenue'], agg: 'sum' },
+      { fieldSynonyms: ['stage', 'status'], agg: 'count' }
+    ]
+  },
+  {
+    key: 'weekly_pipeline_trend',
+    label: 'Weekly trend',
+    description: 'Review weekly movement for created pipeline and outcomes.',
+    chartType: 'line',
+    xSynonyms: ['date', 'created_at', 'created_date', 'close_date'],
+    ySynonyms: ['amount', 'pipeline_amount', 'revenue', 'value'],
+    defaultPivotRows: ['date'],
+    defaultPivotValues: [{ fieldSynonyms: ['amount', 'pipeline_amount', 'revenue', 'value'], agg: 'sum' }]
+  },
+  {
+    key: 'segment_mix_shift',
+    label: 'Segment mix shift',
+    description: 'Detect segment/channel shifts affecting conversion and volume.',
+    chartType: 'area',
+    xSynonyms: ['segment', 'region', 'channel', 'market'],
+    ySynonyms: ['amount', 'pipeline_amount', 'revenue', 'value'],
+    defaultPivotRows: ['segment'],
+    defaultPivotValues: [{ fieldSynonyms: ['amount', 'pipeline_amount', 'revenue', 'value'], agg: 'sum' }]
+  }
+];
+
+const normalizeFieldToken = (value: string) =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+const resolveFieldFromSynonyms = (availableFields: string[], synonyms: string[]) => {
+  if (!availableFields.length) return '';
+  const normalizedFields = availableFields.map((field) => ({
+    field,
+    normalized: normalizeFieldToken(field)
+  }));
+  const normalizedSynonyms = synonyms.map(normalizeFieldToken).filter(Boolean);
+
+  for (const synonym of normalizedSynonyms) {
+    const exactMatch = normalizedFields.find((entry) => entry.normalized === synonym);
+    if (exactMatch) return exactMatch.field;
+  }
+  for (const synonym of normalizedSynonyms) {
+    const fuzzyMatch = normalizedFields.find((entry) => entry.normalized.includes(synonym) || synonym.includes(entry.normalized));
+    if (fuzzyMatch) return fuzzyMatch.field;
+  }
+  return '';
+};
+
 const toErrorMessage = (error: any) =>
   error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Request failed';
 
@@ -245,6 +326,7 @@ const AnalyticsStudio: React.FC = () => {
   const [decisionRationale, setDecisionRationale] = useState('');
   const [decisionArtifactId, setDecisionArtifactId] = useState<string>('room');
   const [visualType, setVisualType] = useState<string>('bar');
+  const [selectedVisualTemplateKey, setSelectedVisualTemplateKey] = useState<string>('');
   const [visualXField, setVisualXField] = useState<string>('');
   const [visualYField, setVisualYField] = useState<string>('');
   const [visualApiRows, setVisualApiRows] = useState<any[]>([]);
@@ -253,7 +335,13 @@ const AnalyticsStudio: React.FC = () => {
   const [visualDrillLevel, setVisualDrillLevel] = useState<number>(0);
   const [visualPathValuesInput, setVisualPathValuesInput] = useState<string>('');
   const [visualBuildBusy, setVisualBuildBusy] = useState(false);
+  const [visualCrossFilter, setVisualCrossFilter] = useState<{
+    source: 'preview' | 'advanced';
+    field: string;
+    value: string;
+  } | null>(null);
   const [metricCatalog, setMetricCatalog] = useState<MetricCatalogItem[]>([]);
+  const [metricOwnerBusyId, setMetricOwnerBusyId] = useState<number | null>(null);
   const [metricValidationBusy, setMetricValidationBusy] = useState(false);
   const [metricValidationSummary, setMetricValidationSummary] = useState<{
     total: number;
@@ -278,6 +366,15 @@ const AnalyticsStudio: React.FC = () => {
   const [coverageTrendPoints, setCoverageTrendPoints] = useState<CoverageTrendPoint[]>([]);
   const [roomRoiSnapshot, setRoomRoiSnapshot] = useState<RoomRoiSnapshot | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
+  const [pivotPercentOfTotalEnabled, setPivotPercentOfTotalEnabled] = useState(true);
+  const [pivotRankEnabled, setPivotRankEnabled] = useState(true);
+  const [pivotRankOrder, setPivotRankOrder] = useState<'asc' | 'desc'>('desc');
+  const [pivotFormulaEnabled, setPivotFormulaEnabled] = useState(false);
+  const [pivotFormulaExpression, setPivotFormulaExpression] = useState<string>('');
+  const [pivotFormulaAlias, setPivotFormulaAlias] = useState<string>('custom_calc');
+  const [pivotFilterField, setPivotFilterField] = useState<string>('');
+  const [pivotFilterOperator, setPivotFilterOperator] = useState<'eq' | 'contains' | 'gt' | 'lt'>('eq');
+  const [pivotFilterValue, setPivotFilterValue] = useState<string>('');
   const [reviewBundleIdInput, setReviewBundleIdInput] = useState<string>('');
   const [reviewStageInput, setReviewStageInput] = useState<string>('manager_review');
   const [reviewNoteInput, setReviewNoteInput] = useState<string>('');
@@ -461,6 +558,40 @@ const AnalyticsStudio: React.FC = () => {
       data: visualApiRows
     };
   }, [fields, visualApiRows, visualApiVisualId, visualType, visualXField, visualYField]);
+
+  const visualCrossFilteredPreviewRows = useMemo(() => {
+    if (!visualCrossFilter || visualCrossFilter.source !== 'preview') return currentRows;
+    const field = visualCrossFilter.field;
+    const value = visualCrossFilter.value;
+    if (!field) return currentRows;
+    return currentRows.filter((row) => String(row?.[field] ?? '(blank)') === value);
+  }, [currentRows, visualCrossFilter]);
+
+  const visualCrossFilteredAdvancedRows = useMemo(() => {
+    if (!visualCrossFilter || visualCrossFilter.source !== 'advanced') return visualApiRows;
+    const field = visualCrossFilter.field;
+    const value = visualCrossFilter.value;
+    if (!field) return visualApiRows;
+    return visualApiRows.filter((row) => String(row?.[field] ?? '(blank)') === value);
+  }, [visualApiRows, visualCrossFilter]);
+
+  const trustIssueSummary = useMemo(() => {
+    const profile = roomTrustProfile;
+    if (!profile) {
+      return {
+        missingFieldsAtRisk: 0,
+        duplicateFieldsAtRisk: 0,
+        continuityFieldsAtRisk: 0,
+        numericFieldsAtRisk: 0
+      };
+    }
+    return {
+      missingFieldsAtRisk: profile.missingness.filter((item) => Number(item.ratio || 0) >= 0.2).length,
+      duplicateFieldsAtRisk: profile.duplicateKeys.filter((item) => Number(item.ratio || 0) >= 0.05).length,
+      continuityFieldsAtRisk: profile.dateContinuity.filter((item) => Number(item.continuityRatio || 1) < 0.8).length,
+      numericFieldsAtRisk: profile.invalidNumerics.filter((item) => Number(item.ratio || 0) >= 0.05).length
+    };
+  }, [roomTrustProfile]);
 
   const refreshRoomState = useCallback(async () => {
     if (!workspaceId || !selectedRoomId) return;
@@ -882,6 +1013,18 @@ const AnalyticsStudio: React.FC = () => {
     setVisualApiNextDimension(null);
     setVisualDrillLevel(0);
     setVisualPathValuesInput('');
+    setVisualCrossFilter(null);
+    setSelectedVisualTemplateKey('');
+    setMetricOwnerBusyId(null);
+    setPivotPercentOfTotalEnabled(true);
+    setPivotRankEnabled(true);
+    setPivotRankOrder('desc');
+    setPivotFormulaEnabled(false);
+    setPivotFormulaExpression('');
+    setPivotFormulaAlias('custom_calc');
+    setPivotFilterField('');
+    setPivotFilterOperator('eq');
+    setPivotFilterValue('');
     setMetricCatalog([]);
     setMetricValidationSummary(null);
     setPlaybookRecommendations([]);
@@ -1046,27 +1189,78 @@ const AnalyticsStudio: React.FC = () => {
       const dimensions = [...(pivotConfig.rows || []), ...(pivotConfig.columns || [])]
         .map((field) => String(field))
         .filter(Boolean);
-      const measures = (pivotConfig.values || []).map((field) => ({
-        field: String(field),
-        agg: 'sum' as const,
-        as: String(field)
-      }));
+      const measures = (pivotConfig.values || [])
+        .map((value, index) => {
+          if (typeof value === 'string') {
+            const alias = `sum_${value}`;
+            return {
+              field: value,
+              agg: 'sum' as const,
+              as: alias || `measure_${index + 1}`
+            };
+          }
+          const field = String(value?.field || '').trim();
+          if (!field) return null;
+          const agg = value?.agg || 'sum';
+          return {
+            field,
+            agg,
+            as: `${agg}_${field}`
+          };
+        })
+        .filter((measure): measure is { field: string; agg: 'sum' | 'avg' | 'count' | 'min' | 'max'; as: string } => Boolean(measure));
       if (!dimensions.length && !measures.length) {
         setStatusMessage('Configure at least one pivot row/column/value before computing.');
         return;
       }
+
+      const primaryMeasure = measures[0]?.as || '';
+      const calculations: Array<{
+        type: 'percent_of_total' | 'rank' | 'formula';
+        sourceField?: string;
+        as?: string;
+        order?: 'asc' | 'desc';
+        expression?: string;
+      }> = [];
+
+      if (pivotPercentOfTotalEnabled && primaryMeasure) {
+        calculations.push({
+          type: 'percent_of_total',
+          sourceField: primaryMeasure,
+          as: `${primaryMeasure}_pct_total`
+        });
+      }
+      if (pivotRankEnabled && primaryMeasure) {
+        calculations.push({
+          type: 'rank',
+          sourceField: primaryMeasure,
+          as: `${primaryMeasure}_rank`,
+          order: pivotRankOrder
+        });
+      }
+      if (pivotFormulaEnabled && pivotFormulaExpression.trim()) {
+        calculations.push({
+          type: 'formula',
+          as: pivotFormulaAlias.trim() || 'custom_calc',
+          expression: pivotFormulaExpression.trim()
+        });
+      }
+
+      const filters = pivotFilterField && pivotFilterValue.trim()
+        ? [{
+            field: pivotFilterField,
+            operator: pivotFilterOperator,
+            value: pivotFilterValue
+          }]
+        : [];
 
       const response = await studioAPI.computePivot(workspaceId, selectedRoomId, {
         name: `Pivot - ${dimensions.join(', ') || 'summary'}`,
         spec: {
           dimensions,
           measures,
-          calculations: measures.length
-            ? [
-                { type: 'percent_of_total', sourceField: measures[0].as, as: `${measures[0].as}_pct_total` },
-                { type: 'rank', sourceField: measures[0].as, as: `${measures[0].as}_rank`, order: 'desc' }
-              ]
-            : []
+          calculations,
+          filters
         }
       });
 
@@ -1150,6 +1344,99 @@ const AnalyticsStudio: React.FC = () => {
       setStatusMessage(toErrorMessage(error));
     } finally {
       setMetricValidationBusy(false);
+    }
+  };
+
+  const applyVisualTemplate = (templateKey: string) => {
+    const template = REVOPS_VISUAL_TEMPLATES.find((item) => item.key === templateKey);
+    if (!template) return;
+
+    const resolvedX = resolveFieldFromSynonyms(fields, template.xSynonyms) || fields[0] || '';
+    const resolvedY = resolveFieldFromSynonyms(numericFields, template.ySynonyms) || numericFields[0] || '';
+    setSelectedVisualTemplateKey(template.key);
+    setVisualType(template.chartType);
+    if (resolvedX) setVisualXField(resolvedX);
+    if (resolvedY) setVisualYField(resolvedY);
+    setVisualCrossFilter(null);
+
+    const nextPivotRows = template.defaultPivotRows
+      .map((synonym) => resolveFieldFromSynonyms(fields, [synonym]))
+      .filter(Boolean);
+    const nextPivotValues = template.defaultPivotValues
+      .map((entry) => {
+        const resolvedField = resolveFieldFromSynonyms(fields, entry.fieldSynonyms);
+        if (!resolvedField) return null;
+        return {
+          field: resolvedField,
+          agg: entry.agg
+        };
+      })
+      .filter((value): value is { field: string; agg: 'sum' | 'count' | 'avg' | 'min' | 'max' } => Boolean(value));
+
+    if (nextPivotRows.length > 0 || nextPivotValues.length > 0) {
+      setPivotConfig((prev) => ({
+        rows: nextPivotRows.length ? nextPivotRows : prev.rows,
+        columns: prev.columns,
+        values: nextPivotValues.length ? nextPivotValues : prev.values
+      }));
+    }
+
+    setStatusMessage(`Applied visual template "${template.label}".`);
+  };
+
+  const applyVisualCrossFilter = (source: 'preview' | 'advanced', field: string, value: any) => {
+    const resolvedField = String(field || '').trim();
+    if (!resolvedField) return;
+    setVisualCrossFilter({
+      source,
+      field: resolvedField,
+      value: String(value ?? '(blank)')
+    });
+    setStatusMessage(`Cross-filter applied: ${resolvedField} = ${String(value ?? '(blank)')}`);
+  };
+
+  const clearVisualCrossFilter = () => {
+    setVisualCrossFilter(null);
+  };
+
+  const assignMetricOwner = async (metricId: number, ownerIdRaw: string) => {
+    if (!workspaceId || !selectedRoomId) return;
+    const ownerId = ownerIdRaw ? Number(ownerIdRaw) : null;
+    if (ownerIdRaw && (!Number.isFinite(ownerId) || Number(ownerId) <= 0)) {
+      setStatusMessage('Invalid metric owner selection.');
+      return;
+    }
+
+    setMetricOwnerBusyId(metricId);
+    try {
+      const response = await studioAPI.assignMetricOwner(workspaceId, selectedRoomId, metricId, {
+        ownerId: ownerId ? Number(ownerId) : null
+      });
+      const updatedMetric = response.data?.metric;
+      const fallbackOwner = ownerId
+        ? mentionableUsers.find((user) => user.id === ownerId)
+        : null;
+      setMetricCatalog((prev) =>
+        prev.map((metric) =>
+          metric.id === metricId
+            ? {
+                ...metric,
+                ownerId: updatedMetric?.ownerId ?? (ownerId ? Number(ownerId) : null),
+                ownerName: updatedMetric?.ownerName || fallbackOwner?.fullName || fallbackOwner?.email || null
+              }
+            : metric
+        )
+      );
+      setStatusMessage(
+        updatedMetric?.ownerName
+          ? `Owner assigned for metric "${updatedMetric.key}".`
+          : 'Metric owner cleared.'
+      );
+      await refreshAnalystOps();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setMetricOwnerBusyId(null);
     }
   };
 
@@ -1929,6 +2216,88 @@ const AnalyticsStudio: React.FC = () => {
                 onConfigChange={setPivotConfig}
                 height={520}
               />
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                <h3 className="text-xs font-bold uppercase text-slate-500">Pivot Calculations</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={pivotPercentOfTotalEnabled}
+                      onChange={(e) => setPivotPercentOfTotalEnabled(e.target.checked)}
+                    />
+                    Enable % of total
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={pivotRankEnabled}
+                      onChange={(e) => setPivotRankEnabled(e.target.checked)}
+                    />
+                    Enable rank
+                  </label>
+                  <label className="flex items-center gap-2">
+                    Rank order
+                    <select
+                      value={pivotRankOrder}
+                      onChange={(e) => setPivotRankOrder(e.target.value as 'asc' | 'desc')}
+                      className="px-2 py-1 text-xs rounded border"
+                    >
+                      <option value="desc">High to low</option>
+                      <option value="asc">Low to high</option>
+                    </select>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={pivotFormulaEnabled}
+                      onChange={(e) => setPivotFormulaEnabled(e.target.checked)}
+                    />
+                    Enable custom formula
+                  </label>
+                </div>
+                {pivotFormulaEnabled && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      value={pivotFormulaAlias}
+                      onChange={(e) => setPivotFormulaAlias(e.target.value)}
+                      placeholder="Formula alias"
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                    <input
+                      value={pivotFormulaExpression}
+                      onChange={(e) => setPivotFormulaExpression(e.target.value)}
+                      placeholder="Formula expression (SafeExecutor syntax)"
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr] gap-2">
+                  <select
+                    value={pivotFilterField}
+                    onChange={(e) => setPivotFilterField(e.target.value)}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="">Optional filter field</option>
+                    {fields.map((field) => <option key={field} value={field}>{field}</option>)}
+                  </select>
+                  <select
+                    value={pivotFilterOperator}
+                    onChange={(e) => setPivotFilterOperator(e.target.value as 'eq' | 'contains' | 'gt' | 'lt')}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="eq">equals</option>
+                    <option value="contains">contains</option>
+                    <option value="gt">greater than</option>
+                    <option value="lt">less than</option>
+                  </select>
+                  <input
+                    value={pivotFilterValue}
+                    onChange={(e) => setPivotFilterValue(e.target.value)}
+                    placeholder="Filter value"
+                    className="px-2 py-1 text-xs rounded border"
+                  />
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <button onClick={savePivotArtifact} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
                   Save Pivot Artifact
@@ -1957,6 +2326,16 @@ const AnalyticsStudio: React.FC = () => {
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
                 <h3 className="text-xs font-bold uppercase text-slate-500">Visual Builder (Tableau-style preview)</h3>
                 <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={selectedVisualTemplateKey}
+                    onChange={(e) => applyVisualTemplate(e.target.value)}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="">Apply RevOps template</option>
+                    {REVOPS_VISUAL_TEMPLATES.map((template) => (
+                      <option key={template.key} value={template.key}>{template.label}</option>
+                    ))}
+                  </select>
                   <select
                     value={visualType}
                     onChange={(e) => setVisualType(e.target.value)}
@@ -1999,7 +2378,40 @@ const AnalyticsStudio: React.FC = () => {
                     {visualBuildBusy ? 'Building...' : 'Build Advanced Visual'}
                   </button>
                 </div>
-                <ChartWidget chart={visualChartSpec} data={visualPreviewData} height={320} />
+                {selectedVisualTemplateKey && (
+                  <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
+                    {REVOPS_VISUAL_TEMPLATES.find((item) => item.key === selectedVisualTemplateKey)?.description}
+                  </div>
+                )}
+                <ChartWidget
+                  chart={visualChartSpec}
+                  data={visualPreviewData}
+                  height={320}
+                  onPointClick={(point) => {
+                    const field = visualChartSpec.xAxis || visualXField;
+                    if (!field) return;
+                    applyVisualCrossFilter('preview', field, point?.[field]);
+                  }}
+                />
+                <div className="rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
+                  {visualCrossFilter ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-indigo-100 text-indigo-700">
+                        {visualCrossFilter.source} filter: {visualCrossFilter.field} = {visualCrossFilter.value}
+                      </span>
+                      <button onClick={clearVisualCrossFilter} className="px-2 py-0.5 rounded border">
+                        Clear filter
+                      </button>
+                    </div>
+                  ) : (
+                    <span>Tip: click a chart point/bar to cross-filter the result table below.</span>
+                  )}
+                </div>
+                <DataGridWidget
+                  data={visualCrossFilteredPreviewRows}
+                  height={220}
+                  title={`Preview Rows (${visualCrossFilteredPreviewRows.length}/${currentRows.length})`}
+                />
                 {visualApiRows.length > 0 && (
                   <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
                     <div className="text-[11px] font-semibold uppercase text-slate-500">
@@ -2031,8 +2443,21 @@ const AnalyticsStudio: React.FC = () => {
                     <div className="text-[11px] text-slate-500">
                       Next dimension: {visualApiNextDimension || 'none (row-level)'}
                     </div>
-                    <ChartWidget chart={visualApiChartSpec} data={visualApiRows} height={280} />
-                    <DataGridWidget data={visualApiRows} height={240} title={`Advanced Visual Rows (${visualApiRows.length})`} />
+                    <ChartWidget
+                      chart={visualApiChartSpec}
+                      data={visualApiRows}
+                      height={280}
+                      onPointClick={(point) => {
+                        const field = visualApiChartSpec.xAxis || visualXField;
+                        if (!field) return;
+                        applyVisualCrossFilter('advanced', field, point?.[field]);
+                      }}
+                    />
+                    <DataGridWidget
+                      data={visualCrossFilteredAdvancedRows}
+                      height={240}
+                      title={`Advanced Visual Rows (${visualCrossFilteredAdvancedRows.length}/${visualApiRows.length})`}
+                    />
                     <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
                       <div className="text-[11px] font-semibold uppercase text-slate-500">Visual Annotations</div>
                       <textarea
@@ -2316,6 +2741,11 @@ const AnalyticsStudio: React.FC = () => {
                         {reportV2Quality.blockers?.length > 0 && (
                           <div className="text-[11px] text-amber-700">
                             {reportV2Quality.blockers.join(' | ')}
+                          </div>
+                        )}
+                        {reportV2Quality.metricPolicyFailures && reportV2Quality.metricPolicyFailures.length > 0 && (
+                          <div className="text-[11px] text-rose-700 rounded border border-rose-200 bg-rose-50 p-1.5">
+                            Metric policy blockers: {reportV2Quality.metricPolicyFailures.map((failure) => `${failure.metricKey} (${failure.status})`).join(' | ')}
                           </div>
                         )}
                       </div>
@@ -2987,15 +3417,53 @@ const AnalyticsStudio: React.FC = () => {
           <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
             {roomTrustQuality ? (
               <>
-                <div>
-                  Quality: {(roomTrustQuality.qualityScore * 100).toFixed(1)}%
-                  {' '}({roomTrustQuality.publishBlocked ? 'blocked' : 'healthy'})
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    Quality: {(roomTrustQuality.qualityScore * 100).toFixed(1)}%
+                    {' '}({roomTrustQuality.publishBlocked ? 'blocked' : 'healthy'})
+                  </div>
+                  <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                    roomTrustQuality.qualityScore >= 0.85
+                      ? 'bg-emerald-100 text-emerald-700'
+                      : roomTrustQuality.qualityScore >= 0.65
+                        ? 'bg-amber-100 text-amber-700'
+                        : 'bg-rose-100 text-rose-700'
+                  }`}>
+                    {roomTrustQuality.qualityScore >= 0.85 ? 'A' : roomTrustQuality.qualityScore >= 0.65 ? 'B' : 'C'}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                  <div
+                    className={`h-full ${
+                      roomTrustQuality.qualityScore >= roomTrustQuality.threshold
+                        ? 'bg-emerald-500'
+                        : 'bg-amber-500'
+                    }`}
+                    style={{ width: `${Math.max(0, Math.min(100, roomTrustQuality.qualityScore * 100))}%` }}
+                  />
                 </div>
                 <div>Threshold: {(roomTrustQuality.threshold * 100).toFixed(0)}%</div>
                 <div>Rows: {roomTrustProfile?.summary?.rowCount ?? 0}</div>
                 <div>Columns: {roomTrustProfile?.summary?.columnCount ?? 0}</div>
+                <div className="grid grid-cols-2 gap-1 mt-1">
+                  <div className="rounded border border-slate-200 dark:border-slate-700 px-1.5 py-1">
+                    Missing risk fields: {trustIssueSummary.missingFieldsAtRisk}
+                  </div>
+                  <div className="rounded border border-slate-200 dark:border-slate-700 px-1.5 py-1">
+                    Duplicate risk fields: {trustIssueSummary.duplicateFieldsAtRisk}
+                  </div>
+                  <div className="rounded border border-slate-200 dark:border-slate-700 px-1.5 py-1">
+                    Date continuity risks: {trustIssueSummary.continuityFieldsAtRisk}
+                  </div>
+                  <div className="rounded border border-slate-200 dark:border-slate-700 px-1.5 py-1">
+                    Invalid numeric risks: {trustIssueSummary.numericFieldsAtRisk}
+                  </div>
+                </div>
                 <div className="text-[10px] text-amber-700">
                   {roomTrustProfile?.summary?.topIssues?.[0] || 'No major issues detected.'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Generated: {roomTrustProfile?.generatedAt ? new Date(roomTrustProfile.generatedAt).toLocaleString() : 'n/a'}
                 </div>
               </>
             ) : (
@@ -3066,7 +3534,28 @@ const AnalyticsStudio: React.FC = () => {
               <div key={metric.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
                 <div className="font-semibold">{metric.name}</div>
                 <div className="text-slate-500">
-                  {metric.key} | {metric.certified ? 'Certified' : 'Uncertified'}
+                  {metric.key} | {metric.certified ? 'Certified' : 'Uncertified'} | Validation: {metric.validationStatus}
+                </div>
+                <div className="mt-1">
+                  Owner: {metric.ownerName || 'Unassigned'}
+                </div>
+                <div className="mt-1 flex items-center gap-1">
+                  <select
+                    value={metric.ownerId ? String(metric.ownerId) : ''}
+                    onChange={(e) => assignMetricOwner(metric.id, e.target.value)}
+                    disabled={metricOwnerBusyId === metric.id}
+                    className="flex-1 px-1.5 py-0.5 rounded border text-[11px]"
+                  >
+                    <option value="">Unassigned</option>
+                    {mentionableUsers.map((user) => (
+                      <option key={user.id} value={user.id}>
+                        {user.fullName || user.email}
+                      </option>
+                    ))}
+                  </select>
+                  {metricOwnerBusyId === metric.id && (
+                    <span className="text-[10px] text-slate-500">Saving...</span>
+                  )}
                 </div>
               </div>
             ))}

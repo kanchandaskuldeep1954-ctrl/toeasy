@@ -430,6 +430,12 @@ export interface ReportV2Quality {
   unsupportedClaims: number;
   publishBlocked: boolean;
   blockers: string[];
+  metricPolicyBlocked?: boolean;
+  metricPolicyFailures?: Array<{
+    metricKey: string;
+    status: string;
+    reason: string;
+  }>;
 }
 
 export interface ReportV2InputRequirements {
@@ -454,7 +460,9 @@ export interface MetricCatalogItem {
   key: string;
   name: string;
   ownerId: number | null;
+  ownerName: string | null;
   certified: boolean;
+  validationStatus: 'passed' | 'failed' | 'pending' | 'missing';
   formulaSql: string;
   lastValidatedAt: string | null;
 }
@@ -807,6 +815,13 @@ export const studioAPI = {
 
   getMetricsCatalog: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/metrics/catalog`),
+
+  assignMetricOwner: (
+    workspaceId: string,
+    roomId: string,
+    metricId: string | number,
+    data: { ownerId: number | null }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/metrics/${metricId}/owner`, data || {}),
 
   validateMetrics: (workspaceId: string, roomId: string, data?: { metricIds?: number[] }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/metrics/validate`, data || {}),
