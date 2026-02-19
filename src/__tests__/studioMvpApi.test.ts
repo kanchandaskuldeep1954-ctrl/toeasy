@@ -81,6 +81,14 @@ describe('Studio MVP API Contracts', () => {
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/threads/99/comments', { content: 'Approved' });
   });
 
+  it('calls thread resolve endpoint', () => {
+    studioAPI.resolveThread('12', '77', 99, { status: 'resolved', resolutionNote: 'Addressed in report v2' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/comments/99/resolve', {
+      status: 'resolved',
+      resolutionNote: 'Addressed in report v2'
+    });
+  });
+
   it('calls room approvals endpoint', () => {
     studioAPI.listApprovals('12', '77');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/approvals');
@@ -99,6 +107,81 @@ describe('Studio MVP API Contracts', () => {
   it('calls respond decision checkpoint endpoint', () => {
     studioAPI.respondDecisionCheckpoint('12', '77', 5, { decision: 'approved' });
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/decision-checkpoints/5/respond', { decision: 'approved' });
+  });
+
+  it('calls metrics catalog endpoint', () => {
+    studioAPI.getMetricsCatalog('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/metrics/catalog');
+  });
+
+  it('calls metrics validate endpoint', () => {
+    studioAPI.validateMetrics('12', '77', { metricIds: [1, 2] });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/metrics/validate', { metricIds: [1, 2] });
+  });
+
+  it('calls visual build endpoint', () => {
+    studioAPI.buildVisual('12', '77', {
+      name: 'Weekly Pipeline Trend',
+      spec: {
+        chartType: 'line',
+        dimensions: ['date'],
+        measures: ['amount'],
+        drillPath: ['date', 'owner']
+      }
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/visuals/build', {
+      name: 'Weekly Pipeline Trend',
+      spec: {
+        chartType: 'line',
+        dimensions: ['date'],
+        measures: ['amount'],
+        drillPath: ['date', 'owner']
+      }
+    });
+  });
+
+  it('calls visual drill endpoint', () => {
+    studioAPI.drillVisual('12', '77', 200, { level: 1, pathValues: { date: '2026-02-18' } });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/visuals/200/drill', {
+      level: 1,
+      pathValues: { date: '2026-02-18' }
+    });
+  });
+
+  it('calls outcomes attribution endpoint', () => {
+    studioAPI.getOutcomeAttribution('12', '77', { persist: true });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/outcomes/attribution', {
+      params: { persist: true }
+    });
+  });
+
+  it('calls playbook recommendations endpoint', () => {
+    studioAPI.getPlaybookRecommendations('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/playbooks/recommendations');
+  });
+
+  it('calls schedule automation endpoint', () => {
+    studioAPI.scheduleAutomation('12', '77', {
+      policyId: 4,
+      cron: '0 9 * * 1',
+      timezone: 'UTC',
+      dedupeKey: 'weekly_revops',
+      retryPolicy: { maxAttempts: 4, backoffMs: 500 },
+      isActive: true
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/automations/schedule', {
+      policyId: 4,
+      cron: '0 9 * * 1',
+      timezone: 'UTC',
+      dedupeKey: 'weekly_revops',
+      retryPolicy: { maxAttempts: 4, backoffMs: 500 },
+      isActive: true
+    });
+  });
+
+  it('calls automation runs endpoint', () => {
+    studioAPI.listAutomationRuns('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/automations/runs');
   });
 
   it('calls MVP KPI snapshot endpoint', () => {

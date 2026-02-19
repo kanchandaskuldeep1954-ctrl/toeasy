@@ -189,6 +189,67 @@ interface RevOpsFieldMap {
   productField: string | null;
 }
 
+interface MetricCatalogItem {
+  id: number;
+  key: string;
+  name: string;
+  ownerId: number | null;
+  certified: boolean;
+  formulaSql: string;
+  lastValidatedAt: string | null;
+}
+
+interface VisualBuildSpec {
+  chartType: string;
+  dimensions: string[];
+  measures: string[];
+  filters?: Array<{ field: string; operator?: string; value: any }>;
+  drillPath?: string[];
+}
+
+interface AutomationScheduleRecord {
+  id: number;
+  workspaceId: number;
+  roomId: number | null;
+  automationPolicyId: number;
+  cron: string;
+  timezone: string;
+  dedupeKey: string | null;
+  retryPolicy: { maxAttempts: number; backoffMs: number };
+  isActive: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+}
+
+interface AutomationRunDetail {
+  runId: number;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  attempts: number;
+  error: string | null;
+  artifacts: number[];
+}
+
+interface OutcomeAttribution {
+  actionId: number | null;
+  metricKey: string;
+  baselineValue: number | null;
+  latestValue: number | null;
+  deltaPct: number | null;
+  confidence: ReportClaimConfidence;
+  evidenceArtifactIds: number[];
+}
+
+interface CommentResolution {
+  threadId: number;
+  status: 'resolved' | 'reopened';
+  resolvedBy: number | null;
+  resolvedAt: string;
+  resolutionNote: string | null;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -1061,8 +1122,38 @@ async function listRoomThreads(workspaceId: number, roomId: number) {
     `,
     [workspaceId, roomId]
   );
+  const threadIds = result.rows.map((row) => Number(row.id)).filter((id) => Number.isFinite(id));
+  const latestResolutionByThread = new Map<number, any>();
+  if (threadIds.length > 0) {
+    try {
+      const resolutions = await query(
+        `
+        SELECT DISTINCT ON (thread_id)
+          thread_id,
+          status,
+          resolved_by,
+          resolution_note,
+          resolved_at
+        FROM comment_thread_resolutions
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND thread_id = ANY($3::int[])
+        ORDER BY thread_id, resolved_at DESC, id DESC
+        `,
+        [workspaceId, roomId, threadIds]
+      );
+      resolutions.rows.forEach((resolution) => {
+        latestResolutionByThread.set(Number(resolution.thread_id), resolution);
+      });
+    } catch (err) {
+      // Migration may not be applied yet; keep thread listing available.
+      console.warn('Thread resolution lookup skipped:', err);
+    }
+  }
 
-  return result.rows.map((row) => ({
+  return result.rows.map((row) => {
+    const resolution = latestResolutionByThread.get(Number(row.id));
+    return {
     id: Number(row.id),
     workspaceId: Number(row.workspace_id),
     roomId: Number(row.room_id),
@@ -1076,8 +1167,17 @@ async function listRoomThreads(workspaceId: number, roomId: number) {
     updatedAt: row.updated_at,
     commentCount: Number(row.comment_count || 0),
     lastCommentAt: row.last_comment_at || null,
-    lastCommentContent: row.last_comment_content || null
-  }));
+    lastCommentContent: row.last_comment_content || null,
+    resolution: resolution
+      ? {
+          status: String(resolution.status || 'resolved'),
+          resolvedBy: resolution.resolved_by ? Number(resolution.resolved_by) : null,
+          resolvedAt: resolution.resolved_at || null,
+          resolutionNote: resolution.resolution_note || null
+        }
+      : null
+  };
+  });
 }
 
 async function listThreadComments(threadId: number) {
@@ -2323,6 +2423,198 @@ async function evaluateBundleClaimSupport(workspaceId: number, roomId: number, b
   };
 }
 
+async function resolveRoomRowsAndEvidence(workspaceId: number, room: any) {
+  const roomId = Number(room.id);
+  const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+  const evidenceArtifactIds = artifacts
+    .filter((artifact) => EVIDENCE_ARTIFACT_TYPES.includes(String(artifact.artifact_type)))
+    .map((artifact) => Number(artifact.id))
+    .filter((id) => Number.isFinite(id))
+    .slice(0, 80);
+
+  let rows: Record<string, any>[] = [];
+  for (const artifact of artifacts) {
+    if (!['query_run', 'pivot', 'dataset_version', 'chart'].includes(String(artifact.artifact_type))) continue;
+    const parsed = parseArtifactRowsFromPayload(artifact.payload || {});
+    if (parsed.length > 0) {
+      rows = parsed;
+      break;
+    }
+  }
+
+  if (!rows.length) {
+    const runContext = parseRoomRunContext(room.run_context);
+    const source = await resolveDatasetRows(workspaceId, undefined, {
+      datasetId: runContext.datasetId || runContext.sourceDatasetId || null
+    });
+    rows = source.rows;
+  }
+
+  return {
+    rows,
+    columns: extractColumns(rows),
+    artifacts,
+    evidenceArtifactIds
+  };
+}
+
+function applyVisualFilters(
+  rows: Record<string, any>[],
+  filters?: Array<{ field: string; operator?: string; value: any }>
+) {
+  if (!Array.isArray(filters) || filters.length === 0) return rows;
+
+  return rows.filter((row) => {
+    return filters.every((filter) => {
+      const field = String(filter?.field || '');
+      if (!field) return true;
+      const operator = String(filter?.operator || 'eq').toLowerCase();
+      const expected = filter?.value;
+      const current = row?.[field];
+
+      switch (operator) {
+        case 'neq':
+          return current !== expected;
+        case 'gt':
+          return Number(current) > Number(expected);
+        case 'gte':
+          return Number(current) >= Number(expected);
+        case 'lt':
+          return Number(current) < Number(expected);
+        case 'lte':
+          return Number(current) <= Number(expected);
+        case 'contains':
+          return String(current ?? '').toLowerCase().includes(String(expected ?? '').toLowerCase());
+        case 'in':
+          return Array.isArray(expected) ? expected.includes(current) : false;
+        case 'eq':
+        default:
+          return String(current ?? '') === String(expected ?? '');
+      }
+    });
+  });
+}
+
+function buildVisualData(rows: Record<string, any>[], spec: VisualBuildSpec) {
+  const dimensions = Array.isArray(spec.dimensions) ? spec.dimensions.filter(Boolean) : [];
+  const measures = Array.isArray(spec.measures) ? spec.measures.filter(Boolean) : [];
+  const filteredRows = applyVisualFilters(rows, spec.filters);
+
+  if (!filteredRows.length) return [];
+  if (!dimensions.length) {
+    if (!measures.length) {
+      return [{ label: 'all_rows', value: filteredRows.length }];
+    }
+    const totals: Record<string, any> = { label: 'all_rows', count: filteredRows.length };
+    measures.forEach((measure) => {
+      totals[measure] = filteredRows.reduce((acc, row) => acc + (toFiniteNumber(row?.[measure]) || 0), 0);
+    });
+    return [totals];
+  }
+
+  const grouped = new Map<string, Record<string, any>>();
+  for (const row of filteredRows) {
+    const keyParts = dimensions.map((dimension) => String(row?.[dimension] ?? '(blank)'));
+    const key = keyParts.join('||');
+    const existing = grouped.get(key) || {
+      count: 0
+    };
+
+    dimensions.forEach((dimension, index) => {
+      existing[dimension] = keyParts[index];
+    });
+    existing.count += 1;
+
+    if (measures.length > 0) {
+      measures.forEach((measure) => {
+        existing[measure] = Number(existing[measure] || 0) + (toFiniteNumber(row?.[measure]) || 0);
+      });
+    } else {
+      existing.value = Number(existing.value || 0) + 1;
+    }
+
+    grouped.set(key, existing);
+  }
+
+  const aggregated = Array.from(grouped.values());
+  const sortMetric = measures[0] || 'value';
+  return aggregated
+    .sort((a, b) => Number(b?.[sortMetric] || b?.count || 0) - Number(a?.[sortMetric] || a?.count || 0))
+    .slice(0, 500);
+}
+
+function buildDrillData(
+  rows: Record<string, any>[],
+  spec: VisualBuildSpec,
+  level: number,
+  pathValues: Record<string, any>
+) {
+  const drillPath = (Array.isArray(spec.drillPath) && spec.drillPath.length ? spec.drillPath : spec.dimensions || [])
+    .filter(Boolean);
+  if (!drillPath.length) {
+    return { nextDimension: null, rows: rows.slice(0, 500) };
+  }
+
+  const boundedLevel = Math.max(0, Math.min(level, drillPath.length - 1));
+  const appliedFilters = drillPath
+    .slice(0, boundedLevel + 1)
+    .map((dimension) => ({
+      field: dimension,
+      operator: 'eq',
+      value: pathValues?.[dimension]
+    }))
+    .filter((filter) => filter.value !== undefined && filter.value !== null && filter.value !== '');
+
+  const scopedRows = applyVisualFilters(rows, [...(spec.filters || []), ...appliedFilters]);
+  const nextDimension = drillPath[boundedLevel + 1] || null;
+  if (!nextDimension) {
+    return { nextDimension: null, rows: scopedRows.slice(0, 500) };
+  }
+
+  const nextSpec: VisualBuildSpec = {
+    ...spec,
+    dimensions: [nextDimension],
+    drillPath
+  };
+  return {
+    nextDimension,
+    rows: buildVisualData(scopedRows, nextSpec)
+  };
+}
+
+function parseRetryPolicy(input: any) {
+  const fallback = { maxAttempts: 3, backoffMs: 300 };
+  if (!input || typeof input !== 'object') return fallback;
+  const maxAttempts = Number(input.maxAttempts);
+  const backoffMs = Number(input.backoffMs);
+  return {
+    maxAttempts: Number.isFinite(maxAttempts) ? Math.max(1, Math.min(20, Math.floor(maxAttempts))) : fallback.maxAttempts,
+    backoffMs: Number.isFinite(backoffMs) ? Math.max(50, Math.min(120000, Math.floor(backoffMs))) : fallback.backoffMs
+  };
+}
+
+function isLikelyCronExpression(cron: string): boolean {
+  const parts = String(cron || '').trim().split(/\s+/g).filter(Boolean);
+  return parts.length >= 5 && parts.length <= 6;
+}
+
+function toAutomationScheduleRecord(row: any): AutomationScheduleRecord {
+  return {
+    id: Number(row.id),
+    workspaceId: Number(row.workspace_id),
+    roomId: row.room_id ? Number(row.room_id) : null,
+    automationPolicyId: Number(row.automation_policy_id),
+    cron: String(row.cron || ''),
+    timezone: String(row.timezone || 'UTC'),
+    dedupeKey: row.dedupe_key ? String(row.dedupe_key) : null,
+    retryPolicy: parseJsonMaybe(row.retry_policy, { maxAttempts: 3, backoffMs: 300 }),
+    isActive: Boolean(row.is_active),
+    nextRunAt: row.next_run_at || null,
+    lastRunAt: row.last_run_at || null,
+    createdAt: row.created_at
+  };
+}
+
 router.post('/:workspaceId/projects', async (req: WorkspaceRequest, res: Response) => {
   try {
     if (!canWrite(req.workspaceRole)) {
@@ -2503,6 +2795,339 @@ router.get('/:workspaceId/rooms/:roomId/state', async (req: WorkspaceRequest, re
   } catch (err) {
     console.error('Fetch room state failed:', err);
     return res.status(500).json({ error: 'Failed to fetch room state' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/metrics/catalog', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const result = await query(
+      `
+      SELECT
+        m.id,
+        m.metric_key,
+        m.name,
+        m.owner_id,
+        m.formula,
+        latest_test.status AS latest_status,
+        latest_test.last_run_at AS last_validated_at
+      FROM metric_definitions m
+      LEFT JOIN LATERAL (
+        SELECT status, last_run_at
+        FROM metric_definition_tests t
+        WHERE t.metric_definition_id = m.id
+        ORDER BY last_run_at DESC NULLS LAST, created_at DESC
+        LIMIT 1
+      ) latest_test ON TRUE
+      WHERE m.workspace_id = $1
+      ORDER BY m.created_at DESC
+      `,
+      [workspaceId]
+    );
+
+    const metrics: MetricCatalogItem[] = result.rows.map((row) => ({
+      id: Number(row.id),
+      key: String(row.metric_key || ''),
+      name: String(row.name || row.metric_key || ''),
+      ownerId: row.owner_id ? Number(row.owner_id) : null,
+      certified: String(row.latest_status || '').toLowerCase() === 'passed',
+      formulaSql: String(row.formula || ''),
+      lastValidatedAt: row.last_validated_at || null
+    }));
+
+    return res.json({
+      roomId,
+      metrics
+    });
+  } catch (err) {
+    console.error('Load metric catalog failed:', err);
+    return res.status(500).json({ error: 'Failed to load metric catalog' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/metrics/validate', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const requestedMetricIds = Array.isArray(req.body?.metricIds)
+      ? req.body.metricIds.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : [];
+
+    const metricResult = await query(
+      `
+      SELECT id, metric_key, name, formula
+      FROM metric_definitions
+      WHERE workspace_id = $1
+      ${requestedMetricIds.length > 0 ? 'AND id = ANY($2::int[])' : ''}
+      ORDER BY created_at DESC
+      `,
+      requestedMetricIds.length > 0 ? [workspaceId, requestedMetricIds] : [workspaceId]
+    );
+
+    const roomData = await resolveRoomRowsAndEvidence(workspaceId, room);
+    const sourceColumns = new Set(roomData.columns.map((column) => normalizeFieldName(column)));
+    const sqlKeywords = new Set([
+      'select', 'from', 'where', 'and', 'or', 'case', 'when', 'then', 'else', 'end', 'sum', 'avg', 'min', 'max',
+      'count', 'distinct', 'coalesce', 'nullif', 'over', 'partition', 'order', 'by', 'as', 'on', 'join', 'left',
+      'right', 'inner', 'outer', 'group', 'having', 'limit'
+    ]);
+
+    const validations = [];
+    for (const metric of metricResult.rows) {
+      const formula = String(metric.formula || '').trim();
+      const tokens = (formula.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [])
+        .map((token) => normalizeFieldName(token))
+        .filter((token) => token && !sqlKeywords.has(token));
+      const referencedColumns = Array.from(new Set(tokens));
+      const unknownColumns = referencedColumns.filter((token) => sourceColumns.size > 0 && !sourceColumns.has(token));
+      const formulaPresent = formula.length > 0;
+      const status = formulaPresent && unknownColumns.length === 0 ? 'passed' : 'failed';
+
+      const validationResult = {
+        metricId: Number(metric.id),
+        metricKey: String(metric.metric_key || ''),
+        name: String(metric.name || metric.metric_key || ''),
+        status,
+        checks: {
+          formulaPresent,
+          unknownColumns
+        },
+        validatedAt: new Date().toISOString()
+      };
+      validations.push(validationResult);
+
+      await query(
+        `
+        INSERT INTO metric_definition_tests (
+          workspace_id,
+          metric_definition_id,
+          test_name,
+          test_definition,
+          status,
+          last_result,
+          last_run_at,
+          created_by
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7)
+        `,
+        [
+          workspaceId,
+          Number(metric.id),
+          'schema_validation',
+          JSON.stringify({ sourceColumns: Array.from(sourceColumns), referencedColumns }),
+          status,
+          JSON.stringify(validationResult),
+          req.user!.id
+        ]
+      );
+    }
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_metric_validation_run',
+      metadata: {
+        metricCount: validations.length,
+        passed: validations.filter((item) => item.status === 'passed').length,
+        failed: validations.filter((item) => item.status === 'failed').length
+      }
+    });
+
+    return res.json({
+      roomId,
+      validations
+    });
+  } catch (err) {
+    console.error('Metric validation failed:', err);
+    return res.status(500).json({ error: 'Failed to validate room metrics' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/visuals/build', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const spec = (req.body?.spec || req.body || {}) as VisualBuildSpec;
+    const chartType = String(spec.chartType || 'bar').toLowerCase();
+    const dimensions = Array.isArray(spec.dimensions) ? spec.dimensions.map((d) => String(d)).filter(Boolean) : [];
+    const measures = Array.isArray(spec.measures) ? spec.measures.map((m) => String(m)).filter(Boolean) : [];
+    if (!dimensions.length && !measures.length) {
+      return res.status(400).json({ error: 'At least one dimension or measure is required to build visual.' });
+    }
+
+    const roomData = await resolveRoomRowsAndEvidence(workspaceId, room);
+    const visualRows = buildVisualData(roomData.rows, {
+      chartType,
+      dimensions,
+      measures,
+      filters: spec.filters || [],
+      drillPath: spec.drillPath || dimensions
+    });
+
+    const artifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id,
+      roomId,
+      artifactType: 'chart',
+      title: String(req.body?.name || `Visual - ${dimensions.join(', ') || measures.join(', ') || chartType}`),
+      description: 'Generated visual artifact from Visual Build API.',
+      payload: {
+        chart: {
+          id: `visual_${Date.now()}`,
+          type: chartType,
+          title: String(req.body?.name || 'Visual'),
+          xAxis: dimensions[0] || 'label',
+          yAxis: measures[0] || 'value',
+          data: visualRows
+        },
+        previewRows: visualRows
+      },
+      metadata: {
+        generatedBy: 'visuals_build_api'
+      },
+      createdBy: req.user!.id
+    });
+
+    await createLineageEdges({
+      workspaceId,
+      roomId,
+      parentArtifactIds: roomData.evidenceArtifactIds,
+      childArtifactId: Number(artifact.id),
+      relationType: 'derived_from',
+      createdBy: req.user!.id
+    });
+
+    const visualInsert = await query(
+      `
+      INSERT INTO visual_specs (
+        workspace_id,
+        room_id,
+        artifact_id,
+        name,
+        spec,
+        annotations,
+        created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+      `,
+      [
+        workspaceId,
+        roomId,
+        Number(artifact.id),
+        String(req.body?.name || artifact.title),
+        JSON.stringify({
+          chartType,
+          dimensions,
+          measures,
+          filters: spec.filters || [],
+          drillPath: spec.drillPath || dimensions
+        }),
+        JSON.stringify(Array.isArray(req.body?.annotations) ? req.body.annotations : []),
+        req.user!.id
+      ]
+    );
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_visual_built',
+      metadata: {
+        visualId: Number(visualInsert.rows[0].id),
+        artifactId: Number(artifact.id),
+        chartType,
+        rowCount: visualRows.length
+      }
+    });
+
+    return res.status(201).json({
+      visualId: Number(visualInsert.rows[0].id),
+      artifact: {
+        ...artifact,
+        payload: parseJsonMaybe(artifact.payload, {}),
+        metadata: parseJsonMaybe(artifact.metadata, {})
+      },
+      data: visualRows
+    });
+  } catch (err) {
+    console.error('Build visual failed:', err);
+    return res.status(500).json({ error: 'Failed to build visual' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/visuals/:visualId/drill', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const visualId = Number(req.params.visualId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    if (!Number.isFinite(visualId)) {
+      return res.status(400).json({ error: 'Invalid visual id' });
+    }
+
+    const visualResult = await query(
+      `
+      SELECT *
+      FROM visual_specs
+      WHERE id = $1 AND workspace_id = $2 AND room_id = $3
+      LIMIT 1
+      `,
+      [visualId, workspaceId, roomId]
+    );
+    if (visualResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Visual spec not found' });
+    }
+
+    const spec = parseJsonMaybe<VisualBuildSpec>(visualResult.rows[0].spec, {
+      chartType: 'bar',
+      dimensions: [],
+      measures: []
+    });
+
+    const level = Number(req.body?.level ?? 0);
+    const pathValues = req.body?.pathValues && typeof req.body.pathValues === 'object'
+      ? req.body.pathValues
+      : {};
+    const roomData = await resolveRoomRowsAndEvidence(workspaceId, room);
+    const drilled = buildDrillData(roomData.rows, spec, Number.isFinite(level) ? level : 0, pathValues);
+
+    return res.json({
+      visualId,
+      nextDimension: drilled.nextDimension,
+      rows: drilled.rows
+    });
+  } catch (err) {
+    console.error('Visual drill failed:', err);
+    return res.status(500).json({ error: 'Failed to drill visual' });
   }
 });
 
@@ -2787,6 +3412,85 @@ router.post('/:workspaceId/rooms/:roomId/threads/:threadId/comments', async (req
   } catch (err) {
     console.error('Create thread comment failed:', err);
     return res.status(500).json({ error: 'Failed to create thread comment' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/comments/:threadId/resolve', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const threadId = Number(req.params.threadId);
+    const statusRaw = String(req.body?.status || 'resolved').toLowerCase();
+    const status = statusRaw === 'reopened' ? 'reopened' : 'resolved';
+    const resolutionNote = req.body?.resolutionNote ? String(req.body.resolutionNote).trim() : null;
+
+    const thread = await getRoomThread(workspaceId, roomId, threadId);
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+
+    const resolutionInsert = await query(
+      `
+      INSERT INTO comment_thread_resolutions (
+        workspace_id,
+        room_id,
+        thread_id,
+        status,
+        resolved_by,
+        resolution_note,
+        resolved_at
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,NOW())
+      RETURNING *
+      `,
+      [workspaceId, roomId, threadId, status, req.user!.id, resolutionNote]
+    );
+
+    await query(
+      `
+      UPDATE comment_threads
+      SET updated_at = NOW()
+      WHERE id = $1
+      `,
+      [threadId]
+    );
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: status === 'resolved' ? 'decision_room_thread_resolved' : 'decision_room_thread_reopened',
+      metadata: {
+        threadId,
+        resolutionNoteLength: resolutionNote?.length || 0
+      }
+    });
+
+    const resolution: CommentResolution = {
+      threadId,
+      status,
+      resolvedBy: Number(req.user!.id),
+      resolvedAt: resolutionInsert.rows[0].resolved_at,
+      resolutionNote
+    };
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:thread-resolved', {
+      roomId,
+      threadId,
+      resolution
+    });
+
+    return res.status(201).json({
+      threadId,
+      resolution
+    });
+  } catch (err) {
+    console.error('Resolve thread failed:', err);
+    return res.status(500).json({ error: 'Failed to resolve thread' });
   }
 });
 
@@ -3279,6 +3983,281 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
   } catch (err) {
     console.error('Generate status draft failed:', err);
     return res.status(500).json({ error: 'Failed to generate status draft' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/outcomes/attribution', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const existing = await query(
+      `
+      SELECT *
+      FROM room_outcome_attributions
+      WHERE workspace_id = $1
+        AND room_id = $2
+      ORDER BY observed_at DESC, created_at DESC
+      LIMIT 200
+      `,
+      [workspaceId, roomId]
+    );
+
+    const normalizeAttribution = (row: any): OutcomeAttribution => ({
+      actionId: row.action_artifact_id ? Number(row.action_artifact_id) : null,
+      metricKey: String(row.metric_key || ''),
+      baselineValue: row.baseline_value === null || row.baseline_value === undefined ? null : Number(row.baseline_value),
+      latestValue: row.latest_value === null || row.latest_value === undefined ? null : Number(row.latest_value),
+      deltaPct: row.delta_pct === null || row.delta_pct === undefined ? null : Number(row.delta_pct),
+      confidence: String(row.confidence || 'medium') as ReportClaimConfidence,
+      evidenceArtifactIds: parseJsonMaybe<number[]>(row.evidence_artifact_ids, []).map((id) => Number(id)).filter((id) => Number.isFinite(id))
+    });
+
+    if (existing.rows.length > 0) {
+      return res.json({
+        roomId,
+        attributions: existing.rows.map(normalizeAttribution),
+        generated: false
+      });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const actionItems = artifacts.filter((artifact) => artifact.artifact_type === 'action_item');
+    const actionIds = actionItems.map((artifact) => Number(artifact.id)).filter((id) => Number.isFinite(id));
+
+    if (!actionIds.length) {
+      return res.json({
+        roomId,
+        attributions: [],
+        generated: true
+      });
+    }
+
+    const evidenceRows = await query(
+      `
+      SELECT le.child_artifact_id, le.parent_artifact_id
+      FROM lineage_edges le
+      JOIN artifacts parent ON parent.id = le.parent_artifact_id
+      WHERE le.workspace_id = $1
+        AND le.room_id = $2
+        AND le.child_artifact_id = ANY($3::int[])
+        AND parent.artifact_type = ANY($4::text[])
+      `,
+      [workspaceId, roomId, actionIds, EVIDENCE_ARTIFACT_TYPES]
+    );
+    const evidenceByAction = new Map<number, number[]>();
+    evidenceRows.rows.forEach((row) => {
+      const actionId = Number(row.child_artifact_id);
+      const evidenceId = Number(row.parent_artifact_id);
+      const list = evidenceByAction.get(actionId) || [];
+      list.push(evidenceId);
+      evidenceByAction.set(actionId, list);
+    });
+
+    const snapshotRows = await query(
+      `
+      SELECT m.metric_key, s.value, s.observed_at
+      FROM metric_value_snapshots s
+      JOIN metric_definitions m ON m.id = s.metric_definition_id
+      WHERE s.workspace_id = $1
+        AND (s.room_id = $2 OR s.room_id IS NULL)
+      ORDER BY s.observed_at DESC
+      LIMIT 400
+      `,
+      [workspaceId, roomId]
+    );
+    const snapshotsByMetric = new Map<string, Array<{ value: number; observedAt: string }>>();
+    snapshotRows.rows.forEach((row) => {
+      const key = String(row.metric_key || '');
+      if (!key) return;
+      const list = snapshotsByMetric.get(key) || [];
+      const parsedValue = Number(row.value);
+      if (Number.isFinite(parsedValue)) {
+        list.push({ value: parsedValue, observedAt: row.observed_at });
+      }
+      snapshotsByMetric.set(key, list);
+    });
+
+    const fallbackMetricKey = snapshotsByMetric.keys().next().value || 'pipeline_created_amount';
+    const attributions: OutcomeAttribution[] = actionItems.slice(0, 120).map((action) => {
+      const payload = action.payload || {};
+      const metricKey = String(payload.metricKey || payload.expectedMetricKey || fallbackMetricKey);
+      const metricSnapshots = snapshotsByMetric.get(metricKey) || [];
+      const latestValue = metricSnapshots[0]?.value ?? null;
+      const baselineValue = metricSnapshots[1]?.value ?? null;
+      const deltaPct = safeDeltaPct(latestValue, baselineValue);
+      const evidenceIds = evidenceByAction.get(Number(action.id)) || [];
+      const status = String(payload.status || '').toLowerCase();
+      const confidence: ReportClaimConfidence = evidenceIds.length === 0
+        ? 'low'
+        : ['done', 'completed', 'closed'].includes(status)
+          ? 'high'
+          : 'medium';
+
+      return {
+        actionId: Number(action.id),
+        metricKey,
+        baselineValue,
+        latestValue,
+        deltaPct,
+        confidence,
+        evidenceArtifactIds: evidenceIds
+      };
+    });
+
+    const persist = String(req.query.persist || 'false').toLowerCase() === 'true';
+    if (persist && attributions.length > 0) {
+      for (const attribution of attributions) {
+        await query(
+          `
+          INSERT INTO room_outcome_attributions (
+            workspace_id,
+            room_id,
+            action_artifact_id,
+            metric_key,
+            baseline_value,
+            latest_value,
+            delta_pct,
+            confidence,
+            evidence_artifact_ids,
+            observed_at,
+            created_by
+          )
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW(),$10)
+          `,
+          [
+            workspaceId,
+            roomId,
+            attribution.actionId,
+            attribution.metricKey,
+            attribution.baselineValue,
+            attribution.latestValue,
+            attribution.deltaPct,
+            attribution.confidence,
+            JSON.stringify(attribution.evidenceArtifactIds || []),
+            req.user!.id
+          ]
+        );
+      }
+    }
+
+    return res.json({
+      roomId,
+      attributions,
+      generated: true
+    });
+  } catch (err) {
+    console.error('Load outcome attribution failed:', err);
+    return res.status(500).json({ error: 'Failed to load outcome attribution' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/playbooks/recommendations', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const actionItems = artifacts.filter((artifact) => artifact.artifact_type === 'action_item');
+    const queryRuns = artifacts.filter((artifact) => artifact.artifact_type === 'query_run');
+    const briefs = artifacts.filter((artifact) => artifact.artifact_type === 'decision_brief');
+    const latestBundleId = await getLatestReportV2BundleId(workspaceId, roomId);
+    const latestBundle = latestBundleId
+      ? await loadReportV2Bundle(workspaceId, roomId, latestBundleId)
+      : null;
+    const quality = latestBundle ? await evaluateBundleClaimSupport(workspaceId, roomId, latestBundle) : null;
+
+    const recommendations: Array<{
+      id: string;
+      priority: 'high' | 'medium' | 'low';
+      title: string;
+      reason: string;
+      action: string;
+      blockers: string[];
+    }> = [];
+
+    if (queryRuns.length === 0) {
+      recommendations.push({
+        id: 'run_first_analysis',
+        priority: 'high',
+        title: 'Run first analysis query',
+        reason: 'No query artifacts are available for this room yet.',
+        action: 'Open Query panel and run SQL/NL analysis to generate evidence artifacts.',
+        blockers: ['No query_run artifacts']
+      });
+    }
+
+    if (briefs.length === 0) {
+      recommendations.push({
+        id: 'generate_brief',
+        priority: 'medium',
+        title: 'Generate decision brief',
+        reason: 'Room has analysis but no decision brief for stakeholder alignment.',
+        action: 'Generate brief/report and include evidence-linked claims.',
+        blockers: ['No decision_brief artifact']
+      });
+    }
+
+    if (!latestBundle) {
+      recommendations.push({
+        id: 'generate_report_v2',
+        priority: 'high',
+        title: 'Generate Report V2 bundle',
+        reason: 'Weekly evidence-first report is missing.',
+        action: 'Generate Report V2 from Report panel and review quality blockers.',
+        blockers: ['No Report V2 bundle']
+      });
+    } else if (quality?.quality.publishBlocked) {
+      recommendations.push({
+        id: 'fix_report_quality',
+        priority: 'high',
+        title: 'Fix report publish blockers',
+        reason: `${quality.quality.unsupportedClaims} unsupported claim(s) prevent publish.`,
+        action: 'Attach missing evidence artifacts to unsupported claims and regenerate report sections.',
+        blockers: quality.quality.blockers
+      });
+    }
+
+    if (actionItems.length === 0) {
+      recommendations.push({
+        id: 'create_actions',
+        priority: 'medium',
+        title: 'Create owner action items',
+        reason: 'No action items exist to convert insights into execution.',
+        action: 'Create actions with owner, due date, and evidence links.',
+        blockers: ['No action_item artifacts']
+      });
+    }
+
+    if (guide.nextBestStep) {
+      recommendations.push({
+        id: `guide_${guide.nextBestStep.stepId}`,
+        priority: 'medium',
+        title: `Complete guide step: ${guide.nextBestStep.stepId}`,
+        reason: guide.nextBestStep.reason,
+        action: 'Use guided rail completion after resolving blockers.',
+        blockers: guide.nextBestStep.blockingIssues || []
+      });
+    }
+
+    return res.json({
+      roomId,
+      completionRatio: guide.completionRatio,
+      nextBestStep: guide.nextBestStep,
+      recommendations
+    });
+  } catch (err) {
+    console.error('Playbook recommendations failed:', err);
+    return res.status(500).json({ error: 'Failed to load playbook recommendations' });
   }
 });
 
@@ -4806,6 +5785,26 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
     );
 
     const run = runInsert.rows[0];
+    try {
+      await query(
+        `
+        INSERT INTO automation_run_events (
+          workspace_id,
+          room_id,
+          automation_run_id,
+          event_type,
+          status,
+          attempt,
+          metadata,
+          created_at
+        )
+        VALUES ($1,$2,$3,'execution_started','running',1,$4,NOW())
+        `,
+        [workspaceId, policy.room_id || null, run.id, JSON.stringify({ automationId, inputProvided: Boolean(inputPayload) })]
+      );
+    } catch (err) {
+      console.warn('Automation run event insert skipped:', err);
+    }
     let approvalRequest = null;
 
     if (policy.risk_level === 'low') {
@@ -4821,6 +5820,27 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
         `,
         [JSON.stringify({ status: 'auto_applied', note: 'Low-risk automation auto-approved.' }), run.id]
       );
+
+      try {
+        await query(
+          `
+          INSERT INTO automation_run_events (
+            workspace_id,
+            room_id,
+            automation_run_id,
+            event_type,
+            status,
+            attempt,
+            metadata,
+            created_at
+          )
+          VALUES ($1,$2,$3,'execution_completed','completed',1,$4,NOW())
+          `,
+          [workspaceId, policy.room_id || null, run.id, JSON.stringify({ autoApproved: true })]
+        );
+      } catch (err) {
+        console.warn('Automation completion event insert skipped:', err);
+      }
 
       return res.status(201).json({
         run: completed.rows[0],
@@ -4856,6 +5876,27 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
       [run.id]
     );
 
+    try {
+      await query(
+        `
+        INSERT INTO automation_run_events (
+          workspace_id,
+          room_id,
+          automation_run_id,
+          event_type,
+          status,
+          attempt,
+          metadata,
+          created_at
+        )
+        VALUES ($1,$2,$3,'awaiting_approval','awaiting_approval',1,$4,NOW())
+        `,
+        [workspaceId, policy.room_id || null, run.id, JSON.stringify({ approvalRequestId: approvalRequest?.id || null })]
+      );
+    } catch (err) {
+      console.warn('Automation awaiting approval event insert skipped:', err);
+    }
+
     if (approvalRequest && policy.room_id) {
       emitToDecisionRoom(workspaceId, Number(policy.room_id), 'decision-room:approval-created', {
         roomId: Number(policy.room_id),
@@ -4870,6 +5911,208 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
   } catch (err) {
     console.error('Execute automation failed:', err);
     return res.status(500).json({ error: 'Failed to execute automation policy' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const automationPolicyId = Number(req.body?.policyId || req.body?.automationPolicyId);
+    if (!Number.isFinite(automationPolicyId)) {
+      return res.status(400).json({ error: 'policyId is required' });
+    }
+
+    const policyResult = await query(
+      `
+      SELECT id, room_id, name
+      FROM automation_policies
+      WHERE id = $1
+        AND workspace_id = $2
+        AND is_active = true
+      LIMIT 1
+      `,
+      [automationPolicyId, workspaceId]
+    );
+    if (policyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Automation policy not found' });
+    }
+
+    const cron = String(req.body?.cron || '').trim();
+    if (!cron || !isLikelyCronExpression(cron)) {
+      return res.status(400).json({ error: 'Valid cron expression is required' });
+    }
+
+    const timezone = String(req.body?.timezone || 'UTC').trim() || 'UTC';
+    const dedupeKeyInput = String(req.body?.dedupeKey || '').trim();
+    const dedupeKey = dedupeKeyInput || `room-${roomId}-policy-${automationPolicyId}-${Date.now()}`;
+    const retryPolicy = parseRetryPolicy(req.body?.retryPolicy);
+    const isActive = req.body?.isActive !== false;
+
+    const nextRunAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const insert = await query(
+      `
+      INSERT INTO automation_schedules (
+        workspace_id,
+        room_id,
+        automation_policy_id,
+        cron,
+        timezone,
+        dedupe_key,
+        retry_policy,
+        is_active,
+        next_run_at,
+        created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      RETURNING *
+      `,
+      [
+        workspaceId,
+        roomId,
+        automationPolicyId,
+        cron,
+        timezone,
+        dedupeKey,
+        JSON.stringify(retryPolicy),
+        isActive,
+        nextRunAt,
+        req.user!.id
+      ]
+    );
+
+    const schedule = toAutomationScheduleRecord(insert.rows[0]);
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_automation_schedule_created',
+      metadata: {
+        scheduleId: schedule.id,
+        policyId: automationPolicyId,
+        cron,
+        timezone,
+        dedupeKey
+      }
+    });
+
+    return res.status(201).json({
+      roomId,
+      schedule
+    });
+  } catch (err: any) {
+    console.error('Create automation schedule failed:', err);
+    const message = String(err?.message || '');
+    if (message.toLowerCase().includes('duplicate key')) {
+      return res.status(409).json({ error: 'dedupeKey already exists in this workspace. Use a different dedupeKey.' });
+    }
+    return res.status(500).json({ error: 'Failed to create automation schedule' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/automations/runs', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const [runsResult, eventsResult, schedulesResult] = await Promise.all([
+      query(
+        `
+        SELECT r.*
+        FROM automation_runs r
+        WHERE r.workspace_id = $1
+          AND (r.room_id = $2 OR r.room_id IS NULL)
+        ORDER BY COALESCE(r.started_at, r.created_at) DESC
+        LIMIT 200
+        `,
+        [workspaceId, roomId]
+      ),
+      query(
+        `
+        SELECT e.*
+        FROM automation_run_events e
+        WHERE e.workspace_id = $1
+          AND (e.room_id = $2 OR e.room_id IS NULL)
+        ORDER BY e.created_at DESC
+        LIMIT 500
+        `,
+        [workspaceId, roomId]
+      ),
+      query(
+        `
+        SELECT *
+        FROM automation_schedules
+        WHERE workspace_id = $1
+          AND (room_id = $2 OR room_id IS NULL)
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 100
+        `,
+        [workspaceId, roomId]
+      )
+    ]);
+
+    const eventsByRun = new Map<number, any[]>();
+    eventsResult.rows.forEach((event) => {
+      const runId = Number(event.automation_run_id);
+      const list = eventsByRun.get(runId) || [];
+      list.push(event);
+      eventsByRun.set(runId, list);
+    });
+
+    const runs: AutomationRunDetail[] = runsResult.rows.map((run) => {
+      const runId = Number(run.id);
+      const events = eventsByRun.get(runId) || [];
+      const attempts = events.length > 0
+        ? Math.max(...events.map((event) => Number(event.attempt || 1)))
+        : 1;
+      const output = parseJsonMaybe<Record<string, any>>(run.output, {});
+      const artifacts = Array.isArray(output?.artifactIds)
+        ? output.artifactIds.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+        : [];
+
+      return {
+        runId,
+        status: String(run.status || 'unknown'),
+        startedAt: run.started_at || null,
+        completedAt: run.completed_at || null,
+        attempts,
+        error: run.error || null,
+        artifacts
+      };
+    });
+
+    const schedules = schedulesResult.rows.map(toAutomationScheduleRecord);
+    return res.json({
+      roomId,
+      runs,
+      schedules,
+      events: eventsResult.rows.map((event) => ({
+        id: Number(event.id),
+        runId: Number(event.automation_run_id),
+        eventType: String(event.event_type || 'unknown'),
+        status: String(event.status || 'info'),
+        attempt: Number(event.attempt || 1),
+        error: event.error || null,
+        metadata: parseJsonMaybe(event.metadata, {}),
+        createdAt: event.created_at
+      }))
+    });
+  } catch (err) {
+    console.error('List automation runs failed:', err);
+    return res.status(500).json({ error: 'Failed to load automation runs' });
   }
 });
 
@@ -4939,6 +6182,35 @@ router.post('/:workspaceId/approvals/:approvalId/respond', async (req: Workspace
         [runStatus, JSON.stringify(output), decision === 'rejected' ? 'Rejected by approver' : null, approval.automation_run_id]
       );
       updatedRun = runUpdate.rows[0] || null;
+
+      try {
+        await query(
+          `
+          INSERT INTO automation_run_events (
+            workspace_id,
+            room_id,
+            automation_run_id,
+            event_type,
+            status,
+            attempt,
+            error,
+            metadata,
+            created_at
+          )
+          VALUES ($1,$2,$3,'approval_response',$4,1,$5,$6,NOW())
+          `,
+          [
+            workspaceId,
+            approval.room_id || null,
+            approval.automation_run_id,
+            runStatus,
+            decision === 'rejected' ? 'Rejected by approver' : null,
+            JSON.stringify({ decision, note: req.body?.note || null, responderId: req.user!.id })
+          ]
+        );
+      } catch (err) {
+        console.warn('Automation approval event insert skipped:', err);
+      }
     }
 
     if (approval.room_id) {

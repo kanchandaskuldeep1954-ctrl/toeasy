@@ -334,6 +334,12 @@ export interface RoomThread {
   commentCount: number;
   lastCommentAt: string | null;
   lastCommentContent: string | null;
+  resolution?: {
+    status: 'resolved' | 'reopened' | string;
+    resolvedBy: number | null;
+    resolvedAt: string | null;
+    resolutionNote: string | null;
+  } | null;
 }
 
 export interface RoomThreadComment {
@@ -443,6 +449,59 @@ export interface ReportV2Bundle {
   summaryArtifactId: number | null;
 }
 
+export interface MetricCatalogItem {
+  id: number;
+  key: string;
+  name: string;
+  ownerId: number | null;
+  certified: boolean;
+  formulaSql: string;
+  lastValidatedAt: string | null;
+}
+
+export interface VisualBuildSpec {
+  chartType: string;
+  dimensions: string[];
+  measures: string[];
+  filters?: Array<{ field: string; operator?: string; value: any }>;
+  drillPath?: string[];
+}
+
+export interface AutomationSchedule {
+  id: number;
+  workspaceId: number;
+  roomId: number | null;
+  automationPolicyId: number;
+  cron: string;
+  timezone: string;
+  dedupeKey: string | null;
+  retryPolicy: { maxAttempts: number; backoffMs: number };
+  isActive: boolean;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  createdAt: string;
+}
+
+export interface AutomationRunDetail {
+  runId: number;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  attempts: number;
+  error: string | null;
+  artifacts: number[];
+}
+
+export interface OutcomeAttribution {
+  actionId: number | null;
+  metricKey: string;
+  baselineValue: number | null;
+  latestValue: number | null;
+  deltaPct: number | null;
+  confidence: 'high' | 'medium' | 'low' | string;
+  evidenceArtifactIds: number[];
+}
+
 export const studioAPI = {
   listProjects: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/projects`),
@@ -464,6 +523,13 @@ export const studioAPI = {
 
   listThreads: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/threads`),
+
+  resolveThread: (
+    workspaceId: string,
+    roomId: string,
+    threadId: string | number,
+    data?: { status?: 'resolved' | 'reopened'; resolutionNote?: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/comments/${threadId}/resolve`, data || {}),
 
   createThread: (
     workspaceId: string,
@@ -528,6 +594,22 @@ export const studioAPI = {
   generateBrief: (workspaceId: string, roomId: string, data?: { title?: string; objective?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/briefs/generate`, data || {}),
 
+  getMetricsCatalog: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/metrics/catalog`),
+
+  validateMetrics: (workspaceId: string, roomId: string, data?: { metricIds?: number[] }) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/metrics/validate`, data || {}),
+
+  buildVisual: (workspaceId: string, roomId: string, data: { name?: string; spec: VisualBuildSpec; annotations?: any[] }) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/build`, data),
+
+  drillVisual: (
+    workspaceId: string,
+    roomId: string,
+    visualId: string | number,
+    data?: { level?: number; pathValues?: Record<string, any> }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/${visualId}/drill`, data || {}),
+
   generateReportV2: (workspaceId: string, roomId: string, data?: ReportV2GenerateRequest) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/generate`, data || {}),
 
@@ -550,11 +632,33 @@ export const studioAPI = {
   generateStatusDraft: (workspaceId: string, roomId: string, data?: { persist?: boolean }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/status/draft`, data || {}),
 
+  getOutcomeAttribution: (workspaceId: string, roomId: string, params?: { persist?: boolean }) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/outcomes/attribution`, { params }),
+
+  getPlaybookRecommendations: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/playbooks/recommendations`),
+
   createAutomation: (workspaceId: string, data: any) =>
     getClient().post(`/workspaces/${workspaceId}/automations`, data),
 
   executeAutomation: (workspaceId: string, automationId: string | number, data?: any) =>
     getClient().post(`/workspaces/${workspaceId}/automations/${automationId}/execute`, data || {}),
+
+  scheduleAutomation: (
+    workspaceId: string,
+    roomId: string,
+    data: {
+      policyId: number;
+      cron: string;
+      timezone?: string;
+      dedupeKey?: string;
+      retryPolicy?: { maxAttempts?: number; backoffMs?: number };
+      isActive?: boolean;
+    }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/automations/schedule`, data),
+
+  listAutomationRuns: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/automations/runs`),
 
   respondApproval: (workspaceId: string, approvalId: string | number, data: { decision: 'approved' | 'rejected'; note?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/approvals/${approvalId}/respond`, data),

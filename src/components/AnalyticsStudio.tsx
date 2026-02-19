@@ -3,9 +3,13 @@ import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useDataset } from '../hooks/useDataset';
 import {
+  AutomationRunDetail,
+  AutomationSchedule,
   analyticsAPI,
   datasetAPI,
+  MetricCatalogItem,
   NextBestStep,
+  OutcomeAttribution,
   ReportV2Bundle,
   ReportV2Quality,
   RoomApproval,
@@ -58,6 +62,15 @@ interface MvpKpiSnapshot {
   counters?: {
     trackedRooms?: number;
   };
+}
+
+interface PlaybookRecommendation {
+  id: string;
+  priority: 'high' | 'medium' | 'low';
+  title: string;
+  reason: string;
+  action: string;
+  blockers: string[];
 }
 
 const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'report', 'actions'];
@@ -167,6 +180,30 @@ const AnalyticsStudio: React.FC = () => {
   const [visualType, setVisualType] = useState<string>('bar');
   const [visualXField, setVisualXField] = useState<string>('');
   const [visualYField, setVisualYField] = useState<string>('');
+  const [visualApiRows, setVisualApiRows] = useState<any[]>([]);
+  const [visualApiVisualId, setVisualApiVisualId] = useState<number | null>(null);
+  const [visualApiNextDimension, setVisualApiNextDimension] = useState<string | null>(null);
+  const [visualDrillLevel, setVisualDrillLevel] = useState<number>(0);
+  const [visualPathValuesInput, setVisualPathValuesInput] = useState<string>('');
+  const [visualBuildBusy, setVisualBuildBusy] = useState(false);
+  const [metricCatalog, setMetricCatalog] = useState<MetricCatalogItem[]>([]);
+  const [metricValidationBusy, setMetricValidationBusy] = useState(false);
+  const [metricValidationSummary, setMetricValidationSummary] = useState<{
+    total: number;
+    passed: number;
+    failed: number;
+    validatedAt: string | null;
+  } | null>(null);
+  const [playbookRecommendations, setPlaybookRecommendations] = useState<PlaybookRecommendation[]>([]);
+  const [outcomeAttributions, setOutcomeAttributions] = useState<OutcomeAttribution[]>([]);
+  const [automationRuns, setAutomationRuns] = useState<AutomationRunDetail[]>([]);
+  const [automationSchedules, setAutomationSchedules] = useState<AutomationSchedule[]>([]);
+  const [automationEventCount, setAutomationEventCount] = useState<number>(0);
+  const [automationPolicyIdInput, setAutomationPolicyIdInput] = useState<string>('');
+  const [automationCronInput, setAutomationCronInput] = useState<string>('0 9 * * 1');
+  const [automationTimezoneInput, setAutomationTimezoneInput] = useState<string>('UTC');
+  const [automationDedupeKeyInput, setAutomationDedupeKeyInput] = useState<string>('');
+  const [automationBusy, setAutomationBusy] = useState(false);
   const { socket, isConnected } = useSocket();
 
   const datasetRows = useMemo(() => {
@@ -256,6 +293,21 @@ const AnalyticsStudio: React.FC = () => {
       data: visualPreviewData
     };
   }, [fields, selectedRoomId, visualPreviewData, visualType, visualXField, visualYField]);
+
+  const visualApiChartSpec = useMemo<ChartSpec>(() => {
+    const xAxis = visualXField || fields[0] || 'label';
+    const hasValueColumn = visualApiRows.length > 0 && Object.prototype.hasOwnProperty.call(visualApiRows[0], 'value');
+    const hasCountColumn = visualApiRows.length > 0 && Object.prototype.hasOwnProperty.call(visualApiRows[0], 'count');
+    const yAxis = visualYField || (hasValueColumn ? 'value' : hasCountColumn ? 'count' : 'value');
+    return {
+      id: `studio-visual-api-${visualApiVisualId || 'preview'}`,
+      type: visualType,
+      title: `Advanced Visual${visualApiVisualId ? ` #${visualApiVisualId}` : ''}`,
+      xAxis,
+      yAxis,
+      data: visualApiRows
+    };
+  }, [fields, visualApiRows, visualApiVisualId, visualType, visualXField, visualYField]);
 
   const refreshRoomState = useCallback(async () => {
     if (!workspaceId || !selectedRoomId) return;
@@ -347,6 +399,52 @@ const AnalyticsStudio: React.FC = () => {
     }
   }, [workspaceId]);
 
+  const refreshAnalystOps = useCallback(async () => {
+    if (!workspaceId || !selectedRoomId) {
+      setMetricCatalog([]);
+      setPlaybookRecommendations([]);
+      setOutcomeAttributions([]);
+      setAutomationRuns([]);
+      setAutomationSchedules([]);
+      setAutomationEventCount(0);
+      return;
+    }
+
+    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse] = await Promise.all([
+      studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
+        console.warn('Metric catalog refresh failed:', error);
+        return null;
+      }),
+      studioAPI.getPlaybookRecommendations(workspaceId, selectedRoomId).catch((error) => {
+        console.warn('Playbook recommendations refresh failed:', error);
+        return null;
+      }),
+      studioAPI.getOutcomeAttribution(workspaceId, selectedRoomId).catch((error) => {
+        console.warn('Outcome attribution refresh failed:', error);
+        return null;
+      }),
+      studioAPI.listAutomationRuns(workspaceId, selectedRoomId).catch((error) => {
+        console.warn('Automation runs refresh failed:', error);
+        return null;
+      })
+    ]);
+
+    if (metricsResponse) {
+      setMetricCatalog(metricsResponse.data?.metrics || []);
+    }
+    if (playbookResponse) {
+      setPlaybookRecommendations(playbookResponse.data?.recommendations || []);
+    }
+    if (outcomeResponse) {
+      setOutcomeAttributions(outcomeResponse.data?.attributions || []);
+    }
+    if (automationResponse) {
+      setAutomationRuns(automationResponse.data?.runs || []);
+      setAutomationSchedules(automationResponse.data?.schedules || []);
+      setAutomationEventCount(Array.isArray(automationResponse.data?.events) ? automationResponse.data.events.length : 0);
+    }
+  }, [workspaceId, selectedRoomId]);
+
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
     if (workspaceId && !searchParams.get('workspace')) next.set('workspace', workspaceId);
@@ -431,6 +529,12 @@ const AnalyticsStudio: React.FC = () => {
   }, [refreshReportV2]);
 
   useEffect(() => {
+    refreshAnalystOps().catch((error) => {
+      console.error('Failed to refresh analyst operations context:', error);
+    });
+  }, [refreshAnalystOps]);
+
+  useEffect(() => {
     if (!socket || !isConnected || !workspaceId || !selectedRoomId) return;
     const workspaceNumeric = Number(workspaceId);
     const roomNumeric = Number(selectedRoomId);
@@ -447,6 +551,9 @@ const AnalyticsStudio: React.FC = () => {
       });
       refreshReportV2().catch((error) => {
         console.error('Realtime Report V2 refresh failed:', error);
+      });
+      refreshAnalystOps().catch((error) => {
+        console.error('Realtime analyst ops refresh failed:', error);
       });
 
       const eventThreadId = payload?.threadId ? String(payload.threadId) : payload?.comment?.threadId ? String(payload.comment.threadId) : '';
@@ -480,7 +587,7 @@ const AnalyticsStudio: React.FC = () => {
       socket.off('decision-room:report-generated', handleRoomEvent);
       socket.off('decision-room:report-published', handleRoomEvent);
     };
-  }, [socket, isConnected, workspaceId, selectedRoomId, selectedThreadId, refreshCommunication, refreshReportV2, refreshRoomState, refreshThreadComments]);
+  }, [socket, isConnected, workspaceId, selectedRoomId, selectedThreadId, refreshAnalystOps, refreshCommunication, refreshReportV2, refreshRoomState, refreshThreadComments]);
 
   useEffect(() => {
     refreshMvpKpis().catch((error) => {
@@ -515,6 +622,22 @@ const AnalyticsStudio: React.FC = () => {
     setReportV2Quality(null);
     setReportPublishMentions('');
     setReportV2Busy(false);
+    setVisualApiRows([]);
+    setVisualApiVisualId(null);
+    setVisualApiNextDimension(null);
+    setVisualDrillLevel(0);
+    setVisualPathValuesInput('');
+    setMetricCatalog([]);
+    setMetricValidationSummary(null);
+    setPlaybookRecommendations([]);
+    setOutcomeAttributions([]);
+    setAutomationRuns([]);
+    setAutomationSchedules([]);
+    setAutomationEventCount(0);
+    setAutomationPolicyIdInput('');
+    setAutomationCronInput('0 9 * * 1');
+    setAutomationTimezoneInput('UTC');
+    setAutomationDedupeKeyInput('');
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -592,6 +715,7 @@ const AnalyticsStudio: React.FC = () => {
       });
       setStatusMessage(`Run completed in ${result.data?.executionMs || 0}ms.`);
       await refreshRoomState();
+      await refreshAnalystOps();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     } finally {
@@ -611,6 +735,7 @@ const AnalyticsStudio: React.FC = () => {
       parentArtifactIds: evidenceArtifacts.slice(0, 3).map((artifact) => artifact.id)
     });
     await refreshRoomState();
+    await refreshAnalystOps();
     setStatusMessage('Pivot artifact saved with lineage.');
   };
 
@@ -631,7 +756,97 @@ const AnalyticsStudio: React.FC = () => {
       parentArtifactIds: evidenceArtifacts.slice(0, 5).map((artifact) => artifact.id)
     });
     await refreshRoomState();
+    await refreshAnalystOps();
     setStatusMessage('Chart artifact saved with lineage.');
+  };
+
+  const validateMetrics = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    setMetricValidationBusy(true);
+    try {
+      const response = await studioAPI.validateMetrics(workspaceId, selectedRoomId);
+      const validations = response.data?.validations || [];
+      const passed = validations.filter((item: any) => String(item.status || '').toLowerCase() === 'passed').length;
+      const failed = validations.length - passed;
+      const validatedAt = validations[0]?.validatedAt || new Date().toISOString();
+      setMetricValidationSummary({
+        total: validations.length,
+        passed,
+        failed,
+        validatedAt
+      });
+      await refreshAnalystOps();
+      setStatusMessage(`Metric validation completed. Passed: ${passed}, failed: ${failed}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setMetricValidationBusy(false);
+    }
+  };
+
+  const buildVisualViaApi = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    const dimensions = visualXField ? [visualXField] : [];
+    const measures = visualYField ? [visualYField] : [];
+    if (!dimensions.length && !measures.length) {
+      setStatusMessage('Pick at least one visual field before building an advanced visual.');
+      return;
+    }
+
+    const drillPath = [visualXField, ...fields.filter((field) => field !== visualXField).slice(0, 2)].filter(Boolean);
+
+    setVisualBuildBusy(true);
+    try {
+      const response = await studioAPI.buildVisual(workspaceId, selectedRoomId, {
+        name: `Visual - ${dimensions[0] || measures[0] || visualType}`,
+        spec: {
+          chartType: visualType,
+          dimensions,
+          measures,
+          drillPath
+        },
+        annotations: []
+      });
+      setVisualApiRows(Array.isArray(response.data?.data) ? response.data.data : []);
+      setVisualApiVisualId(Number(response.data?.visualId || 0) || null);
+      setVisualApiNextDimension(drillPath[1] || null);
+      setVisualDrillLevel(0);
+      setVisualPathValuesInput('');
+      await refreshRoomState();
+      await refreshAnalystOps();
+      setStatusMessage(`Advanced visual built and saved as artifact #${response.data?.artifact?.id || 'n/a'}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setVisualBuildBusy(false);
+    }
+  };
+
+  const drillVisualViaApi = async () => {
+    if (!workspaceId || !selectedRoomId || !visualApiVisualId) return;
+    let pathValues: Record<string, any> = {};
+    if (visualPathValuesInput.trim()) {
+      try {
+        pathValues = JSON.parse(visualPathValuesInput);
+      } catch {
+        setStatusMessage('Path values must be valid JSON, for example {"owner":"Alice"}');
+        return;
+      }
+    }
+
+    try {
+      const response = await studioAPI.drillVisual(workspaceId, selectedRoomId, visualApiVisualId, {
+        level: visualDrillLevel,
+        pathValues
+      });
+      setVisualApiRows(Array.isArray(response.data?.rows) ? response.data.rows : []);
+      setVisualApiNextDimension(response.data?.nextDimension || null);
+      setStatusMessage(response.data?.nextDimension
+        ? `Drilled visual. Next dimension: ${response.data.nextDimension}.`
+        : 'Drill reached row-level detail.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
   };
 
   const generateBrief = async () => {
@@ -674,6 +889,7 @@ const AnalyticsStudio: React.FC = () => {
       await refreshRoomState();
       await refreshCommunication();
       await refreshReportV2();
+      await refreshAnalystOps();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     } finally {
@@ -696,6 +912,7 @@ const AnalyticsStudio: React.FC = () => {
       setStatusMessage(response.data?.message || 'Report V2 published.');
       await refreshReportV2();
       await refreshCommunication();
+      await refreshAnalystOps();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
       if (reportV2Bundle?.bundleId) {
@@ -751,6 +968,7 @@ const AnalyticsStudio: React.FC = () => {
     setActionOwner('');
     setActionDueDate('');
     await refreshRoomState();
+    await refreshAnalystOps();
     setStatusMessage('Action item created with evidence links.');
   };
 
@@ -763,6 +981,7 @@ const AnalyticsStudio: React.FC = () => {
       });
       setStatusMessage(response.data?.message || 'Actions synced.');
       await refreshRoomState();
+      await refreshAnalystOps();
       await refreshMvpKpis();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
@@ -776,9 +995,51 @@ const AnalyticsStudio: React.FC = () => {
       setStatusDraft(response.data?.draft || null);
       setStatusMessage('Status draft generated from room execution logs.');
       await refreshRoomState();
+      await refreshAnalystOps();
       await refreshMvpKpis();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const refreshOutcomeAttribution = async (persist: boolean = false) => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const response = await studioAPI.getOutcomeAttribution(workspaceId, selectedRoomId, persist ? { persist: true } : undefined);
+      setOutcomeAttributions(response.data?.attributions || []);
+      setStatusMessage(`Outcome attribution ${persist ? 'generated and persisted' : 'refreshed'}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const createAutomationSchedule = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    const policyId = Number(automationPolicyIdInput);
+    if (!Number.isFinite(policyId) || policyId <= 0) {
+      setStatusMessage('Automation policy ID must be a positive number.');
+      return;
+    }
+    if (!automationCronInput.trim()) {
+      setStatusMessage('Cron expression is required.');
+      return;
+    }
+
+    setAutomationBusy(true);
+    try {
+      const response = await studioAPI.scheduleAutomation(workspaceId, selectedRoomId, {
+        policyId,
+        cron: automationCronInput.trim(),
+        timezone: automationTimezoneInput.trim() || 'UTC',
+        dedupeKey: automationDedupeKeyInput.trim() || undefined
+      });
+      const createdScheduleId = response.data?.schedule?.id;
+      setStatusMessage(`Automation schedule created${createdScheduleId ? ` (#${createdScheduleId})` : ''}.`);
+      await refreshAnalystOps();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setAutomationBusy(false);
     }
   };
 
@@ -820,6 +1081,23 @@ const AnalyticsStudio: React.FC = () => {
       await refreshThreadComments(selectedThreadId);
       await refreshCommunication();
       setStatusMessage('Comment posted.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const updateThreadResolution = async (status: 'resolved' | 'reopened') => {
+    if (!workspaceId || !selectedRoomId || !selectedThreadId) return;
+    try {
+      await studioAPI.resolveThread(workspaceId, selectedRoomId, selectedThreadId, {
+        status,
+        resolutionNote: status === 'resolved'
+          ? 'Resolved in Decision Room workflow.'
+          : 'Thread reopened for additional follow-up.'
+      });
+      await refreshCommunication();
+      await refreshThreadComments(selectedThreadId);
+      setStatusMessage(`Thread marked as ${status}.`);
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
@@ -1093,8 +1371,50 @@ const AnalyticsStudio: React.FC = () => {
                   <button onClick={saveVisualArtifact} disabled={!selectedRoomId || !visualPreviewData.length} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white disabled:opacity-50">
                     Save Chart Artifact
                   </button>
+                  <button
+                    onClick={buildVisualViaApi}
+                    disabled={!selectedRoomId || visualBuildBusy}
+                    className="px-3 py-1.5 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
+                  >
+                    {visualBuildBusy ? 'Building...' : 'Build Advanced Visual'}
+                  </button>
                 </div>
                 <ChartWidget chart={visualChartSpec} data={visualPreviewData} height={320} />
+                {visualApiRows.length > 0 && (
+                  <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">
+                      Advanced Visual Output {visualApiVisualId ? `#${visualApiVisualId}` : ''}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        value={visualDrillLevel}
+                        onChange={(e) => setVisualDrillLevel(Math.max(0, Number(e.target.value) || 0))}
+                        className="px-2 py-1 text-xs rounded border w-20"
+                        placeholder="Level"
+                      />
+                      <input
+                        value={visualPathValuesInput}
+                        onChange={(e) => setVisualPathValuesInput(e.target.value)}
+                        placeholder='Drill path values JSON, e.g. {"owner":"Alice"}'
+                        className="px-2 py-1 text-xs rounded border flex-1 min-w-[220px]"
+                      />
+                      <button
+                        onClick={drillVisualViaApi}
+                        disabled={!visualApiVisualId}
+                        className="px-3 py-1.5 text-xs rounded border disabled:opacity-50"
+                      >
+                        Drill
+                      </button>
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                      Next dimension: {visualApiNextDimension || 'none (row-level)'}
+                    </div>
+                    <ChartWidget chart={visualApiChartSpec} data={visualApiRows} height={280} />
+                    <DataGridWidget data={visualApiRows} height={240} title={`Advanced Visual Rows (${visualApiRows.length})`} />
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -1372,6 +1692,99 @@ const AnalyticsStudio: React.FC = () => {
                 </div>
               </div>
 
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                <h3 className="text-xs font-bold uppercase text-slate-500">Automation Reliability</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={automationPolicyIdInput}
+                    onChange={(e) => setAutomationPolicyIdInput(e.target.value)}
+                    placeholder="Policy ID"
+                    className="px-2 py-1 text-xs rounded border w-24"
+                  />
+                  <input
+                    value={automationCronInput}
+                    onChange={(e) => setAutomationCronInput(e.target.value)}
+                    placeholder="Cron (e.g. 0 9 * * 1)"
+                    className="px-2 py-1 text-xs rounded border w-40"
+                  />
+                  <input
+                    value={automationTimezoneInput}
+                    onChange={(e) => setAutomationTimezoneInput(e.target.value)}
+                    placeholder="Timezone"
+                    className="px-2 py-1 text-xs rounded border w-24"
+                  />
+                  <input
+                    value={automationDedupeKeyInput}
+                    onChange={(e) => setAutomationDedupeKeyInput(e.target.value)}
+                    placeholder="Dedupe key (optional)"
+                    className="px-2 py-1 text-xs rounded border w-44"
+                  />
+                  <button
+                    onClick={createAutomationSchedule}
+                    disabled={!selectedRoomId || automationBusy}
+                    className="px-3 py-1 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
+                  >
+                    {automationBusy ? 'Scheduling...' : 'Schedule Automation'}
+                  </button>
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Schedules: {automationSchedules.length} | Runs: {automationRuns.length} | Run events: {automationEventCount}
+                </div>
+                <div className="space-y-1">
+                  {automationRuns.slice(0, 4).map((run) => (
+                    <div key={run.runId} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                      <span className="font-semibold">Run #{run.runId}</span> - {run.status} - attempts {run.attempts}
+                      {run.error && <div className="text-rose-600 mt-1">{run.error}</div>}
+                    </div>
+                  ))}
+                  {automationRuns.length === 0 && (
+                    <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
+                      No automation runs in this room yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-xs font-bold uppercase text-slate-500">Outcome Attribution</h3>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => refreshOutcomeAttribution(false)}
+                      className="px-2 py-1 text-[11px] rounded border"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={() => refreshOutcomeAttribution(true)}
+                      className="px-2 py-1 text-[11px] rounded border"
+                    >
+                      Persist Snapshot
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {outcomeAttributions.slice(0, 8).map((attribution, index) => (
+                    <div key={`${attribution.actionId || 'room'}-${attribution.metricKey}-${index}`} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                      <div className="font-semibold">
+                        Action #{attribution.actionId || 'n/a'} - {attribution.metricKey}
+                      </div>
+                      <div className="text-slate-500">
+                        Baseline: {attribution.baselineValue ?? 'n/a'} | Latest: {attribution.latestValue ?? 'n/a'} | Delta: {attribution.deltaPct != null ? `${attribution.deltaPct.toFixed(2)}%` : 'n/a'}
+                      </div>
+                      <div className="text-slate-500">
+                        Confidence: {attribution.confidence} | Evidence: {attribution.evidenceArtifactIds.join(', ') || 'none'}
+                      </div>
+                    </div>
+                  ))}
+                  {outcomeAttributions.length === 0 && (
+                    <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
+                      No attribution records yet. Generate actions and run snapshots.
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {statusDraft && (
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                   <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Latest Status Draft</h3>
@@ -1422,6 +1835,52 @@ const AnalyticsStudio: React.FC = () => {
                 )}
               </div>
             ))}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Semantic Metrics</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <button
+              onClick={validateMetrics}
+              disabled={!selectedRoomId || metricValidationBusy}
+              className="w-full px-2 py-1 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
+            >
+              {metricValidationBusy ? 'Validating...' : 'Validate Metric Formulas'}
+            </button>
+            {metricValidationSummary && (
+              <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                Total: {metricValidationSummary.total} | Passed: {metricValidationSummary.passed} | Failed: {metricValidationSummary.failed}
+              </div>
+            )}
+            {metricCatalog.slice(0, 6).map((metric) => (
+              <div key={metric.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                <div className="font-semibold">{metric.name}</div>
+                <div className="text-slate-500">
+                  {metric.key} | {metric.certified ? 'Certified' : 'Uncertified'}
+                </div>
+              </div>
+            ))}
+            {metricCatalog.length === 0 && (
+              <div className="text-[11px] text-slate-500">No metrics found in this workspace yet.</div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Playbook Recommendations</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            {playbookRecommendations.slice(0, 5).map((recommendation) => (
+              <div key={recommendation.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                <div className="font-semibold">
+                  [{recommendation.priority}] {recommendation.title}
+                </div>
+                <div className="text-slate-500 mt-1">{recommendation.reason}</div>
+                <div className="mt-1">{recommendation.action}</div>
+                {recommendation.blockers.length > 0 && (
+                  <div className="mt-1 text-amber-700">Blockers: {recommendation.blockers.join(' | ')}</div>
+                )}
+              </div>
+            ))}
+            {playbookRecommendations.length === 0 && (
+              <div className="text-[11px] text-slate-500">No recommendations right now.</div>
+            )}
           </div>
 
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Communication</h3>
@@ -1490,6 +1949,30 @@ const AnalyticsStudio: React.FC = () => {
               <div className="text-xs font-semibold">
                 Thread #{selectedThread.id} {selectedThread.artifactTitle ? `- ${selectedThread.artifactTitle}` : '- Room'}
               </div>
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className={`${selectedThread.resolution?.status === 'resolved' ? 'text-emerald-600' : 'text-slate-500'}`}>
+                  Status: {selectedThread.resolution?.status || 'open'}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => updateThreadResolution('resolved')}
+                    className="px-2 py-1 rounded border"
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    onClick={() => updateThreadResolution('reopened')}
+                    className="px-2 py-1 rounded border"
+                  >
+                    Reopen
+                  </button>
+                </div>
+              </div>
+              {selectedThread.resolution?.resolutionNote && (
+                <div className="text-[11px] text-slate-500">
+                  Note: {selectedThread.resolution.resolutionNote}
+                </div>
+              )}
               <div className="max-h-48 overflow-auto space-y-2">
                 {threadComments.map((comment) => (
                   <div key={comment.id} className="text-xs border rounded p-2">
