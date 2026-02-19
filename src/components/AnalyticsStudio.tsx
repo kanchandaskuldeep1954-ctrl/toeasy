@@ -7,16 +7,20 @@ import {
   AutomationRunDetail,
   AutomationSchedule,
   analyticsAPI,
+  CoverageTrendPoint,
   datasetAPI,
+  DatasetProfileArtifact,
   MetricCatalogItem,
   NextBestStep,
   OutcomeAttribution,
   ReportV2Bundle,
   ReportV2Quality,
+  ReviewSubmission,
   RoomApproval,
   RoomDecisionCheckpoint,
   RoomGuideStep,
   RoomMentionableUser,
+  RoomRoiSnapshot,
   RoomThread,
   RoomThreadComment,
   StatusDraft,
@@ -216,6 +220,18 @@ const AnalyticsStudio: React.FC = () => {
   const [automationTimezoneInput, setAutomationTimezoneInput] = useState<string>('UTC');
   const [automationDedupeKeyInput, setAutomationDedupeKeyInput] = useState<string>('');
   const [automationBusy, setAutomationBusy] = useState(false);
+  const [roomTrustProfile, setRoomTrustProfile] = useState<DatasetProfileArtifact | null>(null);
+  const [roomTrustQuality, setRoomTrustQuality] = useState<{ qualityScore: number; threshold: number; publishBlocked: boolean } | null>(null);
+  const [coverageTrendPoints, setCoverageTrendPoints] = useState<CoverageTrendPoint[]>([]);
+  const [roomRoiSnapshot, setRoomRoiSnapshot] = useState<RoomRoiSnapshot | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+  const [reviewBundleIdInput, setReviewBundleIdInput] = useState<string>('');
+  const [reviewStageInput, setReviewStageInput] = useState<string>('manager_review');
+  const [reviewerIdInput, setReviewerIdInput] = useState<string>('');
+  const [reviewNoteInput, setReviewNoteInput] = useState<string>('');
+  const [reviewSubmissionIdInput, setReviewSubmissionIdInput] = useState<string>('');
+  const [reviewResponseNoteInput, setReviewResponseNoteInput] = useState<string>('');
+  const [lastReviewSubmission, setLastReviewSubmission] = useState<ReviewSubmission | null>(null);
   const { socket, isConnected } = useSocket();
 
   const visiblePanels = useMemo(() => {
@@ -428,10 +444,14 @@ const AnalyticsStudio: React.FC = () => {
       setAutomationSchedules([]);
       setAutomationEventCount(0);
       setAutomationQueueState(null);
+      setRoomTrustProfile(null);
+      setRoomTrustQuality(null);
+      setCoverageTrendPoints([]);
+      setRoomRoiSnapshot(null);
       return;
     }
 
-    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse] = await Promise.all([
+    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse] = await Promise.all([
       studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Metric catalog refresh failed:', error);
         return null;
@@ -450,6 +470,24 @@ const AnalyticsStudio: React.FC = () => {
       }),
       studioAPI.getAutomationQueueState(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Automation queue state refresh failed:', error);
+        return null;
+      }),
+      studioAPI.getRoomTrust(workspaceId, selectedRoomId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Room trust refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getEvidenceCoverageTrend(workspaceId, selectedRoomId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Coverage trend refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getRoomRoi(workspaceId, selectedRoomId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Room ROI refresh failed:', error);
+        }
         return null;
       })
     ]);
@@ -470,6 +508,33 @@ const AnalyticsStudio: React.FC = () => {
     }
     if (queueStateResponse) {
       setAutomationQueueState(queueStateResponse.data || null);
+    }
+    if (trustResponse?.data?.trust) {
+      const trust = trustResponse.data.trust;
+      setRoomTrustQuality({
+        qualityScore: Number(trust.qualityScore || 0),
+        threshold: Number(trust.threshold || 0.65),
+        publishBlocked: Boolean(trust.publishBlocked)
+      });
+      setRoomTrustProfile({
+        datasetVersionId: trust.datasetVersionId ?? null,
+        qualityScore: Number(trust.qualityScore || 0),
+        missingness: trust.missingness || [],
+        duplicateKeys: trust.duplicateKeys || [],
+        dateContinuity: trust.dateContinuity || [],
+        invalidNumerics: trust.invalidNumerics || [],
+        generatedAt: trust.generatedAt || new Date().toISOString(),
+        summary: trust.summary || { rowCount: 0, columnCount: 0, topIssues: [] }
+      });
+    } else {
+      setRoomTrustQuality(null);
+      setRoomTrustProfile(null);
+    }
+    if (coverageTrendResponse) {
+      setCoverageTrendPoints(Array.isArray(coverageTrendResponse.data?.points) ? coverageTrendResponse.data.points : []);
+    }
+    if (roiResponse?.data?.snapshot) {
+      setRoomRoiSnapshot(roiResponse.data.snapshot);
     }
   }, [workspaceId, selectedRoomId]);
 
@@ -688,6 +753,18 @@ const AnalyticsStudio: React.FC = () => {
     setAutomationCronInput('0 9 * * 1');
     setAutomationTimezoneInput('UTC');
     setAutomationDedupeKeyInput('');
+    setRoomTrustProfile(null);
+    setRoomTrustQuality(null);
+    setCoverageTrendPoints([]);
+    setRoomRoiSnapshot(null);
+    setProfileBusy(false);
+    setReviewBundleIdInput('');
+    setReviewStageInput('manager_review');
+    setReviewerIdInput('');
+    setReviewNoteInput('');
+    setReviewSubmissionIdInput('');
+    setReviewResponseNoteInput('');
+    setLastReviewSubmission(null);
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -788,6 +865,74 @@ const AnalyticsStudio: React.FC = () => {
     await refreshRoomState();
     await refreshAnalystOps();
     setStatusMessage('Pivot artifact saved with lineage.');
+  };
+
+  const computePivotViaApi = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const dimensions = [...(pivotConfig.rows || []), ...(pivotConfig.columns || [])]
+        .map((field) => String(field))
+        .filter(Boolean);
+      const measures = (pivotConfig.values || []).map((field) => ({
+        field: String(field),
+        agg: 'sum' as const,
+        as: String(field)
+      }));
+      if (!dimensions.length && !measures.length) {
+        setStatusMessage('Configure at least one pivot row/column/value before computing.');
+        return;
+      }
+
+      const response = await studioAPI.computePivot(workspaceId, selectedRoomId, {
+        name: `Pivot - ${dimensions.join(', ') || 'summary'}`,
+        spec: {
+          dimensions,
+          measures,
+          calculations: measures.length
+            ? [
+                { type: 'percent_of_total', sourceField: measures[0].as, as: `${measures[0].as}_pct_total` },
+                { type: 'rank', sourceField: measures[0].as, as: `${measures[0].as}_rank`, order: 'desc' }
+              ]
+            : []
+        }
+      });
+
+      setRunRows(response.data?.pivot?.rows || []);
+      await refreshRoomState();
+      await refreshAnalystOps();
+      setStatusMessage(`Pivot computed and persisted as artifact #${response.data?.pivot?.artifactId || 'n/a'}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const generateDataProfile = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    setProfileBusy(true);
+    try {
+      const response = await studioAPI.generateDataProfile(workspaceId, selectedRoomId, {
+        minQualityScore: 0.65
+      });
+      const profile = response.data?.profile as DatasetProfileArtifact | undefined;
+      const quality = response.data?.quality;
+      if (profile) {
+        setRoomTrustProfile(profile);
+      }
+      if (quality) {
+        setRoomTrustQuality({
+          qualityScore: Number(quality.qualityScore || 0),
+          threshold: Number(quality.threshold || 0.65),
+          publishBlocked: Boolean(quality.publishBlocked)
+        });
+      }
+      await refreshRoomState();
+      await refreshAnalystOps();
+      setStatusMessage(`Data profile generated. Quality ${(Number(quality?.qualityScore || 0) * 100).toFixed(1)}%.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setProfileBusy(false);
+    }
   };
 
   const saveVisualArtifact = async () => {
@@ -958,7 +1103,8 @@ const AnalyticsStudio: React.FC = () => {
         .filter((token) => token.startsWith('@'));
       const response = await studioAPI.publishReportV2(workspaceId, selectedRoomId, reportV2Bundle.bundleId, {
         channel: 'slack',
-        mentionTokens
+        mentionTokens,
+        idempotencyKey: `publish-${selectedRoomId}-${reportV2Bundle.bundleId}`
       });
       setStatusMessage(response.data?.message || 'Report V2 published.');
       await refreshReportV2();
@@ -976,6 +1122,51 @@ const AnalyticsStudio: React.FC = () => {
       }
     } finally {
       setReportV2Busy(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const reviewerId = reviewerIdInput.trim() ? Number(reviewerIdInput) : undefined;
+      if (reviewerIdInput.trim() && !Number.isFinite(reviewerId)) {
+        setStatusMessage('Reviewer ID must be numeric.');
+        return;
+      }
+
+      const response = await studioAPI.submitReview(workspaceId, selectedRoomId, {
+        bundleId: reviewBundleIdInput.trim() || reportV2Bundle?.bundleId || undefined,
+        stage: reviewStageInput.trim() || 'manager_review',
+        reviewerId: reviewerId as number | undefined,
+        note: reviewNoteInput.trim() || undefined
+      });
+      setLastReviewSubmission(response.data?.submission || null);
+      setReviewSubmissionIdInput(String(response.data?.submission?.id || reviewSubmissionIdInput));
+      setStatusMessage(`Review submitted${response.data?.submission?.id ? ` (#${response.data.submission.id})` : ''}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const respondReview = async (decision: 'approved' | 'rejected' | 'cancelled') => {
+    if (!workspaceId || !selectedRoomId) return;
+    const submissionId = Number(reviewSubmissionIdInput || lastReviewSubmission?.id || 0);
+    if (!Number.isFinite(submissionId) || submissionId <= 0) {
+      setStatusMessage('Set a valid review submission ID before responding.');
+      return;
+    }
+
+    try {
+      const response = await studioAPI.respondReview(workspaceId, selectedRoomId, {
+        submissionId,
+        decision,
+        responseNote: reviewResponseNoteInput.trim() || undefined
+      });
+      setLastReviewSubmission(response.data?.submission || null);
+      setStatusMessage(`Review ${decision}.`);
+      await refreshCommunication();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
     }
   };
 
@@ -1028,7 +1219,8 @@ const AnalyticsStudio: React.FC = () => {
     try {
       const response = await studioAPI.syncActions(workspaceId, selectedRoomId, {
         channel: 'slack',
-        createTasks: true
+        createTasks: true,
+        idempotencyKey: `sync-${selectedRoomId}-${actionArtifacts.length}-${actionArtifacts[0]?.id || 0}`
       });
       setStatusMessage(response.data?.message || 'Actions synced.');
       await refreshRoomState();
@@ -1348,6 +1540,22 @@ const AnalyticsStudio: React.FC = () => {
                 >
                   Apply Filter
                 </button>
+                <button
+                  onClick={generateDataProfile}
+                  disabled={!selectedRoomId || profileBusy}
+                  className="px-3 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 disabled:opacity-50"
+                >
+                  {profileBusy ? 'Profiling...' : 'Generate Data Profile'}
+                </button>
+                {roomTrustQuality && (
+                  <span className={`text-[11px] px-2 py-1 rounded ${
+                    roomTrustQuality.publishBlocked
+                      ? 'bg-amber-100 text-amber-700'
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    Trust {(roomTrustQuality.qualityScore * 100).toFixed(0)}%
+                  </span>
+                )}
               </div>
               <DataGridWidget data={currentRows} height={520} title={`Rows (${currentRows.length})`} />
             </div>
@@ -1382,6 +1590,9 @@ const AnalyticsStudio: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button onClick={savePivotArtifact} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
                   Save Pivot Artifact
+                </button>
+                <button onClick={computePivotViaApi} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded border disabled:opacity-50">
+                  Compute Pivot (API)
                 </button>
                 <span className="text-xs text-slate-500">
                   Pivot is focused on grouped summaries. Open the Visuals tab for chart building and drill exploration.
@@ -1534,6 +1745,64 @@ const AnalyticsStudio: React.FC = () => {
                   placeholder="@revops-lead @sales-manager (optional mention prompt before publish)"
                   className="w-full px-2 py-1 text-xs rounded border"
                 />
+
+                <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
+                  <div className="text-[11px] font-semibold uppercase text-slate-500">Review Lane</div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <input
+                      value={reviewBundleIdInput}
+                      onChange={(e) => setReviewBundleIdInput(e.target.value)}
+                      placeholder={reportV2Bundle?.bundleId ? `Bundle ID (${reportV2Bundle.bundleId})` : 'Bundle ID (optional)'}
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                    <input
+                      value={reviewStageInput}
+                      onChange={(e) => setReviewStageInput(e.target.value)}
+                      placeholder="Stage (manager_review)"
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                    <input
+                      value={reviewerIdInput}
+                      onChange={(e) => setReviewerIdInput(e.target.value)}
+                      placeholder="Reviewer user ID (optional)"
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                    <input
+                      value={reviewSubmissionIdInput}
+                      onChange={(e) => setReviewSubmissionIdInput(e.target.value)}
+                      placeholder="Submission ID for response"
+                      className="px-2 py-1 text-xs rounded border"
+                    />
+                  </div>
+                  <textarea
+                    value={reviewNoteInput}
+                    onChange={(e) => setReviewNoteInput(e.target.value)}
+                    placeholder="Submission note (optional)"
+                    className="w-full h-14 px-2 py-1 text-xs rounded border"
+                  />
+                  <textarea
+                    value={reviewResponseNoteInput}
+                    onChange={(e) => setReviewResponseNoteInput(e.target.value)}
+                    placeholder="Response note (optional)"
+                    className="w-full h-14 px-2 py-1 text-xs rounded border"
+                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={submitReview} className="px-3 py-1 text-xs rounded border">
+                      Submit Review
+                    </button>
+                    <button onClick={() => respondReview('approved')} className="px-3 py-1 text-xs rounded bg-emerald-600 text-white">
+                      Approve Review
+                    </button>
+                    <button onClick={() => respondReview('rejected')} className="px-3 py-1 text-xs rounded bg-rose-600 text-white">
+                      Reject Review
+                    </button>
+                    {lastReviewSubmission && (
+                      <span className="text-[11px] text-slate-500">
+                        Last review #{lastReviewSubmission.id}: {lastReviewSubmission.status}
+                      </span>
+                    )}
+                  </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="rounded border border-slate-200 dark:border-slate-700 p-2">
@@ -2090,6 +2359,47 @@ const AnalyticsStudio: React.FC = () => {
             <div>Execution: {runInfo.executionMs || 0}ms</div>
             {runInfo.generatedSql && <pre className="text-[10px] whitespace-pre-wrap bg-slate-50 dark:bg-slate-800 rounded p-2">{runInfo.generatedSql}</pre>}
             {runInfo.explanation && <p className="text-[10px]">{runInfo.explanation}</p>}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Data Trust</h3>
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+            {roomTrustQuality ? (
+              <>
+                <div>
+                  Quality: {(roomTrustQuality.qualityScore * 100).toFixed(1)}%
+                  {' '}({roomTrustQuality.publishBlocked ? 'blocked' : 'healthy'})
+                </div>
+                <div>Threshold: {(roomTrustQuality.threshold * 100).toFixed(0)}%</div>
+                <div>Rows: {roomTrustProfile?.summary?.rowCount ?? 0}</div>
+                <div>Columns: {roomTrustProfile?.summary?.columnCount ?? 0}</div>
+                <div className="text-[10px] text-amber-700">
+                  {roomTrustProfile?.summary?.topIssues?.[0] || 'No major issues detected.'}
+                </div>
+              </>
+            ) : (
+              <div>No trust profile yet. Run "Generate Data Profile" in Sheets.</div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Evidence Trend</h3>
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <div>Points: {coverageTrendPoints.length}</div>
+            {coverageTrendPoints.length > 0 ? (
+              <>
+                <div>Latest coverage: {(coverageTrendPoints[coverageTrendPoints.length - 1].evidenceCoverageRatio * 100).toFixed(0)}%</div>
+                <div>Unsupported claims: {coverageTrendPoints[coverageTrendPoints.length - 1].unsupportedClaims}</div>
+              </>
+            ) : (
+              <div>No coverage history yet.</div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Room ROI</h3>
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <div>Time to insight: {roomRoiSnapshot?.timeToInsightMin != null ? `${roomRoiSnapshot.timeToInsightMin.toFixed(1)} min` : 'n/a'}</div>
+            <div>Insight to action: {roomRoiSnapshot?.timeToActionMin != null ? `${roomRoiSnapshot.timeToActionMin.toFixed(1)} min` : 'n/a'}</div>
+            <div>Manual update reduction: {roomRoiSnapshot?.manualUpdateReductionPct != null ? `${roomRoiSnapshot.manualUpdateReductionPct.toFixed(0)}%` : 'n/a'}</div>
+            <div>Evidence ratio: {roomRoiSnapshot?.evidenceCoverageRatio != null ? `${(roomRoiSnapshot.evidenceCoverageRatio * 100).toFixed(0)}%` : 'n/a'}</div>
           </div>
 
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">MVP KPI Snapshot</h3>

@@ -36,6 +36,12 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [x] `automation_run_events`
   - [x] `room_outcome_attributions`
   - [x] `comment_thread_resolutions`
+- [x] Completion schema expansion:
+  - [x] `dataset_profiles`
+  - [x] `query_versions`
+  - [x] `visual_annotations`
+  - [x] `review_submissions`
+  - [x] `idempotency_keys`
 - [x] Workspace feature flags seeded for phase-4 capabilities.
 - [x] New Analyst OS APIs:
   - [x] `GET /metrics/catalog`
@@ -47,6 +53,25 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [x] `GET /playbooks/recommendations`
   - [x] `POST /automations/schedule`
   - [x] `GET /automations/runs`
+- [x] Completion APIs (Phase 4 pilot-production slice):
+  - [x] `POST /data/profile`
+  - [x] `GET /data/trust`
+  - [x] `POST /queries/save-version`
+  - [x] `GET /queries/:queryId/versions`
+  - [x] `POST /pivots/compute`
+  - [x] `POST /visuals/:visualId/annotate`
+  - [x] `POST /review/submit`
+  - [x] `POST /review/respond`
+  - [x] `GET /evidence/coverage-trend`
+  - [x] `GET /roi`
+- [x] Idempotency guardrails:
+  - [x] Report V2 publish idempotency
+  - [x] Action sync idempotency
+- [x] Studio wiring for completion slice:
+  - [x] Sheets panel data profile trigger + trust state
+  - [x] Pivot API compute action
+  - [x] Report review lane controls (submit/respond)
+  - [x] Right-rail cards for trust, evidence trend, and room ROI
 - [x] Studio UX upgrades:
   - [x] Semantic metrics panel with validation action.
   - [x] Advanced visual build + drill controls.
@@ -69,17 +94,22 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [ ] deterministic dedupe behavior for schedule dispatch
   - [ ] robust actor resolution for schedule-triggered runs
   - [ ] retry/backoff observability in run event timeline
+- [ ] Full frontend UX adoption of newly added completion APIs (data trust, review lane, coverage trend, ROI cards).
+- [ ] UX polish and flow simplification for new controls (replace ID-based inputs with role-aware pickers).
 
 ## 6) Pending by Phase
 ### Phase A (Weeks 1-4): Data + Query Hardening
 - [ ] connector-native SQL profile management and credential validation depth
-- [ ] ingestion quality card: missingness, duplicates, date continuity, invalid numerics
-- [ ] dataset profiling artifact and room trust summary card
+- [x] ingestion profiling API: missingness, duplicates, date continuity, invalid numerics
+- [x] dataset profiling persistence and room trust endpoint
+- [ ] full Studio UI quality card polish for profile/trust
 
 ### Phase B (Weeks 5-8): Exploration Depth
-- [ ] pivot calculated columns and % of total/ranking UX
+- [x] pivot compute API with calculated outputs (`rank`, `% of total`, formula)
+- [ ] pivot UI depth/polish for calculated workflows
 - [ ] cross-filter interactions between visuals and result tables
-- [ ] chart annotations and pinned insight workflows
+- [x] visual annotation API persistence
+- [ ] chart annotation UX/pinned insight polish
 - [ ] RevOps visual template library polish
 
 ### Phase C (Weeks 9-12): Semantic Metrics + Evidence Contract
@@ -90,12 +120,14 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 ### Phase D (Weeks 13-16): Collaboration + Communication
 - [ ] anchor-level assignment and resolved-state audit timeline
 - [ ] mention routing presets (manager, exec, owner group)
+- [x] backend review workflow endpoints (submit/respond)
 - [ ] pre-publish review flow UI (draft -> manager approve -> exec notify)
 
 ### Phase E (Weeks 17-20): Automation Reliability
 - [ ] production scheduler with queue monitoring dashboard
 - [ ] failure taxonomy and operator alerting
-- [ ] exactly-once publish/sync protections with request dedupe keys
+- [x] idempotency key persistence + publish/sync endpoint guards
+- [ ] extend idempotency and dedupe guarantees to remaining mutating endpoints
 
 ### Phase F (Weeks 21-24): Launch Readiness
 - [ ] persona presets finalized (analyst/manager/executive)
@@ -105,7 +137,9 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 
 ## 7) Test Coverage Tracker
 - [x] Studio API contract coverage for new phase-4 endpoints.
+- [x] API contract tests updated for completion APIs (profile/query-version/pivot/annotate/review/coverage/roi).
 - [ ] backend integration tests for visual build/drill, metrics validate, and attribution.
+- [ ] backend integration tests for profile/query-version/review/idempotency paths.
 - [ ] end-to-end flow test:
   - [ ] connect -> run -> pivot -> visual -> report -> publish -> action -> status draft
 - [ ] queue reliability tests:
@@ -128,6 +162,26 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Phase 4 completion tranche):
+  - Added migration `034_phase4_completion_core.js` with additive tables:
+    - `dataset_profiles`, `query_versions`, `visual_annotations`, `review_submissions`, `idempotency_keys`.
+  - Added Studio backend endpoints:
+    - `POST /data/profile`, `GET /data/trust`
+    - `POST /queries/save-version`, `GET /queries/:queryId/versions`
+    - `POST /pivots/compute`
+    - `POST /visuals/:visualId/annotate`
+    - `POST /review/submit`, `POST /review/respond`
+    - `GET /evidence/coverage-trend`, `GET /roi`
+  - Added request idempotency handling for:
+    - `POST /reports/v2/:bundleId/publish`
+    - `POST /actions/sync`
+  - Frontend API client expanded for all new completion endpoints and idempotency payload support.
+  - Analytics Studio wired to new completion APIs:
+    - Data profile generation in `Sheets`
+    - Pivot compute via API
+    - Report review submit/respond controls
+    - Right-rail trust/coverage/ROI visibility
+  - Contract tests updated (`studioMvpApi.test.ts`) and passing.
 - 2026-02-19:
   - Added phase-4 schema and APIs for metrics, visuals, attribution, communication resolution, and automation scheduling.
   - Upgraded Studio UX with analyst-oriented panels and controls.

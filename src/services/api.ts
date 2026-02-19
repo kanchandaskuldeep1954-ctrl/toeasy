@@ -516,6 +516,82 @@ export interface OutcomeAttribution {
   evidenceArtifactIds: number[];
 }
 
+export interface DatasetProfileArtifact {
+  datasetVersionId: number | null;
+  qualityScore: number;
+  missingness: Array<{ field: string; missingCount: number; totalCount: number; ratio: number }>;
+  duplicateKeys: Array<{ field: string; duplicateCount: number; totalCount: number; ratio: number }>;
+  dateContinuity: Array<{ field: string; expectedDays: number; observedDays: number; continuityRatio: number }>;
+  invalidNumerics: Array<{ field: string; invalidCount: number; totalChecked: number; ratio: number }>;
+  generatedAt: string;
+  summary: {
+    rowCount: number;
+    columnCount: number;
+    topIssues: string[];
+  };
+}
+
+export interface QueryVersion {
+  id: number;
+  queryId: number | null;
+  versionNumber: number;
+  sqlTemplate: string;
+  parametersSchema: Record<string, any>;
+  metadata: Record<string, any>;
+  createdBy: number | null;
+  createdAt: string;
+}
+
+export interface PivotComputeSpec {
+  dimensions: string[];
+  measures: Array<string | { field: string; agg?: 'sum' | 'avg' | 'count' | 'min' | 'max'; as?: string }>;
+  calculations?: Array<{
+    type: 'percent_of_total' | 'rank' | 'formula';
+    sourceField?: string;
+    as?: string;
+    order?: 'asc' | 'desc';
+    expression?: string;
+  }>;
+  filters?: Array<{ field: string; operator?: string; value: any }>;
+}
+
+export interface VisualAnnotation {
+  id: number;
+  visualId: number;
+  text: string;
+  anchor: Record<string, any>;
+  createdBy: number | null;
+  createdAt: string;
+}
+
+export interface ReviewSubmission {
+  id: number;
+  roomId: number;
+  bundleId: string;
+  stage: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled' | string;
+  submittedBy: number | null;
+  submittedAt: string;
+  reviewerId: number | null;
+  note: string | null;
+  responseNote: string | null;
+  respondedBy: number | null;
+  respondedAt: string | null;
+}
+
+export interface CoverageTrendPoint {
+  ts: string;
+  evidenceCoverageRatio: number;
+  unsupportedClaims: number;
+}
+
+export interface RoomRoiSnapshot {
+  timeToInsightMin: number | null;
+  timeToActionMin: number | null;
+  manualUpdateReductionPct: number;
+  evidenceCoverageRatio: number;
+}
+
 export interface StudioBootstrapRequest {
   datasetId?: number;
   source?: 'login' | 'upload' | 'dataset_library' | 'deep_link';
@@ -577,6 +653,38 @@ export const studioAPI = {
 
   getRoomState: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/state`),
+
+  generateDataProfile: (
+    workspaceId: string,
+    roomId: string,
+    data?: { datasetVersionId?: number; minQualityScore?: number }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/data/profile`, data || {}),
+
+  getRoomTrust: (
+    workspaceId: string,
+    roomId: string,
+    params?: { minQualityScore?: number; threshold?: number }
+  ) => getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/data/trust`, { params }),
+
+  saveQueryVersion: (
+    workspaceId: string,
+    roomId: string,
+    data: {
+      queryId?: number | null;
+      sqlTemplate: string;
+      parametersSchema?: Record<string, any>;
+      metadata?: Record<string, any>;
+    }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/queries/save-version`, data),
+
+  listQueryVersions: (workspaceId: string, roomId: string, queryId: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/queries/${queryId}/versions`),
+
+  computePivot: (
+    workspaceId: string,
+    roomId: string,
+    data: { name?: string; spec: PivotComputeSpec }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/pivots/compute`, data),
 
   getGuide: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/guide`),
@@ -670,6 +778,13 @@ export const studioAPI = {
     data?: { level?: number; pathValues?: Record<string, any> }
   ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/${visualId}/drill`, data || {}),
 
+  annotateVisual: (
+    workspaceId: string,
+    roomId: string,
+    visualId: string | number,
+    data: { text: string; anchor?: Record<string, any> }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/${visualId}/annotate`, data),
+
   generateReportV2: (workspaceId: string, roomId: string, data?: ReportV2GenerateRequest) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/generate`, data || {}),
 
@@ -683,10 +798,22 @@ export const studioAPI = {
     workspaceId: string,
     roomId: string,
     bundleId: string,
-    data?: { channel?: 'slack' | 'in_app'; mentionTokens?: string[]; mentions?: string }
+    data?: { channel?: 'slack' | 'in_app'; mentionTokens?: string[]; mentions?: string; idempotencyKey?: string }
   ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/${bundleId}/publish`, data || {}),
 
-  syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean }) =>
+  submitReview: (
+    workspaceId: string,
+    roomId: string,
+    data: { bundleId?: string; stage?: string; reviewerId?: number; note?: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/review/submit`, data || {}),
+
+  respondReview: (
+    workspaceId: string,
+    roomId: string,
+    data: { submissionId: number; decision: 'approved' | 'rejected' | 'cancelled'; responseNote?: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/review/respond`, data),
+
+  syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean; idempotencyKey?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/actions/sync`, data || {}),
 
   generateStatusDraft: (workspaceId: string, roomId: string, data?: { persist?: boolean }) =>
@@ -694,6 +821,12 @@ export const studioAPI = {
 
   getOutcomeAttribution: (workspaceId: string, roomId: string, params?: { persist?: boolean }) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/outcomes/attribution`, { params }),
+
+  getEvidenceCoverageTrend: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/evidence/coverage-trend`),
+
+  getRoomRoi: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/roi`),
 
   getPlaybookRecommendations: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/playbooks/recommendations`),

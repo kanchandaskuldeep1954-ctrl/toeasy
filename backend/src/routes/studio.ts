@@ -253,6 +253,82 @@ interface CommentResolution {
   resolutionNote: string | null;
 }
 
+interface DatasetProfileArtifact {
+  datasetVersionId: number | null;
+  qualityScore: number;
+  missingness: Array<{ field: string; missingCount: number; totalCount: number; ratio: number }>;
+  duplicateKeys: Array<{ field: string; duplicateCount: number; totalCount: number; ratio: number }>;
+  dateContinuity: Array<{ field: string; expectedDays: number; observedDays: number; continuityRatio: number }>;
+  invalidNumerics: Array<{ field: string; invalidCount: number; totalChecked: number; ratio: number }>;
+  generatedAt: string;
+  summary: {
+    rowCount: number;
+    columnCount: number;
+    topIssues: string[];
+  };
+}
+
+interface QueryVersion {
+  id: number;
+  queryId: number | null;
+  versionNumber: number;
+  sqlTemplate: string;
+  parametersSchema: Record<string, any>;
+  metadata: Record<string, any>;
+  createdBy: number | null;
+  createdAt: string;
+}
+
+interface PivotComputeSpec {
+  dimensions: string[];
+  measures: Array<string | { field: string; agg?: 'sum' | 'avg' | 'count' | 'min' | 'max'; as?: string }>;
+  calculations: Array<{
+    type: 'percent_of_total' | 'rank' | 'formula';
+    sourceField?: string;
+    as?: string;
+    order?: 'asc' | 'desc';
+    expression?: string;
+  }>;
+  filters: Array<{ field: string; operator?: string; value: any }>;
+}
+
+interface VisualAnnotation {
+  id: number;
+  visualId: number;
+  text: string;
+  anchor: Record<string, any>;
+  createdBy: number | null;
+  createdAt: string;
+}
+
+interface ReviewSubmission {
+  id: number;
+  roomId: number;
+  bundleId: string;
+  stage: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  submittedBy: number | null;
+  submittedAt: string;
+  reviewerId: number | null;
+  note: string | null;
+  responseNote: string | null;
+  respondedBy: number | null;
+  respondedAt: string | null;
+}
+
+interface CoverageTrendPoint {
+  ts: string;
+  evidenceCoverageRatio: number;
+  unsupportedClaims: number;
+}
+
+interface RoomRoiSnapshot {
+  timeToInsightMin: number | null;
+  timeToActionMin: number | null;
+  manualUpdateReductionPct: number;
+  evidenceCoverageRatio: number;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -2608,6 +2684,145 @@ function buildDrillData(
   };
 }
 
+function buildPivotData(
+  rows: Record<string, any>[],
+  spec: PivotComputeSpec
+): Record<string, any>[] {
+  const dimensions = Array.isArray(spec.dimensions) ? spec.dimensions.filter(Boolean) : [];
+  const measureInput = Array.isArray(spec.measures) ? spec.measures : [];
+  const filters = Array.isArray(spec.filters) ? spec.filters : [];
+  const calculations = Array.isArray(spec.calculations) ? spec.calculations : [];
+
+  const measures = measureInput.map((measure, index) => {
+    if (typeof measure === 'string') {
+      return {
+        field: measure,
+        agg: 'sum' as const,
+        as: measure
+      };
+    }
+    const field = String(measure?.field || '');
+    const aggRaw = String(measure?.agg || 'sum').toLowerCase();
+    const agg = ['sum', 'avg', 'count', 'min', 'max'].includes(aggRaw)
+      ? (aggRaw as 'sum' | 'avg' | 'count' | 'min' | 'max')
+      : 'sum';
+    const alias = String(measure?.as || field || `measure_${index + 1}`);
+    return {
+      field,
+      agg,
+      as: alias
+    };
+  }).filter((measure) => Boolean(measure.as));
+
+  const filteredRows = applyVisualFilters(rows, filters);
+  const grouped = new Map<string, Record<string, any>>();
+
+  for (const row of filteredRows) {
+    const keyParts = dimensions.map((dimension) => String(row?.[dimension] ?? '(blank)'));
+    const key = dimensions.length ? keyParts.join('||') : '__all__';
+    const aggregate = grouped.get(key) || {};
+
+    if (dimensions.length === 0) {
+      aggregate.group = 'all_rows';
+    } else {
+      dimensions.forEach((dimension, idx) => {
+        aggregate[dimension] = keyParts[idx];
+      });
+    }
+
+    aggregate.__rowCount = Number(aggregate.__rowCount || 0) + 1;
+
+    for (const measure of measures) {
+      const alias = measure.as;
+      const numericValue = toFiniteNumber(row?.[measure.field] ?? 0) || 0;
+      const currentValue = Number(aggregate[alias] || 0);
+
+      if (measure.agg === 'count') {
+        aggregate[alias] = currentValue + 1;
+      } else if (measure.agg === 'sum') {
+        aggregate[alias] = currentValue + numericValue;
+      } else if (measure.agg === 'min') {
+        const existing = aggregate[alias];
+        aggregate[alias] = existing === undefined ? numericValue : Math.min(Number(existing), numericValue);
+      } else if (measure.agg === 'max') {
+        const existing = aggregate[alias];
+        aggregate[alias] = existing === undefined ? numericValue : Math.max(Number(existing), numericValue);
+      } else if (measure.agg === 'avg') {
+        const sumKey = `${alias}__sum`;
+        const countKey = `${alias}__count`;
+        aggregate[sumKey] = Number(aggregate[sumKey] || 0) + numericValue;
+        aggregate[countKey] = Number(aggregate[countKey] || 0) + 1;
+      }
+    }
+
+    grouped.set(key, aggregate);
+  }
+
+  const pivotRows = Array.from(grouped.values()).map((entry) => {
+    const next = { ...entry };
+    for (const measure of measures) {
+      if (measure.agg === 'avg') {
+        const sumKey = `${measure.as}__sum`;
+        const countKey = `${measure.as}__count`;
+        const sum = Number(next[sumKey] || 0);
+        const count = Number(next[countKey] || 0);
+        next[measure.as] = count > 0 ? toRounded(sum / count, 6) : 0;
+        delete next[sumKey];
+        delete next[countKey];
+      }
+    }
+    return next;
+  });
+
+  for (const calculation of calculations) {
+    const type = String(calculation?.type || '').toLowerCase();
+    const sourceField = String(calculation?.sourceField || '');
+    const alias = String(calculation?.as || `${sourceField}_${type}` || 'calc');
+    if (!alias) continue;
+
+    if (type === 'percent_of_total') {
+      const total = pivotRows.reduce((acc, row) => acc + (toFiniteNumber(row?.[sourceField]) || 0), 0);
+      pivotRows.forEach((row) => {
+        const value = toFiniteNumber(row?.[sourceField]) || 0;
+        row[alias] = total > 0 ? toRounded((value / total) * 100, 4) : 0;
+      });
+    } else if (type === 'rank') {
+      const order = String(calculation?.order || 'desc').toLowerCase() === 'asc' ? 'asc' : 'desc';
+      const sorted = [...pivotRows]
+        .map((row, index) => ({ row, index, value: toFiniteNumber(row?.[sourceField]) || 0 }))
+        .sort((a, b) => order === 'asc' ? a.value - b.value : b.value - a.value);
+      sorted.forEach((entry, index) => {
+        entry.row[alias] = index + 1;
+      });
+    } else if (type === 'formula') {
+      const expression = String(calculation?.expression || '').trim();
+      if (!expression) continue;
+      pivotRows.forEach((row) => {
+        const result = SafeExecutor.execute(expression, row, 200);
+        row[alias] = result.success ? result.result : null;
+      });
+    }
+  }
+
+  const primaryMeasure = measures[0]?.as || dimensions[0] || '__rowCount';
+  return pivotRows
+    .sort((a, b) => {
+      const aValue = toFiniteNumber(a?.[primaryMeasure]);
+      const bValue = toFiniteNumber(b?.[primaryMeasure]);
+      return (bValue || 0) - (aValue || 0);
+    })
+    .slice(0, 2000)
+    .map((row) => {
+      const cleaned: Record<string, any> = {};
+      Object.keys(row).forEach((key) => {
+        if (!key.startsWith('__')) {
+          cleaned[key] = row[key];
+        }
+      });
+      return cleaned;
+    });
+}
+
 function parseRetryPolicy(input: any) {
   const fallback = { maxAttempts: 3, backoffMs: 300 };
   if (!input || typeof input !== 'object') return fallback;
@@ -2651,6 +2866,379 @@ function toAutomationScheduleRecord(row: any): AutomationScheduleRecord {
     lastRunAt: row.last_run_at || null,
     createdAt: row.created_at
   };
+}
+
+function toRounded(value: number, digits: number = 4): number {
+  if (!Number.isFinite(value)) return 0;
+  const factor = Math.pow(10, digits);
+  return Math.round(value * factor) / factor;
+}
+
+function clampUnit(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value));
+}
+
+function normalizeIdempotencyKey(input: any): string | null {
+  const value = String(input || '').trim();
+  if (!value) return null;
+  return value.slice(0, 180);
+}
+
+function resolveIdempotencyKey(req: WorkspaceRequest): string | null {
+  const header = req.headers['idempotency-key'];
+  const headerValue = Array.isArray(header) ? header[0] : header;
+  const bodyValue = req.body?.idempotencyKey;
+  return normalizeIdempotencyKey(headerValue || bodyValue);
+}
+
+interface IdempotencyStartResult {
+  idempotencyKey: string | null;
+  replay?: { statusCode: number; payload: Record<string, any> };
+  inProgress?: boolean;
+}
+
+async function beginIdempotentOperation(params: {
+  workspaceId: number;
+  roomId: number | null;
+  endpointKey: string;
+  userId: string;
+  idempotencyKey: string | null;
+}): Promise<IdempotencyStartResult> {
+  if (!params.idempotencyKey) {
+    return { idempotencyKey: null };
+  }
+
+  const readExisting = async () => {
+    const existing = await query(
+      `
+      SELECT id, status_code, response_payload, completed_at
+      FROM idempotency_keys
+      WHERE workspace_id = $1
+        AND endpoint_key = $2
+        AND idempotency_key = $3
+        AND (($4::int IS NULL AND room_id IS NULL) OR room_id = $4)
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [params.workspaceId, params.endpointKey, params.idempotencyKey, params.roomId]
+    );
+
+    if (existing.rows.length === 0) return null;
+    return existing.rows[0];
+  };
+
+  const existingBeforeInsert = await readExisting();
+  if (existingBeforeInsert?.completed_at) {
+    return {
+      idempotencyKey: params.idempotencyKey,
+      replay: {
+        statusCode: Number(existingBeforeInsert.status_code || 200),
+        payload: parseJsonMaybe(existingBeforeInsert.response_payload, {})
+      }
+    };
+  }
+  if (existingBeforeInsert && !existingBeforeInsert.completed_at) {
+    return {
+      idempotencyKey: params.idempotencyKey,
+      inProgress: true
+    };
+  }
+
+  await query(
+    `
+    INSERT INTO idempotency_keys (
+      workspace_id,
+      room_id,
+      endpoint_key,
+      idempotency_key,
+      created_by,
+      response_payload
+    )
+    VALUES ($1,$2,$3,$4,$5,$6)
+    ON CONFLICT (workspace_id, room_id, endpoint_key, idempotency_key) DO NOTHING
+    `,
+    [
+      params.workspaceId,
+      params.roomId,
+      params.endpointKey,
+      params.idempotencyKey,
+      params.userId,
+      JSON.stringify({})
+    ]
+  );
+
+  const existingAfterInsert = await readExisting();
+  if (existingAfterInsert?.completed_at) {
+    return {
+      idempotencyKey: params.idempotencyKey,
+      replay: {
+        statusCode: Number(existingAfterInsert.status_code || 200),
+        payload: parseJsonMaybe(existingAfterInsert.response_payload, {})
+      }
+    };
+  }
+  if (!existingAfterInsert) {
+    return { idempotencyKey: params.idempotencyKey };
+  }
+
+  return {
+    idempotencyKey: params.idempotencyKey
+  };
+}
+
+async function completeIdempotentOperation(params: {
+  workspaceId: number;
+  roomId: number | null;
+  endpointKey: string;
+  idempotencyKey: string | null;
+  statusCode: number;
+  payload: Record<string, any>;
+}) {
+  if (!params.idempotencyKey) return;
+
+  await query(
+    `
+    UPDATE idempotency_keys
+    SET status_code = $5,
+        response_payload = $6,
+        completed_at = NOW(),
+        updated_at = NOW()
+    WHERE workspace_id = $1
+      AND endpoint_key = $2
+      AND idempotency_key = $3
+      AND (($4::int IS NULL AND room_id IS NULL) OR room_id = $4)
+    `,
+    [
+      params.workspaceId,
+      params.endpointKey,
+      params.idempotencyKey,
+      params.roomId,
+      params.statusCode,
+      JSON.stringify(params.payload || {})
+    ]
+  );
+}
+
+function computeDatasetProfile(params: {
+  rows: Record<string, any>[];
+  columns: string[];
+  datasetVersionId: number | null;
+}): DatasetProfileArtifact {
+  const rows = Array.isArray(params.rows) ? params.rows : [];
+  const columns = Array.isArray(params.columns) ? params.columns.filter(Boolean) : [];
+  const rowCount = rows.length;
+  const totalCount = Math.max(rowCount, 1);
+
+  const missingness = columns.map((field) => {
+    let missingCount = 0;
+    for (const row of rows) {
+      const value = row?.[field];
+      if (value === null || value === undefined || String(value).trim() === '') {
+        missingCount += 1;
+      }
+    }
+    return {
+      field,
+      missingCount,
+      totalCount: rowCount,
+      ratio: toRounded(missingCount / totalCount, 5)
+    };
+  });
+
+  const duplicateCandidates = columns.filter((field) => {
+    const normalized = normalizeFieldName(field);
+    return normalized.includes('id') || normalized.includes('email') || normalized.includes('name');
+  });
+  const dedupeFields = (duplicateCandidates.length ? duplicateCandidates : columns.slice(0, 2)).slice(0, 5);
+  const duplicateKeys = dedupeFields.map((field) => {
+    const seen = new Map<string, number>();
+    for (const row of rows) {
+      const raw = row?.[field];
+      if (raw === null || raw === undefined || String(raw).trim() === '') continue;
+      const key = String(raw).trim().toLowerCase();
+      seen.set(key, (seen.get(key) || 0) + 1);
+    }
+    const nonNull = Array.from(seen.values()).reduce((acc, count) => acc + count, 0);
+    const duplicateCount = Array.from(seen.values()).reduce((acc, count) => acc + (count > 1 ? count - 1 : 0), 0);
+    const ratio = nonNull > 0 ? duplicateCount / nonNull : 0;
+    return {
+      field,
+      duplicateCount,
+      totalCount: nonNull,
+      ratio: toRounded(ratio, 5)
+    };
+  });
+
+  const dateContinuity = columns
+    .filter((field) => {
+      const nonEmpty = rows.filter((row) => row?.[field] !== null && row?.[field] !== undefined && String(row?.[field]).trim() !== '');
+      if (nonEmpty.length < 3) return false;
+      const parseable = nonEmpty.filter((row) => Boolean(toDateMaybe(row?.[field]))).length;
+      return parseable / nonEmpty.length >= 0.6;
+    })
+    .slice(0, 5)
+    .map((field) => {
+      const dates = rows
+        .map((row) => toDateMaybe(row?.[field]))
+        .filter((value): value is Date => Boolean(value))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+      if (dates.length < 2) {
+        return { field, expectedDays: 0, observedDays: dates.length, continuityRatio: 1 };
+      }
+
+      const minDate = dates[0];
+      const maxDate = dates[dates.length - 1];
+      const expectedDays = Math.max(
+        1,
+        Math.floor((maxDate.getTime() - minDate.getTime()) / (1000 * 60 * 60 * 24)) + 1
+      );
+      const observedDays = new Set(dates.map((date) => toIsoDate(date))).size;
+      return {
+        field,
+        expectedDays,
+        observedDays,
+        continuityRatio: toRounded(clampUnit(observedDays / expectedDays), 5)
+      };
+    });
+
+  const invalidNumerics = columns
+    .filter((field) => {
+      const nonEmpty = rows.filter((row) => row?.[field] !== null && row?.[field] !== undefined && String(row?.[field]).trim() !== '');
+      if (nonEmpty.length < 3) return false;
+      const numericLike = nonEmpty.filter((row) => {
+        const value = row?.[field];
+        if (typeof value === 'number') return Number.isFinite(value);
+        return Number.isFinite(Number(String(value).replace(/,/g, '').trim()));
+      }).length;
+      return numericLike / nonEmpty.length >= 0.5;
+    })
+    .slice(0, 8)
+    .map((field) => {
+      const nonEmpty = rows.filter((row) => row?.[field] !== null && row?.[field] !== undefined && String(row?.[field]).trim() !== '');
+      const invalidCount = nonEmpty.filter((row) => {
+        const value = row?.[field];
+        if (typeof value === 'number') return !Number.isFinite(value);
+        return !Number.isFinite(Number(String(value).replace(/,/g, '').trim()));
+      }).length;
+      const checked = nonEmpty.length;
+      return {
+        field,
+        invalidCount,
+        totalChecked: checked,
+        ratio: checked > 0 ? toRounded(invalidCount / checked, 5) : 0
+      };
+    });
+
+  const missingPenalty = missingness.length
+    ? missingness.reduce((acc, item) => acc + item.ratio, 0) / missingness.length
+    : 0;
+  const duplicatePenalty = duplicateKeys.length
+    ? Math.max(...duplicateKeys.map((item) => item.ratio))
+    : 0;
+  const datePenalty = dateContinuity.length
+    ? dateContinuity.reduce((acc, item) => acc + (1 - item.continuityRatio), 0) / dateContinuity.length
+    : 0;
+  const numericPenalty = invalidNumerics.length
+    ? invalidNumerics.reduce((acc, item) => acc + item.ratio, 0) / invalidNumerics.length
+    : 0;
+
+  const qualityScore = toRounded(clampUnit(1 - (
+    (0.35 * missingPenalty) +
+    (0.25 * duplicatePenalty) +
+    (0.2 * datePenalty) +
+    (0.2 * numericPenalty)
+  )), 5);
+
+  const topIssues: string[] = [];
+  const worstMissing = [...missingness].sort((a, b) => b.ratio - a.ratio)[0];
+  if (worstMissing && worstMissing.ratio >= 0.2) {
+    topIssues.push(`High missingness in "${worstMissing.field}" (${(worstMissing.ratio * 100).toFixed(1)}%).`);
+  }
+  const worstDuplicate = [...duplicateKeys].sort((a, b) => b.ratio - a.ratio)[0];
+  if (worstDuplicate && worstDuplicate.ratio >= 0.05) {
+    topIssues.push(`Duplicate key risk in "${worstDuplicate.field}" (${(worstDuplicate.ratio * 100).toFixed(1)}%).`);
+  }
+  const worstDate = [...dateContinuity].sort((a, b) => a.continuityRatio - b.continuityRatio)[0];
+  if (worstDate && worstDate.continuityRatio < 0.8) {
+    topIssues.push(`Date continuity gap in "${worstDate.field}" (${(worstDate.continuityRatio * 100).toFixed(1)}%).`);
+  }
+  const worstNumeric = [...invalidNumerics].sort((a, b) => b.ratio - a.ratio)[0];
+  if (worstNumeric && worstNumeric.ratio >= 0.05) {
+    topIssues.push(`Invalid numeric values in "${worstNumeric.field}" (${(worstNumeric.ratio * 100).toFixed(1)}%).`);
+  }
+
+  return {
+    datasetVersionId: params.datasetVersionId,
+    qualityScore,
+    missingness,
+    duplicateKeys,
+    dateContinuity,
+    invalidNumerics,
+    generatedAt: new Date().toISOString(),
+    summary: {
+      rowCount,
+      columnCount: columns.length,
+      topIssues
+    }
+  };
+}
+
+function toQueryVersionRecord(row: any): QueryVersion {
+  return {
+    id: Number(row.id),
+    queryId: row.query_id ? Number(row.query_id) : null,
+    versionNumber: Number(row.version_number || 1),
+    sqlTemplate: String(row.sql_template || ''),
+    parametersSchema: parseJsonMaybe<Record<string, any>>(row.parameters_schema, {}),
+    metadata: parseJsonMaybe<Record<string, any>>(row.metadata, {}),
+    createdBy: row.created_by ? Number(row.created_by) : null,
+    createdAt: String(row.created_at)
+  };
+}
+
+function toVisualAnnotationRecord(row: any): VisualAnnotation {
+  return {
+    id: Number(row.id),
+    visualId: Number(row.visual_id),
+    text: String(row.text || ''),
+    anchor: parseJsonMaybe<Record<string, any>>(row.anchor, {}),
+    createdBy: row.created_by ? Number(row.created_by) : null,
+    createdAt: String(row.created_at)
+  };
+}
+
+function toReviewSubmissionRecord(row: any): ReviewSubmission {
+  return {
+    id: Number(row.id),
+    roomId: Number(row.room_id),
+    bundleId: String(row.bundle_id || ''),
+    stage: String(row.stage || 'manager_review'),
+    status: String(row.status || 'pending') as ReviewSubmission['status'],
+    submittedBy: row.submitted_by ? Number(row.submitted_by) : null,
+    submittedAt: String(row.created_at),
+    reviewerId: row.reviewer_id ? Number(row.reviewer_id) : null,
+    note: row.note || null,
+    responseNote: row.response_note || null,
+    respondedBy: row.responded_by ? Number(row.responded_by) : null,
+    respondedAt: row.responded_at || null
+  };
+}
+
+async function listVisualAnnotations(workspaceId: number, roomId: number, visualId: number): Promise<VisualAnnotation[]> {
+  const result = await query(
+    `
+    SELECT id, visual_id, text, anchor, created_by, created_at
+    FROM visual_annotations
+    WHERE workspace_id = $1
+      AND room_id = $2
+      AND visual_id = $3
+    ORDER BY created_at ASC
+    `,
+    [workspaceId, roomId, visualId]
+  );
+  return result.rows.map(toVisualAnnotationRecord);
 }
 
 router.post('/:workspaceId/studio/bootstrap', async (req: WorkspaceRequest, res: Response) => {
@@ -3063,6 +3651,452 @@ router.get('/:workspaceId/rooms/:roomId/state', async (req: WorkspaceRequest, re
   }
 });
 
+router.post('/:workspaceId/rooms/:roomId/data/profile', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const datasetVersionIdInput = Number(req.body?.datasetVersionId || 0);
+    const source = await resolveDatasetRows(
+      workspaceId,
+      Number.isFinite(datasetVersionIdInput) && datasetVersionIdInput > 0 ? datasetVersionIdInput : undefined,
+      req.body || {}
+    );
+
+    const profile = computeDatasetProfile({
+      rows: source.rows,
+      columns: source.columns,
+      datasetVersionId: source.datasetVersionId
+    });
+
+    const profileArtifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id,
+      roomId,
+      artifactType: 'report_block',
+      title: `Data Profile - ${new Date().toISOString().slice(0, 10)}`,
+      description: 'Automated dataset trust profile generated for room quality checks.',
+      payload: {
+        profileType: 'dataset_profile',
+        profileVersion: 'v1',
+        ...profile
+      },
+      metadata: {
+        generatedBy: 'data_profile_endpoint'
+      },
+      datasetVersionId: source.datasetVersionId,
+      sourceDatasetId: source.sourceDatasetId,
+      createdBy: req.user!.id
+    });
+
+    const profileInsert = await query(
+      `
+      INSERT INTO dataset_profiles (
+        workspace_id,
+        room_id,
+        dataset_id,
+        dataset_version_id,
+        artifact_id,
+        quality_score,
+        missingness,
+        duplicate_keys,
+        date_continuity,
+        invalid_numerics,
+        row_count,
+        column_count,
+        summary,
+        created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+      RETURNING *
+      `,
+      [
+        workspaceId,
+        roomId,
+        source.sourceDatasetId,
+        source.datasetVersionId,
+        Number(profileArtifact.id),
+        profile.qualityScore,
+        JSON.stringify(profile.missingness),
+        JSON.stringify(profile.duplicateKeys),
+        JSON.stringify(profile.dateContinuity),
+        JSON.stringify(profile.invalidNumerics),
+        profile.summary.rowCount,
+        profile.summary.columnCount,
+        JSON.stringify(profile.summary),
+        req.user!.id
+      ]
+    );
+
+    const parentArtifactIds: number[] = [];
+    if (source.datasetVersionId) {
+      const datasetArtifact = await query(
+        `
+        SELECT id
+        FROM artifacts
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND artifact_type = 'dataset_version'
+          AND dataset_version_id = $3
+        ORDER BY created_at DESC
+        LIMIT 1
+        `,
+        [workspaceId, roomId, source.datasetVersionId]
+      );
+      if (datasetArtifact.rows.length > 0) {
+        parentArtifactIds.push(Number(datasetArtifact.rows[0].id));
+      }
+    }
+    if (parentArtifactIds.length > 0) {
+      await createLineageEdges({
+        workspaceId,
+        roomId,
+        parentArtifactIds,
+        childArtifactId: Number(profileArtifact.id),
+        relationType: 'derived_from',
+        createdBy: req.user!.id
+      });
+    }
+
+    const minQualityScore = Number(req.body?.minQualityScore ?? 0);
+    const qualityThreshold = Number.isFinite(minQualityScore)
+      ? clampUnit(minQualityScore)
+      : 0;
+    const publishBlocked = profile.qualityScore < qualityThreshold;
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_data_profile_generated',
+      metadata: {
+        datasetVersionId: source.datasetVersionId,
+        datasetId: source.sourceDatasetId,
+        artifactId: Number(profileArtifact.id),
+        qualityScore: profile.qualityScore,
+        publishBlocked
+      }
+    });
+
+    return res.status(201).json({
+      roomId,
+      profileId: Number(profileInsert.rows[0].id),
+      profile,
+      quality: {
+        qualityScore: profile.qualityScore,
+        threshold: qualityThreshold,
+        publishBlocked
+      },
+      artifact: {
+        ...profileArtifact,
+        payload: parseJsonMaybe(profileArtifact.payload, {}),
+        metadata: parseJsonMaybe(profileArtifact.metadata, {})
+      }
+    });
+  } catch (err) {
+    console.error('Generate data profile failed:', err);
+    return res.status(500).json({ error: 'Failed to generate room data profile' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/data/trust', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const latest = await query(
+      `
+      SELECT *
+      FROM dataset_profiles
+      WHERE workspace_id = $1
+        AND room_id = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [workspaceId, roomId]
+    );
+    if (latest.rows.length === 0) {
+      return res.status(404).json({ error: 'No data profile found. Generate a profile first.' });
+    }
+
+    const profileRow = latest.rows[0];
+    const qualityScore = Number(profileRow.quality_score || 0);
+    const thresholdRaw = Number(req.query.minQualityScore ?? req.query.threshold ?? 0.65);
+    const threshold = Number.isFinite(thresholdRaw) ? clampUnit(thresholdRaw) : 0.65;
+
+    const trust = {
+      profileId: Number(profileRow.id),
+      qualityScore,
+      threshold,
+      publishBlocked: qualityScore < threshold,
+      datasetId: profileRow.dataset_id ? Number(profileRow.dataset_id) : null,
+      datasetVersionId: profileRow.dataset_version_id ? Number(profileRow.dataset_version_id) : null,
+      generatedAt: profileRow.created_at,
+      summary: parseJsonMaybe(profileRow.summary, {}),
+      missingness: parseJsonMaybe(profileRow.missingness, []),
+      duplicateKeys: parseJsonMaybe(profileRow.duplicate_keys, []),
+      dateContinuity: parseJsonMaybe(profileRow.date_continuity, []),
+      invalidNumerics: parseJsonMaybe(profileRow.invalid_numerics, [])
+    };
+
+    return res.json({
+      roomId,
+      trust
+    });
+  } catch (err) {
+    console.error('Load room trust failed:', err);
+    return res.status(500).json({ error: 'Failed to load room trust summary' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/queries/save-version', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const queryIdRaw = req.body?.queryId;
+    const queryId = queryIdRaw === null || queryIdRaw === undefined || queryIdRaw === ''
+      ? null
+      : Number(queryIdRaw);
+    if (queryId !== null && !Number.isFinite(queryId)) {
+      return res.status(400).json({ error: 'queryId must be numeric when provided' });
+    }
+
+    if (queryId !== null) {
+      const queryCheck = await query(
+        `
+        SELECT id
+        FROM queries
+        WHERE id = $1
+          AND workspace_id = $2
+        LIMIT 1
+        `,
+        [queryId, workspaceId]
+      );
+      if (queryCheck.rows.length === 0) {
+        return res.status(404).json({ error: 'Referenced query not found in workspace' });
+      }
+    }
+
+    const sqlTemplate = String(
+      req.body?.sqlTemplate ||
+      req.body?.sql ||
+      req.body?.query ||
+      ''
+    ).trim();
+    if (!sqlTemplate) {
+      return res.status(400).json({ error: 'sqlTemplate is required' });
+    }
+
+    const parametersSchema = req.body?.parametersSchema && typeof req.body.parametersSchema === 'object'
+      ? req.body.parametersSchema
+      : {};
+    const metadata = req.body?.metadata && typeof req.body.metadata === 'object'
+      ? req.body.metadata
+      : {};
+
+    const versionBaseResult = await query(
+      `
+      SELECT COALESCE(MAX(version_number), 0)::int AS max_version
+      FROM query_versions
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND (($3::int IS NULL AND query_id IS NULL) OR query_id = $3)
+      `,
+      [workspaceId, roomId, queryId]
+    );
+    const versionNumber = Number(versionBaseResult.rows[0]?.max_version || 0) + 1;
+
+    const insertResult = await query(
+      `
+      INSERT INTO query_versions (
+        workspace_id,
+        room_id,
+        query_id,
+        version_number,
+        sql_template,
+        parameters_schema,
+        metadata,
+        created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      RETURNING *
+      `,
+      [
+        workspaceId,
+        roomId,
+        queryId,
+        versionNumber,
+        sqlTemplate,
+        JSON.stringify(parametersSchema),
+        JSON.stringify(metadata),
+        req.user!.id
+      ]
+    );
+
+    const version = toQueryVersionRecord(insertResult.rows[0]);
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_query_version_saved',
+      metadata: {
+        queryId: version.queryId,
+        versionId: version.id,
+        versionNumber: version.versionNumber
+      }
+    });
+
+    return res.status(201).json({
+      roomId,
+      version
+    });
+  } catch (err) {
+    console.error('Save query version failed:', err);
+    return res.status(500).json({ error: 'Failed to save query version' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/queries/:queryId/versions', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const queryId = Number(req.params.queryId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    if (!Number.isFinite(queryId)) {
+      return res.status(400).json({ error: 'Invalid query id' });
+    }
+
+    const versionsResult = await query(
+      `
+      SELECT *
+      FROM query_versions
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND query_id = $3
+      ORDER BY version_number DESC, created_at DESC
+      `,
+      [workspaceId, roomId, queryId]
+    );
+
+    return res.json({
+      roomId,
+      queryId,
+      versions: versionsResult.rows.map(toQueryVersionRecord)
+    });
+  } catch (err) {
+    console.error('List query versions failed:', err);
+    return res.status(500).json({ error: 'Failed to list query versions' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/pivots/compute', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const specRaw = req.body?.spec || req.body || {};
+    const spec: PivotComputeSpec = {
+      dimensions: Array.isArray(specRaw.dimensions) ? specRaw.dimensions.map((value: any) => String(value)).filter(Boolean) : [],
+      measures: Array.isArray(specRaw.measures) ? specRaw.measures : [],
+      calculations: Array.isArray(specRaw.calculations) ? specRaw.calculations : [],
+      filters: Array.isArray(specRaw.filters) ? specRaw.filters : []
+    };
+
+    if (spec.dimensions.length === 0 && (!Array.isArray(spec.measures) || spec.measures.length === 0)) {
+      return res.status(400).json({ error: 'Pivot requires at least one dimension or measure.' });
+    }
+
+    const source = await resolveRoomRowsAndEvidence(workspaceId, room);
+    const pivotRows = buildPivotData(source.rows, spec);
+
+    const artifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id,
+      roomId,
+      artifactType: 'pivot',
+      title: String(req.body?.name || `Pivot - ${spec.dimensions.join(', ') || 'summary'}`),
+      description: 'Computed pivot artifact from Pivot Compute API.',
+      payload: {
+        config: spec,
+        rowCount: pivotRows.length,
+        previewRows: pivotRows.slice(0, 500)
+      },
+      metadata: {
+        generatedBy: 'pivots_compute_api'
+      },
+      createdBy: req.user!.id
+    });
+
+    if (source.evidenceArtifactIds.length > 0) {
+      await createLineageEdges({
+        workspaceId,
+        roomId,
+        parentArtifactIds: source.evidenceArtifactIds,
+        childArtifactId: Number(artifact.id),
+        relationType: 'derived_from',
+        createdBy: req.user!.id
+      });
+    }
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_pivot_computed',
+      metadata: {
+        artifactId: Number(artifact.id),
+        rowCount: pivotRows.length,
+        dimensionCount: spec.dimensions.length
+      }
+    });
+
+    return res.status(201).json({
+      roomId,
+      pivot: {
+        artifactId: Number(artifact.id),
+        rows: pivotRows,
+        rowCount: pivotRows.length,
+        spec
+      }
+    });
+  } catch (err) {
+    console.error('Compute pivot failed:', err);
+    return res.status(500).json({ error: 'Failed to compute pivot' });
+  }
+});
+
 router.get('/:workspaceId/rooms/:roomId/metrics/catalog', async (req: WorkspaceRequest, res: Response) => {
   try {
     const workspaceId = Number(req.params.workspaceId);
@@ -3393,6 +4427,114 @@ router.post('/:workspaceId/rooms/:roomId/visuals/:visualId/drill', async (req: W
   } catch (err) {
     console.error('Visual drill failed:', err);
     return res.status(500).json({ error: 'Failed to drill visual' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/visuals/:visualId/annotate', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const visualId = Number(req.params.visualId);
+    if (!Number.isFinite(visualId) || visualId <= 0) {
+      return res.status(400).json({ error: 'Invalid visual id' });
+    }
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const visualResult = await query(
+      `
+      SELECT id, artifact_id, annotations
+      FROM visual_specs
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [visualId, workspaceId, roomId]
+    );
+    if (visualResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Visual spec not found' });
+    }
+
+    const text = String(req.body?.text || req.body?.annotation || '').trim();
+    if (!text) {
+      return res.status(400).json({ error: 'Annotation text is required' });
+    }
+    const anchor = req.body?.anchor && typeof req.body.anchor === 'object' ? req.body.anchor : {};
+    const artifactIdRaw = Number(visualResult.rows[0].artifact_id || 0);
+    const artifactId = Number.isFinite(artifactIdRaw) && artifactIdRaw > 0 ? artifactIdRaw : null;
+
+    const annotationInsert = await query(
+      `
+      INSERT INTO visual_annotations (
+        workspace_id,
+        room_id,
+        visual_id,
+        artifact_id,
+        text,
+        anchor,
+        created_by
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7)
+      RETURNING *
+      `,
+      [workspaceId, roomId, visualId, artifactId, text, JSON.stringify(anchor), req.user!.id]
+    );
+
+    const annotation = toVisualAnnotationRecord(annotationInsert.rows[0]);
+    const currentAnnotations = parseJsonMaybe<any[]>(visualResult.rows[0].annotations, []);
+    const compactAnnotation = {
+      id: annotation.id,
+      text: annotation.text,
+      anchor: annotation.anchor,
+      createdBy: annotation.createdBy,
+      createdAt: annotation.createdAt
+    };
+    await query(
+      `
+      UPDATE visual_specs
+      SET annotations = $1,
+          updated_at = NOW()
+      WHERE id = $2
+      `,
+      [JSON.stringify([...currentAnnotations, compactAnnotation]), visualId]
+    );
+
+    const annotations = await listVisualAnnotations(workspaceId, roomId, visualId);
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_visual_annotated',
+      metadata: {
+        visualId,
+        annotationId: annotation.id,
+        artifactId
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:visual-annotated', {
+      roomId,
+      visualId,
+      annotation
+    });
+
+    return res.status(201).json({
+      visualId,
+      annotation,
+      annotations
+    });
+  } catch (err) {
+    console.error('Visual annotation failed:', err);
+    return res.status(500).json({ error: 'Failed to annotate visual' });
   }
 });
 
@@ -3987,6 +5129,433 @@ router.post('/:workspaceId/rooms/:roomId/decision-checkpoints/:checkpointId/resp
   } catch (err) {
     console.error('Respond decision checkpoint failed:', err);
     return res.status(500).json({ error: 'Failed to respond decision checkpoint' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/review/submit', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const bundleIdInput = String(req.body?.bundleId || '').trim();
+    const bundleId = bundleIdInput || await getLatestReportV2BundleId(workspaceId, roomId);
+    if (!bundleId) {
+      return res.status(400).json({ error: 'bundleId is required (or generate Report V2 first).' });
+    }
+
+    const stage = String(req.body?.stage || 'manager_review').trim() || 'manager_review';
+    const reviewerIdRaw = req.body?.reviewerId;
+    const reviewerId = reviewerIdRaw === null || reviewerIdRaw === undefined || reviewerIdRaw === ''
+      ? null
+      : Number(reviewerIdRaw);
+    if (reviewerId !== null && !Number.isFinite(reviewerId)) {
+      return res.status(400).json({ error: 'reviewerId must be numeric when provided' });
+    }
+
+    if (reviewerId !== null) {
+      const reviewerCheck = await query(
+        `
+        SELECT user_id
+        FROM workspace_members
+        WHERE workspace_id = $1
+          AND user_id = $2
+        LIMIT 1
+        `,
+        [workspaceId, reviewerId]
+      );
+      if (reviewerCheck.rows.length === 0 && String(reviewerId) !== String(req.user!.id)) {
+        return res.status(404).json({ error: 'Reviewer is not a member of this workspace.' });
+      }
+    }
+
+    const note = req.body?.note ? String(req.body.note).trim() : null;
+    const insertResult = await query(
+      `
+      INSERT INTO review_submissions (
+        workspace_id,
+        room_id,
+        bundle_id,
+        stage,
+        status,
+        submitted_by,
+        reviewer_id,
+        note
+      )
+      VALUES ($1,$2,$3,$4,'pending',$5,$6,$7)
+      RETURNING *
+      `,
+      [workspaceId, roomId, bundleId, stage, req.user!.id, reviewerId, note]
+    );
+
+    const submission = toReviewSubmissionRecord(insertResult.rows[0]);
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_review_submitted',
+      metadata: {
+        submissionId: submission.id,
+        bundleId: submission.bundleId,
+        stage: submission.stage,
+        reviewerId: submission.reviewerId
+      }
+    });
+
+    if (submission.reviewerId && String(submission.reviewerId) !== String(req.user!.id)) {
+      try {
+        const actorName = await resolveUserDisplayName(req.user!.id);
+        const notificationInsert = await query(
+          `
+          INSERT INTO notifications (user_id, workspace_id, title, message, type, is_read, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+          RETURNING *
+          `,
+          [
+            submission.reviewerId,
+            workspaceId,
+            'Review requested',
+            `${actorName} requested your review for Report bundle ${submission.bundleId} in room "${room.name}".`,
+            'approval'
+          ]
+        );
+        emitToUser(submission.reviewerId, 'notification-created', {
+          ...notificationInsert.rows[0],
+          roomId,
+          reviewSubmissionId: submission.id
+        });
+      } catch (notifyErr) {
+        console.warn('Review submit notification skipped:', notifyErr);
+      }
+    }
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:review-submitted', {
+      roomId,
+      submission
+    });
+
+    return res.status(201).json({
+      roomId,
+      submission
+    });
+  } catch (err) {
+    console.error('Submit review failed:', err);
+    return res.status(500).json({ error: 'Failed to submit review' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/review/respond', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const submissionId = Number(req.body?.submissionId);
+    if (!Number.isFinite(submissionId)) {
+      return res.status(400).json({ error: 'submissionId is required' });
+    }
+
+    const decision = String(req.body?.decision || req.body?.status || '').toLowerCase();
+    const allowedStatus = decision === 'approved'
+      ? 'approved'
+      : decision === 'rejected'
+        ? 'rejected'
+        : decision === 'cancelled'
+          ? 'cancelled'
+          : null;
+    if (!allowedStatus) {
+      return res.status(400).json({ error: "decision must be one of 'approved', 'rejected', 'cancelled'" });
+    }
+
+    const existingResult = await query(
+      `
+      SELECT *
+      FROM review_submissions
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [submissionId, workspaceId, roomId]
+    );
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Review submission not found' });
+    }
+
+    const existing = existingResult.rows[0];
+    if (String(existing.status || '') !== 'pending') {
+      return res.status(400).json({ error: `Review submission already ${existing.status}` });
+    }
+
+    const responseNote = req.body?.responseNote ? String(req.body.responseNote).trim() : null;
+    const updateResult = await query(
+      `
+      UPDATE review_submissions
+      SET status = $1,
+          response_note = $2,
+          responded_by = $3,
+          responded_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $4
+      RETURNING *
+      `,
+      [allowedStatus, responseNote, req.user!.id, submissionId]
+    );
+
+    const submission = toReviewSubmissionRecord(updateResult.rows[0]);
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_review_responded',
+      metadata: {
+        submissionId: submission.id,
+        bundleId: submission.bundleId,
+        status: submission.status
+      }
+    });
+
+    if (existing.submitted_by && String(existing.submitted_by) !== String(req.user!.id)) {
+      try {
+        const reviewerName = await resolveUserDisplayName(req.user!.id);
+        const notificationInsert = await query(
+          `
+          INSERT INTO notifications (user_id, workspace_id, title, message, type, is_read, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+          RETURNING *
+          `,
+          [
+            Number(existing.submitted_by),
+            workspaceId,
+            'Review response received',
+            `${reviewerName} ${submission.status} review submission ${submission.id} in room "${room.name}".`,
+            'approval'
+          ]
+        );
+        emitToUser(Number(existing.submitted_by), 'notification-created', {
+          ...notificationInsert.rows[0],
+          roomId,
+          reviewSubmissionId: submission.id
+        });
+      } catch (notifyErr) {
+        console.warn('Review response notification skipped:', notifyErr);
+      }
+    }
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:review-responded', {
+      roomId,
+      submission
+    });
+
+    return res.json({
+      roomId,
+      submission
+    });
+  } catch (err) {
+    console.error('Respond review failed:', err);
+    return res.status(500).json({ error: 'Failed to respond review submission' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/evidence/coverage-trend', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifactResult = await query(
+      `
+      SELECT id, payload, created_at
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type IN ('report_block', 'decision_brief')
+        AND payload->>'reportVersion' = 'v2'
+      ORDER BY created_at ASC
+      LIMIT 1500
+      `,
+      [workspaceId, roomId]
+    );
+
+    const pointsByBundle = new Map<string, CoverageTrendPoint>();
+    for (const row of artifactResult.rows) {
+      const payload = parseJsonMaybe<Record<string, any>>(row.payload, {});
+      const bundleId = String(payload.bundleId || '').trim();
+      if (!bundleId || pointsByBundle.has(bundleId)) continue;
+      const quality = payload.quality && typeof payload.quality === 'object' ? payload.quality : {};
+      const ratio = Number(quality?.evidenceCoverageRatio);
+      const unsupportedClaims = Number(quality?.unsupportedClaims);
+      const ts = String(payload.generatedAt || row.created_at || new Date().toISOString());
+      if (!Number.isFinite(ratio) || !Number.isFinite(unsupportedClaims)) continue;
+      pointsByBundle.set(bundleId, {
+        ts,
+        evidenceCoverageRatio: clampUnit(ratio),
+        unsupportedClaims: Math.max(0, Math.floor(unsupportedClaims))
+      });
+    }
+
+    let points = Array.from(pointsByBundle.values())
+      .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime());
+
+    if (points.length === 0) {
+      const analyticsResult = await query(
+        `
+        SELECT metadata, created_at
+        FROM analytics_events
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND event_type IN (
+            'decision_room_report_v2_generated',
+            'decision_room_report_v2_publish_blocked',
+            'decision_room_report_v2_published'
+          )
+        ORDER BY created_at ASC
+        LIMIT 500
+        `,
+        [workspaceId, roomId]
+      );
+      points = analyticsResult.rows.map((row) => {
+        const metadata = parseJsonMaybe<Record<string, any>>(row.metadata, {});
+        return {
+          ts: String(row.created_at),
+          evidenceCoverageRatio: clampUnit(Number(metadata.evidenceCoverageRatio || 0)),
+          unsupportedClaims: Math.max(0, Number(metadata.unsupportedClaims || 0))
+        };
+      });
+    }
+
+    return res.json({
+      roomId,
+      points,
+      sampleSize: points.length
+    });
+  } catch (err) {
+    console.error('Load evidence coverage trend failed:', err);
+    return res.status(500).json({ error: 'Failed to load evidence coverage trend' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/roi', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const [firstRunResult, firstActionResult, statusDraftEventsResult, latestBundleId] = await Promise.all([
+      query(
+        `
+        SELECT created_at
+        FROM artifacts
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND artifact_type = 'query_run'
+        ORDER BY created_at ASC
+        LIMIT 1
+        `,
+        [workspaceId, roomId]
+      ),
+      query(
+        `
+        SELECT created_at
+        FROM artifacts
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND artifact_type = 'action_item'
+        ORDER BY created_at ASC
+        LIMIT 1
+        `,
+        [workspaceId, roomId]
+      ),
+      query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE event_type = 'decision_room_status_draft_generated')::int AS drafted_count,
+          COUNT(*) FILTER (WHERE event_type = 'decision_room_actions_synced')::int AS synced_count
+        FROM analytics_events
+        WHERE workspace_id = $1
+          AND room_id = $2
+        `,
+        [workspaceId, roomId]
+      ),
+      getLatestReportV2BundleId(workspaceId, roomId)
+    ]);
+
+    const roomCreatedAt = new Date(room.created_at).getTime();
+    const firstRunAt = firstRunResult.rows[0]?.created_at ? new Date(firstRunResult.rows[0].created_at).getTime() : null;
+    const firstActionAt = firstActionResult.rows[0]?.created_at ? new Date(firstActionResult.rows[0].created_at).getTime() : null;
+    const timeToInsightMin = firstRunAt ? toRounded(Math.max(0, (firstRunAt - roomCreatedAt) / 60000), 2) : null;
+    const timeToActionMin = firstRunAt && firstActionAt
+      ? toRounded(Math.max(0, (firstActionAt - firstRunAt) / 60000), 2)
+      : null;
+
+    let evidenceCoverageRatio = 0;
+    if (latestBundleId) {
+      const bundle = await loadReportV2Bundle(workspaceId, roomId, latestBundleId);
+      if (bundle) {
+        const quality = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+        evidenceCoverageRatio = clampUnit(Number(quality.quality.evidenceCoverageRatio || 0));
+      }
+    }
+
+    if (evidenceCoverageRatio === 0) {
+      const artifacts = await listRoomArtifacts(workspaceId, roomId, 400);
+      const actions = artifacts.filter((artifact) => artifact.artifact_type === 'action_item');
+      if (actions.length > 0) {
+        const { evidenceByAction } = await getActionEvidenceMap(
+          workspaceId,
+          roomId,
+          actions.map((artifact) => Number(artifact.id))
+        );
+        const covered = actions.filter((action) => (evidenceByAction.get(Number(action.id)) || 0) > 0).length;
+        evidenceCoverageRatio = clampUnit(covered / actions.length);
+      }
+    }
+
+    const draftedCount = Number(statusDraftEventsResult.rows[0]?.drafted_count || 0);
+    const syncedCount = Number(statusDraftEventsResult.rows[0]?.synced_count || 0);
+    const manualUpdateReductionPct = draftedCount > 0
+      ? Math.min(95, 30 + (syncedCount * 10) + (draftedCount * 12))
+      : 0;
+
+    const snapshot: RoomRoiSnapshot = {
+      timeToInsightMin,
+      timeToActionMin,
+      manualUpdateReductionPct: toRounded(manualUpdateReductionPct, 2),
+      evidenceCoverageRatio: toRounded(evidenceCoverageRatio, 5)
+    };
+
+    return res.json({
+      roomId,
+      snapshot,
+      basedOn: {
+        latestBundleId: latestBundleId || null,
+        draftedStatusEvents: draftedCount,
+        syncedActionEvents: syncedCount
+      }
+    });
+  } catch (err) {
+    console.error('Load room ROI failed:', err);
+    return res.status(500).json({ error: 'Failed to load room ROI snapshot' });
   }
 });
 
@@ -5587,6 +7156,28 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       return res.status(404).json({ error: 'Report V2 bundle not found.' });
     }
 
+    const idempotencyKey = resolveIdempotencyKey(req);
+    const idempotency = await beginIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey: `reports_v2_publish:${bundleId}`,
+      userId: req.user!.id,
+      idempotencyKey
+    });
+    if (idempotency.replay) {
+      return res.status(idempotency.replay.statusCode).json({
+        ...idempotency.replay.payload,
+        replayed: true,
+        idempotencyKey: idempotency.idempotencyKey
+      });
+    }
+    if (idempotency.inProgress) {
+      return res.status(409).json({
+        error: 'A request with the same idempotency key is already in progress.',
+        idempotencyKey: idempotency.idempotencyKey
+      });
+    }
+
     const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
     if (qualityCheck.quality.publishBlocked) {
       await recordAnalyticsEvent({
@@ -5600,11 +7191,20 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
           blockers: qualityCheck.quality.blockers
         }
       });
-      return res.status(400).json({
+      const blockedResponse = {
         error: 'Publish blocked due to unsupported claims.',
         quality: qualityCheck.quality,
         claimChecks: qualityCheck.claimChecks
+      };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey: `reports_v2_publish:${bundleId}`,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 400,
+        payload: blockedResponse
       });
+      return res.status(400).json(blockedResponse);
     }
 
     const channel = String(req.body?.channel || 'slack').toLowerCase();
@@ -5629,14 +7229,32 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
     if (channel === 'slack') {
       const slackConnection = await getSlackConnection(workspaceId, req.user!.id);
       if (!slackConnection) {
-        return res.status(400).json({ error: 'Slack integration is not connected.' });
+        const missingSlackResponse = { error: 'Slack integration is not connected.' };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `reports_v2_publish:${bundleId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 400,
+          payload: missingSlackResponse
+        });
+        return res.status(400).json(missingSlackResponse);
       }
 
       const credentials = normalizeSlackCredentials(slackConnection.credentials);
       if (!credentials.webhookUrl && !credentials.botToken) {
-        return res.status(400).json({
+        const invalidSlackResponse = {
           error: 'Slack integration is connected but missing webhookUrl/botToken credentials.'
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `reports_v2_publish:${bundleId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 400,
+          payload: invalidSlackResponse
         });
+        return res.status(400).json(invalidSlackResponse);
       }
 
       const slackPayload = buildReportV2SlackPayload({
@@ -5653,10 +7271,19 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       });
 
       if (!slackDelivery.posted) {
-        return res.status(502).json({
+        const slackFailureResponse = {
           error: `Slack delivery failed: ${slackDelivery.error || 'unknown error'}`,
           quality: qualityCheck.quality
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `reports_v2_publish:${bundleId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 502,
+          payload: slackFailureResponse
         });
+        return res.status(502).json(slackFailureResponse);
       }
     }
 
@@ -5682,14 +7309,24 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
       slackDelivery
     });
 
-    return res.json({
+    const successResponse = {
       bundleId,
       channel,
       quality: qualityCheck.quality,
       slackDelivery,
       publishedAt: new Date().toISOString(),
       message: 'Report V2 published successfully.'
+    };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey: `reports_v2_publish:${bundleId}`,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 200,
+      payload: successResponse
     });
+
+    return res.json(successResponse);
   } catch (err) {
     console.error('Publish Report V2 failed:', err);
     return res.status(500).json({ error: 'Failed to publish Report V2 bundle' });
@@ -5707,6 +7344,28 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
     const room = await getRoom(workspaceId, roomId);
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const idempotencyKey = resolveIdempotencyKey(req);
+    const idempotency = await beginIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey: `actions_sync:${roomId}`,
+      userId: req.user!.id,
+      idempotencyKey
+    });
+    if (idempotency.replay) {
+      return res.status(idempotency.replay.statusCode).json({
+        ...idempotency.replay.payload,
+        replayed: true,
+        idempotencyKey: idempotency.idempotencyKey
+      });
+    }
+    if (idempotency.inProgress) {
+      return res.status(409).json({
+        error: 'A request with the same idempotency key is already in progress.',
+        idempotencyKey: idempotency.idempotencyKey
+      });
     }
 
     const { channel = 'slack', createTasks = true } = req.body || {};
@@ -5729,17 +7388,35 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
     }));
 
     if (actionItems.length === 0) {
-      return res.status(400).json({ error: 'No action items found to sync.' });
+      const noActionsResponse = { error: 'No action items found to sync.' };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey: `actions_sync:${roomId}`,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 400,
+        payload: noActionsResponse
+      });
+      return res.status(400).json(noActionsResponse);
     }
 
     const actionItemIds = actionItems.map((artifact) => Number(artifact.id));
     const { evidenceByAction, evidenceArtifactIds } = await getActionEvidenceMap(workspaceId, roomId, actionItemIds);
     const missingEvidenceActionIds = actionItemIds.filter((id) => (evidenceByAction.get(id) || 0) === 0);
     if (missingEvidenceActionIds.length > 0) {
-      return res.status(400).json({
+      const missingEvidenceResponse = {
         error: 'Cannot sync actions. Every action item must include at least one linked evidence artifact.',
         missingEvidenceActionIds
+      };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey: `actions_sync:${roomId}`,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 400,
+        payload: missingEvidenceResponse
       });
+      return res.status(400).json(missingEvidenceResponse);
     }
 
     const roomArtifacts = await listRoomArtifacts(workspaceId, roomId, 500);
@@ -5750,10 +7427,19 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       .map((step) => ({ stepId: step.id, blockingIssues: step.blockingIssues }));
 
     if (missingGuideSteps.length > 0) {
-      return res.status(400).json({
+      const missingGuideResponse = {
         error: 'Cannot sync actions until required guide steps are complete.',
         missingGuideSteps
+      };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey: `actions_sync:${roomId}`,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 400,
+        payload: missingGuideResponse
       });
+      return res.status(400).json(missingGuideResponse);
     }
 
     const normalizedChannel = String(channel).toLowerCase();
@@ -5765,9 +7451,18 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
     if (normalizedChannel === 'slack') {
       slackConnection = await getSlackConnection(workspaceId, req.user!.id);
       if (!slackConnection) {
-        return res.status(400).json({
+        const missingSlackResponse = {
           error: 'Slack integration is not connected. Connect Slack before syncing actions.'
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `actions_sync:${roomId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 400,
+          payload: missingSlackResponse
         });
+        return res.status(400).json(missingSlackResponse);
       }
 
       const credentials = normalizeSlackCredentials(slackConnection.credentials);
@@ -5776,9 +7471,18 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       slackBotToken = credentials.botToken;
 
       if (!slackWebhookUrl && !slackBotToken) {
-        return res.status(400).json({
+        const invalidSlackResponse = {
           error: 'Slack integration is connected but missing webhookUrl/botToken credentials.'
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `actions_sync:${roomId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 400,
+          payload: invalidSlackResponse
         });
+        return res.status(400).json(invalidSlackResponse);
       }
     }
 
@@ -5874,13 +7578,22 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
           }
         });
 
-        return res.status(502).json({
+        const slackFailureResponse = {
           error: `Slack delivery failed: ${slackDelivery.error || 'unknown error'}`,
           createdTasks: createdTaskIds.length,
           skippedTasks: skippedTaskIds.length,
           createdTaskIds,
           skippedTaskIds
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey: `actions_sync:${roomId}`,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 502,
+          payload: slackFailureResponse
         });
+        return res.status(502).json(slackFailureResponse);
       }
     }
 
@@ -5928,7 +7641,7 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       }
     });
 
-    return res.json({
+    const successResponse = {
       syncedCount: actionItems.length,
       createdTasks: createdTaskIds.length,
       createdTaskIds,
@@ -5938,7 +7651,17 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
       slackDelivery,
       channel,
       message: `Synced ${actionItems.length} action item(s) for ${String(channel).toUpperCase()} handoff.`
+    };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey: `actions_sync:${roomId}`,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 200,
+      payload: successResponse
     });
+
+    return res.json(successResponse);
   } catch (err) {
     console.error('Sync actions failed:', err);
     return res.status(500).json({ error: 'Failed to sync actions' });

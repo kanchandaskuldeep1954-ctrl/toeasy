@@ -39,6 +39,21 @@ describe('Studio MVP API Contracts', () => {
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/status/draft', { persist: true });
   });
 
+  it('calls data profile generation endpoint', () => {
+    studioAPI.generateDataProfile('12', '77', { datasetVersionId: 9, minQualityScore: 0.7 });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/data/profile', {
+      datasetVersionId: 9,
+      minQualityScore: 0.7
+    });
+  });
+
+  it('calls room trust endpoint', () => {
+    studioAPI.getRoomTrust('12', '77', { threshold: 0.65 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/data/trust', {
+      params: { threshold: 0.65 }
+    });
+  });
+
   it('calls Report V2 generate endpoint', () => {
     studioAPI.generateReportV2('12', '77', { timeframeDays: 7, compareMode: 'previous_period', focus: 'revops_weekly' });
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/reports/v2/generate', {
@@ -148,10 +163,83 @@ describe('Studio MVP API Contracts', () => {
     });
   });
 
+  it('calls visual annotation endpoint', () => {
+    studioAPI.annotateVisual('12', '77', 200, { text: 'Owner concentration spike', anchor: { rowKey: 'owner=Alex' } });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/visuals/200/annotate', {
+      text: 'Owner concentration spike',
+      anchor: { rowKey: 'owner=Alex' }
+    });
+  });
+
+  it('calls query version save endpoint', () => {
+    studioAPI.saveQueryVersion('12', '77', {
+      queryId: 5,
+      sqlTemplate: 'select * from deals where owner = :owner',
+      parametersSchema: { owner: { type: 'string' } }
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/queries/save-version', {
+      queryId: 5,
+      sqlTemplate: 'select * from deals where owner = :owner',
+      parametersSchema: { owner: { type: 'string' } }
+    });
+  });
+
+  it('calls query versions list endpoint', () => {
+    studioAPI.listQueryVersions('12', '77', 5);
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/queries/5/versions');
+  });
+
+  it('calls pivot compute endpoint', () => {
+    studioAPI.computePivot('12', '77', {
+      name: 'Weekly owner pivot',
+      spec: {
+        dimensions: ['owner'],
+        measures: [{ field: 'amount', agg: 'sum', as: 'amount_sum' }],
+        calculations: [{ type: 'rank', sourceField: 'amount_sum', as: 'amount_rank', order: 'desc' }]
+      }
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/pivots/compute', {
+      name: 'Weekly owner pivot',
+      spec: {
+        dimensions: ['owner'],
+        measures: [{ field: 'amount', agg: 'sum', as: 'amount_sum' }],
+        calculations: [{ type: 'rank', sourceField: 'amount_sum', as: 'amount_rank', order: 'desc' }]
+      }
+    });
+  });
+
   it('calls outcomes attribution endpoint', () => {
     studioAPI.getOutcomeAttribution('12', '77', { persist: true });
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/outcomes/attribution', {
       params: { persist: true }
+    });
+  });
+
+  it('calls evidence coverage trend endpoint', () => {
+    studioAPI.getEvidenceCoverageTrend('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/evidence/coverage-trend');
+  });
+
+  it('calls room ROI endpoint', () => {
+    studioAPI.getRoomRoi('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/roi');
+  });
+
+  it('calls review submit endpoint', () => {
+    studioAPI.submitReview('12', '77', { bundleId: 'bundle_7', reviewerId: 13, stage: 'manager_review' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/review/submit', {
+      bundleId: 'bundle_7',
+      reviewerId: 13,
+      stage: 'manager_review'
+    });
+  });
+
+  it('calls review respond endpoint', () => {
+    studioAPI.respondReview('12', '77', { submissionId: 10, decision: 'approved', responseNote: 'Ship it' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/review/respond', {
+      submissionId: 10,
+      decision: 'approved',
+      responseNote: 'Ship it'
     });
   });
 
