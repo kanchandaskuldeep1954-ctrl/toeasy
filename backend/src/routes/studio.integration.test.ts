@@ -7,6 +7,9 @@ import { generateToken } from '../middleware/auth.js';
 import { resetQueryOverrideForTests, setQueryOverrideForTests } from '../db.js';
 
 type MockRow = Record<string, any>;
+type StudioQueryMockOptions = {
+  includeRecoveredAutomationRun?: boolean;
+};
 
 function normalizeSql(text: string): string {
   return String(text || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -16,7 +19,8 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-function createStudioQueryMock() {
+function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
+  const includeRecoveredAutomationRun = Boolean(options.includeRecoveredAutomationRun);
   const calls: Array<{ sql: string; params: any[] }> = [];
   let nextArtifactId = 400;
   let nextVisualSpecId = 600;
@@ -285,6 +289,47 @@ function createStudioQueryMock() {
       return { rows };
     }
 
+    if (
+      sql.includes('from artifacts') &&
+      sql.includes('where workspace_id = $1') &&
+      sql.includes('room_id = $2') &&
+      sql.includes('id = any($3::int[])')
+    ) {
+      const [workspaceId, roomId, artifactIds] = params;
+      const scopedIds = new Set((Array.isArray(artifactIds) ? artifactIds : []).map((id: any) => Number(id)));
+      const rows = state.artifacts
+        .filter(
+          (row) =>
+            Number(row.workspace_id) === Number(workspaceId) &&
+            Number(row.room_id) === Number(roomId) &&
+            scopedIds.has(Number(row.id))
+        )
+        .map((row) => ({ id: Number(row.id) }));
+      return { rows };
+    }
+
+    if (
+      sql.includes('select payload->>\'bundleid\' as bundle_id') &&
+      sql.includes('from artifacts') &&
+      sql.includes('artifact_type = \'report_block\'')
+    ) {
+      const [workspaceId, roomId] = params;
+      const row = state.artifacts
+        .filter(
+          (artifact) =>
+            Number(artifact.workspace_id) === Number(workspaceId) &&
+            Number(artifact.room_id) === Number(roomId) &&
+            String(artifact.artifact_type) === 'report_block' &&
+            String(JSON.parse(String(artifact.payload || '{}')).reportVersion || '') === 'v2'
+        )
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+      return {
+        rows: row
+          ? [{ bundle_id: String(JSON.parse(String(row.payload || '{}')).bundleId || '') }]
+          : []
+      };
+    }
+
     if (sql.includes('from metric_definitions') && sql.includes('where workspace_id = $1')) {
       return {
         rows: [
@@ -292,7 +337,11 @@ function createStudioQueryMock() {
             id: 301,
             metric_key: 'pipeline_created_amount',
             name: 'Pipeline Created Amount',
-            formula: 'SUM(amount)'
+            formula: 'SUM(amount)',
+            owner_id: 2,
+            owner_name: 'Manager User',
+            latest_status: 'passed',
+            last_validated_at: '2026-02-19T08:00:00.000Z'
           }
         ]
       };
@@ -678,52 +727,82 @@ function createStudioQueryMock() {
     }
 
     if (sql.includes('from automation_runs r') && sql.includes('where r.workspace_id = $1')) {
+      const rows = [
+        {
+          id: 5011,
+          workspace_id: 1,
+          room_id: 101,
+          automation_policy_id: 501,
+          status: 'failed',
+          error: 'transient slack timeout',
+          output: JSON.stringify({ artifactIds: [102] }),
+          started_at: '2026-02-19T09:00:00.000Z',
+          completed_at: '2026-02-19T09:02:00.000Z',
+          created_at: '2026-02-19T09:00:00.000Z'
+        }
+      ];
+      if (includeRecoveredAutomationRun) {
+        rows.unshift({
+          id: 5012,
+          workspace_id: 1,
+          room_id: 101,
+          automation_policy_id: 501,
+          status: 'completed',
+          error: null,
+          output: JSON.stringify({ artifactIds: [102], recoveredFromRunId: 5011 }),
+          started_at: '2026-02-19T09:04:00.000Z',
+          completed_at: '2026-02-19T09:05:00.000Z',
+          created_at: '2026-02-19T09:04:00.000Z'
+        });
+      }
       return {
-        rows: [
-          {
-            id: 5011,
-            workspace_id: 1,
-            room_id: 101,
-            automation_policy_id: 501,
-            status: 'failed',
-            error: 'transient slack timeout',
-            output: JSON.stringify({ artifactIds: [102] }),
-            started_at: '2026-02-19T09:00:00.000Z',
-            completed_at: '2026-02-19T09:02:00.000Z',
-            created_at: '2026-02-19T09:00:00.000Z'
-          }
-        ]
+        rows
       };
     }
 
     if (sql.includes('from automation_run_events e') && sql.includes('where e.workspace_id = $1')) {
+      const rows = [
+        {
+          id: 7101,
+          workspace_id: 1,
+          room_id: 101,
+          automation_run_id: 5011,
+          event_type: 'execution_failed',
+          status: 'retrying',
+          attempt: 1,
+          error: 'HTTP 429 too many requests',
+          metadata: JSON.stringify({ queueAttempt: 1, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
+          created_at: '2026-02-19T09:00:30.000Z'
+        },
+        {
+          id: 7102,
+          workspace_id: 1,
+          room_id: 101,
+          automation_run_id: 5011,
+          event_type: 'execution_retry_scheduled',
+          status: 'retrying',
+          attempt: 2,
+          error: null,
+          metadata: JSON.stringify({ queueAttempt: 2, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
+          created_at: '2026-02-19T09:01:00.000Z'
+        }
+      ];
+      if (includeRecoveredAutomationRun) {
+        rows.push({
+          id: 7103,
+          workspace_id: 1,
+          room_id: 101,
+          automation_run_id: 5012,
+          event_type: 'execution_completed',
+          status: 'completed',
+          attempt: 2,
+          error: null,
+          metadata: JSON.stringify({ queueAttempt: 2, recoveredFromRunId: 5011 }),
+          created_at: '2026-02-19T09:05:00.000Z'
+        });
+      }
       return {
-        rows: [
-          {
-            id: 7101,
-            workspace_id: 1,
-            room_id: 101,
-            automation_run_id: 5011,
-            event_type: 'execution_failed',
-            status: 'retrying',
-            attempt: 1,
-            error: 'HTTP 429 too many requests',
-            metadata: JSON.stringify({ queueAttempt: 1, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
-            created_at: '2026-02-19T09:00:30.000Z'
-          },
-          {
-            id: 7102,
-            workspace_id: 1,
-            room_id: 101,
-            automation_run_id: 5011,
-            event_type: 'execution_retry_scheduled',
-            status: 'retrying',
-            attempt: 2,
-            error: null,
-            metadata: JSON.stringify({ queueAttempt: 2, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
-            created_at: '2026-02-19T09:01:00.000Z'
-          }
-        ]
+        rows
       };
     }
 
@@ -1202,6 +1281,210 @@ test('automation runs and queue-state endpoints surface retry/backoff visibility
     assert.equal(queueStateResult.response.status, 200);
     assert.equal(queueStateResult.payload.metrics.activeSchedules, 1);
     assert.equal(queueStateResult.payload.metrics.awaitingApprovalRuns, 1);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('weekly room full-flow e2e covers run -> pivot -> visuals -> report -> review -> publish -> action sync -> status draft', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const profileResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/data/profile',
+      body: {
+        datasetId: 99,
+        minQualityScore: 0.6
+      }
+    });
+    assert.equal(profileResult.response.status, 201);
+
+    const runResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/run',
+      body: {
+        mode: 'sql',
+        payload: {
+          datasetId: 99,
+          sql: 'SELECT owner, amount, stage, created_at FROM data ORDER BY created_at DESC LIMIT 3'
+        }
+      }
+    });
+    assert.equal(runResult.response.status, 201, JSON.stringify(runResult.payload));
+    assert.equal(Array.isArray(runResult.payload.rows), true);
+    assert.ok(runResult.payload.rows.length > 0);
+
+    const pivotResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/pivots/compute',
+      body: {
+        spec: {
+          dimensions: ['owner'],
+          measures: [{ field: 'amount', agg: 'sum', as: 'amount_total' }],
+          calculations: [{ type: 'percent_of_total', sourceField: 'amount_total', as: 'amount_share' }],
+          filters: []
+        }
+      }
+    });
+    assert.equal(pivotResult.response.status, 201, JSON.stringify(pivotResult.payload));
+    assert.ok(Number(pivotResult.payload?.pivot?.rowCount || 0) > 0);
+
+    const visualResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/visuals/build',
+      body: {
+        name: 'Owner Amount Trend',
+        spec: {
+          chartType: 'bar',
+          dimensions: ['owner'],
+          measures: ['amount']
+        }
+      }
+    });
+    assert.equal(visualResult.response.status, 201, JSON.stringify(visualResult.payload));
+    assert.ok(Number.isFinite(Number(visualResult.payload.visualId)));
+
+    const reportGenerateResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/reports/v2/generate',
+      body: {
+        timeframeDays: 7,
+        compareMode: 'previous_period',
+        focus: 'revops_weekly',
+        persist: true
+      }
+    });
+    assert.equal(reportGenerateResult.response.status, 201, JSON.stringify(reportGenerateResult.payload));
+    const bundleId = String(reportGenerateResult.payload.bundleId || '');
+    assert.ok(bundleId.length > 0);
+
+    const reviewSubmitResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/review/submit',
+      body: {
+        bundleId,
+        stage: 'manager_review',
+        reviewerId: 2,
+        note: 'Weekly report ready for approval'
+      }
+    });
+    assert.equal(reviewSubmitResult.response.status, 201, JSON.stringify(reviewSubmitResult.payload));
+    assert.equal(reviewSubmitResult.payload.submission.status, 'pending');
+
+    const reviewRespondResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/review/respond',
+      body: {
+        submissionId: Number(reviewSubmitResult.payload.submission.id),
+        decision: 'approved',
+        responseNote: 'Approved for publish'
+      }
+    });
+    assert.equal(reviewRespondResult.response.status, 200, JSON.stringify(reviewRespondResult.payload));
+    assert.equal(reviewRespondResult.payload.submission.status, 'approved');
+
+    const qualityResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: `/api/workspaces/1/rooms/101/reports/v2/${bundleId}/quality`
+    });
+    assert.equal(qualityResult.response.status, 200, JSON.stringify(qualityResult.payload));
+    assert.equal(Boolean(qualityResult.payload.quality?.publishBlocked), false);
+
+    const publishResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: `/api/workspaces/1/rooms/101/reports/v2/${bundleId}/publish`,
+      body: {
+        channel: 'in_app',
+        minProfileQualityScore: 0
+      },
+      headers: {
+        'Idempotency-Key': `e2e-publish-${bundleId}`
+      }
+    });
+    assert.equal(publishResult.response.status, 200, JSON.stringify(publishResult.payload));
+    assert.equal(Boolean(publishResult.payload.quality?.publishBlocked), false);
+
+    const actionSyncResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/actions/sync',
+      body: {
+        channel: 'in_app',
+        createTasks: false
+      },
+      headers: {
+        'Idempotency-Key': 'e2e-actions-sync-1'
+      }
+    });
+    assert.equal(actionSyncResult.response.status, 200, JSON.stringify(actionSyncResult.payload));
+    assert.ok(Number(actionSyncResult.payload.syncedCount) >= 1);
+
+    const statusDraftResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/status/draft',
+      body: {
+        persist: false
+      }
+    });
+    assert.equal(statusDraftResult.response.status, 200, JSON.stringify(statusDraftResult.payload));
+    assert.equal(typeof statusDraftResult.payload.draft?.summary, 'string');
+    assert.ok(String(statusDraftResult.payload.draft.summary).length > 0);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('failed automation schedule recovery is visible as completed recovery run without duplicate side effects', async () => {
+  const mock = createStudioQueryMock({ includeRecoveredAutomationRun: true });
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const runsResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/rooms/101/automations/runs'
+    });
+    assert.equal(runsResult.response.status, 200, JSON.stringify(runsResult.payload));
+    assert.equal(Array.isArray(runsResult.payload.runs), true);
+    assert.ok(runsResult.payload.runs.some((run: any) => run.status === 'failed'));
+    assert.ok(runsResult.payload.runs.some((run: any) => run.status === 'completed'));
+
+    const failedEvents = (runsResult.payload.events || []).filter((event: any) => event.eventType === 'execution_failed');
+    const retryEvents = (runsResult.payload.events || []).filter((event: any) => event.eventType === 'execution_retry_scheduled');
+    const recoveredEvents = (runsResult.payload.events || []).filter((event: any) => event.eventType === 'execution_completed');
+    assert.ok(failedEvents.length >= 1);
+    assert.ok(retryEvents.length >= 1);
+    assert.ok(recoveredEvents.length >= 1);
+
+    const recoveredMetadata = recoveredEvents[0]?.metadata || {};
+    assert.equal(Number(recoveredMetadata.recoveredFromRunId), 5011);
+    assert.equal(runsResult.payload.runs.filter((run: any) => run.status === 'completed').length, 1);
   } finally {
     await stopStudioServer(server);
   }

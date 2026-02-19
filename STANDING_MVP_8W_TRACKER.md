@@ -34,7 +34,8 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Backend integration tests for visuals/metrics/attribution.
 - [x] Backend integration tests for profile/query-version/review/idempotency paths.
 - [x] Queue retry/backoff + duplicate prevention integration tests.
-- [ ] Weekly full-flow E2E automation test.
+- [x] Weekly full-flow E2E automation test.
+- [x] Failed schedule recovery integration scenario.
 
 ### Weeks 5-6: Manager Control Tower V1
 - [x] Pending approvals + blocked publishes + overdue actions + automation failure summary.
@@ -61,5 +62,5 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 
 ## 5) Next Concrete Build Slice
 
-1. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
-2. Add failed schedule recovery integration scenario in route-level test harness.
+1. Keep hard-gate telemetry collection running in pilot workspaces for two consecutive weekly cycles.
+2. Run reliability incident review cadence and close unresolved critical incidents within SLA.

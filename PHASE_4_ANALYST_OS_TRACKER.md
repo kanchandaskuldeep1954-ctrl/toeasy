@@ -145,12 +145,12 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] Backend reliability score math unit tests (`reliabilityScorecardService`) for MTTR and failure bucketing.
 - [x] backend integration tests for visual build/drill, metrics validate, and attribution.
 - [x] backend integration tests for profile/query-version/review/idempotency paths.
-- [ ] end-to-end flow test:
-  - [ ] connect -> run -> pivot -> visual -> report -> publish -> action -> status draft
-- [ ] queue reliability tests:
+- [x] end-to-end flow test:
+  - [x] connect -> run -> pivot -> visual -> report -> publish -> action -> status draft
+- [x] queue reliability tests:
   - [x] retry/backoff
   - [x] duplicate prevention
-  - [ ] failed schedule recovery
+  - [x] failed schedule recovery
 
 ## 8) Risks and Mitigations
 - Risk: Existing frontend type debt outside Studio slows full-repo `tsc`.
@@ -161,12 +161,21 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - Mitigation: claim row via optimistic `next_run_at` compare-and-update + stable BullMQ job IDs.
 
 ## 9) Next 7-Day Execution Plan
-1. Complete BullMQ runtime integration and startup/shutdown lifecycle.
-2. Add queue metrics endpoint for operator observability.
-3. Add backend integration tests for schedule dispatch and run event history.
-4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
+1. Run two consecutive pilot telemetry windows and compute hard gate scorecards.
+2. Execute weekly reliability incident review and close critical items within SLA.
+3. Collect paid pilot KPI snapshots and publish Go/No-Go decision package.
+4. Keep route integration suite green as release guardrail.
 
 ## 10) Change Log
+- 2026-02-19 (Standing-MVP closure tranche):
+  - Extended `backend/src/routes/studio.integration.test.ts` with:
+    - full weekly route-level E2E flow:
+      - `run -> pivot -> visuals -> report generate -> review -> quality -> publish -> action sync -> status draft`
+    - failed-schedule recovery scenario with completed recovery run visibility and no duplicate side effects.
+  - Expanded test SQL mock coverage for:
+    - report evidence artifact lookups (`id = ANY(...)`) used by publish quality gate.
+    - latest report bundle lookup used by status draft readiness context.
+  - Phase 4 tracker test-coverage gaps moved to complete.
 - 2026-02-19 (Queue reliability integration-test tranche):
   - Extended `backend/src/routes/studio.integration.test.ts` with queue-focused route coverage:
     - schedule dedupe behavior for repeated dedupe keys
