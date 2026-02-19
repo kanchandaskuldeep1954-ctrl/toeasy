@@ -62,5 +62,4 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 ## 5) Next Concrete Build Slice
 
 1. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
-2. Expand idempotency replay integration coverage from schedule/action-sync to report publish endpoint.
-3. Add failed schedule recovery integration scenario in route-level test harness.
+2. Add failed schedule recovery integration scenario in route-level test harness.

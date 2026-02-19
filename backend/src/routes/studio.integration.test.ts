@@ -97,6 +97,74 @@ function createStudioQueryMock() {
         created_by: '1',
         created_at: nowIso(),
         updated_at: nowIso()
+      },
+      {
+        id: 104,
+        workspace_id: 1,
+        project_id: 11,
+        room_id: 101,
+        artifact_type: 'report_block',
+        title: 'KPI Delta',
+        description: null,
+        payload: JSON.stringify({
+          reportVersion: 'v2',
+          bundleId: 'bundle_publish_seed',
+          sectionId: 'kpi_delta_1',
+          sectionType: 'kpi_delta',
+          order: 1,
+          title: 'KPI Delta',
+          contentMarkdown: 'Pipeline moved week-over-week.',
+          claims: [
+            {
+              id: 'claim_1',
+              statement: 'Pipeline created amount increased by 20%.',
+              metricKey: 'pipeline_created_amount',
+              valueCurrent: 120,
+              valuePrevious: 100,
+              deltaPct: 20,
+              confidence: 'high',
+              evidenceArtifactIds: [],
+              supported: false
+            }
+          ],
+          chartArtifactIds: [],
+          kpiSnapshot: [
+            {
+              metricKey: 'pipeline_created_amount',
+              label: 'Pipeline Created Amount',
+              valueCurrent: 120,
+              valuePrevious: 100,
+              deltaPct: 20,
+              evidenceArtifactIds: []
+            }
+          ],
+          generatedAt: '2026-02-19T12:00:00.000Z'
+        }),
+        metadata: JSON.stringify({}),
+        dataset_version_id: null,
+        source_dataset_id: 99,
+        created_by: '1',
+        created_at: nowIso(),
+        updated_at: nowIso()
+      },
+      {
+        id: 105,
+        workspace_id: 1,
+        project_id: 11,
+        room_id: 101,
+        artifact_type: 'decision_brief',
+        title: 'Publish Seed Brief',
+        description: null,
+        payload: JSON.stringify({
+          reportVersion: 'v2',
+          bundleId: 'bundle_publish_seed'
+        }),
+        metadata: JSON.stringify({}),
+        dataset_version_id: null,
+        source_dataset_id: 99,
+        created_by: '1',
+        created_at: nowIso(),
+        updated_at: nowIso()
       }
     ] as MockRow[],
     lineageEdges: [
@@ -169,6 +237,38 @@ function createStudioQueryMock() {
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .slice(0, limit);
       return { rows };
+    }
+
+    if (sql.includes('from artifacts') && sql.includes('artifact_type = \'report_block\'') && sql.includes('payload->>\'bundleid\' = $3')) {
+      const [workspaceId, roomId, bundleId] = params;
+      const rows = state.artifacts
+        .filter(
+          (row) =>
+            Number(row.workspace_id) === Number(workspaceId) &&
+            Number(row.room_id) === Number(roomId) &&
+            String(row.artifact_type) === 'report_block' &&
+            String(JSON.parse(String(row.payload || '{}')).bundleId || '') === String(bundleId)
+        )
+        .map((row) => ({
+          id: row.id,
+          title: row.title,
+          payload: row.payload,
+          metadata: row.metadata,
+          created_at: row.created_at
+        }));
+      return { rows };
+    }
+
+    if (sql.includes('from artifacts') && sql.includes('artifact_type = \'decision_brief\'') && sql.includes('payload->>\'bundleid\' = $3')) {
+      const [workspaceId, roomId, bundleId] = params;
+      const row = state.artifacts.find(
+        (item) =>
+          Number(item.workspace_id) === Number(workspaceId) &&
+          Number(item.room_id) === Number(roomId) &&
+          String(item.artifact_type) === 'decision_brief' &&
+          String(JSON.parse(String(item.payload || '{}')).bundleId || '') === String(bundleId)
+      );
+      return { rows: row ? [{ id: row.id }] : [] };
     }
 
     if (sql.includes('from artifacts') && sql.includes('artifact_type = \'action_item\'')) {
@@ -937,6 +1037,47 @@ test('automation schedule endpoint replays deterministic response for same idemp
     assert.equal(second.response.status, 201);
     assert.equal(second.payload.replayed, true);
     assert.equal(second.payload.schedule?.id, first.payload.schedule?.id);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('report publish endpoint replays blocked response for same idempotency key', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const first = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/reports/v2/bundle_publish_seed/publish',
+      body: {
+        channel: 'in_app'
+      },
+      headers: {
+        'Idempotency-Key': 'report-publish-idem-1'
+      }
+    });
+    assert.equal(first.response.status, 400);
+    assert.equal(typeof first.payload.error, 'string');
+
+    const second = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/reports/v2/bundle_publish_seed/publish',
+      body: {
+        channel: 'in_app'
+      },
+      headers: {
+        'Idempotency-Key': 'report-publish-idem-1'
+      }
+    });
+    assert.equal(second.response.status, 400);
+    assert.equal(second.payload.replayed, true);
+    assert.equal(second.payload.error, first.payload.error);
   } finally {
     await stopStudioServer(server);
   }
