@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useDataset } from '../hooks/useDataset';
 import {
+  AutomationQueueState,
   AutomationRunDetail,
   AutomationSchedule,
   analyticsAPI,
@@ -199,6 +200,7 @@ const AnalyticsStudio: React.FC = () => {
   const [automationRuns, setAutomationRuns] = useState<AutomationRunDetail[]>([]);
   const [automationSchedules, setAutomationSchedules] = useState<AutomationSchedule[]>([]);
   const [automationEventCount, setAutomationEventCount] = useState<number>(0);
+  const [automationQueueState, setAutomationQueueState] = useState<AutomationQueueState | null>(null);
   const [automationPolicyIdInput, setAutomationPolicyIdInput] = useState<string>('');
   const [automationCronInput, setAutomationCronInput] = useState<string>('0 9 * * 1');
   const [automationTimezoneInput, setAutomationTimezoneInput] = useState<string>('UTC');
@@ -407,10 +409,11 @@ const AnalyticsStudio: React.FC = () => {
       setAutomationRuns([]);
       setAutomationSchedules([]);
       setAutomationEventCount(0);
+      setAutomationQueueState(null);
       return;
     }
 
-    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse] = await Promise.all([
+    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse] = await Promise.all([
       studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Metric catalog refresh failed:', error);
         return null;
@@ -425,6 +428,10 @@ const AnalyticsStudio: React.FC = () => {
       }),
       studioAPI.listAutomationRuns(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Automation runs refresh failed:', error);
+        return null;
+      }),
+      studioAPI.getAutomationQueueState(workspaceId, selectedRoomId).catch((error) => {
+        console.warn('Automation queue state refresh failed:', error);
         return null;
       })
     ]);
@@ -442,6 +449,9 @@ const AnalyticsStudio: React.FC = () => {
       setAutomationRuns(automationResponse.data?.runs || []);
       setAutomationSchedules(automationResponse.data?.schedules || []);
       setAutomationEventCount(Array.isArray(automationResponse.data?.events) ? automationResponse.data.events.length : 0);
+    }
+    if (queueStateResponse) {
+      setAutomationQueueState(queueStateResponse.data || null);
     }
   }, [workspaceId, selectedRoomId]);
 
@@ -634,6 +644,7 @@ const AnalyticsStudio: React.FC = () => {
     setAutomationRuns([]);
     setAutomationSchedules([]);
     setAutomationEventCount(0);
+    setAutomationQueueState(null);
     setAutomationPolicyIdInput('');
     setAutomationCronInput('0 9 * * 1');
     setAutomationTimezoneInput('UTC');
@@ -1730,6 +1741,11 @@ const AnalyticsStudio: React.FC = () => {
                 <div className="text-[11px] text-slate-500">
                   Schedules: {automationSchedules.length} | Runs: {automationRuns.length} | Run events: {automationEventCount}
                 </div>
+                {automationQueueState && (
+                  <div className="text-[11px] text-slate-500">
+                    Queue: {automationQueueState.queue.enabled ? 'enabled' : 'disabled'} | Due schedules: {automationQueueState.metrics.dueSchedules} | Running: {automationQueueState.metrics.runningRuns} | Awaiting approval: {automationQueueState.metrics.awaitingApprovalRuns}
+                  </div>
+                )}
                 <div className="space-y-1">
                   {automationRuns.slice(0, 4).map((run) => (
                     <div key={run.runId} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">

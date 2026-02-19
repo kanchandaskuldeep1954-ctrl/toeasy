@@ -4,6 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config.js';
 import { initializeRedis, closeRedis } from './services/cacheService.js';
+import { closeAutomationQueue, initializeAutomationQueue } from './services/automationQueueService.js';
 import { cacheMiddleware, invalidateCacheMiddleware } from './middleware/cacheMiddleware.js';
 import { authenticateToken, AuthRequest, optionalAuthenticateToken } from './middleware/auth.js';
 import { checkSubscription, checkTierLimit } from './middleware/subscription.js';
@@ -511,6 +512,10 @@ async function startServer() {
     await initializeRedis(config.redisUrl);
     logger.info('[STARTUP] Redis initialized');
 
+    logger.info('[STARTUP] Initializing Automation Queue...');
+    await initializeAutomationQueue(config.redisUrl);
+    logger.info('[STARTUP] Automation Queue initialized');
+
     logger.info('[STARTUP] Starting Express server on port', PORT);
     const server = app.listen(PORT, () => {
       logger.info(`Backend server running on port ${PORT}`);
@@ -527,6 +532,7 @@ async function startServer() {
     process.on('SIGTERM', async () => {
       logger.info('SIGTERM received, shutting down gracefully...');
       server.close(async () => {
+        await closeAutomationQueue();
         await closeRedis();
         process.exit(0);
       });
@@ -535,6 +541,7 @@ async function startServer() {
     process.on('SIGINT', async () => {
       logger.info('SIGINT received, shutting down gracefully...');
       server.close(async () => {
+        await closeAutomationQueue();
         await closeRedis();
         process.exit(0);
       });

@@ -184,6 +184,11 @@ describe('Studio MVP API Contracts', () => {
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/automations/runs');
   });
 
+  it('calls automation queue state endpoint', () => {
+    studioAPI.getAutomationQueueState('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/automations/queue-state');
+  });
+
   it('calls MVP KPI snapshot endpoint', () => {
     analyticsAPI.getMvpKpis('12', 45);
     expect(mockGet).toHaveBeenCalledWith('/analytics/workspaces/12/mvp-kpis', { params: { days: 45 } });

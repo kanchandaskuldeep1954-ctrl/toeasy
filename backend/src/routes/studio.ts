@@ -1,10 +1,13 @@
 import { NextFunction, Response, Router } from 'express';
+import { CronExpressionParser } from 'cron-parser';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
 import { SafeExecutor } from '../utils/safeExecutor.js';
 import { GroqService } from '../services/groq.service.js';
 import { emitToDecisionRoom, emitToUser } from '../realtime.js';
+import { AutomationExecutionError, executeAutomationPolicy } from '../services/automationExecutionService.js';
+import { getAutomationQueueState, requestAutomationDispatch } from '../services/automationQueueService.js';
 
 const router = Router();
 
@@ -2596,6 +2599,18 @@ function parseRetryPolicy(input: any) {
 function isLikelyCronExpression(cron: string): boolean {
   const parts = String(cron || '').trim().split(/\s+/g).filter(Boolean);
   return parts.length >= 5 && parts.length <= 6;
+}
+
+function computeNextRunAtFromCronExpression(cron: string, timezone: string): string {
+  try {
+    const expression = CronExpressionParser.parse(cron, {
+      currentDate: new Date(),
+      tz: timezone || 'UTC'
+    });
+    return expression.next().toDate().toISOString();
+  } catch {
+    return new Date(Date.now() + 60 * 60 * 1000).toISOString();
+  }
 }
 
 function toAutomationScheduleRecord(row: any): AutomationScheduleRecord {
@@ -5749,166 +5764,24 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
 
     const workspaceId = Number(req.params.workspaceId);
     const automationId = Number(req.params.automationId);
-    const policyResult = await query(
-      `
-      SELECT *
-      FROM automation_policies
-      WHERE id = $1 AND workspace_id = $2 AND is_active = true
-      LIMIT 1
-      `,
-      [automationId, workspaceId]
-    );
-
-    if (policyResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Automation policy not found' });
-    }
-
-    const policy = policyResult.rows[0];
-    const inputPayload = req.body?.input || {};
-
-    const runInsert = await query(
-      `
-      INSERT INTO automation_runs (
-        workspace_id,
-        room_id,
-        automation_policy_id,
-        status,
-        risk_level,
-        input,
-        created_by,
-        started_at
-      )
-      VALUES ($1,$2,$3,'running',$4,$5,$6,NOW())
-      RETURNING *
-      `,
-      [workspaceId, policy.room_id || null, automationId, policy.risk_level, JSON.stringify(inputPayload), req.user!.id]
-    );
-
-    const run = runInsert.rows[0];
-    try {
-      await query(
-        `
-        INSERT INTO automation_run_events (
-          workspace_id,
-          room_id,
-          automation_run_id,
-          event_type,
-          status,
-          attempt,
-          metadata,
-          created_at
-        )
-        VALUES ($1,$2,$3,'execution_started','running',1,$4,NOW())
-        `,
-        [workspaceId, policy.room_id || null, run.id, JSON.stringify({ automationId, inputProvided: Boolean(inputPayload) })]
-      );
-    } catch (err) {
-      console.warn('Automation run event insert skipped:', err);
-    }
-    let approvalRequest = null;
-
-    if (policy.risk_level === 'low') {
-      const completed = await query(
-        `
-        UPDATE automation_runs
-        SET status = 'completed',
-            output = $1,
-            completed_at = NOW(),
-            updated_at = NOW()
-        WHERE id = $2
-        RETURNING *
-        `,
-        [JSON.stringify({ status: 'auto_applied', note: 'Low-risk automation auto-approved.' }), run.id]
-      );
-
-      try {
-        await query(
-          `
-          INSERT INTO automation_run_events (
-            workspace_id,
-            room_id,
-            automation_run_id,
-            event_type,
-            status,
-            attempt,
-            metadata,
-            created_at
-          )
-          VALUES ($1,$2,$3,'execution_completed','completed',1,$4,NOW())
-          `,
-          [workspaceId, policy.room_id || null, run.id, JSON.stringify({ autoApproved: true })]
-        );
-      } catch (err) {
-        console.warn('Automation completion event insert skipped:', err);
-      }
-
-      return res.status(201).json({
-        run: completed.rows[0],
-        approvalRequest: null
-      });
-    }
-
-    const approvalInsert = await query(
-      `
-      INSERT INTO approval_requests (
-        workspace_id,
-        room_id,
-        automation_run_id,
-        requested_by,
-        risk_level,
-        status,
-        reason
-      )
-      VALUES ($1,$2,$3,$4,$5,'pending',$6)
-      RETURNING *
-      `,
-      [workspaceId, policy.room_id || null, run.id, req.user!.id, policy.risk_level, req.body?.reason || null]
-    );
-    approvalRequest = approvalInsert.rows[0];
-
-    const awaiting = await query(
-      `
-      UPDATE automation_runs
-      SET status = 'awaiting_approval', updated_at = NOW()
-      WHERE id = $1
-      RETURNING *
-      `,
-      [run.id]
-    );
-
-    try {
-      await query(
-        `
-        INSERT INTO automation_run_events (
-          workspace_id,
-          room_id,
-          automation_run_id,
-          event_type,
-          status,
-          attempt,
-          metadata,
-          created_at
-        )
-        VALUES ($1,$2,$3,'awaiting_approval','awaiting_approval',1,$4,NOW())
-        `,
-        [workspaceId, policy.room_id || null, run.id, JSON.stringify({ approvalRequestId: approvalRequest?.id || null })]
-      );
-    } catch (err) {
-      console.warn('Automation awaiting approval event insert skipped:', err);
-    }
-
-    if (approvalRequest && policy.room_id) {
-      emitToDecisionRoom(workspaceId, Number(policy.room_id), 'decision-room:approval-created', {
-        roomId: Number(policy.room_id),
-        approval: approvalRequest
-      });
-    }
+    const actorUserId = Number(req.user?.id || 0);
+    const execution = await executeAutomationPolicy({
+      workspaceId,
+      automationId,
+      actorUserId,
+      inputPayload: req.body?.input || {},
+      reason: req.body?.reason || null,
+      source: 'manual'
+    });
 
     return res.status(201).json({
-      run: awaiting.rows[0],
-      approvalRequest
+      run: execution.run,
+      approvalRequest: execution.approvalRequest
     });
-  } catch (err) {
+  } catch (err: any) {
+    if (err instanceof AutomationExecutionError) {
+      return res.status(err.statusCode).json({ error: err.message });
+    }
     console.error('Execute automation failed:', err);
     return res.status(500).json({ error: 'Failed to execute automation policy' });
   }
@@ -5958,7 +5831,7 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
     const retryPolicy = parseRetryPolicy(req.body?.retryPolicy);
     const isActive = req.body?.isActive !== false;
 
-    const nextRunAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const nextRunAt = computeNextRunAtFromCronExpression(cron, timezone);
     const insert = await query(
       `
       INSERT INTO automation_schedules (
@@ -6005,6 +5878,7 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
       }
     });
 
+    await requestAutomationDispatch('schedule_created');
     return res.status(201).json({
       roomId,
       schedule
@@ -6113,6 +5987,58 @@ router.get('/:workspaceId/rooms/:roomId/automations/runs', async (req: Workspace
   } catch (err) {
     console.error('List automation runs failed:', err);
     return res.status(500).json({ error: 'Failed to load automation runs' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/automations/queue-state', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const [scheduleStats, runStats] = await Promise.all([
+      query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE is_active = true)::int AS active_schedules,
+          COUNT(*) FILTER (WHERE is_active = true AND next_run_at IS NOT NULL AND next_run_at <= NOW())::int AS due_schedules
+        FROM automation_schedules
+        WHERE workspace_id = $1
+          AND (room_id = $2 OR room_id IS NULL)
+        `,
+        [workspaceId, roomId]
+      ),
+      query(
+        `
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'running')::int AS running_runs,
+          COUNT(*) FILTER (WHERE status = 'awaiting_approval')::int AS awaiting_approval_runs
+        FROM automation_runs
+        WHERE workspace_id = $1
+          AND (room_id = $2 OR room_id IS NULL)
+        `,
+        [workspaceId, roomId]
+      )
+    ]);
+
+    const scheduleRow = scheduleStats.rows[0] || {};
+    const runRow = runStats.rows[0] || {};
+    return res.json({
+      roomId,
+      queue: getAutomationQueueState(),
+      metrics: {
+        activeSchedules: Number(scheduleRow.active_schedules || 0),
+        dueSchedules: Number(scheduleRow.due_schedules || 0),
+        runningRuns: Number(runRow.running_runs || 0),
+        awaitingApprovalRuns: Number(runRow.awaiting_approval_runs || 0)
+      }
+    });
+  } catch (err) {
+    console.error('Load automation queue state failed:', err);
+    return res.status(500).json({ error: 'Failed to load automation queue state' });
   }
 });
 

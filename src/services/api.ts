@@ -492,6 +492,20 @@ export interface AutomationRunDetail {
   artifacts: number[];
 }
 
+export interface AutomationQueueState {
+  roomId: number;
+  queue: {
+    initialized: boolean;
+    enabled: boolean;
+  };
+  metrics: {
+    activeSchedules: number;
+    dueSchedules: number;
+    runningRuns: number;
+    awaitingApprovalRuns: number;
+  };
+}
+
 export interface OutcomeAttribution {
   actionId: number | null;
   metricKey: string;
@@ -659,6 +673,9 @@ export const studioAPI = {
 
   listAutomationRuns: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/automations/runs`),
+
+  getAutomationQueueState: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/automations/queue-state`),
 
   respondApproval: (workspaceId: string, approvalId: string | number, data: { decision: 'approved' | 'rejected'; note?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/approvals/${approvalId}/respond`, data),
