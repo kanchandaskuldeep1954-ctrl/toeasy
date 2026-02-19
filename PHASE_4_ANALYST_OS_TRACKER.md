@@ -102,7 +102,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 
 ## 6) Pending by Phase
 ### Phase A (Weeks 1-4): Data + Query Hardening
-- [ ] connector-native SQL profile management and credential validation depth
+- [x] connector-native SQL profile management and credential validation depth
 - [x] ingestion profiling API: missingness, duplicates, date continuity, invalid numerics
 - [x] dataset profiling persistence and room trust endpoint
 - [x] full Studio UI quality card polish for profile/trust
@@ -165,6 +165,19 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (SQL profile management + credential validation tranche):
+  - Added SQL credential validation and profile management in Studio routes:
+    - provider normalization for `postgres|mysql`
+    - required-field checks + warning diagnostics
+    - optional Postgres live connectivity verification with latency/error reporting.
+  - Upgraded SQL connect endpoint:
+    - `POST /api/workspaces/:id/integrations/sql/connect`
+    - now returns validation payload and masked credentials.
+  - Added SQL profile listing endpoint:
+    - `GET /api/workspaces/:id/integrations/sql/profiles`
+    - returns saved profiles with validation summaries.
+  - Updated Studio API client + contract tests for SQL profile APIs.
+  - Updated Studio UI SQL connect action to create validated draft profile payloads.
 - 2026-02-19 (Automation failure taxonomy + operator alerting tranche):
   - Added automation failure taxonomy classification service:
     - `backend/src/services/automationFailureTaxonomy.ts`

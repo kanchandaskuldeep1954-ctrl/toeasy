@@ -3022,7 +3022,27 @@ const AnalyticsStudio: React.FC = () => {
                 <button onClick={() => studioAPI.connectSheets(workspaceId, { name: 'Google Sheets', credentials: { mode: 'oauth' } })} className="px-3 py-1 text-xs rounded border">
                   Connect Sheets
                 </button>
-                <button onClick={() => studioAPI.connectSQL(workspaceId, { provider: 'postgres', name: 'Postgres', credentials: { host: 'localhost' } })} className="px-3 py-1 text-xs rounded border">
+                <button
+                  onClick={async () => {
+                    try {
+                      await studioAPI.connectSQL(workspaceId, {
+                        provider: 'postgres',
+                        name: 'Postgres',
+                        validateConnection: false,
+                        credentials: {
+                          host: 'localhost',
+                          port: 5432,
+                          database: 'analytics',
+                          user: 'analyst'
+                        }
+                      });
+                      setStatusMessage('SQL profile saved. Add credentials before production runs.');
+                    } catch (error: any) {
+                      setStatusMessage(toErrorMessage(error));
+                    }
+                  }}
+                  className="px-3 py-1 text-xs rounded border"
+                >
                   Connect SQL
                 </button>
               </div>

@@ -571,6 +571,27 @@ export interface AutomationQueueState {
   };
 }
 
+export interface SqlConnectionProfile {
+  id: number;
+  provider: 'postgres' | 'mysql';
+  name: string;
+  status: string;
+  lastSyncAt: string | null;
+  syncMessage: string | null;
+  credentials: Record<string, any>;
+  validation: {
+    provider: 'postgres' | 'mysql';
+    requiredFields: string[];
+    missingFields: string[];
+    warnings: string[];
+    valid: boolean;
+    testAttempted: boolean;
+    connectionVerified: boolean;
+    latencyMs: number | null;
+    error: string | null;
+  };
+}
+
 export interface OutcomeAttribution {
   actionId: number | null;
   metricKey: string;
@@ -996,6 +1017,9 @@ export const studioAPI = {
 
   connectSQL: (workspaceId: string, data: any) =>
     getClient().post(`/workspaces/${workspaceId}/integrations/sql/connect`, data),
+
+  listSqlProfiles: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/integrations/sql/profiles`),
 
   getExecutiveDigest: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/digests/executive`)

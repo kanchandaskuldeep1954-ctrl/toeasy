@@ -1,5 +1,6 @@
 import { NextFunction, Response, Router } from 'express';
 import { CronExpressionParser } from 'cron-parser';
+import { Client as PgClient } from 'pg';
 import { query } from '../db.js';
 import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
@@ -9078,12 +9079,164 @@ router.post('/:workspaceId/approvals/:approvalId/respond', async (req: Workspace
   }
 });
 
+type SqlProvider = 'postgres' | 'mysql';
+
+interface SqlConnectionValidationResult {
+  provider: SqlProvider;
+  requiredFields: string[];
+  missingFields: string[];
+  warnings: string[];
+  valid: boolean;
+  testAttempted: boolean;
+  connectionVerified: boolean;
+  latencyMs: number | null;
+  error: string | null;
+}
+
+function normalizeSqlProvider(provider: any): SqlProvider {
+  const normalized = String(provider || 'postgres').toLowerCase();
+  if (normalized === 'mysql') return 'mysql';
+  return 'postgres';
+}
+
+function getSqlRequiredFields(provider: SqlProvider, credentials: Record<string, any>): string[] {
+  const hasConnectionString = typeof credentials.connectionString === 'string' && credentials.connectionString.trim().length > 0;
+  if (hasConnectionString) return ['connectionString'];
+  if (provider === 'mysql') return ['host', 'port', 'database', 'user'];
+  return ['host', 'port', 'database', 'user'];
+}
+
+function sanitizeSqlCredentials(credentials: Record<string, any>) {
+  const sanitized: Record<string, any> = {
+    host: credentials.host || null,
+    port: credentials.port || null,
+    database: credentials.database || null,
+    user: credentials.user || null,
+    ssl: credentials.ssl || false,
+    connectionString: credentials.connectionString ? '[hidden]' : null
+  };
+  if (credentials.password) {
+    sanitized.password = '***';
+  }
+  return sanitized;
+}
+
+function validateSqlCredentialShape(provider: SqlProvider, credentials: Record<string, any>): SqlConnectionValidationResult {
+  const requiredFields = getSqlRequiredFields(provider, credentials);
+  const missingFields = requiredFields.filter((field) => {
+    const value = credentials[field];
+    if (value === null || value === undefined) return true;
+    if (typeof value === 'string' && value.trim().length === 0) return true;
+    return false;
+  });
+
+  const warnings: string[] = [];
+  const rawPort = Number(credentials.port);
+  if (!Number.isFinite(rawPort) && !requiredFields.includes('connectionString')) {
+    warnings.push('Port should be a number.');
+  } else if (Number.isFinite(rawPort) && (rawPort < 1 || rawPort > 65535)) {
+    warnings.push('Port should be between 1 and 65535.');
+  }
+  if (!credentials.password && !requiredFields.includes('connectionString')) {
+    warnings.push('Password is empty; verify your connector auth policy.');
+  }
+
+  return {
+    provider,
+    requiredFields,
+    missingFields,
+    warnings,
+    valid: missingFields.length === 0,
+    testAttempted: false,
+    connectionVerified: false,
+    latencyMs: null,
+    error: null
+  };
+}
+
+async function verifyPostgresConnectivity(credentials: Record<string, any>): Promise<{ ok: boolean; latencyMs: number; error?: string }> {
+  const startedAt = Date.now();
+  const hasConnectionString = typeof credentials.connectionString === 'string' && credentials.connectionString.trim().length > 0;
+
+  const pgClient = new PgClient({
+    connectionString: hasConnectionString ? credentials.connectionString : undefined,
+    host: hasConnectionString ? undefined : String(credentials.host || ''),
+    port: hasConnectionString ? undefined : Number(credentials.port || 5432),
+    user: hasConnectionString ? undefined : String(credentials.user || ''),
+    password: hasConnectionString ? undefined : credentials.password ? String(credentials.password) : undefined,
+    database: hasConnectionString ? undefined : String(credentials.database || ''),
+    ssl: credentials.ssl ? { rejectUnauthorized: false } : undefined,
+    connectionTimeoutMillis: 3000,
+    query_timeout: 3000,
+    statement_timeout: 3000
+  });
+
+  try {
+    await pgClient.connect();
+    await pgClient.query('SELECT 1');
+    return { ok: true, latencyMs: Date.now() - startedAt };
+  } catch (err: any) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      error: err?.message ? String(err.message) : 'Connection check failed'
+    };
+  } finally {
+    try {
+      await pgClient.end();
+    } catch {
+      // no-op
+    }
+  }
+}
+
+async function validateSqlConnectionProfile(params: {
+  provider: SqlProvider;
+  credentials: Record<string, any>;
+  verifyConnectivity?: boolean;
+}): Promise<SqlConnectionValidationResult> {
+  const validation = validateSqlCredentialShape(params.provider, params.credentials);
+  if (!params.verifyConnectivity || !validation.valid) {
+    return validation;
+  }
+
+  if (params.provider !== 'postgres') {
+    return {
+      ...validation,
+      warnings: [...validation.warnings, 'Connectivity test is currently available for Postgres only.'],
+      testAttempted: false,
+      connectionVerified: false
+    };
+  }
+
+  const connectivity = await verifyPostgresConnectivity(params.credentials);
+  if (!connectivity.ok) {
+    return {
+      ...validation,
+      testAttempted: true,
+      connectionVerified: false,
+      latencyMs: connectivity.latencyMs,
+      error: connectivity.error || 'Failed to verify connection',
+      valid: false
+    };
+  }
+
+  return {
+    ...validation,
+    testAttempted: true,
+    connectionVerified: true,
+    latencyMs: connectivity.latencyMs
+  };
+}
+
 async function upsertIntegrationConnection(params: {
   workspaceId: number;
   userId: string;
   provider: string;
   name: string;
   credentials: Record<string, any>;
+  status?: 'active' | 'error' | 'expired';
+  syncMessage?: string;
 }) {
   const existing = await query(
     `
@@ -9102,14 +9255,20 @@ async function upsertIntegrationConnection(params: {
       UPDATE integrations
       SET name = $1,
           credentials = $2,
-          status = 'active',
+          status = $3,
           last_sync_at = NOW(),
-          sync_message = 'Connected via Studio V2',
+          sync_message = $4,
           updated_at = NOW()
-      WHERE id = $3
-      RETURNING id, provider, name, status, last_sync_at
+      WHERE id = $5
+      RETURNING id, provider, name, status, last_sync_at, sync_message
       `,
-      [params.name, JSON.stringify(params.credentials || {}), existing.rows[0].id]
+      [
+        params.name,
+        JSON.stringify(params.credentials || {}),
+        params.status || 'active',
+        params.syncMessage || 'Connected via Studio V2',
+        existing.rows[0].id
+      ]
     );
     return updated.rows[0];
   }
@@ -9126,10 +9285,18 @@ async function upsertIntegrationConnection(params: {
       last_sync_at,
       sync_message
     )
-    VALUES ($1,$2,$3,$4,$5,'active',NOW(),'Connected via Studio V2')
-    RETURNING id, provider, name, status, last_sync_at
+    VALUES ($1,$2,$3,$4,$5,$6,NOW(),$7)
+    RETURNING id, provider, name, status, last_sync_at, sync_message
     `,
-    [params.userId, params.workspaceId, params.provider, params.name, JSON.stringify(params.credentials || {})]
+    [
+      params.userId,
+      params.workspaceId,
+      params.provider,
+      params.name,
+      JSON.stringify(params.credentials || {}),
+      params.status || 'active',
+      params.syncMessage || 'Connected via Studio V2'
+    ]
   );
   return inserted.rows[0];
 }
@@ -9174,21 +9341,93 @@ router.post('/:workspaceId/integrations/sheets/connect', async (req: WorkspaceRe
   }
 });
 
+router.get('/:workspaceId/integrations/sql/profiles', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const profilesResult = await query(
+      `
+      SELECT id, provider, name, credentials, status, last_sync_at, sync_message, updated_at
+      FROM integrations
+      WHERE workspace_id = $1
+        AND provider IN ('postgres', 'mysql', 'sql')
+      ORDER BY updated_at DESC, id DESC
+      LIMIT 100
+      `,
+      [workspaceId]
+    );
+
+    const profiles = profilesResult.rows.map((row) => {
+      const provider = normalizeSqlProvider(row.provider);
+      const credentials = parseJsonMaybe<Record<string, any>>(row.credentials, {});
+      const validation = validateSqlCredentialShape(provider, credentials);
+      return {
+        id: Number(row.id),
+        provider,
+        name: String(row.name || ''),
+        status: String(row.status || 'active'),
+        lastSyncAt: row.last_sync_at || null,
+        syncMessage: row.sync_message || null,
+        credentials: sanitizeSqlCredentials(credentials),
+        validation
+      };
+    });
+
+    return res.json({ data: profiles });
+  } catch (err) {
+    console.error('List SQL profiles failed:', err);
+    return res.status(500).json({ error: 'Failed to load SQL profiles' });
+  }
+});
+
 router.post('/:workspaceId/integrations/sql/connect', async (req: WorkspaceRequest, res: Response) => {
   try {
     if (!canWrite(req.workspaceRole)) {
       return res.status(403).json({ error: 'Write access required' });
     }
     const workspaceId = Number(req.params.workspaceId);
-    const provider = String(req.body?.provider || 'sql');
+    const provider = normalizeSqlProvider(req.body?.provider || 'postgres');
+    const credentials = req.body?.credentials && typeof req.body.credentials === 'object'
+      ? req.body.credentials
+      : req.body || {};
+    const verifyConnectivity = req.body?.validateConnection === true;
+    const validation = await validateSqlConnectionProfile({
+      provider,
+      credentials,
+      verifyConnectivity
+    });
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'SQL connection profile failed validation',
+        validation,
+        credentials: sanitizeSqlCredentials(credentials)
+      });
+    }
+
+    const syncMessage = validation.testAttempted
+      ? validation.connectionVerified
+        ? `Connection verified in ${validation.latencyMs || 0}ms`
+        : validation.error || 'Connection test failed'
+      : validation.warnings.length > 0
+        ? `Profile saved with warnings: ${validation.warnings.join(' ')}`
+        : 'Profile validated and saved';
+
     const result = await upsertIntegrationConnection({
       workspaceId,
       userId: req.user!.id,
       provider,
       name: req.body?.name || `${provider.toUpperCase()} Connection`,
-      credentials: req.body?.credentials || req.body || {}
+      credentials,
+      status: validation.connectionVerified || !validation.testAttempted ? 'active' : 'error',
+      syncMessage
     });
-    return res.status(201).json({ data: result });
+    return res.status(201).json({
+      data: {
+        ...result,
+        provider,
+        credentials: sanitizeSqlCredentials(credentials)
+      },
+      validation
+    });
   } catch (err) {
     console.error('SQL connect failed:', err);
     return res.status(500).json({ error: 'Failed to connect SQL integration' });

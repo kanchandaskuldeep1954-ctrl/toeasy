@@ -281,6 +281,36 @@ describe('Studio MVP API Contracts', () => {
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/playbooks/onboarding');
   });
 
+  it('calls SQL connect endpoint with validation toggle', () => {
+    studioAPI.connectSQL('12', {
+      provider: 'postgres',
+      name: 'Primary Postgres',
+      validateConnection: false,
+      credentials: {
+        host: 'localhost',
+        port: 5432,
+        database: 'analytics',
+        user: 'analyst'
+      }
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/integrations/sql/connect', {
+      provider: 'postgres',
+      name: 'Primary Postgres',
+      validateConnection: false,
+      credentials: {
+        host: 'localhost',
+        port: 5432,
+        database: 'analytics',
+        user: 'analyst'
+      }
+    });
+  });
+
+  it('calls SQL profile list endpoint', () => {
+    studioAPI.listSqlProfiles('12');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/integrations/sql/profiles');
+  });
+
   it('calls schedule automation endpoint', () => {
     studioAPI.scheduleAutomation('12', '77', {
       policyId: 4,
