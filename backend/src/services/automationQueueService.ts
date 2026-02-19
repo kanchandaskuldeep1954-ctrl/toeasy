@@ -8,6 +8,8 @@ import {
   resolveAutomationActorContext,
   recordAutomationRunEvent
 } from './automationExecutionService.js';
+import { classifyAutomationFailure } from './automationFailureTaxonomy.js';
+import { notifyOperatorsForAutomationFailure } from './automationOperatorAlertService.js';
 
 interface DispatchJobPayload {
   reason?: string;
@@ -43,6 +45,20 @@ interface QueueRuntimeState {
   executeFailures: number;
   executeRetriesScheduled: number;
   executeTerminalFailures: number;
+  failureByCode: Record<string, number>;
+  lastFailure: {
+    at: string;
+    code: string;
+    category: string;
+    severity: string;
+    retryable: boolean;
+    terminal: boolean;
+    message: string;
+    operatorAction: string;
+    scheduleId: number | null;
+    automationPolicyId: number | null;
+    jobId: string | null;
+  } | null;
   lastDispatchAt: string | null;
   lastDispatchReason: string | null;
   lastDispatchError: string | null;
@@ -76,6 +92,8 @@ const queueState: QueueRuntimeState = {
   executeFailures: 0,
   executeRetriesScheduled: 0,
   executeTerminalFailures: 0,
+  failureByCode: {},
+  lastFailure: null,
   lastDispatchAt: null,
   lastDispatchReason: null,
   lastDispatchError: null,
@@ -455,11 +473,31 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
       const attemptsMade = Math.max(1, Number(job?.attemptsMade || 1));
       const maxAttempts = Math.max(1, Number(job?.opts?.attempts || job?.data?.retryPolicy?.maxAttempts || 1));
       const retriesRemaining = attemptsMade < maxAttempts;
+      const normalizedMessage = normalizeQueueError(err);
+      const failure = classifyAutomationFailure({
+        message: normalizedMessage,
+        attemptsMade,
+        maxAttempts
+      });
       if (retriesRemaining) {
         queueState.executeRetriesScheduled += 1;
       } else {
         queueState.executeTerminalFailures += 1;
       }
+      queueState.failureByCode[failure.code] = Number(queueState.failureByCode[failure.code] || 0) + 1;
+      queueState.lastFailure = {
+        at: new Date().toISOString(),
+        code: failure.code,
+        category: failure.category,
+        severity: failure.severity,
+        retryable: failure.retryable,
+        terminal: failure.terminal,
+        message: normalizedMessage,
+        operatorAction: failure.operatorAction,
+        scheduleId: Number(job?.data?.scheduleId || 0) || null,
+        automationPolicyId: Number(job?.data?.automationPolicyId || 0) || null,
+        jobId: job?.id ? String(job.id) : null
+      };
       logger.error('[AutomationQueue] Execute worker failed', {
         jobId: job?.id || null,
         scheduleId: job?.data?.scheduleId || null,
@@ -467,7 +505,10 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
         attemptsMade,
         maxAttempts,
         retriesRemaining,
-        error: err.message
+        error: normalizedMessage,
+        failureCode: failure.code,
+        failureCategory: failure.category,
+        failureSeverity: failure.severity
       });
 
       try {
@@ -507,7 +548,13 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
               scheduleId: job.data.scheduleId || null,
               actorResolutionStrategy: job.data.actorResolutionStrategy || null,
               retryBackoffMs: job.data.retryPolicy?.backoffMs || null,
-              retriesRemaining
+              retriesRemaining,
+              failureCode: failure.code,
+              failureCategory: failure.category,
+              failureSeverity: failure.severity,
+              failureRetryable: failure.retryable,
+              failureOperatorAction: failure.operatorAction,
+              matchedSignals: failure.matchedSignals
             }
           });
 
@@ -519,10 +566,27 @@ export async function initializeAutomationQueue(redisUrl?: string): Promise<void
                   error = COALESCE(error, $1),
                   completed_at = CASE WHEN status IN ('completed', 'awaiting_approval') THEN completed_at ELSE NOW() END,
                   updated_at = NOW()
-              WHERE id = $2
+                WHERE id = $2
               `,
-              [err.message, runId]
+              [normalizedMessage, runId]
             );
+          }
+
+          if (!retriesRemaining) {
+            try {
+              await notifyOperatorsForAutomationFailure({
+                workspaceId: Number(job.data.workspaceId),
+                roomId,
+                runId,
+                scheduleId: Number(job.data.scheduleId || 0) || null,
+                automationPolicyId: Number(job.data.automationPolicyId || 0) || null,
+                jobId: job.id ? String(job.id) : null,
+                errorMessage: normalizedMessage,
+                classification: failure
+              });
+            } catch (notifyErr) {
+              logger.warn('[AutomationQueue] Failed to create operator automation-failure alerts', notifyErr);
+            }
           }
         }
       } catch (eventErr) {
@@ -616,6 +680,8 @@ export async function closeAutomationQueue(): Promise<void> {
   queueState.executeFailures = 0;
   queueState.executeRetriesScheduled = 0;
   queueState.executeTerminalFailures = 0;
+  queueState.failureByCode = {};
+  queueState.lastFailure = null;
   queueState.lastDispatchAt = null;
   queueState.lastDispatchReason = null;
   queueState.lastDispatchError = null;
@@ -646,6 +712,8 @@ export function getAutomationQueueState(): QueueRuntimeState {
     executeFailures: queueState.executeFailures,
     executeRetriesScheduled: queueState.executeRetriesScheduled,
     executeTerminalFailures: queueState.executeTerminalFailures,
+    failureByCode: { ...queueState.failureByCode },
+    lastFailure: queueState.lastFailure ? { ...queueState.lastFailure } : null,
     lastDispatchAt: queueState.lastDispatchAt,
     lastDispatchReason: queueState.lastDispatchReason,
     lastDispatchError: queueState.lastDispatchError,

@@ -520,6 +520,20 @@ export interface AutomationQueueState {
     executeFailures?: number;
     executeRetriesScheduled?: number;
     executeTerminalFailures?: number;
+    failureByCode?: Record<string, number>;
+    lastFailure?: {
+      at: string;
+      code: string;
+      category: string;
+      severity: string;
+      retryable: boolean;
+      terminal: boolean;
+      message: string;
+      operatorAction: string;
+      scheduleId: number | null;
+      automationPolicyId: number | null;
+      jobId: string | null;
+    } | null;
     lastDispatchAt?: string | null;
     lastDispatchReason?: string | null;
     lastDispatchError?: string | null;

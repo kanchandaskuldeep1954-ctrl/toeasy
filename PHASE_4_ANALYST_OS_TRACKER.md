@@ -128,7 +128,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 
 ### Phase E (Weeks 17-20): Automation Reliability
 - [x] production scheduler with queue monitoring dashboard
-- [ ] failure taxonomy and operator alerting
+- [x] failure taxonomy and operator alerting
 - [x] idempotency key persistence + publish/sync endpoint guards
 - [x] extend idempotency and dedupe guarantees to remaining mutating endpoints
 
@@ -165,6 +165,21 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Automation failure taxonomy + operator alerting tranche):
+  - Added automation failure taxonomy classification service:
+    - `backend/src/services/automationFailureTaxonomy.ts`
+    - deterministic mapping for connector auth/unreachable, query syntax, rate-limit, permission, timeout, approval timeout, invalid input, unknown.
+  - Integrated taxonomy into BullMQ execute failure flow:
+    - queue runtime now tracks `failureByCode` histogram and `lastFailure` snapshot.
+    - run-event metadata now carries `failureCode/category/severity/retryable/operatorAction`.
+  - Added operator alert notifications for terminal automation failures:
+    - `backend/src/services/automationOperatorAlertService.ts`
+    - sends deduped `automation_failure` notifications to workspace admins/editors/owner.
+  - Upgraded Studio Automation Reliability panel:
+    - renders failure taxonomy summary and actionable last-failure card.
+  - Added backend test harness + taxonomy tests:
+    - `backend/package.json` script: `npm test`
+    - `backend/src/services/automationFailureTaxonomy.test.ts` passing.
 - 2026-02-19 (Pilot conversion operations tranche):
   - Added pilot conversion and GTM execution artifact:
     - `PILOT_CONVERSION_CHECKLIST.md`

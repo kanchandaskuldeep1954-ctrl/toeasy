@@ -3096,6 +3096,15 @@ const AnalyticsStudio: React.FC = () => {
                       {' '}| Execute failures: {automationQueueState.queue.executeFailures || 0}
                       {' '}| Terminal failures: {automationQueueState.queue.executeTerminalFailures || 0}
                     </div>
+                    {!!Object.keys(automationQueueState.queue.failureByCode || {}).length && (
+                      <div>
+                        Failure taxonomy -&gt; {Object.entries(automationQueueState.queue.failureByCode || {})
+                          .sort((a, b) => Number(b[1]) - Number(a[1]))
+                          .slice(0, 5)
+                          .map(([code, count]) => `${code}: ${count}`)
+                          .join(' | ')}
+                      </div>
+                    )}
                     {automationQueueState.queue.lastDispatchAt && (
                       <div>
                         Last dispatch: {new Date(automationQueueState.queue.lastDispatchAt).toLocaleString()}
@@ -3120,6 +3129,20 @@ const AnalyticsStudio: React.FC = () => {
                         {' '}active {automationQueueState.queue.queues.execute.active},
                         {' '}delayed {automationQueueState.queue.queues.execute.delayed},
                         {' '}failed {automationQueueState.queue.queues.execute.failed}
+                      </div>
+                    )}
+                    {automationQueueState.queue.lastFailure && (
+                      <div className="rounded border border-rose-200 dark:border-rose-700/70 bg-rose-50/80 dark:bg-rose-900/20 px-2 py-1 text-rose-700 dark:text-rose-300">
+                        <div className="font-semibold">
+                          Last failure: {automationQueueState.queue.lastFailure.code} ({automationQueueState.queue.lastFailure.severity})
+                          {' '}| terminal: {automationQueueState.queue.lastFailure.terminal ? 'yes' : 'no'}
+                        </div>
+                        <div>
+                          {automationQueueState.queue.lastFailure.operatorAction}
+                        </div>
+                        <div className="truncate">
+                          {automationQueueState.queue.lastFailure.message}
+                        </div>
                       </div>
                     )}
                   </div>
