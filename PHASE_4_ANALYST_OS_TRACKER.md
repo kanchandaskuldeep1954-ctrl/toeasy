@@ -130,7 +130,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] production scheduler with queue monitoring dashboard
 - [ ] failure taxonomy and operator alerting
 - [x] idempotency key persistence + publish/sync endpoint guards
-- [ ] extend idempotency and dedupe guarantees to remaining mutating endpoints
+- [x] extend idempotency and dedupe guarantees to remaining mutating endpoints
 
 ### Phase F (Weeks 21-24): Launch Readiness
 - [ ] persona presets finalized (analyst/manager/executive)
@@ -165,6 +165,14 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Automation idempotency extension tranche):
+  - Added idempotency handling to additional mutating automation APIs:
+    - `POST /api/workspaces/:id/automations/:automationId/execute`
+    - `POST /api/workspaces/:id/rooms/:roomId/automations/schedule`
+  - Added replay/in-progress behavior for those endpoints:
+    - deterministic replay payload for repeated idempotency keys
+    - 409 conflict for concurrent in-flight duplicate requests
+  - Persisted status/error payloads for idempotent completion on success and failure paths.
 - 2026-02-19 (Phase 4 automation reliability tranche):
   - Hardened BullMQ schedule dispatch for multi-instance behavior:
     - deterministic schedule dedupe keys from `room+policy+cron+timezone`

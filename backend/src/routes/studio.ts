@@ -7879,13 +7879,45 @@ router.post('/:workspaceId/automations', async (req: WorkspaceRequest, res: Resp
 });
 
 router.post('/:workspaceId/automations/:automationId/execute', async (req: WorkspaceRequest, res: Response) => {
+  const workspaceId = Number(req.params.workspaceId);
+  const automationId = Number(req.params.automationId);
+  const endpointKey = `automation_execute:${automationId}`;
+  const idempotencyKey = resolveIdempotencyKey(req);
+  const idempotency = await beginIdempotentOperation({
+    workspaceId,
+    roomId: null,
+    endpointKey,
+    userId: req.user?.id || '0',
+    idempotencyKey
+  });
+  if (idempotency.replay) {
+    return res.status(idempotency.replay.statusCode).json({
+      ...idempotency.replay.payload,
+      replayed: true,
+      idempotencyKey: idempotency.idempotencyKey
+    });
+  }
+  if (idempotency.inProgress) {
+    return res.status(409).json({
+      error: 'A request with the same idempotency key is already in progress.',
+      idempotencyKey: idempotency.idempotencyKey
+    });
+  }
+
   try {
     if (!canWrite(req.workspaceRole)) {
-      return res.status(403).json({ error: 'Write access required' });
+      const payload = { error: 'Write access required', idempotencyKey: idempotency.idempotencyKey };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId: null,
+        endpointKey,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 403,
+        payload
+      });
+      return res.status(403).json(payload);
     }
 
-    const workspaceId = Number(req.params.workspaceId);
-    const automationId = Number(req.params.automationId);
     const actorUserId = Number(req.user?.id || 0);
     const execution = await executeAutomationPolicy({
       workspaceId,
@@ -7896,27 +7928,58 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
       source: 'manual'
     });
 
-    return res.status(201).json({
+    const payload = {
       run: execution.run,
-      approvalRequest: execution.approvalRequest
+      approvalRequest: execution.approvalRequest,
+      idempotencyKey: idempotency.idempotencyKey
+    };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId: null,
+      endpointKey,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 201,
+      payload
     });
+    return res.status(201).json(payload);
   } catch (err: any) {
     if (err instanceof AutomationExecutionError) {
-      return res.status(err.statusCode).json({ error: err.message });
+      const payload = { error: err.message, idempotencyKey: idempotency.idempotencyKey };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId: null,
+        endpointKey,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: err.statusCode,
+        payload
+      });
+      return res.status(err.statusCode).json(payload);
     }
     console.error('Execute automation failed:', err);
-    return res.status(500).json({ error: 'Failed to execute automation policy' });
+    const payload = { error: 'Failed to execute automation policy', idempotencyKey: idempotency.idempotencyKey };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId: null,
+      endpointKey,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 500,
+      payload
+    });
+    return res.status(500).json(payload);
   }
 });
 
 router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: WorkspaceRequest, res: Response) => {
+  const workspaceId = Number(req.params.workspaceId);
+  const roomId = Number(req.params.roomId);
+  let endpointKey = 'automation_schedule_create';
+  let idempotency: IdempotencyStartResult = { idempotencyKey: null };
+
   try {
     if (!canWrite(req.workspaceRole)) {
       return res.status(403).json({ error: 'Write access required' });
     }
 
-    const workspaceId = Number(req.params.workspaceId);
-    const roomId = Number(req.params.roomId);
     const room = await getRoom(workspaceId, roomId);
     if (!room) {
       return res.status(404).json({ error: 'Room not found' });
@@ -7957,6 +8020,27 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
     });
     const retryPolicy = parseRetryPolicy(req.body?.retryPolicy);
     const isActive = req.body?.isActive !== false;
+    endpointKey = `automation_schedule_create:${automationPolicyId}`;
+    idempotency = await beginIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey,
+      userId: req.user?.id || '0',
+      idempotencyKey: resolveIdempotencyKey(req)
+    });
+    if (idempotency.replay) {
+      return res.status(idempotency.replay.statusCode).json({
+        ...idempotency.replay.payload,
+        replayed: true,
+        idempotencyKey: idempotency.idempotencyKey
+      });
+    }
+    if (idempotency.inProgress) {
+      return res.status(409).json({
+        error: 'A request with the same idempotency key is already in progress.',
+        idempotencyKey: idempotency.idempotencyKey
+      });
+    }
 
     const existingScheduleResult = await query(
       `
@@ -7976,15 +8060,34 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
         && String(existingSchedule.cron || '') === cron
         && String(existingSchedule.timezone || 'UTC') === timezone;
       if (!sameIntent) {
-        return res.status(409).json({
+        const payload = {
           error: 'dedupeKey is already used by a different schedule. Use a different dedupeKey.'
+        };
+        await completeIdempotentOperation({
+          workspaceId,
+          roomId,
+          endpointKey,
+          idempotencyKey: idempotency.idempotencyKey,
+          statusCode: 409,
+          payload
         });
+        return res.status(409).json(payload);
       }
-      return res.status(200).json({
+      const payload = {
         roomId,
         schedule: toAutomationScheduleRecord(existingSchedule),
-        deduped: true
+        deduped: true,
+        idempotencyKey: idempotency.idempotencyKey
+      };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 200,
+        payload
       });
+      return res.status(200).json(payload);
     }
 
     const nextRunAt = computeNextRunAtFromCronExpression(cron, timezone);
@@ -8035,17 +8138,48 @@ router.post('/:workspaceId/rooms/:roomId/automations/schedule', async (req: Work
     });
 
     await requestAutomationDispatch('schedule_created');
-    return res.status(201).json({
+    const payload = {
       roomId,
-      schedule
+      schedule,
+      idempotencyKey: idempotency.idempotencyKey
+    };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 201,
+      payload
     });
+    return res.status(201).json(payload);
   } catch (err: any) {
     console.error('Create automation schedule failed:', err);
     const message = String(err?.message || '');
     if (message.toLowerCase().includes('duplicate key')) {
-      return res.status(409).json({ error: 'dedupeKey already exists in this workspace. Use a different dedupeKey.' });
+      const payload = {
+        error: 'dedupeKey already exists in this workspace. Use a different dedupeKey.',
+        idempotencyKey: idempotency.idempotencyKey
+      };
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 409,
+        payload
+      });
+      return res.status(409).json(payload);
     }
-    return res.status(500).json({ error: 'Failed to create automation schedule' });
+    const payload = { error: 'Failed to create automation schedule', idempotencyKey: idempotency.idempotencyKey };
+    await completeIdempotentOperation({
+      workspaceId,
+      roomId,
+      endpointKey,
+      idempotencyKey: idempotency.idempotencyKey,
+      statusCode: 500,
+      payload
+    });
+    return res.status(500).json(payload);
   }
 });
 
