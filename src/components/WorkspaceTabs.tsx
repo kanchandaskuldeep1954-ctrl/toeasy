@@ -32,6 +32,15 @@ const WorkspaceTabs: React.FC = () => {
     const workspaceId = activeWorkspace?.id;
     const currentDatasetId = searchParams.get('dataset');
     const currentPath = location.pathname;
+    const currentPanel = searchParams.get('panel') || 'sheets';
+    const currentProjectId = searchParams.get('project');
+    const currentRoomId = searchParams.get('room');
+
+    const tabPanelMap: Record<Tab['tab_type'], string> = {
+        dashboard: 'visuals',
+        report: 'report',
+        dataset: 'sheets'
+    };
 
     useEffect(() => {
         if (workspaceId) {
@@ -57,15 +66,15 @@ const WorkspaceTabs: React.FC = () => {
         let tabType: 'dashboard' | 'report' | 'dataset' = 'dataset';
         let tabName = 'New Tab';
 
-        if (currentPath.includes('/app/dashboard')) {
+        if (currentPath.includes('/app/studio') && currentPanel === 'visuals') {
             tabType = 'dashboard';
-            tabName = 'Dashboard';
-        } else if (currentPath.includes('/app/report')) {
+            tabName = 'Visuals';
+        } else if (currentPath.includes('/app/studio') && currentPanel === 'report') {
             tabType = 'report';
             tabName = 'Report';
-        } else if (currentPath.includes('/app/datasets') || currentPath.includes('/app/clean')) {
+        } else if (currentPath.includes('/app/studio')) {
             tabType = 'dataset';
-            tabName = 'Dataset';
+            tabName = 'Sheets';
         }
 
         try {
@@ -93,20 +102,20 @@ const WorkspaceTabs: React.FC = () => {
     };
 
     const navigateToTab = (tab: Tab) => {
-        let path = '';
-        switch (tab.tab_type) {
-            case 'dashboard': path = '/app/dashboard'; break;
-            case 'report': path = '/app/report'; break;
-            case 'dataset': path = '/app/clean'; break;
-        }
-        navigate(`${path}?workspace=${workspaceId}&dataset=${tab.resource_id}`);
+        const params = new URLSearchParams();
+        params.set('workspace', String(workspaceId));
+        params.set('dataset', tab.resource_id);
+        params.set('panel', tabPanelMap[tab.tab_type] || 'sheets');
+        if (currentProjectId) params.set('project', currentProjectId);
+        if (currentRoomId) params.set('room', currentRoomId);
+        navigate(`/app/studio?${params.toString()}`);
     };
 
     const isTabActive = (tab: Tab) => {
-        return currentDatasetId === tab.resource_id && (
-            (tab.tab_type === 'dashboard' && currentPath.includes('/app/dashboard')) ||
-            (tab.tab_type === 'report' && currentPath.includes('/app/report')) ||
-            (tab.tab_type === 'dataset' && (currentPath.includes('/app/clean') || currentPath.includes('/app/datasets')))
+        return (
+            currentPath.includes('/app/studio')
+            && currentDatasetId === tab.resource_id
+            && currentPanel === (tabPanelMap[tab.tab_type] || 'sheets')
         );
     };
 

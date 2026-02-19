@@ -100,7 +100,7 @@ export const QueryHistory: React.FC = () => {
               <div className="text-center py-12 bg-slate-900 border border-slate-800 rounded-xl">
                 <p className="text-slate-400 mb-4">No query history yet</p>
                 <button
-                  onClick={() => navigate('/app/playground')}
+                  onClick={() => navigate(`/app/studio?workspace=${workspaceId}&panel=query`)}
                   className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors"
                 >
                   Run Your First Query
@@ -188,7 +188,7 @@ export const QueryHistory: React.FC = () => {
               {/* Actions */}
               <div className="mt-6 pt-6 border-t border-slate-800 space-y-2">
                 <button
-                  onClick={() => navigate(`/app/playground?workspace=${workspaceId}&dataset=${selectedQuery.dataset_id}&query=${selectedQuery.id}`)}
+                  onClick={() => navigate(`/app/studio?workspace=${workspaceId}&dataset=${selectedQuery.dataset_id}&panel=query&query=${selectedQuery.id}`)}
                   className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold transition-colors text-sm"
                 >
                   Edit & Run

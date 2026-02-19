@@ -1,16 +1,8 @@
-/**
+﻿/**
  * Journey Configuration
- * 
- * Defines the guided workflows for different source types.
- * Each journey is a sequence of steps that guide the user through
- * the data intelligence process.
- * 
- * Part of Phase 1: Intelligent Core Loop
+ *
+ * Studio-first route map used for optional guidance during upload and onboarding.
  */
-
-// ============================================
-// Type Definitions
-// ============================================
 
 export type SourceType =
     | 'invoice'
@@ -40,8 +32,8 @@ export interface JourneyStep {
     id: JourneyStepId;
     label: string;
     description: string;
-    icon: string; // Emoji or icon name
-    route: string; // React Router path
+    icon: string;
+    route: string;
     isOptional?: boolean;
     requiredTier?: 'basic' | 'pro' | 'enterprise';
 }
@@ -51,75 +43,68 @@ export interface Journey {
     name: string;
     description: string;
     icon: string;
-    color: string; // Tailwind color class
+    color: string;
     steps: JourneyStep[];
     suggestedFor: SourceType[];
 }
-
-// ============================================
-// Journey Definitions
-// ============================================
 
 export const JOURNEY_STEPS: Record<JourneyStepId, JourneyStep> = {
     review: {
         id: 'review',
         label: 'Review Data',
-        description: 'Preview your uploaded data and verify it looks correct',
-        icon: '👁️',
-        route: '/app/preview'
+        description: 'Preview uploaded data in sheets mode and validate baseline quality.',
+        icon: 'review',
+        route: '/app/studio?panel=sheets'
     },
     classify: {
         id: 'classify',
         label: 'Classify',
-        description: 'AI identifies what type of data you uploaded',
-        icon: '🧠',
-        // Classification currently happens during upload; route to preview until a dedicated view exists.
-        route: '/app/preview'
+        description: 'Optional AI-based dataset classification metadata.',
+        icon: 'classify',
+        route: '/app/studio?panel=sheets'
     },
     clean: {
         id: 'clean',
         label: 'Fix Issues',
-        description: 'AI detects and fixes data quality issues',
-        icon: '🧹',
-        route: '/app/clean'
+        description: 'Resolve quality issues in sheets/query flows. AI suggestions are assistive only.',
+        icon: 'quality',
+        route: '/app/studio?panel=sheets'
     },
     analyze: {
         id: 'analyze',
         label: 'Analyze',
-        description: 'Deep analysis to uncover patterns and insights',
-        icon: '🔬',
-        route: '/app/playground'
+        description: 'Run SQL/NL analysis and persist evidence artifacts.',
+        icon: 'analyze',
+        route: '/app/studio?panel=query'
     },
     dashboard: {
         id: 'dashboard',
         label: 'Visualize',
-        description: 'Generate charts and dashboards automatically',
-        icon: '📊',
-        route: '/app/dashboard'
+        description: 'Create and drill visual artifacts from query and pivot outputs.',
+        icon: 'visuals',
+        route: '/app/studio?panel=visuals'
     },
     report: {
         id: 'report',
         label: 'Generate Report',
-        description: 'Create an AI-written strategic narrative',
-        icon: '📝',
-        route: '/app/report'
+        description: 'Create evidence-first reporting bundles and briefs.',
+        icon: 'report',
+        route: '/app/studio?panel=report'
     },
     export: {
         id: 'export',
         label: 'Export',
-        description: 'Download your cleaned data and visualizations',
-        icon: '📤',
-        // Export is currently surfaced inside the cleaning/report experiences (ExportModal).
-        route: '/app/clean',
+        description: 'Prepare downstream sync/export actions and status updates.',
+        icon: 'export',
+        route: '/app/studio?panel=actions',
         isOptional: true
     },
     share: {
         id: 'share',
         label: 'Share',
-        description: 'Share insights with your team or stakeholders',
-        icon: '🔗',
-        // Sharing is currently supported from reports (public share link).
-        route: '/app/report',
+        description: 'Share insights and approvals with collaborators.',
+        icon: 'share',
+        route: '/app/studio?panel=comms',
         isOptional: true,
         requiredTier: 'pro'
     }
@@ -129,8 +114,8 @@ export const JOURNEYS: Record<string, Journey> = {
     financial_analysis: {
         id: 'financial_analysis',
         name: 'Financial Analysis',
-        description: 'Analyze invoices, transactions, and financial reports',
-        icon: '💰',
+        description: 'Analyze invoices, transactions, and financial reports.',
+        icon: 'financial',
         color: 'emerald',
         steps: [
             JOURNEY_STEPS.review,
@@ -144,8 +129,8 @@ export const JOURNEYS: Record<string, Journey> = {
     sales_insights: {
         id: 'sales_insights',
         name: 'Sales Insights',
-        description: 'Uncover revenue trends and customer patterns',
-        icon: '📈',
+        description: 'Uncover revenue trends and customer patterns.',
+        icon: 'sales',
         color: 'blue',
         steps: [
             JOURNEY_STEPS.review,
@@ -159,8 +144,8 @@ export const JOURNEYS: Record<string, Journey> = {
     hr_analytics: {
         id: 'hr_analytics',
         name: 'HR Analytics',
-        description: 'Analyze workforce data and organizational patterns',
-        icon: '👥',
+        description: 'Analyze workforce data and organizational patterns.',
+        icon: 'hr',
         color: 'purple',
         steps: [
             JOURNEY_STEPS.review,
@@ -174,8 +159,8 @@ export const JOURNEYS: Record<string, Journey> = {
     customer_intelligence: {
         id: 'customer_intelligence',
         name: 'Customer Intelligence',
-        description: 'Analyze customer data for segmentation and insights',
-        icon: '🎯',
+        description: 'Analyze customer data for segmentation and insights.',
+        icon: 'customer',
         color: 'orange',
         steps: [
             JOURNEY_STEPS.review,
@@ -189,8 +174,8 @@ export const JOURNEYS: Record<string, Journey> = {
     inventory_management: {
         id: 'inventory_management',
         name: 'Inventory Management',
-        description: 'Track stock levels and optimize inventory',
-        icon: '📦',
+        description: 'Track stock levels and optimize inventory.',
+        icon: 'inventory',
         color: 'amber',
         steps: [
             JOURNEY_STEPS.review,
@@ -204,8 +189,8 @@ export const JOURNEYS: Record<string, Journey> = {
     operational_monitoring: {
         id: 'operational_monitoring',
         name: 'Operational Monitoring',
-        description: 'Analyze logs and system events for issues',
-        icon: '🖥️',
+        description: 'Analyze logs and system events for issues.',
+        icon: 'operations',
         color: 'slate',
         steps: [
             JOURNEY_STEPS.review,
@@ -218,8 +203,8 @@ export const JOURNEYS: Record<string, Journey> = {
     quick_exploration: {
         id: 'quick_exploration',
         name: 'Quick Exploration',
-        description: 'General-purpose data exploration workflow',
-        icon: '🔍',
+        description: 'General-purpose data exploration workflow.',
+        icon: 'explore',
         color: 'indigo',
         steps: [
             JOURNEY_STEPS.review,
@@ -231,13 +216,6 @@ export const JOURNEYS: Record<string, Journey> = {
     }
 };
 
-// ============================================
-// Helper Functions
-// ============================================
-
-/**
- * Get the recommended journey for a source type
- */
 export function getJourneyForSourceType(sourceType: SourceType): Journey {
     for (const journey of Object.values(JOURNEYS)) {
         if (journey.suggestedFor.includes(sourceType)) {
@@ -247,60 +225,44 @@ export function getJourneyForSourceType(sourceType: SourceType): Journey {
     return JOURNEYS.quick_exploration;
 }
 
-/**
- * Get all available journeys
- */
 export function getAllJourneys(): Journey[] {
     return Object.values(JOURNEYS);
 }
 
-/**
- * Get journey by ID
- */
 export function getJourneyById(id: string): Journey | undefined {
     return JOURNEYS[id];
 }
 
-/**
- * Calculate journey progress percentage
- */
 export function calculateJourneyProgress(
     journey: Journey,
     completedSteps: JourneyStepId[]
 ): number {
-    const requiredSteps = journey.steps.filter(s => !s.isOptional);
-    const completedRequired = requiredSteps.filter(s => completedSteps.includes(s.id));
+    const requiredSteps = journey.steps.filter((step) => !step.isOptional);
+    const completedRequired = requiredSteps.filter((step) => completedSteps.includes(step.id));
     return Math.round((completedRequired.length / requiredSteps.length) * 100);
 }
 
-/**
- * Get the next step in the journey
- */
 export function getNextStep(
     journey: Journey,
     currentStep: JourneyStepId
 ): JourneyStep | null {
-    const currentIndex = journey.steps.findIndex(s => s.id === currentStep);
+    const currentIndex = journey.steps.findIndex((step) => step.id === currentStep);
     if (currentIndex === -1 || currentIndex >= journey.steps.length - 1) {
         return null;
     }
     return journey.steps[currentIndex + 1];
 }
 
-/**
- * Check if a step is accessible (all previous required steps completed)
- */
 export function isStepAccessible(
     journey: Journey,
     stepId: JourneyStepId,
     completedSteps: JourneyStepId[]
 ): boolean {
-    const stepIndex = journey.steps.findIndex(s => s.id === stepId);
+    const stepIndex = journey.steps.findIndex((step) => step.id === stepId);
     if (stepIndex === -1) return false;
     if (stepIndex === 0) return true;
 
-    // Check all previous required steps are completed
-    for (let i = 0; i < stepIndex; i++) {
+    for (let i = 0; i < stepIndex; i += 1) {
         const step = journey.steps[i];
         if (!step.isOptional && !completedSteps.includes(step.id)) {
             return false;

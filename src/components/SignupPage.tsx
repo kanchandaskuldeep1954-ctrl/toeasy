@@ -66,9 +66,9 @@ export const SignupPage: React.FC = () => {
 
       // If we joined a workspace via invite, go there
       if (response && response.joinedWorkspaceId) {
-        navigate(`/app/workspaces/${response.joinedWorkspaceId}`);
+        navigate(`/app/studio?workspace=${response.joinedWorkspaceId}`);
       } else {
-        navigate('/app/workspaces');
+        navigate('/app/studio');
       }
     } catch (err: any) {
       setFormError(error || 'Verification failed. Please check the OTP.');

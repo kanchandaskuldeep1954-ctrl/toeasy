@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
     Search,
     FileText,
@@ -36,19 +36,36 @@ interface CommandPaletteProps {
 
 export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose }) => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const inputRef = useRef<HTMLInputElement>(null);
     const [query, setQuery] = useState('');
     const [selectedIndex, setSelectedIndex] = useState(0);
     const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+    const workspaceId = searchParams.get('workspace');
+    const datasetId = searchParams.get('dataset');
+    const projectId = searchParams.get('project');
+    const roomId = searchParams.get('room');
+
+    const buildStudioPath = useCallback((panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms') => {
+        const params = new URLSearchParams();
+        if (workspaceId) params.set('workspace', workspaceId);
+        if (datasetId) params.set('dataset', datasetId);
+        if (projectId) params.set('project', projectId);
+        if (roomId) params.set('room', roomId);
+        params.set('panel', panel);
+        return `/app/studio?${params.toString()}`;
+    }, [workspaceId, datasetId, projectId, roomId]);
 
     // Define all commands
     const commands: CommandItem[] = useMemo(() => [
         // Navigation (Core)
         { id: 'go-home', label: 'Go to Home', icon: FolderOpen, category: 'navigation', action: () => navigate('/app/home') },
         { id: 'go-data', label: 'Go to Data Hub', icon: Table2, category: 'navigation', action: () => navigate('/app/datasets') },
+        { id: 'go-studio', label: 'Go to Studio', icon: BarChart3, category: 'navigation', action: () => navigate(buildStudioPath('sheets')) },
         { id: 'go-chat', label: 'Go to Chat', icon: MessageCircle, category: 'navigation', action: () => navigate('/app/chat') },
         { id: 'go-docs', label: 'Go to Docs', icon: FileText, category: 'navigation', action: () => navigate('/app/docs') },
-        { id: 'go-settings', label: 'Go to Settings', icon: CheckSquare, category: 'navigation', action: () => navigate('/app/settings/profile') },
+        { id: 'go-settings', label: 'Go to Settings', icon: CheckSquare, category: 'navigation', action: () => navigate('/app/profile') },
 
         // Create / Actions
         { id: 'new-doc', label: 'New Document', description: 'Create a blank document', icon: FileText, category: 'create', action: () => navigate('/app/docs/new') },
@@ -81,10 +98,14 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose 
         },
 
         // Tools (Contextual - would ideally be dynamic based on active route/dataset)
-        { id: 'tool-sheets', label: 'Open Sheets', icon: Table2, category: 'navigation', action: () => { /* Logic to find active dataset or go to library */ navigate('/app/datasets'); } },
-        { id: 'tool-reporting', label: 'Open Reports', icon: FileText, category: 'navigation', action: () => navigate('/app/reports') },
+        { id: 'tool-sheets', label: 'Open Sheets', icon: Table2, category: 'navigation', action: () => navigate(buildStudioPath('sheets')) },
+        { id: 'tool-query', label: 'Open Query', icon: Search, category: 'navigation', action: () => navigate(buildStudioPath('query')) },
+        { id: 'tool-visuals', label: 'Open Visuals', icon: BarChart3, category: 'navigation', action: () => navigate(buildStudioPath('visuals')) },
+        { id: 'tool-reporting', label: 'Open Reports', icon: FileText, category: 'navigation', action: () => navigate(buildStudioPath('report')) },
+        { id: 'tool-actions', label: 'Open Actions', icon: CheckSquare, category: 'navigation', action: () => navigate(buildStudioPath('actions')) },
+        { id: 'tool-comms', label: 'Open Comms', icon: MessageCircle, category: 'navigation', action: () => navigate(buildStudioPath('comms')) },
 
-    ], [navigate]);
+    ], [navigate, buildStudioPath]);
 
     // Filter commands based on query
     const filteredCommands = useMemo(() => {

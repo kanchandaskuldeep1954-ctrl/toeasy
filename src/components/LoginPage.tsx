@@ -20,7 +20,7 @@ export const LoginPage: React.FC = () => {
 
     try {
       await login(email, password);
-      navigate('/app/workspaces');
+      navigate('/app/studio');
     } catch (err) {
       setFormError(error || 'Login failed. Please try again.');
     }

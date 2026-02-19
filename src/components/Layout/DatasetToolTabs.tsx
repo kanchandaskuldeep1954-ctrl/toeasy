@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, useLocation, useSearchParams } from 'react-router-dom';
-import { Table2, Search, GitBranch, FileText, CheckSquare } from 'lucide-react';
+import { Table2, Search, GitBranch, FileText, CheckSquare, BarChart3, MessageSquare } from 'lucide-react';
 import { useDataset } from '../../hooks/useDataset';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useTheme } from '../../hooks/useTheme';
+import { studioAPI } from '../../services/api';
 
 interface ToolTab {
   panel: string;
@@ -18,20 +19,56 @@ const DatasetToolTabs: React.FC = () => {
   const { theme } = useTheme();
   const location = useLocation();
   const [searchParams] = useSearchParams();
+  const [flags, setFlags] = useState({
+    visualsTabEnabled: true,
+    commsTabEnabled: true
+  });
 
   const workspaceId = activeWorkspace?.id;
   const datasetId = searchParams.get('dataset') || (activeDataset as any)?.id;
 
+  useEffect(() => {
+    if (!workspaceId) return;
+    let cancelled = false;
+    const loadFlags = async () => {
+      try {
+        const response = await studioAPI.getNavigationState(String(workspaceId));
+        const featureFlags = response.data?.featureFlags;
+        if (!cancelled && featureFlags) {
+          setFlags({
+            visualsTabEnabled: Boolean(featureFlags.visualsTabEnabled),
+            commsTabEnabled: Boolean(featureFlags.commsTabEnabled)
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setFlags({ visualsTabEnabled: true, commsTabEnabled: true });
+        }
+      }
+    };
+    loadFlags();
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
   if (!workspaceId || !datasetId) return null;
 
   const queryPrefix = `?workspace=${workspaceId}&dataset=${datasetId}`;
-  const tools: ToolTab[] = [
+  const baseTools: ToolTab[] = [
     { panel: 'sheets', label: 'Sheets', icon: <Table2 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=sheets` },
     { panel: 'query', label: 'Query', icon: <Search className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=query` },
     { panel: 'pivot', label: 'Pivot', icon: <GitBranch className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=pivot` },
+    { panel: 'visuals', label: 'Visuals', icon: <BarChart3 className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=visuals` },
     { panel: 'report', label: 'Report', icon: <FileText className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=report` },
-    { panel: 'actions', label: 'Actions', icon: <CheckSquare className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=actions` }
+    { panel: 'actions', label: 'Actions', icon: <CheckSquare className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=actions` },
+    { panel: 'comms', label: 'Comms', icon: <MessageSquare className="w-4 h-4" />, path: `/app/studio${queryPrefix}&panel=comms` }
   ];
+  const tools = baseTools.filter((tool) => {
+    if (tool.panel === 'visuals' && !flags.visualsTabEnabled) return false;
+    if (tool.panel === 'comms' && !flags.commsTabEnabled) return false;
+    return true;
+  });
 
   const isActive = (panel: string) =>
     location.pathname.includes('/app/studio') && searchParams.get('panel') === panel;

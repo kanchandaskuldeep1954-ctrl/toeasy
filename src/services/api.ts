@@ -516,7 +516,53 @@ export interface OutcomeAttribution {
   evidenceArtifactIds: number[];
 }
 
+export interface StudioBootstrapRequest {
+  datasetId?: number;
+  source?: 'login' | 'upload' | 'dataset_library' | 'deep_link';
+  preferredPanel?: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+}
+
+export interface StudioBootstrapResponse {
+  workspaceId: number;
+  datasetId: number | null;
+  projectId: number;
+  roomId: number;
+  panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+  featureFlags?: {
+    legacySurfacesEnabled: boolean;
+    visualsTabEnabled: boolean;
+    commsTabEnabled: boolean;
+  };
+  created: {
+    project: boolean;
+    room: boolean;
+  };
+  route: string;
+}
+
+export interface StudioNavigationState {
+  active: {
+    datasetId?: number;
+    projectId?: number;
+    roomId?: number;
+  };
+  featureFlags?: {
+    legacySurfacesEnabled: boolean;
+    visualsTabEnabled: boolean;
+    commsTabEnabled: boolean;
+  };
+  projects: Array<{ id: number; name: string; updatedAt?: string; createdAt?: string }>;
+  rooms: Array<{ id: number; projectId: number; name: string; stage?: string; updatedAt?: string; createdAt?: string }>;
+  recentDatasets: Array<{ id: number; name: string; updatedAt?: string; createdAt?: string }>;
+}
+
 export const studioAPI = {
+  bootstrap: (workspaceId: string, data?: StudioBootstrapRequest) =>
+    getClient().post<StudioBootstrapResponse>(`/workspaces/${workspaceId}/studio/bootstrap`, data || {}),
+
+  getNavigationState: (workspaceId: string) =>
+    getClient().get<StudioNavigationState>(`/workspaces/${workspaceId}/studio/navigation`),
+
   listProjects: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/projects`),
 

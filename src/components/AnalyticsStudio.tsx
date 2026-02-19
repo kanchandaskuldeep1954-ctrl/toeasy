@@ -28,8 +28,13 @@ import { ChartWidget } from './Widgets/ChartWidget';
 import { PivotConfig, PivotWidget } from './Widgets/PivotWidget';
 import { ChartSpec } from '../../types';
 
-type StudioPanel = 'sheets' | 'query' | 'pivot' | 'report' | 'actions';
+type StudioPanel = 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
 type RunMode = 'sql' | 'nl' | 'sheet_op';
+type StudioFeatureFlags = {
+  legacySurfacesEnabled: boolean;
+  visualsTabEnabled: boolean;
+  commsTabEnabled: boolean;
+};
 
 interface StudioProject {
   id: number;
@@ -74,7 +79,7 @@ interface PlaybookRecommendation {
   blockers: string[];
 }
 
-const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'report', 'actions'];
+const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'visuals', 'report', 'actions', 'comms'];
 const EVIDENCE_ARTIFACT_TYPES = new Set(['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief']);
 
 const parseDatasetRows = (rawData: any, headers?: string[]) => {
@@ -122,6 +127,11 @@ const AnalyticsStudio: React.FC = () => {
   const workspaceId = searchParams.get('workspace') || String(activeWorkspace?.id || '');
   const datasetId = searchParams.get('dataset') || String((activeDataset as any)?.id || '');
   const panel = (searchParams.get('panel') as StudioPanel) || 'sheets';
+  const [studioFeatureFlags, setStudioFeatureFlags] = useState<StudioFeatureFlags>({
+    legacySurfacesEnabled: false,
+    visualsTabEnabled: true,
+    commsTabEnabled: true
+  });
 
   const [projects, setProjects] = useState<StudioProject[]>([]);
   const [rooms, setRooms] = useState<StudioRoom[]>([]);
@@ -207,6 +217,14 @@ const AnalyticsStudio: React.FC = () => {
   const [automationDedupeKeyInput, setAutomationDedupeKeyInput] = useState<string>('');
   const [automationBusy, setAutomationBusy] = useState(false);
   const { socket, isConnected } = useSocket();
+
+  const visiblePanels = useMemo(() => {
+    return PANELS.filter((panelKey) => {
+      if (panelKey === 'visuals' && !studioFeatureFlags.visualsTabEnabled) return false;
+      if (panelKey === 'comms' && !studioFeatureFlags.commsTabEnabled) return false;
+      return true;
+    });
+  }, [studioFeatureFlags]);
 
   const datasetRows = useMemo(() => {
     const rows = (activeDataset as any)?.data || (activeDataset as any)?.raw_data || [];
@@ -459,11 +477,11 @@ const AnalyticsStudio: React.FC = () => {
     const next = new URLSearchParams(searchParams);
     if (workspaceId && !searchParams.get('workspace')) next.set('workspace', workspaceId);
     if (datasetId && !searchParams.get('dataset')) next.set('dataset', datasetId);
-    if (!PANELS.includes(panel)) next.set('panel', 'sheets');
+    if (!visiblePanels.includes(panel)) next.set('panel', 'sheets');
     if (selectedProjectId) next.set('project', selectedProjectId);
     if (selectedRoomId) next.set('room', selectedRoomId);
     if (next.toString() !== searchParams.toString()) setSearchParams(next, { replace: true });
-  }, [workspaceId, datasetId, panel, selectedProjectId, selectedRoomId, searchParams, setSearchParams]);
+  }, [workspaceId, datasetId, panel, selectedProjectId, selectedRoomId, searchParams, setSearchParams, visiblePanels]);
 
   useEffect(() => {
     const hydrateDataset = async () => {
@@ -485,6 +503,27 @@ const AnalyticsStudio: React.FC = () => {
     };
     hydrateDataset();
   }, [workspaceId, datasetId, activeDataset, setActiveDataset]);
+
+  useEffect(() => {
+    const loadStudioFlags = async () => {
+      if (!workspaceId) return;
+      try {
+        const response = await studioAPI.getNavigationState(workspaceId);
+        const flags = response.data?.featureFlags;
+        if (flags) {
+          setStudioFeatureFlags({
+            legacySurfacesEnabled: Boolean(flags.legacySurfacesEnabled),
+            visualsTabEnabled: Boolean(flags.visualsTabEnabled),
+            commsTabEnabled: Boolean(flags.commsTabEnabled)
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to load Studio feature flags:', error);
+      }
+    };
+
+    loadStudioFlags();
+  }, [workspaceId]);
 
   useEffect(() => {
     const loadProjects = async () => {
@@ -673,8 +712,9 @@ const AnalyticsStudio: React.FC = () => {
   }, [numericFields, visualYField]);
 
   const setPanel = (nextPanel: StudioPanel) => {
+    const resolvedPanel = visiblePanels.includes(nextPanel) ? nextPanel : 'sheets';
     const next = new URLSearchParams(searchParams);
-    next.set('panel', nextPanel);
+    next.set('panel', resolvedPanel);
     if (selectedProjectId) next.set('project', selectedProjectId);
     if (selectedRoomId) next.set('room', selectedRoomId);
     setSearchParams(next);
@@ -1235,7 +1275,7 @@ const AnalyticsStudio: React.FC = () => {
       </div>
 
       <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2 overflow-x-auto">
-        {PANELS.map((tab) => (
+        {visiblePanels.map((tab) => (
           <button
             key={tab}
             onClick={() => setPanel(tab)}
@@ -1315,6 +1355,9 @@ const AnalyticsStudio: React.FC = () => {
 
           {panel === 'query' && (
             <div className="space-y-3">
+              <div className="text-xs text-slate-500">
+                AI is assistive here: prompts can draft queries, but execution and persistence are always explicit actions.
+              </div>
               <textarea value={sqlInput} onChange={(e) => setSqlInput(e.target.value)} className="w-full h-28 p-3 text-sm rounded border font-mono" />
               <button disabled={!selectedRoomId || loading} onClick={() => runExecution('sql', { sql: sqlInput })} className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
                 Run SQL
@@ -1341,10 +1384,23 @@ const AnalyticsStudio: React.FC = () => {
                   Save Pivot Artifact
                 </button>
                 <span className="text-xs text-slate-500">
-                  Pivot groups data for fast summaries. Chart Builder turns those summaries into visuals.
+                  Pivot is focused on grouped summaries. Open the Visuals tab for chart building and drill exploration.
                 </span>
               </div>
+              <button
+                onClick={() => setPanel('visuals')}
+                className="px-3 py-1.5 text-xs rounded border border-slate-300 dark:border-slate-700"
+              >
+                Open Visuals Tab
+              </button>
+            </div>
+          )}
 
+          {panel === 'visuals' && (
+            <div className="space-y-3">
+              <div className="text-xs text-slate-500">
+                Visuals are evidence-linked artifacts. Build charts here, then use Report and Actions to execute decisions.
+              </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
                 <h3 className="text-xs font-bold uppercase text-slate-500">Visual Builder (Tableau-style preview)</h3>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1432,6 +1488,9 @@ const AnalyticsStudio: React.FC = () => {
 
           {panel === 'report' && (
             <div className="space-y-4">
+              <div className="text-xs text-slate-500">
+                AI can polish language, but numeric claims and publish actions remain evidence-gated and user-controlled.
+              </div>
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <select
@@ -1817,6 +1876,210 @@ const AnalyticsStudio: React.FC = () => {
               )}
             </div>
           )}
+
+          {panel === 'comms' && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                <div className="text-xs font-bold uppercase text-slate-500">Communication Hub</div>
+                <div className="text-xs text-slate-500">
+                  Collaboration is optional but first-class: create artifact-linked threads, route mentions, and resolve approvals without leaving Studio.
+                </div>
+                <select
+                  value={newThreadArtifactId}
+                  onChange={(e) => setNewThreadArtifactId(e.target.value)}
+                  className="w-full px-2 py-1 text-xs rounded border"
+                >
+                  <option value="room">Room-level thread</option>
+                  {artifacts.slice(0, 40).map((artifact) => (
+                    <option key={artifact.id} value={artifact.id}>
+                      {artifact.title} ({artifact.artifact_type})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  value={newThreadAnchor}
+                  onChange={(e) => setNewThreadAnchor(e.target.value)}
+                  placeholder="Anchor (row/metric optional)"
+                  className="w-full px-2 py-1 text-xs rounded border"
+                />
+                <textarea
+                  value={newThreadContent}
+                  onChange={(e) => setNewThreadContent(e.target.value)}
+                  placeholder="Start a thread. Mention teammates with @handle."
+                  className="w-full h-16 px-2 py-1 text-xs rounded border"
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={createThread} disabled={!selectedRoomId || !newThreadContent.trim()} className="px-3 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
+                    Start Thread
+                  </button>
+                  <span className="text-[10px] text-slate-500">
+                    Mentions: {mentionHints || 'No workspace members detected.'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase text-slate-500">Threads</div>
+                  <div className="space-y-2 max-h-80 overflow-auto">
+                    {threads.length === 0 && (
+                      <div className="text-[11px] text-slate-500 border rounded p-2">
+                        No threads yet.
+                      </div>
+                    )}
+                    {threads.slice(0, 20).map((thread) => (
+                      <button
+                        key={thread.id}
+                        onClick={() => setSelectedThreadId(String(thread.id))}
+                        className={`w-full text-left text-xs border rounded p-2 ${
+                          String(thread.id) === selectedThreadId
+                            ? 'border-blue-300 bg-blue-50 dark:bg-slate-800'
+                            : 'border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="font-semibold truncate">{thread.artifactTitle || 'Room discussion'}</div>
+                        <div className="text-[10px] text-slate-500 truncate">
+                          {thread.lastCommentContent || 'No messages yet'}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-1">
+                          {thread.commentCount} comment(s)
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase text-slate-500">
+                    {selectedThread ? `Thread #${selectedThread.id}` : 'Select a thread'}
+                  </div>
+                  {selectedThread ? (
+                    <>
+                      <div className="flex items-center justify-between gap-2 text-[11px]">
+                        <span className={`${selectedThread.resolution?.status === 'resolved' ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          Status: {selectedThread.resolution?.status || 'open'}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => updateThreadResolution('resolved')} className="px-2 py-1 rounded border">
+                            Resolve
+                          </button>
+                          <button onClick={() => updateThreadResolution('reopened')} className="px-2 py-1 rounded border">
+                            Reopen
+                          </button>
+                        </div>
+                      </div>
+                      <div className="max-h-56 overflow-auto space-y-2">
+                        {threadComments.map((comment) => (
+                          <div key={comment.id} className="text-xs border rounded p-2">
+                            <div className="text-[10px] text-slate-500">{comment.authorName}</div>
+                            <div className="mt-1 whitespace-pre-wrap break-words">{comment.content}</div>
+                          </div>
+                        ))}
+                        {threadComments.length === 0 && (
+                          <div className="text-[11px] text-slate-500">No comments in this thread yet.</div>
+                        )}
+                      </div>
+                      <textarea
+                        value={newThreadComment}
+                        onChange={(e) => setNewThreadComment(e.target.value)}
+                        placeholder="Reply to thread..."
+                        className="w-full h-14 px-2 py-1 text-xs rounded border"
+                      />
+                      <button
+                        onClick={addCommentToThread}
+                        disabled={!newThreadComment.trim()}
+                        className="w-full px-2 py-1 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
+                      >
+                        Send Reply
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-[11px] text-slate-500">Choose a thread from the left column.</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase text-slate-500">Approval Inbox</div>
+                  {pendingApprovals.length === 0 && (
+                    <div className="text-[11px] text-slate-500 border rounded p-2">
+                      No pending approvals.
+                    </div>
+                  )}
+                  {pendingApprovals.map((approval) => (
+                    <div key={approval.id} className="text-xs border rounded p-2 space-y-2">
+                      <div className="font-semibold">
+                        {approval.policyName || 'Automation'} ({approval.riskLevel})
+                      </div>
+                      <div className="text-[11px] text-slate-500">Requested by {approval.requestedByName}</div>
+                      {approval.reason && <div className="text-[11px] text-slate-600 dark:text-slate-300">{approval.reason}</div>}
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => respondApproval(approval.id, 'approved')} className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white">
+                          Approve
+                        </button>
+                        <button onClick={() => respondApproval(approval.id, 'rejected')} className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white">
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                  <div className="text-xs font-bold uppercase text-slate-500">Decision Checkpoints</div>
+                  <input
+                    value={decisionTitle}
+                    onChange={(e) => setDecisionTitle(e.target.value)}
+                    placeholder="Decision checkpoint title"
+                    className="w-full px-2 py-1 text-xs rounded border"
+                  />
+                  <textarea
+                    value={decisionRationale}
+                    onChange={(e) => setDecisionRationale(e.target.value)}
+                    placeholder="Rationale and decision context"
+                    className="w-full h-16 px-2 py-1 text-xs rounded border"
+                  />
+                  <button
+                    onClick={createDecisionCheckpoint}
+                    disabled={!decisionTitle.trim()}
+                    className="px-3 py-1 text-xs rounded bg-indigo-600 text-white disabled:opacity-50"
+                  >
+                    Create Checkpoint
+                  </button>
+                  <div className="space-y-2 max-h-52 overflow-auto">
+                    {decisionCheckpoints.length === 0 && (
+                      <div className="text-[11px] text-slate-500 border rounded p-2">No checkpoints yet.</div>
+                    )}
+                    {decisionCheckpoints.slice(0, 12).map((checkpoint) => (
+                      <div key={checkpoint.id} className="text-xs border rounded p-2 space-y-1">
+                        <div className="font-semibold">{checkpoint.decision}</div>
+                        <div className="text-[10px] text-slate-500">
+                          Status: {checkpoint.status} | Owner: {checkpoint.createdByName}
+                        </div>
+                        {checkpoint.status === 'pending' && (
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => respondDecisionCheckpoint(checkpoint.id, 'approved')}
+                              className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white"
+                            >
+                              Approve
+                            </button>
+                            <button
+                              onClick={() => respondDecisionCheckpoint(checkpoint.id, 'rejected')}
+                              className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white"
+                            >
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         <aside className="border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto">
@@ -1899,234 +2162,18 @@ const AnalyticsStudio: React.FC = () => {
             )}
           </div>
 
-          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Communication</h3>
-          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
-            <select
-              value={newThreadArtifactId}
-              onChange={(e) => setNewThreadArtifactId(e.target.value)}
-              className="w-full px-2 py-1 text-xs rounded border"
-            >
-              <option value="room">Room-level thread</option>
-              {artifacts.slice(0, 40).map((artifact) => (
-                <option key={artifact.id} value={artifact.id}>
-                  {artifact.title} ({artifact.artifact_type})
-                </option>
-              ))}
-            </select>
-            <input
-              value={newThreadAnchor}
-              onChange={(e) => setNewThreadAnchor(e.target.value)}
-              placeholder="Anchor (row/metric optional)"
-              className="w-full px-2 py-1 text-xs rounded border"
-            />
-            <textarea
-              value={newThreadContent}
-              onChange={(e) => setNewThreadContent(e.target.value)}
-              placeholder="Start a thread. Mention teammates with @handle."
-              className="w-full h-16 px-2 py-1 text-xs rounded border"
-            />
-            <button onClick={createThread} disabled={!selectedRoomId || !newThreadContent.trim()} className="w-full px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
-              Start Thread
-            </button>
-            <div className="text-[10px] text-slate-500">
-              Mentions: {mentionHints || 'No workspace members detected.'}
-            </div>
-          </div>
-
-          <div className="space-y-2 mt-2">
-            {threads.length === 0 && (
-              <div className="text-[11px] text-slate-500 border rounded p-2">
-                No threads yet.
-              </div>
-            )}
-            {threads.slice(0, 12).map((thread) => (
-              <button
-                key={thread.id}
-                onClick={() => setSelectedThreadId(String(thread.id))}
-                className={`w-full text-left text-xs border rounded p-2 ${
-                  String(thread.id) === selectedThreadId
-                    ? 'border-blue-300 bg-blue-50 dark:bg-slate-800'
-                    : 'border-slate-200 dark:border-slate-700'
-                }`}
-              >
-                <div className="font-semibold truncate">{thread.artifactTitle || 'Room discussion'}</div>
-                <div className="text-[10px] text-slate-500 truncate">
-                  {thread.lastCommentContent || 'No messages yet'}
-                </div>
-                <div className="text-[10px] text-slate-400 mt-1">
-                  {thread.commentCount} comment(s)
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {selectedThread && (
-            <div className="mt-2 rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
-              <div className="text-xs font-semibold">
-                Thread #{selectedThread.id} {selectedThread.artifactTitle ? `- ${selectedThread.artifactTitle}` : '- Room'}
-              </div>
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className={`${selectedThread.resolution?.status === 'resolved' ? 'text-emerald-600' : 'text-slate-500'}`}>
-                  Status: {selectedThread.resolution?.status || 'open'}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => updateThreadResolution('resolved')}
-                    className="px-2 py-1 rounded border"
-                  >
-                    Resolve
-                  </button>
-                  <button
-                    onClick={() => updateThreadResolution('reopened')}
-                    className="px-2 py-1 rounded border"
-                  >
-                    Reopen
-                  </button>
-                </div>
-              </div>
-              {selectedThread.resolution?.resolutionNote && (
-                <div className="text-[11px] text-slate-500">
-                  Note: {selectedThread.resolution.resolutionNote}
-                </div>
-              )}
-              <div className="max-h-48 overflow-auto space-y-2">
-                {threadComments.map((comment) => (
-                  <div key={comment.id} className="text-xs border rounded p-2">
-                    <div className="text-[10px] text-slate-500">{comment.authorName}</div>
-                    <div className="mt-1 whitespace-pre-wrap break-words">{comment.content}</div>
-                  </div>
-                ))}
-                {threadComments.length === 0 && (
-                  <div className="text-[11px] text-slate-500">No comments in this thread yet.</div>
-                )}
-              </div>
-              <textarea
-                value={newThreadComment}
-                onChange={(e) => setNewThreadComment(e.target.value)}
-                placeholder="Reply to thread..."
-                className="w-full h-14 px-2 py-1 text-xs rounded border"
-              />
-              <button
-                onClick={addCommentToThread}
-                disabled={!newThreadComment.trim()}
-                className="w-full px-2 py-1 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
-              >
-                Send Reply
-              </button>
-            </div>
-          )}
-
-          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Approval Inbox</h3>
-          <div className="space-y-2">
-            {pendingApprovals.length === 0 && (
-              <div className="text-[11px] text-slate-500 border rounded p-2">
-                No pending approvals.
-              </div>
-            )}
-            {pendingApprovals.map((approval) => (
-              <div key={approval.id} className="text-xs border rounded p-2 space-y-2">
-                <div className="font-semibold">
-                  {approval.policyName || 'Automation'} ({approval.riskLevel})
-                </div>
-                <div className="text-[11px] text-slate-500">
-                  Requested by {approval.requestedByName}
-                </div>
-                {approval.reason && (
-                  <div className="text-[11px] text-slate-600 dark:text-slate-300">{approval.reason}</div>
-                )}
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => respondApproval(approval.id, 'approved')}
-                    className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => respondApproval(approval.id, 'rejected')}
-                    className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white"
-                  >
-                    Reject
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Decision Checkpoints</h3>
-          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
-            <input
-              value={decisionTitle}
-              onChange={(e) => setDecisionTitle(e.target.value)}
-              placeholder="Decision checkpoint title"
-              className="w-full px-2 py-1 text-xs rounded border"
-            />
-            <textarea
-              value={decisionRationale}
-              onChange={(e) => setDecisionRationale(e.target.value)}
-              placeholder="Rationale and decision context"
-              className="w-full h-16 px-2 py-1 text-xs rounded border"
-            />
-            <select
-              value={decisionArtifactId}
-              onChange={(e) => setDecisionArtifactId(e.target.value)}
-              className="w-full px-2 py-1 text-xs rounded border"
-            >
-              <option value="room">Room-level checkpoint</option>
-              {artifacts.slice(0, 40).map((artifact) => (
-                <option key={artifact.id} value={artifact.id}>
-                  {artifact.title} ({artifact.artifact_type})
-                </option>
-              ))}
-            </select>
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Collaboration Snapshot</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
+            <div>Threads: {threads.length}</div>
+            <div>Pending approvals: {pendingApprovals.length}</div>
+            <div>Decision checkpoints: {decisionCheckpoints.length}</div>
+            <div>Mention hints: {mentionHints || 'No teammates detected'}</div>
             <button
-              onClick={createDecisionCheckpoint}
-              disabled={!decisionTitle.trim()}
-              className="w-full px-2 py-1 text-xs rounded bg-indigo-600 text-white disabled:opacity-50"
+              onClick={() => setPanel('comms')}
+              className="w-full mt-1 px-2 py-1 text-xs rounded bg-slate-800 text-white"
             >
-              Create Checkpoint
+              Open Comms Panel
             </button>
-          </div>
-
-          <div className="space-y-2 mt-2">
-            {decisionCheckpoints.length === 0 && (
-              <div className="text-[11px] text-slate-500 border rounded p-2">
-                No checkpoints yet.
-              </div>
-            )}
-            {decisionCheckpoints.slice(0, 12).map((checkpoint) => (
-              <div key={checkpoint.id} className="text-xs border rounded p-2 space-y-2">
-                <div className="font-semibold">{checkpoint.decision}</div>
-                <div className="text-[10px] text-slate-500">
-                  Status: {checkpoint.status} | Owner: {checkpoint.createdByName}
-                </div>
-                {checkpoint.artifactTitle && (
-                  <div className="text-[10px] text-slate-500">
-                    Evidence: {checkpoint.artifactTitle}
-                  </div>
-                )}
-                {checkpoint.rationale && (
-                  <div className="text-[11px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
-                    {checkpoint.rationale}
-                  </div>
-                )}
-                {checkpoint.status === 'pending' && (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => respondDecisionCheckpoint(checkpoint.id, 'approved')}
-                      className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => respondDecisionCheckpoint(checkpoint.id, 'rejected')}
-                      className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
           </div>
 
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Artifacts</h3>

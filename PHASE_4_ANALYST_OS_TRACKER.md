@@ -134,3 +134,19 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - Added API contracts tests for new endpoints.
   - Added BullMQ queue runtime foundation and queue-state health endpoint.
   - Unified manual automation execution on shared execution service.
+- 2026-02-19 (Flow Reset cutover update, commit pending):
+  - Studio-first routing now canonical from login/signup/onboarding and `/app` entry.
+  - Added Studio context bootstrap/navigation APIs:
+    - `POST /api/workspaces/:id/studio/bootstrap`
+    - `GET /api/workspaces/:id/studio/navigation`
+  - Added soft-cutover feature flags in Studio API payloads:
+    - `legacy_surfaces_enabled` (default false)
+    - `studio_visuals_tab_enabled` (default true)
+    - `studio_comms_tab_enabled` (default true)
+  - Upload and dataset-library handoff now open Studio directly; no default path to `clean`.
+  - Studio tabs expanded and clarified for `visuals` and `comms`; duplicated sidebar comms controls removed.
+  - Sidebar now surfaces active project/room context and recent rooms from Studio navigation state.
+  - Quick validation matrix:
+    - backend build: PASS
+    - frontend production build: PASS
+    - strict full-repo `tsc --noEmit`: FAIL (pre-existing unrelated legacy type debt)

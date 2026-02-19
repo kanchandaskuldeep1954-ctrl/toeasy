@@ -82,7 +82,7 @@ export const HomeView: React.FC = () => {
                     </p>
                 </div>
                 <div className="flex gap-3">
-                    <Link to="/app/create" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
+                    <Link to="/app/upload" className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-500/20 transition-all hover:-translate-y-0.5 active:translate-y-0 flex items-center gap-2">
                         <Plus className="w-5 h-5" />
                         <span>New Project</span>
                     </Link>

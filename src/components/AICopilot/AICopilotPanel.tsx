@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+﻿import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Dataset } from '../../../types';
 
@@ -29,29 +29,29 @@ interface AICopilotPanelProps {
 
 const QUICK_PROMPTS = {
     clean: [
-        { icon: '🔍', label: 'Find issues', prompt: 'What issues exist in my data?' },
-        { icon: '🧹', label: 'Suggest fixes', prompt: 'How should I clean this data?' },
-        { icon: '📊', label: 'Quality score', prompt: 'What is my data quality score?' },
+        { icon: 'ðŸ”', label: 'Find issues', prompt: 'What issues exist in my data?' },
+        { icon: 'ðŸ§¹', label: 'Suggest fixes', prompt: 'How should I clean this data?' },
+        { icon: 'ðŸ“Š', label: 'Quality score', prompt: 'What is my data quality score?' },
     ],
     dashboard: [
-        { icon: '📈', label: 'Key insights', prompt: 'What are the key insights from this data?' },
-        { icon: '🎯', label: 'Add KPI', prompt: 'What KPIs should I track?' },
-        { icon: '📊', label: 'Best chart', prompt: 'What chart would best visualize this data?' },
+        { icon: 'ðŸ“ˆ', label: 'Key insights', prompt: 'What are the key insights from this data?' },
+        { icon: 'ðŸŽ¯', label: 'Add KPI', prompt: 'What KPIs should I track?' },
+        { icon: 'ðŸ“Š', label: 'Best chart', prompt: 'What chart would best visualize this data?' },
     ],
     report: [
-        { icon: '📝', label: 'Executive summary', prompt: 'Write an executive summary' },
-        { icon: '💡', label: 'Key findings', prompt: 'What are the key findings?' },
-        { icon: '🎯', label: 'Recommendations', prompt: 'What actions do you recommend?' },
+        { icon: 'ðŸ“', label: 'Executive summary', prompt: 'Write an executive summary' },
+        { icon: 'ðŸ’¡', label: 'Key findings', prompt: 'What are the key findings?' },
+        { icon: 'ðŸŽ¯', label: 'Recommendations', prompt: 'What actions do you recommend?' },
     ],
     upload: [
-        { icon: '🔍', label: 'Data preview', prompt: 'What does this data contain?' },
-        { icon: '📋', label: 'Column analysis', prompt: 'Analyze the columns in this dataset' },
-        { icon: '⚠️', label: 'Potential issues', prompt: 'Are there any potential issues?' },
+        { icon: 'ðŸ”', label: 'Data preview', prompt: 'What does this data contain?' },
+        { icon: 'ðŸ“‹', label: 'Column analysis', prompt: 'Analyze the columns in this dataset' },
+        { icon: 'âš ï¸', label: 'Potential issues', prompt: 'Are there any potential issues?' },
     ],
     other: [
-        { icon: '❓', label: 'Help me', prompt: 'How can I use ToEasy effectively?' },
-        { icon: '🚀', label: 'Get started', prompt: 'What should I do first?' },
-        { icon: '📖', label: 'Features', prompt: 'What features are available?' },
+        { icon: 'â“', label: 'Help me', prompt: 'How can I use ToEasy effectively?' },
+        { icon: 'ðŸš€', label: 'Get started', prompt: 'What should I do first?' },
+        { icon: 'ðŸ“–', label: 'Features', prompt: 'What features are available?' },
     ]
 };
 
@@ -107,7 +107,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                 actions.push({
                     id: 'create-chart',
                     label: 'Create Chart',
-                    icon: '📊',
+                    icon: 'ðŸ“Š',
                     type: 'execute',
                     payload: { action: 'create-chart' }
                 });
@@ -115,10 +115,10 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
             if (response.toLowerCase().includes('go to dashboard')) {
                 actions.push({
                     id: 'nav-dashboard',
-                    label: 'Open Dashboard',
-                    icon: '📈',
+                    label: 'Open Visuals',
+                    icon: 'ðŸ“ˆ',
                     type: 'navigate',
-                    payload: { route: '/app/dashboard' }
+                    payload: { route: '/app/studio?panel=visuals' }
                 });
             }
 
@@ -198,7 +198,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/30">
-                                    <span className="text-xl">🤖</span>
+                                    <span className="text-xl">ðŸ¤–</span>
                                 </div>
                                 <div>
                                     <h2 className="font-black text-slate-900 dark:text-white">AI Copilot</h2>
@@ -211,7 +211,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                                 onClick={onClose}
                                 className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 transition-colors"
                             >
-                                ✕
+                                âœ•
                             </button>
                         </div>
 
@@ -220,7 +220,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                             {messages.length === 0 ? (
                                 <div className="text-center py-8">
                                     <div className="w-16 h-16 mx-auto bg-blue-100 dark:bg-blue-900/30 rounded-2xl flex items-center justify-center mb-4">
-                                        <span className="text-3xl">💬</span>
+                                        <span className="text-3xl">ðŸ’¬</span>
                                     </div>
                                     <h3 className="font-bold text-slate-900 dark:text-white">How can I help?</h3>
                                     <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -312,7 +312,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                                         }`}
                                     title="Voice input"
                                 >
-                                    {isListening ? '🔴' : '🎤'}
+                                    {isListening ? 'ðŸ”´' : 'ðŸŽ¤'}
                                 </button>
 
                                 {/* Text Input */}
@@ -335,7 +335,7 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
                                     {isLoading ? (
                                         <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                                     ) : (
-                                        '→'
+                                        'â†’'
                                     )}
                                 </button>
                             </div>
@@ -353,3 +353,4 @@ export const AICopilotPanel: React.FC<AICopilotPanelProps> = ({
 };
 
 export default AICopilotPanel;
+

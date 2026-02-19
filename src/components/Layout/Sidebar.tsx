@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import { useDataset, useDatasetNavigation } from '../../hooks/useDataset';
 import { useTheme } from '../../hooks/useTheme';
+import { StudioNavigationState, studioAPI } from '../../services/api';
 
 interface SidebarProps {
     mobileOpen?: boolean;
@@ -13,16 +14,73 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { logout, user } = useAuth();
     const { activeWorkspace } = useWorkspace();
     const { activeDataset } = useDataset();
     const { theme, toggleTheme } = useTheme();
     const { buildPath } = useDatasetNavigation(); // Use the navigation hook
     const [collapsed, setCollapsed] = useState(false);
+    const [navigationState, setNavigationState] = useState<StudioNavigationState | null>(null);
+
+    const workspaceId = activeWorkspace?.id || searchParams.get('workspace');
+    const datasetId = searchParams.get('dataset') || String(activeDataset?.id || navigationState?.active?.datasetId || '');
+    const projectId = searchParams.get('project') || (navigationState?.active?.projectId ? String(navigationState.active.projectId) : '');
+    const roomId = searchParams.get('room') || (navigationState?.active?.roomId ? String(navigationState.active.roomId) : '');
+
+    useEffect(() => {
+        if (!workspaceId) {
+            setNavigationState(null);
+            return;
+        }
+
+        let cancelled = false;
+        const loadNavigation = async () => {
+            try {
+                const response = await studioAPI.getNavigationState(String(workspaceId));
+                if (!cancelled) {
+                    setNavigationState(response.data || null);
+                }
+            } catch {
+                if (!cancelled) {
+                    setNavigationState(null);
+                }
+            }
+        };
+
+        loadNavigation();
+        return () => {
+            cancelled = true;
+        };
+    }, [workspaceId, location.pathname, location.search]);
+
+    const activeRoom = useMemo(() => {
+        if (!roomId || !navigationState?.rooms?.length) return null;
+        return navigationState.rooms.find((room) => String(room.id) === String(roomId)) || null;
+    }, [navigationState?.rooms, roomId]);
+
+    const activeProject = useMemo(() => {
+        if (!projectId || !navigationState?.projects?.length) return null;
+        return navigationState.projects.find((project) => String(project.id) === String(projectId)) || null;
+    }, [navigationState?.projects, projectId]);
+
+    const recentRooms = useMemo(() => (navigationState?.rooms || []).slice(0, 5), [navigationState?.rooms]);
+
+    const buildStudioPath = (panel: string = 'sheets', roomOverride?: { roomId?: number; projectId?: number }) => {
+        const query = new URLSearchParams();
+        if (workspaceId) query.set('workspace', String(workspaceId));
+        if (datasetId) query.set('dataset', String(datasetId));
+        if (roomOverride?.projectId) query.set('project', String(roomOverride.projectId));
+        else if (projectId) query.set('project', String(projectId));
+        if (roomOverride?.roomId) query.set('room', String(roomOverride.roomId));
+        else if (roomId) query.set('room', String(roomId));
+        query.set('panel', panel);
+        return `/app/studio?${query.toString()}`;
+    };
 
     const navItems = [
         { name: 'Home', path: '/app/home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
-        { name: 'Decision Room', path: buildPath('/app/studio'), icon: 'M4 5h7v7H4V5zm9 0h7v4h-7V5zM4 14h7v5H4v-5zm9-3h7v8h-7v-8z' },
+        { name: 'Decision Room', path: buildStudioPath('sheets'), icon: 'M4 5h7v7H4V5zm9 0h7v4h-7V5zM4 14h7v5H4v-5zm9-3h7v8h-7v-8z' },
         { name: 'Data', path: buildPath('/app/datasets'), icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
         { name: 'Team', path: '/app/team', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
         { name: 'Settings', path: buildPath('/app/profile'), icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z' },
@@ -85,6 +143,10 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                                 ) : (
                                     <p className="text-[10px] text-slate-400 italic pl-7">No dataset selected</p>
                                 )}
+                                <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 space-y-1 pl-7">
+                                    <div>Project: {activeProject?.name || 'Not selected'}</div>
+                                    <div>Room: {activeRoom?.name || 'Not selected'}</div>
+                                </div>
                             </div>
                         ) : (
                             <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center text-indigo-600 font-bold text-xs" title={activeDataset?.name}>
@@ -140,6 +202,33 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                                 Pinned
                             </h3>
                             <p className="px-3 text-[10px] text-slate-600 italic">No pinned items yet</p>
+                        </div>
+                    )}
+
+                    {!collapsed && (
+                        <div className="mt-4">
+                            <h3 className="px-3 text-[10px] font-black uppercase text-slate-500 tracking-widest mb-2">
+                                Recent Rooms
+                            </h3>
+                            <div className="space-y-1">
+                                {recentRooms.length === 0 && (
+                                    <p className="px-3 text-[10px] text-slate-600 italic">No rooms yet</p>
+                                )}
+                                {recentRooms.map((room) => (
+                                    <button
+                                        key={room.id}
+                                        onClick={() => navigate(buildStudioPath('sheets', { roomId: room.id, projectId: room.projectId }))}
+                                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors ${
+                                            String(room.id) === String(roomId)
+                                                ? 'bg-slate-800 text-white'
+                                                : 'text-slate-400 hover:bg-slate-800 hover:text-white'
+                                        }`}
+                                    >
+                                        <div className="font-semibold truncate">{room.name}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase">{room.stage}</div>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     )}
                 </nav>

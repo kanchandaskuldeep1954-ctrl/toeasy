@@ -266,6 +266,7 @@ const ARTIFACT_TYPES = new Set([
 const ROOM_STAGES = new Set(['ingest', 'profile', 'analyze', 'brief', 'action', 'done']);
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 const ROOM_STAGE_ORDER: RoomStage[] = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
+const STUDIO_PANELS = new Set(['sheets', 'query', 'pivot', 'visuals', 'report', 'actions', 'comms']);
 const EVIDENCE_ARTIFACT_TYPES = ['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief'];
 const REPORT_V2_REQUIRED_SECTION_TYPES: ReportSectionType[] = ['kpi_delta', 'trend', 'pattern', 'explanation', 'recommendation'];
 const REPORT_V2_FOCUS = 'revops_weekly';
@@ -319,6 +320,14 @@ async function ensureWorkspaceAccess(req: WorkspaceRequest, res: Response, next:
 
 function canWrite(role?: 'admin' | 'editor' | 'viewer') {
   return role === 'admin' || role === 'editor';
+}
+
+function toStudioPanel(value: any): 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms' {
+  const normalized = String(value || '').toLowerCase();
+  if (STUDIO_PANELS.has(normalized)) {
+    return normalized as 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+  }
+  return 'sheets';
 }
 
 function parseJsonMaybe<T = any>(value: any, fallback: T): T {
@@ -2236,6 +2245,20 @@ async function isWorkspaceFeatureEnabled(workspaceId: number, flagKey: string, d
   }
 }
 
+async function resolveStudioFeatureFlags(workspaceId: number) {
+  const [legacySurfacesEnabled, visualsTabEnabled, commsTabEnabled] = await Promise.all([
+    isWorkspaceFeatureEnabled(workspaceId, 'legacy_surfaces_enabled', false),
+    isWorkspaceFeatureEnabled(workspaceId, 'studio_visuals_tab_enabled', true),
+    isWorkspaceFeatureEnabled(workspaceId, 'studio_comms_tab_enabled', true)
+  ]);
+
+  return {
+    legacySurfacesEnabled,
+    visualsTabEnabled,
+    commsTabEnabled
+  };
+}
+
 async function getLatestReportV2BundleId(workspaceId: number, roomId: number): Promise<string | null> {
   const result = await query(
     `
@@ -2629,6 +2652,233 @@ function toAutomationScheduleRecord(row: any): AutomationScheduleRecord {
     createdAt: row.created_at
   };
 }
+
+router.post('/:workspaceId/studio/bootstrap', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const preferredPanel = toStudioPanel(req.body?.preferredPanel);
+    const featureFlags = await resolveStudioFeatureFlags(workspaceId);
+    const panel =
+      (!featureFlags.visualsTabEnabled && preferredPanel === 'visuals')
+      || (!featureFlags.commsTabEnabled && preferredPanel === 'comms')
+        ? 'sheets'
+        : preferredPanel;
+    const datasetIdInput = Number(req.body?.datasetId || 0);
+    let datasetId: number | null = Number.isFinite(datasetIdInput) && datasetIdInput > 0 ? datasetIdInput : null;
+
+    if (datasetId) {
+      const datasetCheck = await query(
+        `SELECT id FROM datasets WHERE id = $1 AND workspace_id = $2 LIMIT 1`,
+        [datasetId, workspaceId]
+      );
+      if (datasetCheck.rows.length === 0) {
+        datasetId = null;
+      }
+    }
+
+    let createdProject = false;
+    let createdRoom = false;
+
+    let project = null as any;
+    const projectResult = await query(
+      `
+      SELECT id, name, created_at, updated_at
+      FROM projects
+      WHERE workspace_id = $1
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1
+      `,
+      [workspaceId]
+    );
+    project = projectResult.rows[0] || null;
+
+    if (!project) {
+      if (!canWrite(req.workspaceRole)) {
+        return res.status(403).json({ error: 'Project setup requires editor/admin access' });
+      }
+      const inserted = await query(
+        `
+        INSERT INTO projects (workspace_id, name, description, objective, created_by)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id, name, created_at, updated_at
+        `,
+        [
+          workspaceId,
+          'RevOps Weekly Project',
+          'Auto-generated project for Studio-first workflow.',
+          'Weekly RevOps decision execution',
+          req.user!.id
+        ]
+      );
+      project = inserted.rows[0];
+      createdProject = true;
+    }
+
+    let room = null as any;
+    const roomResult = await query(
+      `
+      SELECT id, name, stage, run_context, created_at, updated_at
+      FROM analysis_rooms
+      WHERE workspace_id = $1
+        AND project_id = $2
+        AND is_archived = false
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 1
+      `,
+      [workspaceId, Number(project.id)]
+    );
+    room = roomResult.rows[0] || null;
+
+    if (!room) {
+      if (!canWrite(req.workspaceRole)) {
+        return res.status(403).json({ error: 'Room setup requires editor/admin access' });
+      }
+      const insertedRoom = await query(
+        `
+        INSERT INTO analysis_rooms (workspace_id, project_id, name, description, stage, run_context, created_by)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, name, stage, run_context, created_at, updated_at
+        `,
+        [
+          workspaceId,
+          Number(project.id),
+          'Weekly Decision Room',
+          'Auto-generated room for Studio-first workflow.',
+          'ingest',
+          JSON.stringify({ datasetId: datasetId || undefined }),
+          req.user!.id
+        ]
+      );
+      room = insertedRoom.rows[0];
+      createdRoom = true;
+    }
+
+    const runContext = parseRoomRunContext(room.run_context);
+    const resolvedDatasetId = datasetId || Number(runContext.datasetId || 0) || null;
+
+    if (datasetId && canWrite(req.workspaceRole)) {
+      const currentDatasetId = Number(runContext.datasetId || 0);
+      if (!Number.isFinite(currentDatasetId) || currentDatasetId !== datasetId) {
+        const nextContext = {
+          ...runContext,
+          datasetId
+        };
+        const updated = await query(
+          `
+          UPDATE analysis_rooms
+          SET run_context = $1,
+              updated_at = NOW()
+          WHERE id = $2
+          RETURNING id, name, stage, run_context, created_at, updated_at
+          `,
+          [JSON.stringify(nextContext), Number(room.id)]
+        );
+        room = updated.rows[0] || room;
+      }
+    }
+
+    const routeParams = new URLSearchParams();
+    routeParams.set('workspace', String(workspaceId));
+    if (resolvedDatasetId) routeParams.set('dataset', String(resolvedDatasetId));
+    routeParams.set('project', String(project.id));
+    routeParams.set('room', String(room.id));
+    routeParams.set('panel', panel);
+
+    return res.json({
+      workspaceId,
+      datasetId: resolvedDatasetId,
+      projectId: Number(project.id),
+      roomId: Number(room.id),
+      panel,
+      featureFlags,
+      created: {
+        project: createdProject,
+        room: createdRoom
+      },
+      route: `/app/studio?${routeParams.toString()}`
+    });
+  } catch (err) {
+    console.error('Studio bootstrap failed:', err);
+    return res.status(500).json({ error: 'Failed to bootstrap Studio context' });
+  }
+});
+
+router.get('/:workspaceId/studio/navigation', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+
+    const [projectsResult, roomsResult, datasetsResult] = await Promise.all([
+      query(
+        `
+        SELECT id, name, created_at, updated_at
+        FROM projects
+        WHERE workspace_id = $1
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 50
+        `,
+        [workspaceId]
+      ),
+      query(
+        `
+        SELECT id, project_id, name, stage, run_context, created_at, updated_at
+        FROM analysis_rooms
+        WHERE workspace_id = $1
+          AND is_archived = false
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 100
+        `,
+        [workspaceId]
+      ),
+      query(
+        `
+        SELECT id, name, created_at, updated_at
+        FROM datasets
+        WHERE workspace_id = $1
+        ORDER BY updated_at DESC, created_at DESC
+        LIMIT 30
+        `,
+        [workspaceId]
+      )
+    ]);
+
+    const latestRoom = roomsResult.rows[0] || null;
+    const latestRunContext = latestRoom ? parseRoomRunContext(latestRoom.run_context) : {};
+    const activeDatasetId = Number(latestRunContext.datasetId || 0);
+    const featureFlags = await resolveStudioFeatureFlags(workspaceId);
+
+    return res.json({
+      active: {
+        datasetId: Number.isFinite(activeDatasetId) && activeDatasetId > 0 ? activeDatasetId : undefined,
+        projectId: latestRoom?.project_id ? Number(latestRoom.project_id) : undefined,
+        roomId: latestRoom?.id ? Number(latestRoom.id) : undefined
+      },
+      featureFlags,
+      projects: projectsResult.rows.map((project) => ({
+        id: Number(project.id),
+        name: String(project.name || 'Untitled Project'),
+        createdAt: project.created_at,
+        updatedAt: project.updated_at
+      })),
+      rooms: roomsResult.rows.map((room) => ({
+        id: Number(room.id),
+        projectId: Number(room.project_id),
+        name: String(room.name || 'Untitled Room'),
+        stage: String(room.stage || 'ingest'),
+        createdAt: room.created_at,
+        updatedAt: room.updated_at
+      })),
+      recentDatasets: datasetsResult.rows.map((dataset) => ({
+        id: Number(dataset.id),
+        name: String(dataset.name || `Dataset ${dataset.id}`),
+        createdAt: dataset.created_at,
+        updatedAt: dataset.updated_at
+      }))
+    });
+  } catch (err) {
+    console.error('Studio navigation state failed:', err);
+    return res.status(500).json({ error: 'Failed to load Studio navigation state' });
+  }
+});
 
 router.post('/:workspaceId/projects', async (req: WorkspaceRequest, res: Response) => {
   try {

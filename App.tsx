@@ -26,11 +26,9 @@ import ConnectorSetupView from './src/components/ConnectorSetupView';
 import ConnectorExplorerView from './src/components/ConnectorExplorerView';
 import { QueryHistory } from './src/components/QueryHistory';
 import TheWarRoom from './src/components/TheWarRoom';
-import AnalyticsStudio from './src/components/AnalyticsStudio';
 import StudioLegacyRedirect from './src/components/StudioLegacyRedirect';
-const UniverCleanView = React.lazy(() => import('./src/components/Univer/UniverCleanView'));
+import StudioEntryRedirect from './src/components/StudioEntryRedirect';
 import BillingViewIntegrated from './src/components/BillingViewIntegrated';
-import DatasetCreatorView from './components/DatasetCreatorView';
 import DataPreview from './src/components/DataPreview';
 import ValidationRulesManager from './src/components/ValidationRulesManager';
 import QuarantineVault from './src/components/QuarantineVault';
@@ -70,16 +68,16 @@ const AppLayout: React.FC = () => {
           {/* =========================================================
               CORE WORKSPACE
              ========================================================= */}
-          <Route path="/" element={<Navigate to="studio" replace />} />
+          <Route path="/" element={<StudioEntryRedirect source="app_root" />} />
           <Route path="home" element={<HomeView />} />
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
           <Route path="team" element={<TeamView />} />
-          <Route path="studio" element={<AnalyticsStudio />} />
+          <Route path="studio" element={<StudioEntryRedirect source="studio_route" />} />
 
           {/* Connect & Upload */}
-          <Route path="create" element={<DatasetCreatorView onDataLoaded={() => { }} />} />
+          <Route path="create" element={<Navigate to="/app/upload" replace />} />
           <Route path="upload" element={<SourceHubView />} />
           <Route path="upload-file" element={<UploadViewPhase3 />} />
           <Route path="connect/:providerId" element={<ConnectorSetupView />} />
@@ -98,10 +96,10 @@ const AppLayout: React.FC = () => {
           <Route path="sheets" element={<StudioLegacyRedirect panel="sheets" />} />
 
           {/* The "Clean" View — AI Data Quality */}
-          <Route path="clean" element={<UniverCleanView />} />
+          <Route path="clean" element={<StudioLegacyRedirect panel="sheets" />} />
 
           {/* The "Dashboard" View — Visualization */}
-          <Route path="dashboard" element={<StudioLegacyRedirect panel="pivot" />} />
+          <Route path="dashboard" element={<StudioLegacyRedirect panel="visuals" />} />
 
           {/* The "Report" View — Doc-style Reporting */}
           <Route path="report" element={<StudioLegacyRedirect panel="report" />} />
@@ -118,7 +116,7 @@ const AppLayout: React.FC = () => {
           <Route path="forms/:id" element={<FormsView />} />
           <Route path="files" element={<FilesView />} />
           <Route path="war-room" element={<TheWarRoom />} />
-          <Route path="dashboards" element={<StudioLegacyRedirect panel="pivot" />} />
+          <Route path="dashboards" element={<StudioLegacyRedirect panel="visuals" />} />
           <Route path="reports" element={<StudioLegacyRedirect panel="report" />} />
           <Route path="queries" element={<QueryHistory />} />
           <Route path="preview" element={<DataPreview />} />
@@ -238,7 +236,7 @@ function App() {
                       />
 
                       {/* Default redirect for /app */}
-                      <Route path="/admin" element={<Navigate to="/app/workspaces" replace />} />
+                      <Route path="/admin" element={<Navigate to="/app/studio" replace />} />
                     </Routes>
                   </WorkflowProvider>
                 </Router>

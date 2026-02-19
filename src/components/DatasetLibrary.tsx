@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '../hooks/useAuth';
+﻿import React, { useState, useEffect } from 'react';
 import { useWorkspace, useWorkspaceNavigation } from '../hooks/useWorkspace';
-import { useDataset, useDatasetNavigation } from '../hooks/useDataset';
+import { useDataset } from '../hooks/useDataset';
 import { Dataset } from '../context/DatasetContext'; // Import interface
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { LayoutGrid, List as ListIcon, Search, Filter, FileSpreadsheet, Database, Clock, Star, MoreVertical, Trash2, Download, ExternalLink, FileText, Folder } from 'lucide-react';
+import { LayoutGrid, List as ListIcon, Search, FileSpreadsheet, Database, Clock, Star, MoreVertical, Trash2, FileText, Folder } from 'lucide-react';
+import { studioAPI } from '../services/api';
 
 export const DatasetLibrary: React.FC = () => {
-  const { user, token } = useAuth();
   const { activeWorkspace } = useWorkspace();
   const {
     datasets,
@@ -19,7 +18,6 @@ export const DatasetLibrary: React.FC = () => {
     fetchDatasets
   } = useDataset();
   const { buildPath: buildWorkspacePath } = useWorkspaceNavigation();
-  const { buildPath: buildDatasetPath } = useDatasetNavigation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
@@ -51,6 +49,27 @@ export const DatasetLibrary: React.FC = () => {
       await removeDataset(id);
     } catch (err: any) {
       setLocalError(err.message || 'Failed to delete dataset');
+    }
+  };
+
+  const openDatasetInStudio = async (dataset: Dataset) => {
+    setActiveDataset(dataset);
+    const targetWorkspaceId = String(dataset.workspace_id || workspaceId || '');
+    if (!targetWorkspaceId) {
+      navigate('/app/workspaces');
+      return;
+    }
+
+    try {
+      const response = await studioAPI.bootstrap(targetWorkspaceId, {
+        datasetId: Number(dataset.id),
+        source: 'dataset_library',
+        preferredPanel: 'sheets'
+      });
+      const route = response.data?.route || `/app/studio?workspace=${targetWorkspaceId}&dataset=${dataset.id}&panel=sheets`;
+      navigate(route);
+    } catch (err) {
+      navigate(`/app/studio?workspace=${targetWorkspaceId}&dataset=${dataset.id}&panel=sheets`);
     }
   };
 
@@ -98,7 +117,7 @@ export const DatasetLibrary: React.FC = () => {
       <div className="w-64 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hidden md:flex flex-col">
         <div className="p-6">
           <h2 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-2">
-            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white">🗄️</div>
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">DL</div>
             Library
           </h2>
         </div>
@@ -180,7 +199,7 @@ export const DatasetLibrary: React.FC = () => {
 
           {error && (
             <div className="mb-6 p-4 bg-red-500/10 border border-red-500/30 rounded-xl text-red-500 flex items-center gap-3">
-              <span>⚠️ {error}</span>
+              <span>Warning: {error}</span>
             </div>
           )}
 
@@ -209,11 +228,7 @@ export const DatasetLibrary: React.FC = () => {
                   {filteredDatasets.map((dataset: Dataset) => (
                     <div
                       key={dataset.id}
-                      onClick={() => {
-                        setActiveDataset(dataset);
-                        const targetWorkspaceId = dataset.workspace_id || workspaceId;
-                        navigate(`/app/clean?workspace=${targetWorkspaceId}&dataset=${dataset.id}`);
-                      }}
+                      onClick={() => openDatasetInStudio(dataset)}
                       className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-xl transition-all relative overflow-hidden"
                     >
                       <div className="flex justify-between items-start mb-4">
@@ -253,11 +268,7 @@ export const DatasetLibrary: React.FC = () => {
                       {filteredDatasets.map((dataset: Dataset) => (
                         <tr
                           key={dataset.id}
-                          onClick={() => {
-                            setActiveDataset(dataset);
-                            const targetWorkspaceId = dataset.workspace_id || workspaceId;
-                            navigate(`/app/clean?workspace=${targetWorkspaceId}&dataset=${dataset.id}`);
-                          }}
+                          onClick={() => openDatasetInStudio(dataset)}
                           className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors group"
                         >
                           <td className="px-6 py-4">
@@ -309,3 +320,4 @@ export const DatasetLibrary: React.FC = () => {
     </div>
   );
 };
+

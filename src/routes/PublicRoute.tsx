@@ -10,7 +10,7 @@ export const PublicRoute: React.FC<PublicRouteProps> = ({ children }) => {
   const { user } = useAuth();
 
   if (user) {
-    return <Navigate to="/app/workspaces" replace />;
+    return <Navigate to="/app/studio" replace />;
   }
 
   return <>{children}</>;
