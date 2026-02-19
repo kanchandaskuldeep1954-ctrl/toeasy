@@ -39,6 +39,33 @@ describe('Studio MVP API Contracts', () => {
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/status/draft', { persist: true });
   });
 
+  it('calls Report V2 generate endpoint', () => {
+    studioAPI.generateReportV2('12', '77', { timeframeDays: 7, compareMode: 'previous_period', focus: 'revops_weekly' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/reports/v2/generate', {
+      timeframeDays: 7,
+      compareMode: 'previous_period',
+      focus: 'revops_weekly'
+    });
+  });
+
+  it('calls Report V2 latest endpoint', () => {
+    studioAPI.getLatestReportV2('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/reports/v2/latest');
+  });
+
+  it('calls Report V2 quality endpoint', () => {
+    studioAPI.getReportV2Quality('12', '77', 'bundle_1');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/reports/v2/bundle_1/quality');
+  });
+
+  it('calls Report V2 publish endpoint', () => {
+    studioAPI.publishReportV2('12', '77', 'bundle_1', { channel: 'slack', mentionTokens: ['@ops'] });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/reports/v2/bundle_1/publish', {
+      channel: 'slack',
+      mentionTokens: ['@ops']
+    });
+  });
+
   it('calls room threads endpoint', () => {
     studioAPI.listThreads('12', '77');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/threads');

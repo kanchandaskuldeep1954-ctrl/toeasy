@@ -299,6 +299,7 @@ export interface StatusDraft {
   blockedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null; reason: string | null }>;
   inProgressActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
   evidenceArtifactIds: number[];
+  latestReportBundleId?: string | null;
   roomStage: 'ingest' | 'profile' | 'analyze' | 'brief' | 'action' | 'done';
   generatedAt: string;
   metrics: {
@@ -379,6 +380,67 @@ export interface RoomDecisionCheckpoint {
   decidedAt: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ReportV2GenerateRequest {
+  timeframeDays?: number;
+  compareMode?: 'previous_period';
+  focus?: 'revops_weekly';
+  persist?: boolean;
+}
+
+export interface ReportV2Claim {
+  id: string;
+  statement: string;
+  metricKey: string;
+  valueCurrent: number | null;
+  valuePrevious: number | null;
+  deltaPct: number | null;
+  confidence: 'high' | 'medium' | 'low';
+  evidenceArtifactIds: number[];
+  supported: boolean;
+}
+
+export interface ReportV2Section {
+  id: string;
+  type: 'kpi_delta' | 'trend' | 'pattern' | 'explanation' | 'recommendation';
+  title: string;
+  contentMarkdown: string;
+  claims: ReportV2Claim[];
+  chartArtifactIds: number[];
+}
+
+export interface ReportV2MetricSnapshot {
+  metricKey: string;
+  label: string;
+  valueCurrent: number | null;
+  valuePrevious: number | null;
+  deltaPct: number | null;
+  evidenceArtifactIds: number[];
+}
+
+export interface ReportV2Quality {
+  evidenceCoverageRatio: number;
+  unsupportedClaims: number;
+  publishBlocked: boolean;
+  blockers: string[];
+}
+
+export interface ReportV2InputRequirements {
+  mappedFields: Record<string, string>;
+  missingFields: string[];
+  warnings: string[];
+}
+
+export interface ReportV2Bundle {
+  bundleId: string;
+  roomId: number;
+  generatedAt: string;
+  quality: ReportV2Quality;
+  sections: ReportV2Section[];
+  kpiSnapshot: ReportV2MetricSnapshot[];
+  inputRequirements: ReportV2InputRequirements;
+  summaryArtifactId: number | null;
 }
 
 export const studioAPI = {
@@ -465,6 +527,22 @@ export const studioAPI = {
 
   generateBrief: (workspaceId: string, roomId: string, data?: { title?: string; objective?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/briefs/generate`, data || {}),
+
+  generateReportV2: (workspaceId: string, roomId: string, data?: ReportV2GenerateRequest) =>
+    getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/generate`, data || {}),
+
+  getLatestReportV2: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/latest`),
+
+  getReportV2Quality: (workspaceId: string, roomId: string, bundleId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/${bundleId}/quality`),
+
+  publishReportV2: (
+    workspaceId: string,
+    roomId: string,
+    bundleId: string,
+    data?: { channel?: 'slack' | 'in_app'; mentionTokens?: string[]; mentions?: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/${bundleId}/publish`, data || {}),
 
   syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/actions/sync`, data || {}),

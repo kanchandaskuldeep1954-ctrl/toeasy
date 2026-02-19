@@ -53,6 +53,7 @@ interface StatusDraft {
   blockedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null; reason: string | null }>;
   inProgressActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
   evidenceArtifactIds: number[];
+  latestReportBundleId?: string | null;
   roomStage: RoomStage;
   generatedAt: string;
   metrics: {
@@ -112,6 +113,82 @@ interface MentionableUser {
   handle: string;
 }
 
+type ReportSectionType = 'kpi_delta' | 'trend' | 'pattern' | 'explanation' | 'recommendation';
+type ReportClaimConfidence = 'high' | 'medium' | 'low';
+
+interface ReportV2GenerateRequest {
+  timeframeDays?: number;
+  compareMode?: 'previous_period';
+  focus?: 'revops_weekly';
+  persist?: boolean;
+}
+
+interface ReportClaim {
+  id: string;
+  statement: string;
+  metricKey: string;
+  valueCurrent: number | null;
+  valuePrevious: number | null;
+  deltaPct: number | null;
+  confidence: ReportClaimConfidence;
+  evidenceArtifactIds: number[];
+  supported: boolean;
+}
+
+interface ReportSection {
+  id: string;
+  type: ReportSectionType;
+  title: string;
+  contentMarkdown: string;
+  claims: ReportClaim[];
+  chartArtifactIds: number[];
+}
+
+interface ReportMetricSnapshot {
+  metricKey: string;
+  label: string;
+  valueCurrent: number | null;
+  valuePrevious: number | null;
+  deltaPct: number | null;
+  evidenceArtifactIds: number[];
+}
+
+interface ReportQuality {
+  evidenceCoverageRatio: number;
+  unsupportedClaims: number;
+  publishBlocked: boolean;
+  blockers: string[];
+}
+
+interface ReportInputRequirements {
+  mappedFields: Record<string, string>;
+  missingFields: string[];
+  warnings: string[];
+}
+
+interface ReportV2Bundle {
+  bundleId: string;
+  roomId: number;
+  generatedAt: string;
+  quality: ReportQuality;
+  sections: ReportSection[];
+  kpiSnapshot: ReportMetricSnapshot[];
+  inputRequirements: ReportInputRequirements;
+  summaryArtifactId: number | null;
+}
+
+interface RevOpsFieldMap {
+  dateField: string | null;
+  createdDateField: string | null;
+  closeDateField: string | null;
+  amountField: string | null;
+  stageField: string | null;
+  ownerField: string | null;
+  segmentField: string | null;
+  customerField: string | null;
+  productField: string | null;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -126,6 +203,9 @@ const ROOM_STAGES = new Set(['ingest', 'profile', 'analyze', 'brief', 'action', 
 const RISK_LEVELS = new Set(['low', 'medium', 'high']);
 const ROOM_STAGE_ORDER: RoomStage[] = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
 const EVIDENCE_ARTIFACT_TYPES = ['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief'];
+const REPORT_V2_REQUIRED_SECTION_TYPES: ReportSectionType[] = ['kpi_delta', 'trend', 'pattern', 'explanation', 'recommendation'];
+const REPORT_V2_FOCUS = 'revops_weekly';
+const REPORT_V2_FLAG_KEY = 'report_v2_enabled';
 const GUIDED_ROOM_STEPS: Array<{ id: string; stage: RoomStage; label: string; requiredArtifacts: string[] }> = [
   { id: 'connect_data', stage: 'ingest', label: 'Connect data source', requiredArtifacts: [] },
   { id: 'analyze_data', stage: 'analyze', label: 'Run analysis', requiredArtifacts: ['query_run'] },
@@ -234,6 +314,208 @@ function extractColumns(rows: Record<string, any>[]): string[] {
     Object.keys(row || {}).forEach((k) => keys.add(k));
   });
   return Array.from(keys);
+}
+
+function clampTimeframeDays(value: any): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 7;
+  return Math.max(1, Math.min(90, Math.floor(parsed)));
+}
+
+function normalizeFieldName(value: string): string {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+}
+
+function findBestColumnMatch(columns: string[], synonyms: string[]): string | null {
+  if (!columns.length) return null;
+  const normalizedColumns = columns.map((column) => ({
+    column,
+    normalized: normalizeFieldName(column)
+  }));
+  const normalizedSynonyms = synonyms.map(normalizeFieldName).filter(Boolean);
+
+  for (const synonym of normalizedSynonyms) {
+    const exact = normalizedColumns.find((entry) => entry.normalized === synonym);
+    if (exact) return exact.column;
+  }
+
+  for (const synonym of normalizedSynonyms) {
+    const contains = normalizedColumns.find((entry) => entry.normalized.includes(synonym) || synonym.includes(entry.normalized));
+    if (contains) return contains.column;
+  }
+
+  return null;
+}
+
+function resolveRevOpsFieldMap(columns: string[]) {
+  const createdDateField = findBestColumnMatch(columns, [
+    'created_at',
+    'created_date',
+    'create_date',
+    'createdon',
+    'opportunity_created',
+    'pipeline_date',
+    'date_created'
+  ]);
+  const closeDateField = findBestColumnMatch(columns, [
+    'close_date',
+    'closed_at',
+    'closed_date',
+    'closedon',
+    'won_date',
+    'lost_date',
+    'date_closed'
+  ]);
+  const dateField = findBestColumnMatch(columns, [
+    'date',
+    'day',
+    'ds',
+    'event_date',
+    'transaction_date',
+    'report_date'
+  ]);
+
+  const map: RevOpsFieldMap = {
+    dateField,
+    createdDateField: createdDateField || dateField,
+    closeDateField: closeDateField || dateField || createdDateField,
+    amountField: findBestColumnMatch(columns, [
+      'amount',
+      'revenue',
+      'arr',
+      'mrr',
+      'deal_value',
+      'value',
+      'pipeline_amount',
+      'bookings'
+    ]),
+    stageField: findBestColumnMatch(columns, [
+      'stage',
+      'status',
+      'deal_stage',
+      'opportunity_stage',
+      'pipeline_stage',
+      'lifecycle_stage',
+      'outcome'
+    ]),
+    ownerField: findBestColumnMatch(columns, [
+      'owner',
+      'sales_rep',
+      'rep',
+      'account_executive',
+      'ae',
+      'seller',
+      'salesperson'
+    ]),
+    segmentField: findBestColumnMatch(columns, [
+      'segment',
+      'region',
+      'market',
+      'channel',
+      'source',
+      'vertical'
+    ]),
+    customerField: findBestColumnMatch(columns, [
+      'customer',
+      'customer_name',
+      'account',
+      'company',
+      'account_name'
+    ]),
+    productField: findBestColumnMatch(columns, [
+      'product',
+      'sku',
+      'plan',
+      'package',
+      'offering'
+    ])
+  };
+
+  const mappedFields: Record<string, string> = {};
+  Object.entries(map).forEach(([key, value]) => {
+    if (value) {
+      mappedFields[key] = value;
+    }
+  });
+
+  const missingFields: string[] = [];
+  if (!map.amountField) missingFields.push('amount');
+  if (!map.stageField) missingFields.push('stage/status');
+  if (!map.createdDateField && !map.closeDateField) missingFields.push('created/close date');
+
+  return {
+    map,
+    mappedFields,
+    missingFields
+  };
+}
+
+function toFiniteNumber(value: any): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const cleaned = trimmed.replace(/[$,%\s,]/g, '');
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function toDateMaybe(value: any): Date | null {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function isWonStage(value: any): boolean {
+  const normalized = String(value || '').toLowerCase();
+  return normalized.includes('won') || normalized.includes('closed won') || normalized.includes('closed_won');
+}
+
+function isLostStage(value: any): boolean {
+  const normalized = String(value || '').toLowerCase();
+  return normalized.includes('lost') || normalized.includes('closed lost') || normalized.includes('closed_lost');
+}
+
+function safeDeltaPct(current: number | null, previous: number | null): number | null {
+  if (current === null || previous === null) return null;
+  if (previous === 0) return null;
+  return ((current - previous) / Math.abs(previous)) * 100;
+}
+
+function median(values: number[]): number | null {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 0) {
+    return (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+  return sorted[middle];
+}
+
+function computeMad(values: number[]): number | null {
+  const med = median(values);
+  if (med === null) return null;
+  const deviations = values.map((value) => Math.abs(value - med));
+  return median(deviations);
+}
+
+function formatMetricValue(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return 'n/a';
+  if (Math.abs(value) >= 1000) {
+    return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  }
+  return value.toFixed(2).replace(/\.00$/, '');
 }
 
 function normalizeCondition(condition: string): string {
@@ -1239,6 +1521,808 @@ async function createArtifact(params: {
   return result.rows[0];
 }
 
+async function createLineageEdges(params: {
+  workspaceId: number;
+  roomId: number;
+  parentArtifactIds: number[];
+  childArtifactId: number;
+  relationType: string;
+  createdBy: string;
+}) {
+  const inserted: Array<{ id: number; parent_artifact_id: number; child_artifact_id: number; relation_type: string }> = [];
+  const uniqueParents = Array.from(new Set(params.parentArtifactIds))
+    .map((id) => Number(id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+
+  for (const parentId of uniqueParents) {
+    const edgeResult = await query(
+      `
+      INSERT INTO lineage_edges (
+        workspace_id,
+        room_id,
+        parent_artifact_id,
+        child_artifact_id,
+        relation_type,
+        created_by
+      )
+      VALUES ($1, $2, $3, $4, $5, $6)
+      ON CONFLICT (parent_artifact_id, child_artifact_id, relation_type) DO NOTHING
+      RETURNING id, parent_artifact_id, child_artifact_id, relation_type
+      `,
+      [params.workspaceId, params.roomId, parentId, params.childArtifactId, params.relationType, params.createdBy]
+    );
+    inserted.push(...edgeResult.rows);
+  }
+
+  return inserted;
+}
+
+function parseArtifactRowsFromPayload(payload: Record<string, any>): Record<string, any>[] {
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload.previewRows)) return payload.previewRows as Record<string, any>[];
+  if (Array.isArray(payload.rows)) return payload.rows as Record<string, any>[];
+  if (Array.isArray(payload.data)) return payload.data as Record<string, any>[];
+  if (payload.chart && Array.isArray(payload.chart.data)) return payload.chart.data as Record<string, any>[];
+  return [];
+}
+
+function getClaimConfidence(sampleSize: number, hasDelta: boolean): ReportClaimConfidence {
+  if (sampleSize >= 20 && hasDelta) return 'high';
+  if (sampleSize >= 8) return 'medium';
+  return 'low';
+}
+
+function getRowDate(row: Record<string, any>, field?: string | null): Date | null {
+  if (!field) return null;
+  return toDateMaybe(row?.[field]);
+}
+
+function getReferenceDate(rows: Record<string, any>[], fieldMap: RevOpsFieldMap): Date | null {
+  const candidates: Date[] = [];
+  rows.forEach((row) => {
+    const createdDate = getRowDate(row, fieldMap.createdDateField);
+    const closeDate = getRowDate(row, fieldMap.closeDateField);
+    if (createdDate) candidates.push(createdDate);
+    if (closeDate) candidates.push(closeDate);
+  });
+  if (!candidates.length) return null;
+  return candidates.sort((a, b) => b.getTime() - a.getTime())[0];
+}
+
+function computeWindowBounds(referenceDate: Date, timeframeDays: number) {
+  const currentEnd = new Date(referenceDate);
+  currentEnd.setHours(23, 59, 59, 999);
+  const currentStart = new Date(currentEnd);
+  currentStart.setDate(currentStart.getDate() - (timeframeDays - 1));
+  currentStart.setHours(0, 0, 0, 0);
+
+  const previousEnd = new Date(currentStart);
+  previousEnd.setDate(previousEnd.getDate() - 1);
+  previousEnd.setHours(23, 59, 59, 999);
+
+  const previousStart = new Date(previousEnd);
+  previousStart.setDate(previousStart.getDate() - (timeframeDays - 1));
+  previousStart.setHours(0, 0, 0, 0);
+
+  return { currentStart, currentEnd, previousStart, previousEnd };
+}
+
+function inRange(target: Date | null, start: Date, end: Date): boolean {
+  if (!target) return false;
+  const ts = target.getTime();
+  return ts >= start.getTime() && ts <= end.getTime();
+}
+
+function buildDailySeries(params: {
+  rows: Record<string, any>[];
+  fieldMap: RevOpsFieldMap;
+  windowBounds: ReturnType<typeof computeWindowBounds> | null;
+}) {
+  const series = new Map<string, { date: string; pipeline_created_amount: number; closed_won_amount: number; closed_lost_count: number }>();
+  const amountField = params.fieldMap.amountField;
+  const stageField = params.fieldMap.stageField;
+
+  for (const row of params.rows) {
+    const createdDate = getRowDate(row, params.fieldMap.createdDateField);
+    const closeDate = getRowDate(row, params.fieldMap.closeDateField) || createdDate;
+    const amount = toFiniteNumber(amountField ? row?.[amountField] : null) || 0;
+    const stageRaw = stageField ? row?.[stageField] : '';
+
+    if (createdDate) {
+      if (!params.windowBounds || inRange(createdDate, params.windowBounds.currentStart, params.windowBounds.currentEnd)) {
+        const key = toIsoDate(createdDate);
+        const bucket = series.get(key) || { date: key, pipeline_created_amount: 0, closed_won_amount: 0, closed_lost_count: 0 };
+        bucket.pipeline_created_amount += amount;
+        series.set(key, bucket);
+      }
+    }
+
+    if (closeDate && (!params.windowBounds || inRange(closeDate, params.windowBounds.currentStart, params.windowBounds.currentEnd))) {
+      const key = toIsoDate(closeDate);
+      const bucket = series.get(key) || { date: key, pipeline_created_amount: 0, closed_won_amount: 0, closed_lost_count: 0 };
+      if (isWonStage(stageRaw)) {
+        bucket.closed_won_amount += amount;
+      }
+      if (isLostStage(stageRaw)) {
+        bucket.closed_lost_count += 1;
+      }
+      series.set(key, bucket);
+    }
+  }
+
+  return Array.from(series.values()).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function computeRevOpsMetrics(params: {
+  rows: Record<string, any>[];
+  fieldMap: RevOpsFieldMap;
+  timeframeDays: number;
+  evidenceArtifactIds: number[];
+}) {
+  const amountField = params.fieldMap.amountField;
+  const stageField = params.fieldMap.stageField;
+  const referenceDate = getReferenceDate(params.rows, params.fieldMap);
+  const windowBounds = referenceDate ? computeWindowBounds(referenceDate, params.timeframeDays) : null;
+
+  const rowsWithDates = params.rows.map((row) => ({
+    row,
+    createdDate: getRowDate(row, params.fieldMap.createdDateField),
+    closeDate: getRowDate(row, params.fieldMap.closeDateField) || getRowDate(row, params.fieldMap.createdDateField)
+  }));
+
+  const currentCreatedRows = rowsWithDates.filter(({ createdDate }) =>
+    windowBounds ? inRange(createdDate, windowBounds.currentStart, windowBounds.currentEnd) : true
+  );
+  const previousCreatedRows = rowsWithDates.filter(({ createdDate }) =>
+    windowBounds ? inRange(createdDate, windowBounds.previousStart, windowBounds.previousEnd) : false
+  );
+
+  const currentClosedRows = rowsWithDates.filter(({ closeDate }) =>
+    windowBounds ? inRange(closeDate, windowBounds.currentStart, windowBounds.currentEnd) : true
+  );
+  const previousClosedRows = rowsWithDates.filter(({ closeDate }) =>
+    windowBounds ? inRange(closeDate, windowBounds.previousStart, windowBounds.previousEnd) : false
+  );
+
+  const sumAmount = (items: Array<{ row: Record<string, any> }>) =>
+    items.reduce((acc, { row }) => {
+      const parsed = toFiniteNumber(amountField ? row?.[amountField] : null);
+      return acc + (parsed || 0);
+    }, 0);
+
+  const pipelineCurrent = amountField ? sumAmount(currentCreatedRows) : null;
+  const pipelinePrevious = amountField ? sumAmount(previousCreatedRows) : null;
+
+  const wonCurrentRows = stageField ? currentClosedRows.filter(({ row }) => isWonStage(row?.[stageField])) : [];
+  const wonPreviousRows = stageField ? previousClosedRows.filter(({ row }) => isWonStage(row?.[stageField])) : [];
+  const lostCurrentRows = stageField ? currentClosedRows.filter(({ row }) => isLostStage(row?.[stageField])) : [];
+  const lostPreviousRows = stageField ? previousClosedRows.filter(({ row }) => isLostStage(row?.[stageField])) : [];
+
+  const closedWonCurrent = amountField ? sumAmount(wonCurrentRows) : null;
+  const closedWonPrevious = amountField ? sumAmount(wonPreviousRows) : null;
+
+  const closedLostCurrent = stageField ? lostCurrentRows.length : null;
+  const closedLostPrevious = stageField ? lostPreviousRows.length : null;
+
+  const winRateCurrent = stageField
+    ? (wonCurrentRows.length + lostCurrentRows.length) > 0
+      ? (wonCurrentRows.length / (wonCurrentRows.length + lostCurrentRows.length)) * 100
+      : 0
+    : null;
+  const winRatePrevious = stageField
+    ? (wonPreviousRows.length + lostPreviousRows.length) > 0
+      ? (wonPreviousRows.length / (wonPreviousRows.length + lostPreviousRows.length)) * 100
+      : 0
+    : null;
+
+  const avgDealSizeCurrent = amountField
+    ? currentCreatedRows.length > 0
+      ? sumAmount(currentCreatedRows) / currentCreatedRows.length
+      : 0
+    : null;
+  const avgDealSizePrevious = amountField
+    ? previousCreatedRows.length > 0
+      ? sumAmount(previousCreatedRows) / previousCreatedRows.length
+      : 0
+    : null;
+
+  const computeCycleDays = (items: Array<{ createdDate: Date | null; closeDate: Date | null }>) => {
+    const diffs = items
+      .filter((item) => item.createdDate && item.closeDate)
+      .map((item) => Number(item.closeDate!.getTime() - item.createdDate!.getTime()) / (1000 * 60 * 60 * 24))
+      .filter((value) => Number.isFinite(value) && value >= 0);
+    if (!diffs.length) return null;
+    return diffs.reduce((acc, value) => acc + value, 0) / diffs.length;
+  };
+
+  const cycleCurrent = computeCycleDays(
+    stageField ? currentClosedRows.filter(({ row }) => isWonStage(row?.[stageField]) || isLostStage(row?.[stageField])) : []
+  );
+  const cyclePrevious = computeCycleDays(
+    stageField ? previousClosedRows.filter(({ row }) => isWonStage(row?.[stageField]) || isLostStage(row?.[stageField])) : []
+  );
+
+  const snapshots: ReportMetricSnapshot[] = [
+    {
+      metricKey: 'pipeline_created_amount',
+      label: 'Pipeline Created Amount',
+      valueCurrent: pipelineCurrent,
+      valuePrevious: pipelinePrevious,
+      deltaPct: safeDeltaPct(pipelineCurrent, pipelinePrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    },
+    {
+      metricKey: 'closed_won_amount',
+      label: 'Closed Won Amount',
+      valueCurrent: closedWonCurrent,
+      valuePrevious: closedWonPrevious,
+      deltaPct: safeDeltaPct(closedWonCurrent, closedWonPrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    },
+    {
+      metricKey: 'closed_lost_count',
+      label: 'Closed Lost Count',
+      valueCurrent: closedLostCurrent,
+      valuePrevious: closedLostPrevious,
+      deltaPct: safeDeltaPct(closedLostCurrent, closedLostPrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    },
+    {
+      metricKey: 'win_rate',
+      label: 'Win Rate (%)',
+      valueCurrent: winRateCurrent,
+      valuePrevious: winRatePrevious,
+      deltaPct: safeDeltaPct(winRateCurrent, winRatePrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    },
+    {
+      metricKey: 'avg_deal_size',
+      label: 'Average Deal Size',
+      valueCurrent: avgDealSizeCurrent,
+      valuePrevious: avgDealSizePrevious,
+      deltaPct: safeDeltaPct(avgDealSizeCurrent, avgDealSizePrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    },
+    {
+      metricKey: 'cycle_time_days',
+      label: 'Cycle Time (days)',
+      valueCurrent: cycleCurrent,
+      valuePrevious: cyclePrevious,
+      deltaPct: safeDeltaPct(cycleCurrent, cyclePrevious),
+      evidenceArtifactIds: params.evidenceArtifactIds
+    }
+  ];
+
+  const stageDistribution = new Map<string, { stage: string; count: number; amount: number }>();
+  if (stageField) {
+    currentCreatedRows.forEach(({ row }) => {
+      const stage = String(row?.[stageField] || 'unknown');
+      const amount = toFiniteNumber(amountField ? row?.[amountField] : null) || 0;
+      const bucket = stageDistribution.get(stage) || { stage, count: 0, amount: 0 };
+      bucket.count += 1;
+      bucket.amount += amount;
+      stageDistribution.set(stage, bucket);
+    });
+  }
+
+  const ownerDistribution = new Map<string, number>();
+  if (params.fieldMap.ownerField) {
+    currentCreatedRows.forEach(({ row }) => {
+      const owner = String(row?.[params.fieldMap.ownerField!] || 'unassigned');
+      const amount = toFiniteNumber(amountField ? row?.[amountField] : null) || 0;
+      ownerDistribution.set(owner, (ownerDistribution.get(owner) || 0) + (amountField ? amount : 1));
+    });
+  }
+
+  const segmentField = params.fieldMap.segmentField || params.fieldMap.productField || params.fieldMap.customerField;
+  const segmentCurrent = new Map<string, number>();
+  const segmentPrevious = new Map<string, number>();
+  if (segmentField) {
+    currentCreatedRows.forEach(({ row }) => {
+      const segment = String(row?.[segmentField] || 'unknown');
+      segmentCurrent.set(segment, (segmentCurrent.get(segment) || 0) + 1);
+    });
+    previousCreatedRows.forEach(({ row }) => {
+      const segment = String(row?.[segmentField] || 'unknown');
+      segmentPrevious.set(segment, (segmentPrevious.get(segment) || 0) + 1);
+    });
+  }
+
+  return {
+    referenceDate,
+    windowBounds,
+    snapshots,
+    sampleSizeCurrent: currentCreatedRows.length,
+    sampleSizePrevious: previousCreatedRows.length,
+    dailySeries: buildDailySeries({
+      rows: params.rows,
+      fieldMap: params.fieldMap,
+      windowBounds
+    }),
+    stageDistribution: Array.from(stageDistribution.values()).sort((a, b) => b.count - a.count),
+    ownerDistribution: Array.from(ownerDistribution.entries()).map(([owner, value]) => ({ owner, value })).sort((a, b) => b.value - a.value),
+    segmentCurrent,
+    segmentPrevious
+  };
+}
+
+function detectRevOpsPatterns(params: {
+  metrics: ReturnType<typeof computeRevOpsMetrics>;
+  evidenceArtifactIds: number[];
+}) {
+  const patterns: Array<{
+    id: string;
+    title: string;
+    statement: string;
+    metricKey: string;
+    valueCurrent: number | null;
+    valuePrevious: number | null;
+    deltaPct: number | null;
+    confidence: ReportClaimConfidence;
+    evidenceArtifactIds: number[];
+  }> = [];
+
+  const totalOwnerValue = params.metrics.ownerDistribution.reduce((acc, item) => acc + item.value, 0);
+  if (params.metrics.ownerDistribution.length > 1 && totalOwnerValue > 0) {
+    const topOwner = params.metrics.ownerDistribution[0];
+    const share = topOwner.value / totalOwnerValue;
+    if (share >= 0.45) {
+      patterns.push({
+        id: `pattern_owner_concentration_${Date.now()}`,
+        title: 'Owner concentration risk',
+        statement: `${topOwner.owner} accounts for ${(share * 100).toFixed(1)}% of tracked pipeline in the current window.`,
+        metricKey: 'owner_concentration_risk',
+        valueCurrent: share * 100,
+        valuePrevious: null,
+        deltaPct: null,
+        confidence: getClaimConfidence(params.metrics.sampleSizeCurrent, false),
+        evidenceArtifactIds: params.evidenceArtifactIds
+      });
+    }
+  }
+
+  if (params.metrics.stageDistribution.length > 1) {
+    const totalCount = params.metrics.stageDistribution.reduce((acc, entry) => acc + entry.count, 0);
+    const topStage = params.metrics.stageDistribution[0];
+    if (totalCount > 0) {
+      const share = topStage.count / totalCount;
+      if (share >= 0.5 && !isWonStage(topStage.stage) && !isLostStage(topStage.stage)) {
+        patterns.push({
+          id: `pattern_stage_bottleneck_${Date.now()}`,
+          title: 'Stage bottleneck risk',
+          statement: `Stage "${topStage.stage}" contains ${(share * 100).toFixed(1)}% of current opportunities, indicating a potential bottleneck.`,
+          metricKey: 'stage_bottleneck_risk',
+          valueCurrent: share * 100,
+          valuePrevious: null,
+          deltaPct: null,
+          confidence: getClaimConfidence(params.metrics.sampleSizeCurrent, false),
+          evidenceArtifactIds: params.evidenceArtifactIds
+        });
+      }
+    }
+  }
+
+  if (params.metrics.dailySeries.length >= 5) {
+    const values = params.metrics.dailySeries.map((entry) => entry.pipeline_created_amount);
+    const med = median(values);
+    const mad = computeMad(values);
+    const last = params.metrics.dailySeries[params.metrics.dailySeries.length - 1];
+    if (med !== null && mad !== null && mad > 0) {
+      const zScoreLike = Math.abs(last.pipeline_created_amount - med) / mad;
+      if (zScoreLike >= 3) {
+        patterns.push({
+          id: `pattern_daily_volatility_${Date.now()}`,
+          title: 'Daily volatility anomaly',
+          statement: `Latest daily pipeline amount (${formatMetricValue(last.pipeline_created_amount)}) deviates sharply from recent baseline.`,
+          metricKey: 'daily_volatility_anomaly',
+          valueCurrent: last.pipeline_created_amount,
+          valuePrevious: med,
+          deltaPct: safeDeltaPct(last.pipeline_created_amount, med),
+          confidence: 'medium',
+          evidenceArtifactIds: params.evidenceArtifactIds
+        });
+      }
+    }
+  }
+
+  const currentSegmentEntries = Array.from(params.metrics.segmentCurrent.entries()).sort((a, b) => b[1] - a[1]);
+  const previousSegmentEntries = Array.from(params.metrics.segmentPrevious.entries()).sort((a, b) => b[1] - a[1]);
+  if (currentSegmentEntries.length > 0 && previousSegmentEntries.length > 0) {
+    const [currentSegment, currentCount] = currentSegmentEntries[0];
+    const [previousSegment, previousCount] = previousSegmentEntries[0];
+    const currentTotal = currentSegmentEntries.reduce((acc, entry) => acc + entry[1], 0);
+    const previousTotal = previousSegmentEntries.reduce((acc, entry) => acc + entry[1], 0);
+    if (currentTotal > 0 && previousTotal > 0) {
+      const currentShare = currentCount / currentTotal;
+      const previousShare = previousCount / previousTotal;
+      const changedLeader = currentSegment !== previousSegment;
+      const shareShift = Math.abs(currentShare - previousShare);
+      if (changedLeader || shareShift >= 0.15) {
+        patterns.push({
+          id: `pattern_segment_shift_${Date.now()}`,
+          title: 'Segment shift detected',
+          statement: changedLeader
+            ? `Top segment shifted from "${previousSegment}" to "${currentSegment}" in the current window.`
+            : `Top segment "${currentSegment}" share moved by ${(shareShift * 100).toFixed(1)} points.`,
+          metricKey: 'segment_shift',
+          valueCurrent: currentShare * 100,
+          valuePrevious: previousShare * 100,
+          deltaPct: safeDeltaPct(currentShare * 100, previousShare * 100),
+          confidence: getClaimConfidence(params.metrics.sampleSizeCurrent, true),
+          evidenceArtifactIds: params.evidenceArtifactIds
+        });
+      }
+    }
+  }
+
+  return patterns;
+}
+
+function createMetricClaim(params: {
+  metric: ReportMetricSnapshot;
+  sampleSize: number;
+}): ReportClaim {
+  const evidenceArtifactIds = params.metric.evidenceArtifactIds || [];
+  const supported = evidenceArtifactIds.length > 0;
+  const hasDelta = params.metric.deltaPct !== null && Number.isFinite(Number(params.metric.deltaPct));
+  const direction = params.metric.deltaPct === null
+    ? 'changed'
+    : params.metric.deltaPct > 0
+      ? 'increased'
+      : params.metric.deltaPct < 0
+        ? 'decreased'
+        : 'remained flat';
+  const statement = params.metric.valueCurrent === null
+    ? `${params.metric.label} is unavailable due to insufficient mapped data.`
+    : `${params.metric.label} is ${formatMetricValue(params.metric.valueCurrent)} and ${direction}${hasDelta ? ` by ${Math.abs(Number(params.metric.deltaPct)).toFixed(1)}%` : ''} versus previous period.`;
+
+  return {
+    id: `claim_${params.metric.metricKey}`,
+    statement,
+    metricKey: params.metric.metricKey,
+    valueCurrent: params.metric.valueCurrent,
+    valuePrevious: params.metric.valuePrevious,
+    deltaPct: params.metric.deltaPct,
+    confidence: getClaimConfidence(params.sampleSize, hasDelta),
+    evidenceArtifactIds,
+    supported
+  };
+}
+
+function computeReportQuality(sections: ReportSection[]): ReportQuality {
+  const claims = sections.flatMap((section) => section.claims || []);
+  const unsupportedClaims = claims.filter((claim) => !claim.supported || !claim.evidenceArtifactIds?.length).length;
+  const evidenceCoverageRatio = claims.length ? (claims.length - unsupportedClaims) / claims.length : 0;
+
+  const blockers: string[] = [];
+  if (unsupportedClaims > 0) {
+    blockers.push(`${unsupportedClaims} claim(s) are missing evidence links.`);
+  }
+
+  const presentSectionTypes = new Set(sections.map((section) => section.type));
+  REPORT_V2_REQUIRED_SECTION_TYPES.forEach((requiredType) => {
+    if (!presentSectionTypes.has(requiredType)) {
+      blockers.push(`Missing required section: ${requiredType}.`);
+    }
+  });
+
+  return {
+    evidenceCoverageRatio,
+    unsupportedClaims,
+    publishBlocked: blockers.length > 0,
+    blockers
+  };
+}
+
+function buildReportV2SlackPayload(params: {
+  roomName: string;
+  bundle: ReportV2Bundle;
+  mentionTokens: string[];
+}) {
+  const topKpis = params.bundle.kpiSnapshot.slice(0, 3).map((metric) => {
+    const deltaText = metric.deltaPct === null ? 'n/a' : `${metric.deltaPct.toFixed(1)}%`;
+    return `- ${metric.label}: ${formatMetricValue(metric.valueCurrent)} (delta ${deltaText})`;
+  });
+
+  const patternSection = params.bundle.sections.find((section) => section.type === 'pattern');
+  const patternLines = (patternSection?.claims || []).slice(0, 3).map((claim) => `- ${claim.statement}`);
+
+  const recommendationSection = params.bundle.sections.find((section) => section.type === 'recommendation');
+  const recommendationLines = (recommendationSection?.claims || []).slice(0, 3).map((claim) => `- ${claim.statement}`);
+
+  const mentionLine = params.mentionTokens.length ? `\nNotify: ${params.mentionTokens.join(' ')}` : '';
+  const text = [
+    `Report V2 published for Decision Room "${params.roomName}".`,
+    `Bundle: ${params.bundle.bundleId}`,
+    `Evidence coverage: ${(params.bundle.quality.evidenceCoverageRatio * 100).toFixed(0)}%`,
+    topKpis.length ? `Top KPIs:\n${topKpis.join('\n')}` : 'Top KPIs unavailable.',
+    patternLines.length ? `Patterns:\n${patternLines.join('\n')}` : 'Patterns: none detected.',
+    recommendationLines.length ? `Recommendations:\n${recommendationLines.join('\n')}` : 'Recommendations unavailable.'
+  ].join('\n');
+
+  return {
+    text: `${text}${mentionLine}`,
+    blocks: [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: `Report V2: ${params.roomName}`,
+          emoji: true
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Bundle:* ${params.bundle.bundleId}\n*Evidence coverage:* ${(params.bundle.quality.evidenceCoverageRatio * 100).toFixed(0)}%`
+        }
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: topKpis.length ? `*Top KPIs*\n${topKpis.join('\n')}` : '*Top KPIs*\nNo KPI snapshot available.'
+        }
+      },
+      ...(patternLines.length
+        ? [{
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Patterns*\n${patternLines.join('\n')}`
+            }
+          }]
+        : []),
+      ...(recommendationLines.length
+        ? [{
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Recommendations*\n${recommendationLines.join('\n')}`
+            }
+          }]
+        : []),
+      ...(params.mentionTokens.length
+        ? [{
+            type: 'context',
+            elements: [
+              {
+                type: 'mrkdwn',
+                text: `Notify ${params.mentionTokens.join(' ')}`
+              }
+            ]
+          }]
+        : []),
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `Published at ${new Date().toISOString()}`
+          }
+        ]
+      }
+    ]
+  };
+}
+
+async function isWorkspaceFeatureEnabled(workspaceId: number, flagKey: string, defaultValue: boolean = true): Promise<boolean> {
+  try {
+    const existsResult = await query(`SELECT to_regclass('public.workspace_feature_flags') AS table_name`);
+    if (!existsResult.rows[0]?.table_name) {
+      return defaultValue;
+    }
+
+    const flagResult = await query(
+      `
+      SELECT is_enabled
+      FROM workspace_feature_flags
+      WHERE workspace_id = $1 AND flag_key = $2
+      LIMIT 1
+      `,
+      [workspaceId, flagKey]
+    );
+    if (flagResult.rows.length === 0) {
+      return defaultValue;
+    }
+    return Boolean(flagResult.rows[0].is_enabled);
+  } catch (err) {
+    console.warn('Workspace feature flag lookup failed, using default:', err);
+    return defaultValue;
+  }
+}
+
+async function getLatestReportV2BundleId(workspaceId: number, roomId: number): Promise<string | null> {
+  const result = await query(
+    `
+    SELECT payload->>'bundleId' AS bundle_id
+    FROM artifacts
+    WHERE workspace_id = $1
+      AND room_id = $2
+      AND artifact_type = 'report_block'
+      AND payload->>'reportVersion' = 'v2'
+      AND payload ? 'bundleId'
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [workspaceId, roomId]
+  );
+  const bundleId = String(result.rows[0]?.bundle_id || '');
+  return bundleId || null;
+}
+
+function normalizeReportSectionFromArtifact(row: any): ReportSection | null {
+  const payload = parseJsonMaybe<Record<string, any>>(row.payload, {});
+  if (!payload || payload.reportVersion !== 'v2') return null;
+
+  const claimsRaw = Array.isArray(payload.claims) ? payload.claims : [];
+  const claims: ReportClaim[] = claimsRaw.map((claim, index) => ({
+    id: String(claim?.id || `${payload.sectionType || 'section'}_claim_${index + 1}`),
+    statement: String(claim?.statement || ''),
+    metricKey: String(claim?.metricKey || 'unknown'),
+    valueCurrent: claim?.valueCurrent === null || claim?.valueCurrent === undefined ? null : Number(claim.valueCurrent),
+    valuePrevious: claim?.valuePrevious === null || claim?.valuePrevious === undefined ? null : Number(claim.valuePrevious),
+    deltaPct: claim?.deltaPct === null || claim?.deltaPct === undefined ? null : Number(claim.deltaPct),
+    confidence: (claim?.confidence || 'medium') as ReportClaimConfidence,
+    evidenceArtifactIds: Array.isArray(claim?.evidenceArtifactIds)
+      ? claim.evidenceArtifactIds.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : [],
+    supported: Boolean(claim?.supported)
+  }));
+
+  return {
+    id: String(payload.sectionId || row.id),
+    type: (payload.sectionType || 'explanation') as ReportSectionType,
+    title: String(payload.title || row.title || 'Report section'),
+    contentMarkdown: String(payload.contentMarkdown || ''),
+    claims,
+    chartArtifactIds: Array.isArray(payload.chartArtifactIds)
+      ? payload.chartArtifactIds.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+  };
+}
+
+async function loadReportV2Bundle(workspaceId: number, roomId: number, bundleId: string): Promise<ReportV2Bundle | null> {
+  const sectionResult = await query(
+    `
+    SELECT id, title, payload, metadata, created_at
+    FROM artifacts
+    WHERE workspace_id = $1
+      AND room_id = $2
+      AND artifact_type = 'report_block'
+      AND payload->>'bundleId' = $3
+      AND payload->>'reportVersion' = 'v2'
+    ORDER BY COALESCE(NULLIF(payload->>'order', '')::int, 1000), created_at ASC
+    `,
+    [workspaceId, roomId, bundleId]
+  );
+
+  if (sectionResult.rows.length === 0) return null;
+
+  const sections = sectionResult.rows
+    .map((row) => normalizeReportSectionFromArtifact(row))
+    .filter((section): section is ReportSection => Boolean(section));
+
+  const firstPayload = parseJsonMaybe<Record<string, any>>(sectionResult.rows[0].payload, {});
+  const generatedAt = String(firstPayload.generatedAt || sectionResult.rows[0].created_at || new Date().toISOString());
+
+  const kpiSnapshotRaw = Array.isArray(firstPayload.kpiSnapshot) ? firstPayload.kpiSnapshot : [];
+  const kpiSnapshot: ReportMetricSnapshot[] = kpiSnapshotRaw.map((metric) => ({
+    metricKey: String(metric?.metricKey || 'unknown'),
+    label: String(metric?.label || metric?.metricKey || 'Metric'),
+    valueCurrent: metric?.valueCurrent === null || metric?.valueCurrent === undefined ? null : Number(metric.valueCurrent),
+    valuePrevious: metric?.valuePrevious === null || metric?.valuePrevious === undefined ? null : Number(metric.valuePrevious),
+    deltaPct: metric?.deltaPct === null || metric?.deltaPct === undefined ? null : Number(metric.deltaPct),
+    evidenceArtifactIds: Array.isArray(metric?.evidenceArtifactIds)
+      ? metric.evidenceArtifactIds.map((id: any) => Number(id)).filter((id: number) => Number.isFinite(id))
+      : []
+  }));
+
+  const inputRequirementsPayload = parseJsonMaybe<Record<string, any>>(firstPayload.inputRequirements, firstPayload.inputRequirements || {});
+  const inputRequirements: ReportInputRequirements = {
+    mappedFields: inputRequirementsPayload?.mappedFields && typeof inputRequirementsPayload.mappedFields === 'object'
+      ? inputRequirementsPayload.mappedFields
+      : {},
+    missingFields: Array.isArray(inputRequirementsPayload?.missingFields)
+      ? inputRequirementsPayload.missingFields.map((field: any) => String(field))
+      : [],
+    warnings: Array.isArray(inputRequirementsPayload?.warnings)
+      ? inputRequirementsPayload.warnings.map((warning: any) => String(warning))
+      : []
+  };
+
+  const summaryResult = await query(
+    `
+    SELECT id
+    FROM artifacts
+    WHERE workspace_id = $1
+      AND room_id = $2
+      AND artifact_type = 'decision_brief'
+      AND payload->>'bundleId' = $3
+      AND payload->>'reportVersion' = 'v2'
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [workspaceId, roomId, bundleId]
+  );
+
+  const quality = computeReportQuality(sections);
+
+  return {
+    bundleId,
+    roomId,
+    generatedAt,
+    quality,
+    sections,
+    kpiSnapshot,
+    inputRequirements,
+    summaryArtifactId: summaryResult.rows.length ? Number(summaryResult.rows[0].id) : null
+  };
+}
+
+async function evaluateBundleClaimSupport(workspaceId: number, roomId: number, bundle: ReportV2Bundle) {
+  const claims = bundle.sections.flatMap((section) => section.claims.map((claim) => ({
+    sectionId: section.id,
+    sectionType: section.type,
+    claim
+  })));
+
+  const allEvidenceIds = Array.from(new Set(
+    claims.flatMap((entry) => entry.claim.evidenceArtifactIds).filter((id) => Number.isFinite(id))
+  ));
+
+  const existingEvidence = new Set<number>();
+  if (allEvidenceIds.length > 0) {
+    const evidenceResult = await query(
+      `
+      SELECT id
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND id = ANY($3::int[])
+      `,
+      [workspaceId, roomId, allEvidenceIds]
+    );
+    evidenceResult.rows.forEach((row) => existingEvidence.add(Number(row.id)));
+  }
+
+  const claimChecks = claims.map((entry) => {
+    const missingEvidenceIds = entry.claim.evidenceArtifactIds.filter((id) => !existingEvidence.has(id));
+    const hasEvidence = entry.claim.evidenceArtifactIds.length > 0;
+    const supported = hasEvidence && missingEvidenceIds.length === 0;
+    return {
+      sectionId: entry.sectionId,
+      sectionType: entry.sectionType,
+      claimId: entry.claim.id,
+      statement: entry.claim.statement,
+      supported,
+      evidenceArtifactIds: entry.claim.evidenceArtifactIds,
+      missingEvidenceArtifactIds: missingEvidenceIds,
+      blockingIssues: supported
+        ? []
+        : [
+            !hasEvidence ? 'Claim is missing evidence artifact links.' : '',
+            ...missingEvidenceIds.map((id) => `Evidence artifact ${id} not found in room.`)
+          ].filter(Boolean)
+    };
+  });
+
+  const unsupportedClaims = claimChecks.filter((check) => !check.supported).length;
+  const evidenceCoverageRatio = claimChecks.length ? (claimChecks.length - unsupportedClaims) / claimChecks.length : 0;
+  const blockers = claimChecks.flatMap((check) => check.blockingIssues);
+
+  return {
+    claimChecks,
+    quality: {
+      evidenceCoverageRatio,
+      unsupportedClaims,
+      publishBlocked: unsupportedClaims > 0,
+      blockers
+    } as ReportQuality
+  };
+}
+
 router.post('/:workspaceId/projects', async (req: WorkspaceRequest, res: Response) => {
   try {
     if (!canWrite(req.workspaceRole)) {
@@ -2116,6 +3200,7 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
       roomId,
       actionItems.map((artifact) => Number(artifact.id))
     );
+    const latestReportBundleId = await getLatestReportV2BundleId(workspaceId, roomId);
 
     const rowsAnalyzed = queryRuns.reduce((acc, artifact) => acc + Number(artifact.payload?.rowCount || 0), 0);
     const summary = [
@@ -2123,6 +3208,7 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
       `${queryRuns.length} analysis run(s) processed ${rowsAnalyzed} row(s).`,
       `${actionItems.length} action item(s): ${completedActions.length} completed, ${inProgressActions.length} in progress, ${blockedActions.length} blocked.`,
       latestBrief ? `Latest brief: ${latestBrief.title}.` : 'Decision brief is still missing.',
+      latestReportBundleId ? `Latest Report V2 bundle: ${latestReportBundleId}.` : 'Report V2 bundle has not been generated yet.',
       evidenceArtifactIds.length > 0
         ? `${evidenceArtifactIds.length} evidence artifact(s) are linked to actions.`
         : 'No evidence linked to action items yet.'
@@ -2134,6 +3220,7 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
       blockedActions,
       inProgressActions,
       evidenceArtifactIds,
+      latestReportBundleId,
       roomStage: String(room.stage || 'ingest') as RoomStage,
       generatedAt: new Date().toISOString(),
       metrics: {
@@ -2172,6 +3259,7 @@ router.post('/:workspaceId/rooms/:roomId/status/draft', async (req: WorkspaceReq
         actionItems: actionItems.length,
         completedActions: completedActions.length,
         blockedActions: blockedActions.length,
+        latestReportBundleId: latestReportBundleId || null,
         evidenceCoverageRatio: actionItems.length
           ? evidenceArtifactIds.length / actionItems.length
           : 0
@@ -2701,6 +3789,666 @@ router.post('/:workspaceId/rooms/:roomId/briefs/generate', async (req: Workspace
   } catch (err) {
     console.error('Generate brief failed:', err);
     return res.status(500).json({ error: 'Failed to generate decision brief' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/reports/v2/generate', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const featureEnabled = await isWorkspaceFeatureEnabled(workspaceId, REPORT_V2_FLAG_KEY, true);
+    if (!featureEnabled) {
+      return res.status(404).json({ error: 'Report V2 is not enabled for this workspace.' });
+    }
+
+    const body = (req.body || {}) as ReportV2GenerateRequest;
+    const timeframeDays = clampTimeframeDays(body.timeframeDays);
+    const compareMode = body.compareMode || 'previous_period';
+    const focus = body.focus || REPORT_V2_FOCUS;
+    const persist = body.persist !== false;
+
+    if (compareMode !== 'previous_period') {
+      return res.status(400).json({ error: "compareMode must be 'previous_period'" });
+    }
+    if (focus !== REPORT_V2_FOCUS) {
+      return res.status(400).json({ error: `focus must be '${REPORT_V2_FOCUS}' for MVP` });
+    }
+
+    const sourceArtifactsResult = await query(
+      `
+      SELECT id, artifact_type, title, payload, created_at
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type IN ('dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief')
+      ORDER BY created_at DESC
+      LIMIT 250
+      `,
+      [workspaceId, roomId]
+    );
+
+    const sourceArtifacts = sourceArtifactsResult.rows.map((artifact) => ({
+      ...artifact,
+      payload: parseJsonMaybe(artifact.payload, {})
+    }));
+
+    const sourceArtifactIds = sourceArtifacts
+      .map((artifact) => Number(artifact.id))
+      .filter((id) => Number.isFinite(id))
+      .slice(0, 40);
+
+    let sourceRows: Record<string, any>[] = [];
+    for (const artifact of sourceArtifacts) {
+      if (!['query_run', 'pivot', 'chart', 'dataset_version'].includes(String(artifact.artifact_type))) continue;
+      const rows = parseArtifactRowsFromPayload(artifact.payload || {});
+      if (rows.length > 0) {
+        sourceRows = rows;
+        break;
+      }
+    }
+
+    if (!sourceRows.length) {
+      const runContext = parseRoomRunContext(room.run_context);
+      const datasetResolution = await resolveDatasetRows(workspaceId, undefined, {
+        datasetId: runContext.datasetId || runContext.sourceDatasetId || null
+      });
+      sourceRows = datasetResolution.rows;
+    }
+
+    const sourceColumns = extractColumns(sourceRows);
+    const fieldResolution = resolveRevOpsFieldMap(sourceColumns);
+    const metrics = computeRevOpsMetrics({
+      rows: sourceRows,
+      fieldMap: fieldResolution.map,
+      timeframeDays,
+      evidenceArtifactIds: sourceArtifactIds
+    });
+    const patterns = detectRevOpsPatterns({
+      metrics,
+      evidenceArtifactIds: sourceArtifactIds
+    });
+
+    const kpiClaims = metrics.snapshots.map((metric) => createMetricClaim({
+      metric,
+      sampleSize: metrics.sampleSizeCurrent
+    }));
+
+    const topDeltaMetric = metrics.snapshots
+      .filter((metric) => metric.deltaPct !== null && Number.isFinite(Number(metric.deltaPct)))
+      .sort((a, b) => Math.abs(Number(b.deltaPct || 0)) - Math.abs(Number(a.deltaPct || 0)))[0] || null;
+
+    const patternClaims: ReportClaim[] = patterns.length > 0
+      ? patterns.map((pattern) => ({
+          id: pattern.id,
+          statement: pattern.statement,
+          metricKey: pattern.metricKey,
+          valueCurrent: pattern.valueCurrent,
+          valuePrevious: pattern.valuePrevious,
+          deltaPct: pattern.deltaPct,
+          confidence: pattern.confidence,
+          evidenceArtifactIds: pattern.evidenceArtifactIds,
+          supported: pattern.evidenceArtifactIds.length > 0
+        }))
+      : [{
+          id: `pattern_none_${Date.now()}`,
+          statement: 'No major bottlenecks or volatility anomalies were detected in the current window.',
+          metricKey: 'pattern_none',
+          valueCurrent: null,
+          valuePrevious: null,
+          deltaPct: null,
+          confidence: 'medium',
+          evidenceArtifactIds: sourceArtifactIds,
+          supported: sourceArtifactIds.length > 0
+        }];
+
+    const explanationClaim: ReportClaim = {
+      id: `explanation_${Date.now()}`,
+      statement: topDeltaMetric
+        ? `Largest movement this week is ${topDeltaMetric.label} with ${topDeltaMetric.deltaPct?.toFixed(1)}% period-over-period change.`
+        : 'Trend explanation is limited due to insufficient previous-period data.',
+      metricKey: topDeltaMetric?.metricKey || 'report_explanation',
+      valueCurrent: topDeltaMetric?.valueCurrent ?? null,
+      valuePrevious: topDeltaMetric?.valuePrevious ?? null,
+      deltaPct: topDeltaMetric?.deltaPct ?? null,
+      confidence: topDeltaMetric ? getClaimConfidence(metrics.sampleSizeCurrent, true) : 'low',
+      evidenceArtifactIds: sourceArtifactIds,
+      supported: sourceArtifactIds.length > 0
+    };
+
+    const recommendationClaims: ReportClaim[] = patterns.slice(0, 3).map((pattern, index) => ({
+      id: `recommendation_${index + 1}_${Date.now()}`,
+      statement: `Assign owner follow-up for "${pattern.title}" and review supporting evidence before next weekly sync.`,
+      metricKey: `recommendation_${pattern.metricKey}`,
+      valueCurrent: null,
+      valuePrevious: null,
+      deltaPct: null,
+      confidence: 'medium',
+      evidenceArtifactIds: pattern.evidenceArtifactIds,
+      supported: pattern.evidenceArtifactIds.length > 0
+    }));
+
+    if (!recommendationClaims.length) {
+      recommendationClaims.push({
+        id: `recommendation_default_${Date.now()}`,
+        statement: 'Proceed with weekly action review and keep evidence links attached to owner updates.',
+        metricKey: 'recommendation_default',
+        valueCurrent: null,
+        valuePrevious: null,
+        deltaPct: null,
+        confidence: 'medium',
+        evidenceArtifactIds: sourceArtifactIds,
+        supported: sourceArtifactIds.length > 0
+      });
+    }
+
+    const bundleId = `rptv2_${Date.now()}_${Math.floor(Math.random() * 100000)}`;
+    const generatedAt = new Date().toISOString();
+    const trendSectionId = `section_trend_${bundleId}`;
+    const stageSectionId = `section_stage_${bundleId}`;
+
+    let trendChartArtifactId: number | null = null;
+    let stageChartArtifactId: number | null = null;
+
+    if (persist) {
+      const trendChartArtifact = await createArtifact({
+        workspaceId,
+        projectId: room.project_id,
+        roomId,
+        artifactType: 'chart',
+        title: `RevOps Trend - ${bundleId}`,
+        description: 'Auto-generated trend chart for Report V2.',
+        payload: {
+          chart: {
+            id: `report_v2_trend_${bundleId}`,
+            type: 'line',
+            title: 'Pipeline vs Closed Won (Daily)',
+            xAxis: 'date',
+            yAxis: 'pipeline_created_amount',
+            data: metrics.dailySeries
+          },
+          previewRows: metrics.dailySeries
+        },
+        metadata: { reportVersion: 'v2', bundleId, generatedAt },
+        createdBy: req.user!.id
+      });
+      trendChartArtifactId = Number(trendChartArtifact.id);
+      await createLineageEdges({
+        workspaceId,
+        roomId,
+        parentArtifactIds: sourceArtifactIds,
+        childArtifactId: trendChartArtifactId,
+        relationType: 'derived_from',
+        createdBy: req.user!.id
+      });
+
+      const stageChartArtifact = await createArtifact({
+        workspaceId,
+        projectId: room.project_id,
+        roomId,
+        artifactType: 'chart',
+        title: `Stage Distribution - ${bundleId}`,
+        description: 'Auto-generated stage bottleneck view for Report V2.',
+        payload: {
+          chart: {
+            id: `report_v2_stage_${bundleId}`,
+            type: 'bar',
+            title: 'Current Stage Distribution',
+            xAxis: 'stage',
+            yAxis: 'count',
+            data: metrics.stageDistribution
+          },
+          previewRows: metrics.stageDistribution
+        },
+        metadata: { reportVersion: 'v2', bundleId, generatedAt },
+        createdBy: req.user!.id
+      });
+      stageChartArtifactId = Number(stageChartArtifact.id);
+      await createLineageEdges({
+        workspaceId,
+        roomId,
+        parentArtifactIds: sourceArtifactIds,
+        childArtifactId: stageChartArtifactId,
+        relationType: 'derived_from',
+        createdBy: req.user!.id
+      });
+    }
+
+    const sections: ReportSection[] = [
+      {
+        id: `section_kpi_${bundleId}`,
+        type: 'kpi_delta',
+        title: 'KPI Deltas (Current vs Previous Period)',
+        contentMarkdown: kpiClaims.map((claim) => `- ${claim.statement}`).join('\n'),
+        claims: kpiClaims,
+        chartArtifactIds: []
+      },
+      {
+        id: trendSectionId,
+        type: 'trend',
+        title: 'Trend View',
+        contentMarkdown: metrics.dailySeries.length
+          ? 'Daily trend shows movement in pipeline creation and closed-won outcomes.'
+          : 'Trend view is limited due to missing date-aligned records.',
+        claims: [
+          {
+            id: `trend_claim_${bundleId}`,
+            statement: metrics.dailySeries.length
+              ? `Trend chart includes ${metrics.dailySeries.length} day(s) from the selected window.`
+              : 'Insufficient date coverage to produce a full trend profile.',
+            metricKey: 'trend_coverage',
+            valueCurrent: metrics.dailySeries.length,
+            valuePrevious: null,
+            deltaPct: null,
+            confidence: metrics.dailySeries.length >= 5 ? 'high' : 'low',
+            evidenceArtifactIds: sourceArtifactIds,
+            supported: sourceArtifactIds.length > 0
+          }
+        ],
+        chartArtifactIds: [trendChartArtifactId, stageChartArtifactId].filter((id): id is number => Number.isFinite(Number(id)))
+      },
+      {
+        id: stageSectionId,
+        type: 'pattern',
+        title: 'Pattern Findings',
+        contentMarkdown: patternClaims.map((claim) => `- ${claim.statement}`).join('\n'),
+        claims: patternClaims,
+        chartArtifactIds: stageChartArtifactId ? [stageChartArtifactId] : []
+      },
+      {
+        id: `section_explanation_${bundleId}`,
+        type: 'explanation',
+        title: 'Evidence-First Explanation',
+        contentMarkdown: explanationClaim.statement,
+        claims: [explanationClaim],
+        chartArtifactIds: [trendChartArtifactId].filter((id): id is number => Number.isFinite(Number(id)))
+      },
+      {
+        id: `section_recommendation_${bundleId}`,
+        type: 'recommendation',
+        title: 'Recommended Actions',
+        contentMarkdown: recommendationClaims.map((claim) => `- ${claim.statement}`).join('\n'),
+        claims: recommendationClaims,
+        chartArtifactIds: []
+      }
+    ];
+
+    const quality = computeReportQuality(sections);
+    const inputRequirements: ReportInputRequirements = {
+      mappedFields: fieldResolution.mappedFields,
+      missingFields: fieldResolution.missingFields,
+      warnings: [
+        ...fieldResolution.missingFields.map((field) => `Missing mapped field: ${field}`),
+        ...(sourceRows.length === 0 ? ['No row-level evidence found. Report sections are generated with limited confidence.'] : [])
+      ]
+    };
+
+    let summaryArtifactId: number | null = null;
+    const sectionArtifactIds: number[] = [];
+    if (persist) {
+      for (let index = 0; index < sections.length; index += 1) {
+        const section = sections[index];
+        const sectionArtifact = await createArtifact({
+          workspaceId,
+          projectId: room.project_id,
+          roomId,
+          artifactType: 'report_block',
+          title: section.title,
+          description: `Report V2 section (${section.type})`,
+          payload: {
+            reportVersion: 'v2',
+            bundleId,
+            generatedAt,
+            sectionId: section.id,
+            sectionType: section.type,
+            order: index + 1,
+            title: section.title,
+            contentMarkdown: section.contentMarkdown,
+            claims: section.claims,
+            chartArtifactIds: section.chartArtifactIds,
+            quality,
+            kpiSnapshot: metrics.snapshots,
+            inputRequirements
+          },
+          metadata: {
+            focus,
+            compareMode,
+            timeframeDays
+          },
+          createdBy: req.user!.id
+        });
+
+        const sectionArtifactId = Number(sectionArtifact.id);
+        sectionArtifactIds.push(sectionArtifactId);
+        await createLineageEdges({
+          workspaceId,
+          roomId,
+          parentArtifactIds: sourceArtifactIds,
+          childArtifactId: sectionArtifactId,
+          relationType: 'derived_from',
+          createdBy: req.user!.id
+        });
+        if (section.chartArtifactIds.length > 0) {
+          await createLineageEdges({
+            workspaceId,
+            roomId,
+            parentArtifactIds: section.chartArtifactIds,
+            childArtifactId: sectionArtifactId,
+            relationType: 'derived_from',
+            createdBy: req.user!.id
+          });
+        }
+      }
+
+      const briefArtifact = await createArtifact({
+        workspaceId,
+        projectId: room.project_id,
+        roomId,
+        artifactType: 'decision_brief',
+        title: `Report V2 Weekly Brief - ${new Date().toLocaleDateString()}`,
+        description: 'Evidence-first RevOps weekly report bundle summary.',
+        payload: {
+          reportVersion: 'v2',
+          bundleId,
+          generatedAt,
+          focus,
+          compareMode,
+          timeframeDays,
+          highlights: sections.slice(0, 3).flatMap((section) => section.claims.slice(0, 1).map((claim) => claim.statement)),
+          quality,
+          kpiSnapshot: metrics.snapshots,
+          inputRequirements
+        },
+        metadata: {
+          reportVersion: 'v2'
+        },
+        createdBy: req.user!.id
+      });
+      summaryArtifactId = Number(briefArtifact.id);
+      await createLineageEdges({
+        workspaceId,
+        roomId,
+        parentArtifactIds: [...sourceArtifactIds, ...sectionArtifactIds].slice(0, 120),
+        childArtifactId: summaryArtifactId,
+        relationType: 'evidence_for',
+        createdBy: req.user!.id
+      });
+
+      const autoThreadResult = await query(
+        `
+        INSERT INTO comment_threads (workspace_id, room_id, artifact_id, anchor, created_by)
+        VALUES ($1, $2, $3, $4, $5)
+        RETURNING id
+        `,
+        [workspaceId, roomId, summaryArtifactId, JSON.stringify({ type: 'report_v2', bundleId }), req.user!.id]
+      );
+      const threadId = Number(autoThreadResult.rows[0]?.id || 0);
+      if (threadId > 0) {
+        const summaryMessage = [
+          `Report V2 bundle generated: ${bundleId}`,
+          `Coverage: ${(quality.evidenceCoverageRatio * 100).toFixed(0)}%`,
+          quality.publishBlocked
+            ? `Publish blocked: ${quality.blockers.join(' | ')}`
+            : 'Ready for publish to Slack.'
+        ].join('\n');
+        await query(
+          `
+          INSERT INTO comments (thread_id, user_id, content, mentions)
+          VALUES ($1, $2, $3, $4)
+          `,
+          [threadId, req.user!.id, summaryMessage, JSON.stringify([])]
+        );
+      }
+    }
+
+    const bundle: ReportV2Bundle = {
+      bundleId,
+      roomId,
+      generatedAt,
+      quality,
+      sections,
+      kpiSnapshot: metrics.snapshots,
+      inputRequirements,
+      summaryArtifactId
+    };
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_report_v2_generated',
+      metadata: {
+        bundleId,
+        timeframeDays,
+        compareMode,
+        focus,
+        sectionCount: sections.length,
+        unsupportedClaims: quality.unsupportedClaims,
+        evidenceCoverageRatio: quality.evidenceCoverageRatio,
+        publishBlocked: quality.publishBlocked
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:report-generated', {
+      roomId,
+      bundleId,
+      quality
+    });
+
+    return res.status(201).json(bundle);
+  } catch (err) {
+    console.error('Generate Report V2 failed:', err);
+    return res.status(500).json({ error: 'Failed to generate Report V2 bundle' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/reports/v2/latest', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const featureEnabled = await isWorkspaceFeatureEnabled(workspaceId, REPORT_V2_FLAG_KEY, true);
+    if (!featureEnabled) {
+      return res.status(404).json({ error: 'Report V2 is not enabled for this workspace.' });
+    }
+
+    const bundleId = await getLatestReportV2BundleId(workspaceId, roomId);
+    if (!bundleId) {
+      return res.status(404).json({ error: 'No Report V2 bundle found for this room.' });
+    }
+
+    const bundle = await loadReportV2Bundle(workspaceId, roomId, bundleId);
+    if (!bundle) {
+      return res.status(404).json({ error: 'Report V2 bundle not found.' });
+    }
+
+    return res.json(bundle);
+  } catch (err) {
+    console.error('Load latest Report V2 failed:', err);
+    return res.status(500).json({ error: 'Failed to load latest Report V2 bundle' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/quality', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const bundleId = String(req.params.bundleId || '').trim();
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    if (!bundleId) {
+      return res.status(400).json({ error: 'bundleId is required' });
+    }
+
+    const featureEnabled = await isWorkspaceFeatureEnabled(workspaceId, REPORT_V2_FLAG_KEY, true);
+    if (!featureEnabled) {
+      return res.status(404).json({ error: 'Report V2 is not enabled for this workspace.' });
+    }
+
+    const bundle = await loadReportV2Bundle(workspaceId, roomId, bundleId);
+    if (!bundle) {
+      return res.status(404).json({ error: 'Report V2 bundle not found.' });
+    }
+
+    const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+    return res.json({
+      bundleId,
+      quality: qualityCheck.quality,
+      claimChecks: qualityCheck.claimChecks
+    });
+  } catch (err) {
+    console.error('Load Report V2 quality failed:', err);
+    return res.status(500).json({ error: 'Failed to evaluate Report V2 quality' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const bundleId = String(req.params.bundleId || '').trim();
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+    if (!bundleId) {
+      return res.status(400).json({ error: 'bundleId is required' });
+    }
+
+    const featureEnabled = await isWorkspaceFeatureEnabled(workspaceId, REPORT_V2_FLAG_KEY, true);
+    if (!featureEnabled) {
+      return res.status(404).json({ error: 'Report V2 is not enabled for this workspace.' });
+    }
+
+    const bundle = await loadReportV2Bundle(workspaceId, roomId, bundleId);
+    if (!bundle) {
+      return res.status(404).json({ error: 'Report V2 bundle not found.' });
+    }
+
+    const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+    if (qualityCheck.quality.publishBlocked) {
+      await recordAnalyticsEvent({
+        workspaceId,
+        roomId,
+        userId: req.user!.id,
+        eventType: 'decision_room_report_v2_publish_blocked',
+        metadata: {
+          bundleId,
+          unsupportedClaims: qualityCheck.quality.unsupportedClaims,
+          blockers: qualityCheck.quality.blockers
+        }
+      });
+      return res.status(400).json({
+        error: 'Publish blocked due to unsupported claims.',
+        quality: qualityCheck.quality,
+        claimChecks: qualityCheck.claimChecks
+      });
+    }
+
+    const channel = String(req.body?.channel || 'slack').toLowerCase();
+    const mentionTokensRaw = Array.isArray(req.body?.mentionTokens)
+      ? req.body.mentionTokens
+      : typeof req.body?.mentionTokens === 'string'
+        ? req.body.mentionTokens.split(/\s+/g)
+        : typeof req.body?.mentions === 'string'
+          ? req.body.mentions.split(/\s+/g)
+          : [];
+    const mentionTokens = mentionTokensRaw
+      .map((token: any) => String(token || '').trim())
+      .filter((token: string) => token.startsWith('@'));
+
+    let slackDelivery: SlackDeliveryResult = {
+      posted: false,
+      attempts: 0,
+      destination: channel,
+      error: 'Slack delivery not requested.'
+    };
+
+    if (channel === 'slack') {
+      const slackConnection = await getSlackConnection(workspaceId, req.user!.id);
+      if (!slackConnection) {
+        return res.status(400).json({ error: 'Slack integration is not connected.' });
+      }
+
+      const credentials = normalizeSlackCredentials(slackConnection.credentials);
+      if (!credentials.webhookUrl && !credentials.botToken) {
+        return res.status(400).json({
+          error: 'Slack integration is connected but missing webhookUrl/botToken credentials.'
+        });
+      }
+
+      const slackPayload = buildReportV2SlackPayload({
+        roomName: room.name,
+        bundle,
+        mentionTokens
+      });
+
+      slackDelivery = await postSlackWithRetry({
+        webhookUrl: credentials.webhookUrl,
+        botToken: credentials.botToken,
+        channel: credentials.channel || '#general',
+        payload: slackPayload
+      });
+
+      if (!slackDelivery.posted) {
+        return res.status(502).json({
+          error: `Slack delivery failed: ${slackDelivery.error || 'unknown error'}`,
+          quality: qualityCheck.quality
+        });
+      }
+    }
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_report_v2_published',
+      metadata: {
+        bundleId,
+        channel,
+        slackPosted: slackDelivery.posted,
+        slackAttempts: slackDelivery.attempts,
+        evidenceCoverageRatio: qualityCheck.quality.evidenceCoverageRatio
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:report-published', {
+      roomId,
+      bundleId,
+      channel,
+      quality: qualityCheck.quality,
+      slackDelivery
+    });
+
+    return res.json({
+      bundleId,
+      channel,
+      quality: qualityCheck.quality,
+      slackDelivery,
+      publishedAt: new Date().toISOString(),
+      message: 'Report V2 published successfully.'
+    });
+  } catch (err) {
+    console.error('Publish Report V2 failed:', err);
+    return res.status(500).json({ error: 'Failed to publish Report V2 bundle' });
   }
 });
 

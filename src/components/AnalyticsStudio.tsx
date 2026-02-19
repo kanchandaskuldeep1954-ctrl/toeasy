@@ -6,6 +6,8 @@ import {
   analyticsAPI,
   datasetAPI,
   NextBestStep,
+  ReportV2Bundle,
+  ReportV2Quality,
   RoomApproval,
   RoomDecisionCheckpoint,
   RoomGuideStep,
@@ -87,6 +89,13 @@ const parseDatasetRows = (rawData: any, headers?: string[]) => {
 };
 
 const stageOrder = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
+const reportSectionMeaning: Record<string, string> = {
+  kpi_delta: 'Shows period-over-period KPI movement grounded in linked evidence artifacts.',
+  trend: 'Visual trend coverage across the selected weekly window.',
+  pattern: 'Detected risks and shifts (owner concentration, bottlenecks, volatility, segment movement).',
+  explanation: 'Deterministic explanation of what changed and why it matters for RevOps decisions.',
+  recommendation: 'Next actions tied to evidence so owners can execute in Slack and action boards.'
+};
 
 const toErrorMessage = (error: any) =>
   error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Request failed';
@@ -126,6 +135,11 @@ const AnalyticsStudio: React.FC = () => {
 
   const [pivotConfig, setPivotConfig] = useState<PivotConfig>({ rows: [], columns: [], values: [] });
   const [reportText, setReportText] = useState('');
+  const [reportV2TimeframeDays, setReportV2TimeframeDays] = useState<number>(7);
+  const [reportV2Bundle, setReportV2Bundle] = useState<ReportV2Bundle | null>(null);
+  const [reportV2Quality, setReportV2Quality] = useState<ReportV2Quality | null>(null);
+  const [reportPublishMentions, setReportPublishMentions] = useState<string>('');
+  const [reportV2Busy, setReportV2Busy] = useState<boolean>(false);
 
   const [actionTitle, setActionTitle] = useState('');
   const [actionDescription, setActionDescription] = useState('');
@@ -285,6 +299,33 @@ const AnalyticsStudio: React.FC = () => {
     }
   }, [workspaceId, selectedRoomId, selectedThreadId]);
 
+  const refreshReportV2 = useCallback(async () => {
+    if (!workspaceId || !selectedRoomId) {
+      setReportV2Bundle(null);
+      setReportV2Quality(null);
+      return;
+    }
+
+    try {
+      const latestResponse = await studioAPI.getLatestReportV2(workspaceId, selectedRoomId);
+      const bundle = latestResponse.data as ReportV2Bundle;
+      setReportV2Bundle(bundle);
+      setReportV2Quality(bundle.quality || null);
+
+      if (bundle?.bundleId) {
+        const qualityResponse = await studioAPI.getReportV2Quality(workspaceId, selectedRoomId, bundle.bundleId);
+        setReportV2Quality(qualityResponse.data?.quality || bundle.quality || null);
+      }
+    } catch (error: any) {
+      if (error?.response?.status === 404) {
+        setReportV2Bundle(null);
+        setReportV2Quality(null);
+        return;
+      }
+      throw error;
+    }
+  }, [workspaceId, selectedRoomId]);
+
   const refreshThreadComments = useCallback(async (threadId?: string) => {
     const targetThreadId = threadId || selectedThreadId;
     if (!workspaceId || !selectedRoomId || !targetThreadId) {
@@ -384,6 +425,12 @@ const AnalyticsStudio: React.FC = () => {
   }, [refreshCommunication]);
 
   useEffect(() => {
+    refreshReportV2().catch((error) => {
+      console.error('Failed to refresh Report V2:', error);
+    });
+  }, [refreshReportV2]);
+
+  useEffect(() => {
     if (!socket || !isConnected || !workspaceId || !selectedRoomId) return;
     const workspaceNumeric = Number(workspaceId);
     const roomNumeric = Number(selectedRoomId);
@@ -394,6 +441,12 @@ const AnalyticsStudio: React.FC = () => {
       if (eventRoomId && eventRoomId !== roomNumeric) return;
       refreshCommunication().catch((error) => {
         console.error('Realtime communication refresh failed:', error);
+      });
+      refreshRoomState().catch((error) => {
+        console.error('Realtime room refresh failed:', error);
+      });
+      refreshReportV2().catch((error) => {
+        console.error('Realtime Report V2 refresh failed:', error);
       });
 
       const eventThreadId = payload?.threadId ? String(payload.threadId) : payload?.comment?.threadId ? String(payload.comment.threadId) : '';
@@ -413,6 +466,8 @@ const AnalyticsStudio: React.FC = () => {
     socket.on('decision-room:approval-updated', handleRoomEvent);
     socket.on('decision-room:checkpoint-created', handleRoomEvent);
     socket.on('decision-room:checkpoint-updated', handleRoomEvent);
+    socket.on('decision-room:report-generated', handleRoomEvent);
+    socket.on('decision-room:report-published', handleRoomEvent);
 
     return () => {
       socket.emit('leave-decision-room', { workspaceId: workspaceNumeric, roomId: roomNumeric });
@@ -422,8 +477,10 @@ const AnalyticsStudio: React.FC = () => {
       socket.off('decision-room:approval-updated', handleRoomEvent);
       socket.off('decision-room:checkpoint-created', handleRoomEvent);
       socket.off('decision-room:checkpoint-updated', handleRoomEvent);
+      socket.off('decision-room:report-generated', handleRoomEvent);
+      socket.off('decision-room:report-published', handleRoomEvent);
     };
-  }, [socket, isConnected, workspaceId, selectedRoomId, selectedThreadId, refreshCommunication, refreshThreadComments]);
+  }, [socket, isConnected, workspaceId, selectedRoomId, selectedThreadId, refreshCommunication, refreshReportV2, refreshRoomState, refreshThreadComments]);
 
   useEffect(() => {
     refreshMvpKpis().catch((error) => {
@@ -454,6 +511,10 @@ const AnalyticsStudio: React.FC = () => {
     setDecisionTitle('');
     setDecisionRationale('');
     setDecisionArtifactId('room');
+    setReportV2Bundle(null);
+    setReportV2Quality(null);
+    setReportPublishMentions('');
+    setReportV2Busy(false);
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -594,6 +655,75 @@ const AnalyticsStudio: React.FC = () => {
     });
     await refreshRoomState();
     setStatusMessage('Report block saved.');
+  };
+
+  const generateReportV2 = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    setReportV2Busy(true);
+    try {
+      const response = await studioAPI.generateReportV2(workspaceId, selectedRoomId, {
+        timeframeDays: reportV2TimeframeDays,
+        compareMode: 'previous_period',
+        focus: 'revops_weekly',
+        persist: true
+      });
+      const bundle = response.data as ReportV2Bundle;
+      setReportV2Bundle(bundle);
+      setReportV2Quality(bundle.quality || null);
+      setStatusMessage(`Report V2 generated (${bundle.bundleId}).`);
+      await refreshRoomState();
+      await refreshCommunication();
+      await refreshReportV2();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setReportV2Busy(false);
+    }
+  };
+
+  const publishReportV2 = async () => {
+    if (!workspaceId || !selectedRoomId || !reportV2Bundle?.bundleId) return;
+    setReportV2Busy(true);
+    try {
+      const mentionTokens = reportPublishMentions
+        .split(/\s+/g)
+        .map((token) => token.trim())
+        .filter((token) => token.startsWith('@'));
+      const response = await studioAPI.publishReportV2(workspaceId, selectedRoomId, reportV2Bundle.bundleId, {
+        channel: 'slack',
+        mentionTokens
+      });
+      setStatusMessage(response.data?.message || 'Report V2 published.');
+      await refreshReportV2();
+      await refreshCommunication();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+      if (reportV2Bundle?.bundleId) {
+        try {
+          const qualityResponse = await studioAPI.getReportV2Quality(workspaceId, selectedRoomId, reportV2Bundle.bundleId);
+          setReportV2Quality(qualityResponse.data?.quality || null);
+        } catch {
+          // no-op; fallback to API error message
+        }
+      }
+    } finally {
+      setReportV2Busy(false);
+    }
+  };
+
+  const createReportCheckpoint = async () => {
+    if (!workspaceId || !selectedRoomId || !reportV2Bundle?.bundleId) return;
+    try {
+      await studioAPI.createDecisionCheckpoint(workspaceId, selectedRoomId, {
+        decision: `Approve Report V2 bundle ${reportV2Bundle.bundleId}`,
+        rationale: 'Decision checkpoint created from Report V2 quality panel.',
+        artifactId: reportV2Bundle.summaryArtifactId || null
+      });
+      setStatusMessage('Decision checkpoint created from Report V2.');
+      await refreshCommunication();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
   };
 
   const createAction = async () => {
@@ -970,16 +1100,176 @@ const AnalyticsStudio: React.FC = () => {
           )}
 
           {panel === 'report' && (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <button onClick={generateBrief} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white disabled:opacity-50">
-                  Generate Decision Brief
-                </button>
-                <button onClick={saveReportBlock} disabled={!selectedRoomId || !reportText.trim()} className="px-3 py-1.5 text-xs rounded bg-slate-800 text-white disabled:opacity-50">
-                  Save Report Block
-                </button>
+            <div className="space-y-4">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={reportV2TimeframeDays}
+                    onChange={(e) => setReportV2TimeframeDays(Number(e.target.value))}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value={7}>Last 7 days vs previous 7</option>
+                    <option value={14}>Last 14 days vs previous 14</option>
+                    <option value={30}>Last 30 days vs previous 30</option>
+                  </select>
+                  <button
+                    onClick={generateReportV2}
+                    disabled={!selectedRoomId || reportV2Busy}
+                    className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white disabled:opacity-50"
+                  >
+                    {reportV2Busy ? 'Generating...' : 'Generate Report V2'}
+                  </button>
+                  <button
+                    onClick={publishReportV2}
+                    disabled={!reportV2Bundle?.bundleId || Boolean(reportV2Quality?.publishBlocked) || reportV2Busy}
+                    className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white disabled:opacity-50"
+                  >
+                    Publish to Slack
+                  </button>
+                  <button
+                    onClick={createReportCheckpoint}
+                    disabled={!reportV2Bundle?.bundleId}
+                    className="px-3 py-1.5 text-xs rounded border"
+                  >
+                    Create Decision Checkpoint
+                  </button>
+                  <button onClick={generateBrief} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded border">
+                    Generate Legacy Brief
+                  </button>
+                </div>
+
+                <input
+                  value={reportPublishMentions}
+                  onChange={(e) => setReportPublishMentions(e.target.value)}
+                  placeholder="@revops-lead @sales-manager (optional mention prompt before publish)"
+                  className="w-full px-2 py-1 text-xs rounded border"
+                />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="rounded border border-slate-200 dark:border-slate-700 p-2">
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">Report Quality</div>
+                    {reportV2Quality ? (
+                      <div className="mt-2 space-y-1 text-xs">
+                        <div>Evidence coverage: {(reportV2Quality.evidenceCoverageRatio * 100).toFixed(0)}%</div>
+                        <div>Unsupported claims: {reportV2Quality.unsupportedClaims}</div>
+                        <div>
+                          Publish gate: {reportV2Quality.publishBlocked ? (
+                            <span className="text-rose-600 font-semibold">Blocked</span>
+                          ) : (
+                            <span className="text-emerald-600 font-semibold">Ready</span>
+                          )}
+                        </div>
+                        {reportV2Quality.blockers?.length > 0 && (
+                          <div className="text-[11px] text-amber-700">
+                            {reportV2Quality.blockers.join(' | ')}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs text-slate-500">Generate Report V2 to view quality gates.</div>
+                    )}
+                  </div>
+
+                  <div className="rounded border border-slate-200 dark:border-slate-700 p-2">
+                    <div className="text-[11px] font-semibold uppercase text-slate-500">Input Requirements</div>
+                    {reportV2Bundle ? (
+                      <div className="mt-2 space-y-2 text-xs">
+                        <div className="text-[11px] text-slate-500">
+                          Bundle: {reportV2Bundle.bundleId}
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {Object.entries(reportV2Bundle.inputRequirements?.mappedFields || {}).map(([key, value]) => (
+                            <span key={key} className="px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-[11px]">
+                              {key}: {value}
+                            </span>
+                          ))}
+                        </div>
+                        {reportV2Bundle.inputRequirements?.missingFields?.length > 0 && (
+                          <div className="text-[11px] text-amber-700">
+                            Missing: {reportV2Bundle.inputRequirements.missingFields.join(', ')}
+                          </div>
+                        )}
+                        {reportV2Bundle.inputRequirements?.warnings?.length > 0 && (
+                          <div className="text-[11px] text-slate-500">
+                            {reportV2Bundle.inputRequirements.warnings.join(' | ')}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="mt-2 text-xs text-slate-500">No report bundle yet.</div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} className="w-full h-[520px] p-3 text-sm rounded border font-mono" />
+
+              {reportV2Bundle ? (
+                <div className="space-y-3">
+                  {reportV2Bundle.sections.map((section) => (
+                    <div key={section.id} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <h4 className="text-sm font-semibold">{section.title}</h4>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {reportSectionMeaning[section.type] || 'Evidence-backed section.'}
+                          </div>
+                        </div>
+                        {section.chartArtifactIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {section.chartArtifactIds.map((chartId) => (
+                              <button
+                                key={chartId}
+                                onClick={() => openLineage(chartId)}
+                                className="px-2 py-0.5 text-[11px] rounded border"
+                              >
+                                Chart #{chartId}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-xs mt-2 whitespace-pre-wrap break-words">{section.contentMarkdown}</div>
+                      <div className="mt-2 space-y-2">
+                        {section.claims.map((claim) => (
+                          <div key={claim.id} className="rounded border border-slate-200 dark:border-slate-700 p-2">
+                            <div className="text-xs">{claim.statement}</div>
+                            <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px]">
+                              <span className={`px-1.5 py-0.5 rounded ${claim.supported ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                {claim.supported ? 'supported' : 'unsupported'}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800">
+                                {claim.metricKey}
+                              </span>
+                              {claim.evidenceArtifactIds.map((artifactId) => (
+                                <button
+                                  key={`${claim.id}-${artifactId}`}
+                                  onClick={() => openLineage(artifactId)}
+                                  className="px-1.5 py-0.5 rounded border"
+                                >
+                                  evidence #{artifactId}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-slate-300 dark:border-slate-700 p-4 text-xs text-slate-500">
+                  Report V2 is evidence-first weekly reporting: generate once data analysis artifacts exist in this room.
+                </div>
+              )}
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-2">
+                <div className="text-xs font-semibold uppercase text-slate-500">Manual Report Block</div>
+                <div className="flex items-center gap-2">
+                  <button onClick={saveReportBlock} disabled={!selectedRoomId || !reportText.trim()} className="px-3 py-1.5 text-xs rounded bg-slate-800 text-white disabled:opacity-50">
+                    Save Report Block
+                  </button>
+                </div>
+                <textarea value={reportText} onChange={(e) => setReportText(e.target.value)} className="w-full h-48 p-3 text-sm rounded border font-mono" />
+              </div>
             </div>
           )}
 
@@ -1086,6 +1376,11 @@ const AnalyticsStudio: React.FC = () => {
                 <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
                   <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Latest Status Draft</h3>
                   <p className="text-xs text-slate-700 dark:text-slate-200">{statusDraft.summary}</p>
+                  {statusDraft.latestReportBundleId && (
+                    <div className="mt-2 text-[11px] text-slate-500">
+                      Linked Report V2: {statusDraft.latestReportBundleId}
+                    </div>
+                  )}
                   <div className="mt-2 text-[11px] text-slate-500">
                     Evidence IDs: {statusDraft.evidenceArtifactIds.join(', ') || 'none'}
                   </div>
