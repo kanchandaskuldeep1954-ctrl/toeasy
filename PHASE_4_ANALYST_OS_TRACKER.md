@@ -136,7 +136,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] persona presets finalized (analyst/manager/executive)
 - [x] guided onboarding playbooks from first room to first publish
 - [x] ROI dashboard tied to program KPIs
-- [ ] pilot conversion package and GTM launch checklist
+- [x] pilot conversion package and GTM launch checklist
 
 ## 7) Test Coverage Tracker
 - [x] Studio API contract coverage for new phase-4 endpoints.
@@ -165,6 +165,15 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Pilot conversion operations tranche):
+  - Added pilot conversion and GTM execution artifact:
+    - `PILOT_CONVERSION_CHECKLIST.md`
+  - Captured day-0 to day-90 conversion workflow:
+    - contract package
+    - KPI baseline and weekly cadence
+    - day-60 conversion motion
+    - day-90 close/extend/exit outcomes
+  - Defined internal ownership matrix for pilot-production operations.
 - 2026-02-19 (Persona + onboarding + ROI scorecard tranche):
   - Added workspace persona profile APIs:
     - `GET /api/workspaces/:id/preferences/profile`
