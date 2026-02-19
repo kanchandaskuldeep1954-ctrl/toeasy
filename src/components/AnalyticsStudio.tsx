@@ -383,6 +383,8 @@ const AnalyticsStudio: React.FC = () => {
     steps: OnboardingPlaybookStep[];
   } | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
+  const [isContextRailOpen, setIsContextRailOpen] = useState(true);
+  const [isFocusMode, setIsFocusMode] = useState(false);
   const [pivotPercentOfTotalEnabled, setPivotPercentOfTotalEnabled] = useState(true);
   const [pivotRankEnabled, setPivotRankEnabled] = useState(true);
   const [pivotRankOrder, setPivotRankOrder] = useState<'asc' | 'desc'>('desc');
@@ -2136,6 +2138,10 @@ const AnalyticsStudio: React.FC = () => {
   };
 
   const roomStageProgress = stageOrder.indexOf(roomStage) + 1;
+  const showContextRail = isContextRailOpen && !isFocusMode;
+  const panelViewportHeights = isFocusMode
+    ? { primary: 700, secondary: 580, compact: 340 }
+    : { primary: 520, secondary: 400, compact: 220 };
 
   if (!workspaceId || !datasetId) {
     return (
@@ -2180,7 +2186,27 @@ const AnalyticsStudio: React.FC = () => {
         <span className="text-[11px] px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
           Stage {roomStageProgress}/{stageOrder.length}: {roomStage}
         </span>
-        <span className="ml-auto text-xs text-slate-500">{statusMessage}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setIsContextRailOpen((prev) => !prev)}
+            className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+            title="Toggle the right context panel"
+          >
+            {showContextRail ? 'Hide Context' : 'Show Context'}
+          </button>
+          <button
+            onClick={() => setIsFocusMode((prev) => !prev)}
+            className={`px-2 py-1 text-xs rounded border ${
+              isFocusMode
+                ? 'border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800'
+            }`}
+            title="Focus mode maximizes tool workspace and hides guided/context rails"
+          >
+            {isFocusMode ? 'Exit Focus' : 'Focus View'}
+          </button>
+          <span className="text-xs text-slate-500">{statusMessage}</span>
+        </div>
       </div>
 
       <div className="px-4 py-2 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center gap-2 overflow-x-auto">
@@ -2199,42 +2225,44 @@ const AnalyticsStudio: React.FC = () => {
         ))}
       </div>
 
-      <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-bold uppercase text-slate-500">Guided Flow</h3>
-          <span className="text-xs text-slate-500">{Math.round(guideCompletionRatio * 100)}% complete</span>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
-          {guideSteps.map((step) => (
-            <button
-              key={step.id}
-              onClick={() => !step.completed && step.blockingIssues.length === 0 && completeGuideStep(step.id)}
-              className={`text-left p-2 rounded border ${
-                step.completed
-                  ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
-                  : step.blockingIssues.length > 0
-                    ? 'border-amber-300 bg-amber-50 text-amber-700'
-                    : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
-            >
-              <div className="text-[11px] font-semibold">{step.label}</div>
-              <div className="text-[10px] uppercase mt-1">{step.stage}</div>
-            </button>
-          ))}
-        </div>
-        {nextBestStep && (
-          <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
-            <span className="font-semibold">Next best step:</span> {nextBestStep.reason}
-            {nextBestStep.blockingIssues.length > 0 && (
-              <div className="mt-1 text-[11px] text-amber-700">
-                Blockers: {nextBestStep.blockingIssues.join(' | ')}
-              </div>
-            )}
+      {!isFocusMode && (
+        <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-bold uppercase text-slate-500">Guided Flow</h3>
+            <span className="text-xs text-slate-500">{Math.round(guideCompletionRatio * 100)}% complete</span>
           </div>
-        )}
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-2">
+            {guideSteps.map((step) => (
+              <button
+                key={step.id}
+                onClick={() => !step.completed && step.blockingIssues.length === 0 && completeGuideStep(step.id)}
+                className={`text-left p-2 rounded border ${
+                  step.completed
+                    ? 'border-emerald-300 bg-emerald-50 text-emerald-700'
+                    : step.blockingIssues.length > 0
+                      ? 'border-amber-300 bg-amber-50 text-amber-700'
+                      : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                <div className="text-[11px] font-semibold">{step.label}</div>
+                <div className="text-[10px] uppercase mt-1">{step.stage}</div>
+              </button>
+            ))}
+          </div>
+          {nextBestStep && (
+            <div className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">Next best step:</span> {nextBestStep.reason}
+              {nextBestStep.blockingIssues.length > 0 && (
+                <div className="mt-1 text-[11px] text-amber-700">
+                  Blockers: {nextBestStep.blockingIssues.join(' | ')}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 xl:grid-cols-[1fr_320px]">
+      <div className={`flex-1 min-h-0 ${showContextRail ? 'grid grid-cols-1 xl:grid-cols-[1fr_320px]' : 'block'}`}>
         <div className="min-h-0 p-4 overflow-auto">
           {panel === 'sheets' && (
             <div className="space-y-3">
@@ -2274,7 +2302,7 @@ const AnalyticsStudio: React.FC = () => {
                   </span>
                 )}
               </div>
-              <DataGridWidget data={currentRows} height={520} title={`Rows (${currentRows.length})`} />
+              <DataGridWidget data={currentRows} height={panelViewportHeights.primary} title={`Rows (${currentRows.length})`} />
             </div>
           )}
 
@@ -2291,7 +2319,7 @@ const AnalyticsStudio: React.FC = () => {
               <button disabled={!selectedRoomId || loading} onClick={() => runExecution('nl', { prompt: nlInput })} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white disabled:opacity-50">
                 Run NL Query
               </button>
-              <DataGridWidget data={currentRows} height={400} title={`Run Results (${currentRows.length})`} />
+              <DataGridWidget data={currentRows} height={panelViewportHeights.secondary} title={`Run Results (${currentRows.length})`} />
             </div>
           )}
 
@@ -2302,7 +2330,7 @@ const AnalyticsStudio: React.FC = () => {
                 fields={fields}
                 config={pivotConfig}
                 onConfigChange={setPivotConfig}
-                height={520}
+                height={panelViewportHeights.primary}
               />
               <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
                 <h3 className="text-xs font-bold uppercase text-slate-500">Pivot Calculations</h3>
@@ -2474,7 +2502,7 @@ const AnalyticsStudio: React.FC = () => {
                 <ChartWidget
                   chart={visualChartSpec}
                   data={visualPreviewData}
-                  height={320}
+                  height={panelViewportHeights.compact}
                   onPointClick={(point) => {
                     const field = visualChartSpec.xAxis || visualXField;
                     if (!field) return;
@@ -2497,7 +2525,7 @@ const AnalyticsStudio: React.FC = () => {
                 </div>
                 <DataGridWidget
                   data={visualCrossFilteredPreviewRows}
-                  height={220}
+                  height={panelViewportHeights.compact}
                   title={`Preview Rows (${visualCrossFilteredPreviewRows.length}/${currentRows.length})`}
                 />
                 {visualApiRows.length > 0 && (
@@ -2534,7 +2562,7 @@ const AnalyticsStudio: React.FC = () => {
                     <ChartWidget
                       chart={visualApiChartSpec}
                       data={visualApiRows}
-                      height={280}
+                      height={panelViewportHeights.secondary}
                       onPointClick={(point) => {
                         const field = visualApiChartSpec.xAxis || visualXField;
                         if (!field) return;
@@ -2543,7 +2571,7 @@ const AnalyticsStudio: React.FC = () => {
                     />
                     <DataGridWidget
                       data={visualCrossFilteredAdvancedRows}
-                      height={240}
+                      height={panelViewportHeights.secondary}
                       title={`Advanced Visual Rows (${visualCrossFilteredAdvancedRows.length}/${visualApiRows.length})`}
                     />
                     <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
@@ -3534,7 +3562,8 @@ const AnalyticsStudio: React.FC = () => {
           )}
         </div>
 
-        <aside className="border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto">
+        {showContextRail && (
+          <aside className="border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto">
           <h3 className="text-xs font-bold uppercase text-slate-500 mb-2">Run Context</h3>
           <div className="text-xs text-slate-600 dark:text-slate-300 space-y-1">
             <div>Rows: {currentRows.length}</div>
@@ -3834,7 +3863,8 @@ const AnalyticsStudio: React.FC = () => {
               </div>
             </>
           )}
-        </aside>
+          </aside>
+        )}
       </div>
     </div>
   );

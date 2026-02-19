@@ -165,6 +165,12 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Studio workspace focus UX tranche):
+  - Added Studio workspace controls for analysis depth and screen real-estate:
+    - `Focus View` toggle to hide guided/context rails and maximize panel workspace.
+    - `Hide/Show Context` toggle to collapse the right run-context rail when needed.
+  - Updated panel viewport sizing so Sheets/Query/Pivot/Visuals expand in focus mode.
+  - Preserved all existing right-rail trust/ROI/lineage content behind explicit user toggle.
 - 2026-02-19 (SQL profile management + credential validation tranche):
   - Added SQL credential validation and profile management in Studio routes:
     - provider normalization for `postgres|mysql`
