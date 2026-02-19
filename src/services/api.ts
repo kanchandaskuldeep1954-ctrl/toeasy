@@ -785,6 +785,9 @@ export const studioAPI = {
     data: { text: string; anchor?: Record<string, any> }
   ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/${visualId}/annotate`, data),
 
+  listVisualAnnotations: (workspaceId: string, roomId: string, visualId: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/visuals/${visualId}/annotations`),
+
   generateReportV2: (workspaceId: string, roomId: string, data?: ReportV2GenerateRequest) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/reports/v2/generate`, data || {}),
 
@@ -812,6 +815,9 @@ export const studioAPI = {
     roomId: string,
     data: { submissionId: number; decision: 'approved' | 'rejected' | 'cancelled'; responseNote?: string }
   ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/review/respond`, data),
+
+  listReviewSubmissions: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/review/submissions`),
 
   syncActions: (workspaceId: string, roomId: string, data?: { channel?: string; createTasks?: boolean; idempotencyKey?: string }) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/actions/sync`, data || {}),

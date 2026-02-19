@@ -4538,6 +4538,46 @@ router.post('/:workspaceId/rooms/:roomId/visuals/:visualId/annotate', async (req
   }
 });
 
+router.get('/:workspaceId/rooms/:roomId/visuals/:visualId/annotations', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const visualId = Number(req.params.visualId);
+    if (!Number.isFinite(visualId) || visualId <= 0) {
+      return res.status(400).json({ error: 'Invalid visual id' });
+    }
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const visualResult = await query(
+      `
+      SELECT id
+      FROM visual_specs
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [visualId, workspaceId, roomId]
+    );
+    if (visualResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Visual spec not found' });
+    }
+
+    const annotations = await listVisualAnnotations(workspaceId, roomId, visualId);
+    return res.json({
+      visualId,
+      annotations
+    });
+  } catch (err) {
+    console.error('List visual annotations failed:', err);
+    return res.status(500).json({ error: 'Failed to load visual annotations' });
+  }
+});
+
 router.get('/:workspaceId/rooms/:roomId/threads', async (req: WorkspaceRequest, res: Response) => {
   try {
     const workspaceId = Number(req.params.workspaceId);
@@ -5368,6 +5408,37 @@ router.post('/:workspaceId/rooms/:roomId/review/respond', async (req: WorkspaceR
   } catch (err) {
     console.error('Respond review failed:', err);
     return res.status(500).json({ error: 'Failed to respond review submission' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/review/submissions', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const result = await query(
+      `
+      SELECT *
+      FROM review_submissions
+      WHERE workspace_id = $1
+        AND room_id = $2
+      ORDER BY created_at DESC
+      LIMIT 200
+      `,
+      [workspaceId, roomId]
+    );
+
+    return res.json({
+      roomId,
+      submissions: result.rows.map(toReviewSubmissionRecord)
+    });
+  } catch (err) {
+    console.error('List review submissions failed:', err);
+    return res.status(500).json({ error: 'Failed to load review submissions' });
   }
 });
 
@@ -7179,6 +7250,63 @@ router.post('/:workspaceId/rooms/:roomId/reports/v2/:bundleId/publish', async (r
     }
 
     const qualityCheck = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+
+    const profileThresholdRaw = Number(req.body?.minProfileQualityScore ?? 0.65);
+    const profileQualityThreshold = Number.isFinite(profileThresholdRaw)
+      ? clampUnit(profileThresholdRaw)
+      : 0.65;
+    const latestProfileResult = await query(
+      `
+      SELECT id, quality_score, created_at
+      FROM dataset_profiles
+      WHERE workspace_id = $1
+        AND room_id = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+      `,
+      [workspaceId, roomId]
+    );
+    const latestProfile = latestProfileResult.rows[0] || null;
+    const profileQualityScore = latestProfile ? Number(latestProfile.quality_score || 0) : null;
+    const profileGateBlocked = profileQualityScore !== null && profileQualityScore < profileQualityThreshold;
+
+    if (profileGateBlocked) {
+      const profileBlockedResponse = {
+        error: 'Publish blocked due to data trust gate.',
+        trustGate: {
+          profileId: Number(latestProfile.id),
+          qualityScore: profileQualityScore,
+          threshold: profileQualityThreshold,
+          profileGeneratedAt: latestProfile.created_at
+        },
+        quality: qualityCheck.quality
+      };
+
+      await recordAnalyticsEvent({
+        workspaceId,
+        roomId,
+        userId: req.user!.id,
+        eventType: 'decision_room_report_v2_publish_blocked',
+        metadata: {
+          bundleId,
+          reason: 'data_profile_gate',
+          qualityScore: profileQualityScore,
+          threshold: profileQualityThreshold
+        }
+      });
+
+      await completeIdempotentOperation({
+        workspaceId,
+        roomId,
+        endpointKey: `reports_v2_publish:${bundleId}`,
+        idempotencyKey: idempotency.idempotencyKey,
+        statusCode: 400,
+        payload: profileBlockedResponse
+      });
+
+      return res.status(400).json(profileBlockedResponse);
+    }
+
     if (qualityCheck.quality.publishBlocked) {
       await recordAnalyticsEvent({
         workspaceId,

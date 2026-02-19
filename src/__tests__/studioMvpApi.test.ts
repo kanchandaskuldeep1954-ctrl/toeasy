@@ -171,6 +171,11 @@ describe('Studio MVP API Contracts', () => {
     });
   });
 
+  it('calls visual annotations list endpoint', () => {
+    studioAPI.listVisualAnnotations('12', '77', 200);
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/visuals/200/annotations');
+  });
+
   it('calls query version save endpoint', () => {
     studioAPI.saveQueryVersion('12', '77', {
       queryId: 5,
@@ -241,6 +246,11 @@ describe('Studio MVP API Contracts', () => {
       decision: 'approved',
       responseNote: 'Ship it'
     });
+  });
+
+  it('calls review submissions list endpoint', () => {
+    studioAPI.listReviewSubmissions('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/review/submissions');
   });
 
   it('calls playbook recommendations endpoint', () => {

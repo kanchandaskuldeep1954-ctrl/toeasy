@@ -62,6 +62,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [x] `POST /visuals/:visualId/annotate`
   - [x] `POST /review/submit`
   - [x] `POST /review/respond`
+  - [x] `GET /review/submissions`
+  - [x] `GET /visuals/:visualId/annotations`
   - [x] `GET /evidence/coverage-trend`
   - [x] `GET /roi`
 - [x] Idempotency guardrails:
@@ -70,7 +72,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] Studio wiring for completion slice:
   - [x] Sheets panel data profile trigger + trust state
   - [x] Pivot API compute action
-  - [x] Report review lane controls (submit/respond)
+  - [x] Report review lane controls (submit/respond/list with selector UX)
+  - [x] Visual annotation controls in advanced visual flow
   - [x] Right-rail cards for trust, evidence trend, and room ROI
 - [x] Studio UX upgrades:
   - [x] Semantic metrics panel with validation action.
@@ -94,8 +97,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [ ] deterministic dedupe behavior for schedule dispatch
   - [ ] robust actor resolution for schedule-triggered runs
   - [ ] retry/backoff observability in run event timeline
-- [ ] Full frontend UX adoption of newly added completion APIs (data trust, review lane, coverage trend, ROI cards).
-- [ ] UX polish and flow simplification for new controls (replace ID-based inputs with role-aware pickers).
+- [x] Full frontend UX adoption of newly added completion APIs (data trust, review lane, coverage trend, ROI cards).
+- [x] UX polish and flow simplification for review controls (replaced raw ID inputs with role-aware pickers/selectors).
 
 ## 6) Pending by Phase
 ### Phase A (Weeks 1-4): Data + Query Hardening
@@ -109,7 +112,7 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [ ] pivot UI depth/polish for calculated workflows
 - [ ] cross-filter interactions between visuals and result tables
 - [x] visual annotation API persistence
-- [ ] chart annotation UX/pinned insight polish
+- [x] chart annotation UX/pinned insight polish
 - [ ] RevOps visual template library polish
 
 ### Phase C (Weeks 9-12): Semantic Metrics + Evidence Contract
@@ -118,10 +121,10 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [ ] room evidence coverage trend telemetry
 
 ### Phase D (Weeks 13-16): Collaboration + Communication
-- [ ] anchor-level assignment and resolved-state audit timeline
-- [ ] mention routing presets (manager, exec, owner group)
+- [x] anchor-level assignment and resolved-state audit timeline
+- [x] mention routing presets (manager, exec, owner group)
 - [x] backend review workflow endpoints (submit/respond)
-- [ ] pre-publish review flow UI (draft -> manager approve -> exec notify)
+- [x] pre-publish review flow UI (draft -> manager approve -> exec notify)
 
 ### Phase E (Weeks 17-20): Automation Reliability
 - [ ] production scheduler with queue monitoring dashboard
@@ -162,6 +165,32 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Phase 4 collaboration/annotation polish tranche):
+  - Added role-based mention routing presets in Studio for:
+    - report publish mentions
+    - comms thread creation
+    - thread reply drafting
+  - Added review lane workflow controls for:
+    - `Submit Draft -> Manager`
+    - manager approval response
+    - `Notify Exec Review` escalation
+  - Added comms thread ownership + anchor visibility:
+    - owner selection when creating a thread
+    - anchor/owner display in thread list and thread detail
+    - resolution timeline details in selected thread view
+  - Added visual annotation quality-of-life controls:
+    - pin/unpin insights
+    - push annotation to report draft
+    - send annotation to comms as a new evidence thread
+- 2026-02-19 (Phase 4 UX continuation tranche):
+  - Added backend read endpoints for new UI flows:
+    - `GET /review/submissions`
+    - `GET /visuals/:visualId/annotations`
+  - Upgraded Report review lane UX from raw ID fields to selectors:
+    - reviewer dropdown from workspace members
+    - submission selector and recent submission list
+  - Added visual annotation UX to the Visuals panel and wired persisted annotation loading.
+  - Updated Studio API contracts/tests for new read endpoints.
 - 2026-02-19 (Phase 4 completion tranche):
   - Added migration `034_phase4_completion_core.js` with additive tables:
     - `dataset_profiles`, `query_versions`, `visual_annotations`, `review_submissions`, `idempotency_keys`.

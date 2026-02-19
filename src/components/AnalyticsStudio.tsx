@@ -24,6 +24,7 @@ import {
   RoomThread,
   RoomThreadComment,
   StatusDraft,
+  VisualAnnotation,
   studioAPI
 } from '../services/api';
 import { useSocket } from '../context/SocketContext';
@@ -34,6 +35,7 @@ import { ChartSpec } from '../../types';
 
 type StudioPanel = 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
 type RunMode = 'sql' | 'nl' | 'sheet_op';
+type MentionPresetKey = 'manager' | 'exec' | 'owner_group';
 type StudioFeatureFlags = {
   legacySurfacesEnabled: boolean;
   visualsTabEnabled: boolean;
@@ -112,6 +114,13 @@ const parseDatasetRows = (rawData: any, headers?: string[]) => {
 };
 
 const stageOrder = ['ingest', 'profile', 'analyze', 'brief', 'action', 'done'];
+const reviewStageOptions = [
+  { value: 'manager_review', label: 'Manager review' },
+  { value: 'executive_notify', label: 'Executive notify' },
+  { value: 'final_signoff', label: 'Final signoff' }
+] as const;
+const managerRolePattern = /(manager|lead|admin|owner)/i;
+const executiveRolePattern = /(exec|executive|director|vp|chief|ceo|coo|cfo|cro|founder)/i;
 const reportSectionMeaning: Record<string, string> = {
   kpi_delta: 'Shows period-over-period KPI movement grounded in linked evidence artifacts.',
   trend: 'Visual trend coverage across the selected weekly window.',
@@ -122,6 +131,47 @@ const reportSectionMeaning: Record<string, string> = {
 
 const toErrorMessage = (error: any) =>
   error?.response?.data?.error || error?.response?.data?.message || error?.message || 'Request failed';
+
+const mergeMentionTokens = (existing: string, tokens: string[]) => {
+  const currentTokens = existing
+    .split(/\s+/g)
+    .map((token) => token.trim())
+    .filter((token) => token.startsWith('@'));
+  const tokenSet = new Set(currentTokens.map((token) => token.toLowerCase()));
+  const merged = [...currentTokens];
+  tokens.forEach((token) => {
+    const normalized = token.trim().toLowerCase();
+    if (!normalized.startsWith('@')) return;
+    if (tokenSet.has(normalized)) return;
+    tokenSet.add(normalized);
+    merged.push(token.trim());
+  });
+  return merged.join(' ').trim();
+};
+
+const appendMentionsToMessage = (existing: string, tokens: string[]) => {
+  const normalizedExisting = existing.trim();
+  const existingMentionSet = new Set(
+    normalizedExisting
+      .split(/\s+/g)
+      .map((token) => token.trim().toLowerCase())
+      .filter((token) => token.startsWith('@'))
+  );
+  const uniqueTokens = tokens
+    .map((token) => token.trim())
+    .filter((token) => token.startsWith('@'))
+    .filter((token) => {
+      const normalized = token.toLowerCase();
+      if (existingMentionSet.has(normalized)) return false;
+      existingMentionSet.add(normalized);
+      return true;
+    });
+
+  if (!uniqueTokens.length) return normalizedExisting;
+  return normalizedExisting
+    ? `${normalizedExisting}\n${uniqueTokens.join(' ')}`
+    : uniqueTokens.join(' ');
+};
 
 const AnalyticsStudio: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -184,6 +234,7 @@ const AnalyticsStudio: React.FC = () => {
   const [selectedThreadId, setSelectedThreadId] = useState<string>('');
   const [threadComments, setThreadComments] = useState<RoomThreadComment[]>([]);
   const [newThreadArtifactId, setNewThreadArtifactId] = useState<string>('room');
+  const [newThreadOwnerId, setNewThreadOwnerId] = useState<string>('');
   const [newThreadAnchor, setNewThreadAnchor] = useState('');
   const [newThreadContent, setNewThreadContent] = useState('');
   const [newThreadComment, setNewThreadComment] = useState('');
@@ -227,11 +278,17 @@ const AnalyticsStudio: React.FC = () => {
   const [profileBusy, setProfileBusy] = useState(false);
   const [reviewBundleIdInput, setReviewBundleIdInput] = useState<string>('');
   const [reviewStageInput, setReviewStageInput] = useState<string>('manager_review');
-  const [reviewerIdInput, setReviewerIdInput] = useState<string>('');
   const [reviewNoteInput, setReviewNoteInput] = useState<string>('');
-  const [reviewSubmissionIdInput, setReviewSubmissionIdInput] = useState<string>('');
   const [reviewResponseNoteInput, setReviewResponseNoteInput] = useState<string>('');
   const [lastReviewSubmission, setLastReviewSubmission] = useState<ReviewSubmission | null>(null);
+  const [reviewSubmissions, setReviewSubmissions] = useState<ReviewSubmission[]>([]);
+  const [selectedReviewSubmissionId, setSelectedReviewSubmissionId] = useState<string>('');
+  const [selectedReviewerId, setSelectedReviewerId] = useState<string>('');
+  const [visualAnnotationText, setVisualAnnotationText] = useState<string>('');
+  const [visualAnnotationAnchorInput, setVisualAnnotationAnchorInput] = useState<string>('');
+  const [visualAnnotations, setVisualAnnotations] = useState<VisualAnnotation[]>([]);
+  const [pinnedVisualAnnotationIds, setPinnedVisualAnnotationIds] = useState<number[]>([]);
+  const [annotateVisualBusy, setAnnotateVisualBusy] = useState(false);
   const { socket, isConnected } = useSocket();
 
   const visiblePanels = useMemo(() => {
@@ -268,6 +325,64 @@ const AnalyticsStudio: React.FC = () => {
   const selectedThread = useMemo(
     () => threads.find((thread) => String(thread.id) === selectedThreadId) || null,
     [threads, selectedThreadId]
+  );
+
+  const selectedReviewSubmission = useMemo(
+    () => reviewSubmissions.find((submission) => String(submission.id) === selectedReviewSubmissionId) || null,
+    [reviewSubmissions, selectedReviewSubmissionId]
+  );
+
+  const mentionRoleGroups = useMemo(() => {
+    const managers: RoomMentionableUser[] = [];
+    const executives: RoomMentionableUser[] = [];
+    const owners: RoomMentionableUser[] = [];
+
+    mentionableUsers.forEach((user) => {
+      const role = String(user.role || '');
+      if (managerRolePattern.test(role)) {
+        managers.push(user);
+      }
+      if (executiveRolePattern.test(role)) {
+        executives.push(user);
+      }
+      if (managerRolePattern.test(role) || role.toLowerCase().includes('analyst') || role.toLowerCase().includes('editor')) {
+        owners.push(user);
+      }
+    });
+
+    const dedupe = (users: RoomMentionableUser[]) => {
+      const seen = new Set<number>();
+      return users.filter((user) => {
+        if (seen.has(user.id)) return false;
+        seen.add(user.id);
+        return true;
+      });
+    };
+
+    return {
+      managers: dedupe(managers),
+      executives: dedupe(executives),
+      owners: dedupe(owners.length ? owners : mentionableUsers)
+    };
+  }, [mentionableUsers]);
+
+  const mentionPresetHandles = useMemo<Record<MentionPresetKey, string[]>>(
+    () => ({
+      manager: mentionRoleGroups.managers.map((user) => user.handle).filter(Boolean),
+      exec: mentionRoleGroups.executives.map((user) => user.handle).filter(Boolean),
+      owner_group: mentionRoleGroups.owners.map((user) => user.handle).filter(Boolean)
+    }),
+    [mentionRoleGroups]
+  );
+
+  const suggestedManagerReviewer = useMemo(
+    () => mentionRoleGroups.managers[0] || mentionableUsers[0] || null,
+    [mentionRoleGroups.managers, mentionableUsers]
+  );
+
+  const suggestedExecutiveReviewer = useMemo(
+    () => mentionRoleGroups.executives[0] || mentionRoleGroups.managers[0] || mentionableUsers[0] || null,
+    [mentionRoleGroups.executives, mentionRoleGroups.managers, mentionableUsers]
   );
 
   const mentionHints = useMemo(
@@ -451,7 +566,7 @@ const AnalyticsStudio: React.FC = () => {
       return;
     }
 
-    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse] = await Promise.all([
+    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse, reviewSubmissionsResponse] = await Promise.all([
       studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Metric catalog refresh failed:', error);
         return null;
@@ -487,6 +602,12 @@ const AnalyticsStudio: React.FC = () => {
       studioAPI.getRoomRoi(workspaceId, selectedRoomId).catch((error) => {
         if (error?.response?.status !== 404) {
           console.warn('Room ROI refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.listReviewSubmissions(workspaceId, selectedRoomId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Review submissions refresh failed:', error);
         }
         return null;
       })
@@ -536,7 +657,22 @@ const AnalyticsStudio: React.FC = () => {
     if (roiResponse?.data?.snapshot) {
       setRoomRoiSnapshot(roiResponse.data.snapshot);
     }
-  }, [workspaceId, selectedRoomId]);
+    if (reviewSubmissionsResponse) {
+      const submissions = Array.isArray(reviewSubmissionsResponse.data?.submissions)
+        ? reviewSubmissionsResponse.data.submissions
+        : [];
+      setReviewSubmissions(submissions);
+      if (submissions.length > 0) {
+        setLastReviewSubmission(submissions[0]);
+        if (!selectedReviewSubmissionId) {
+          setSelectedReviewSubmissionId(String(submissions[0].id));
+        }
+      } else {
+        setLastReviewSubmission(null);
+        setSelectedReviewSubmissionId('');
+      }
+    }
+  }, [workspaceId, selectedRoomId, selectedReviewSubmissionId]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -725,6 +861,7 @@ const AnalyticsStudio: React.FC = () => {
     setMentionableUsers([]);
     setSelectedThreadId('');
     setThreadComments([]);
+    setNewThreadOwnerId('');
     setNewThreadContent('');
     setNewThreadComment('');
     setPendingApprovals([]);
@@ -760,11 +897,17 @@ const AnalyticsStudio: React.FC = () => {
     setProfileBusy(false);
     setReviewBundleIdInput('');
     setReviewStageInput('manager_review');
-    setReviewerIdInput('');
     setReviewNoteInput('');
-    setReviewSubmissionIdInput('');
     setReviewResponseNoteInput('');
     setLastReviewSubmission(null);
+    setReviewSubmissions([]);
+    setSelectedReviewSubmissionId('');
+    setSelectedReviewerId('');
+    setVisualAnnotationText('');
+    setVisualAnnotationAnchorInput('');
+    setVisualAnnotations([]);
+    setPinnedVisualAnnotationIds([]);
+    setAnnotateVisualBusy(false);
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -787,6 +930,31 @@ const AnalyticsStudio: React.FC = () => {
       setVisualYField(numericFields[0]);
     }
   }, [numericFields, visualYField]);
+
+  useEffect(() => {
+    const loadVisualAnnotations = async () => {
+      if (!workspaceId || !selectedRoomId || !visualApiVisualId) {
+        setVisualAnnotations([]);
+        setPinnedVisualAnnotationIds([]);
+        return;
+      }
+      try {
+        const response = await studioAPI.listVisualAnnotations(workspaceId, selectedRoomId, visualApiVisualId);
+        const nextAnnotations = Array.isArray(response.data?.annotations) ? response.data.annotations : [];
+        setVisualAnnotations(nextAnnotations);
+        setPinnedVisualAnnotationIds((prev) => prev.filter((id) => nextAnnotations.some((annotation) => annotation.id === id)));
+      } catch (error: any) {
+        if (error?.response?.status !== 404) {
+          console.warn('Failed to load visual annotations:', error);
+        }
+        setVisualAnnotations([]);
+        setPinnedVisualAnnotationIds([]);
+      }
+    };
+    loadVisualAnnotations().catch((error) => {
+      console.warn('Visual annotations load error:', error);
+    });
+  }, [workspaceId, selectedRoomId, visualApiVisualId]);
 
   const setPanel = (nextPanel: StudioPanel) => {
     const resolvedPanel = visiblePanels.includes(nextPanel) ? nextPanel : 'sheets';
@@ -1045,6 +1213,87 @@ const AnalyticsStudio: React.FC = () => {
     }
   };
 
+  const annotateVisualViaApi = async () => {
+    if (!workspaceId || !selectedRoomId || !visualApiVisualId) return;
+    const text = visualAnnotationText.trim();
+    if (!text) {
+      setStatusMessage('Add annotation text before saving visual annotation.');
+      return;
+    }
+
+    let anchor: Record<string, any> = {};
+    if (visualAnnotationAnchorInput.trim()) {
+      try {
+        anchor = JSON.parse(visualAnnotationAnchorInput);
+      } catch {
+        setStatusMessage('Annotation anchor must be valid JSON, for example {"x":"owner=Alex"}');
+        return;
+      }
+    }
+
+    setAnnotateVisualBusy(true);
+    try {
+      const response = await studioAPI.annotateVisual(workspaceId, selectedRoomId, visualApiVisualId, {
+        text,
+        anchor
+      });
+      const nextAnnotations = Array.isArray(response.data?.annotations) ? response.data.annotations : [];
+      setVisualAnnotations(nextAnnotations);
+      setPinnedVisualAnnotationIds((prev) => prev.filter((id) => nextAnnotations.some((item) => item.id === id)));
+      setVisualAnnotationText('');
+      setVisualAnnotationAnchorInput('');
+      setStatusMessage('Visual annotation saved.');
+      await refreshRoomState();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setAnnotateVisualBusy(false);
+    }
+  };
+
+  const togglePinnedVisualAnnotation = (annotationId: number) => {
+    setPinnedVisualAnnotationIds((prev) =>
+      prev.includes(annotationId)
+        ? prev.filter((id) => id !== annotationId)
+        : [...prev, annotationId]
+    );
+  };
+
+  const addVisualAnnotationToReportDraft = (annotation: VisualAnnotation) => {
+    const anchorSummary = annotation.anchor && Object.keys(annotation.anchor).length > 0
+      ? ` | anchor: ${JSON.stringify(annotation.anchor)}`
+      : '';
+    const block = `- [Visual insight] ${annotation.text}${anchorSummary}`;
+    setReportText((prev) => (prev.trim() ? `${prev}\n${block}` : block));
+    setPanel('report');
+    setStatusMessage('Visual insight added to report draft.');
+  };
+
+  const createThreadFromVisualAnnotation = async (annotation: VisualAnnotation) => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      const ownerMentions = mentionPresetHandles.owner_group.join(' ');
+      const message = [
+        `Visual insight: ${annotation.text}`,
+        ownerMentions || ''
+      ].filter(Boolean).join('\n');
+      await studioAPI.createThread(workspaceId, selectedRoomId, {
+        artifactId: null,
+        anchor: {
+          ...(annotation.anchor || {}),
+          visualId: annotation.visualId,
+          annotationId: annotation.id
+        },
+        content: message
+      });
+      await refreshCommunication();
+      setPanel('comms');
+      setStatusMessage('Visual insight sent to Comms as a thread.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
   const generateBrief = async () => {
     if (!workspaceId || !selectedRoomId) return;
     const result = await studioAPI.generateBrief(workspaceId, selectedRoomId, {
@@ -1125,34 +1374,106 @@ const AnalyticsStudio: React.FC = () => {
     }
   };
 
-  const submitReview = async () => {
+  const applyMentionPresetToReport = (preset: MentionPresetKey) => {
+    const tokens = mentionPresetHandles[preset];
+    if (!tokens.length) {
+      setStatusMessage(`No users found for "${preset}" mention preset.`);
+      return;
+    }
+    setReportPublishMentions((prev) => mergeMentionTokens(prev, tokens));
+    setStatusMessage(`Added ${tokens.length} mention(s) using preset "${preset}".`);
+  };
+
+  const applyMentionPresetToThreadComposer = (preset: MentionPresetKey) => {
+    const tokens = mentionPresetHandles[preset];
+    if (!tokens.length) {
+      setStatusMessage(`No users found for "${preset}" mention preset.`);
+      return;
+    }
+    setNewThreadContent((prev) => appendMentionsToMessage(prev, tokens));
+    setStatusMessage(`Added ${tokens.length} mention(s) to thread draft.`);
+  };
+
+  const applyMentionPresetToThreadReply = (preset: MentionPresetKey) => {
+    const tokens = mentionPresetHandles[preset];
+    if (!tokens.length) {
+      setStatusMessage(`No users found for "${preset}" mention preset.`);
+      return;
+    }
+    setNewThreadComment((prev) => appendMentionsToMessage(prev, tokens));
+    setStatusMessage(`Added ${tokens.length} mention(s) to reply draft.`);
+  };
+
+  const submitReview = async (overrides?: { bundleId?: string; stage?: string; reviewerId?: number | null; note?: string }) => {
     if (!workspaceId || !selectedRoomId) return;
     try {
-      const reviewerId = reviewerIdInput.trim() ? Number(reviewerIdInput) : undefined;
-      if (reviewerIdInput.trim() && !Number.isFinite(reviewerId)) {
-        setStatusMessage('Reviewer ID must be numeric.');
-        return;
-      }
+      const reviewerIdFromState = selectedReviewerId.trim() ? Number(selectedReviewerId) : undefined;
+      const reviewerId = overrides?.reviewerId !== undefined
+        ? overrides.reviewerId
+        : reviewerIdFromState;
 
       const response = await studioAPI.submitReview(workspaceId, selectedRoomId, {
-        bundleId: reviewBundleIdInput.trim() || reportV2Bundle?.bundleId || undefined,
-        stage: reviewStageInput.trim() || 'manager_review',
-        reviewerId: reviewerId as number | undefined,
-        note: reviewNoteInput.trim() || undefined
+        bundleId: overrides?.bundleId || reviewBundleIdInput.trim() || reportV2Bundle?.bundleId || undefined,
+        stage: overrides?.stage || reviewStageInput.trim() || 'manager_review',
+        reviewerId: reviewerId === null ? undefined : (reviewerId as number | undefined),
+        note: overrides?.note || reviewNoteInput.trim() || undefined
       });
-      setLastReviewSubmission(response.data?.submission || null);
-      setReviewSubmissionIdInput(String(response.data?.submission?.id || reviewSubmissionIdInput));
+      const createdSubmission = response.data?.submission || null;
+      setLastReviewSubmission(createdSubmission);
+      if (createdSubmission?.id) {
+        setSelectedReviewSubmissionId(String(createdSubmission.id));
+      }
       setStatusMessage(`Review submitted${response.data?.submission?.id ? ` (#${response.data.submission.id})` : ''}.`);
+      await refreshAnalystOps();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
   };
 
+  const submitDraftForManagerReview = async () => {
+    const reviewer = suggestedManagerReviewer;
+    if (!reviewer) {
+      setStatusMessage('No manager candidate found. Select a reviewer manually.');
+      return;
+    }
+    setSelectedReviewerId(String(reviewer.id));
+    setReviewStageInput('manager_review');
+    await submitReview({
+      stage: 'manager_review',
+      reviewerId: reviewer.id,
+      note: reviewNoteInput.trim() || 'Analyst draft submitted for manager review.'
+    });
+  };
+
+  const notifyExecutiveReview = async () => {
+    const reviewer = suggestedExecutiveReviewer;
+    if (!reviewer) {
+      setStatusMessage('No executive candidate found. Select a reviewer manually.');
+      return;
+    }
+    const sourceSubmission = selectedReviewSubmission || lastReviewSubmission;
+    if (sourceSubmission && sourceSubmission.stage === 'manager_review' && sourceSubmission.status !== 'approved') {
+      setStatusMessage('Manager review should be approved before executive notify.');
+      return;
+    }
+    const noteParts = [
+      'Manager-approved report ready for executive notify.',
+      sourceSubmission ? `Source review #${sourceSubmission.id} (${sourceSubmission.status}).` : ''
+    ].filter(Boolean);
+    setSelectedReviewerId(String(reviewer.id));
+    setReviewStageInput('executive_notify');
+    await submitReview({
+      stage: 'executive_notify',
+      reviewerId: reviewer.id,
+      note: noteParts.join(' ')
+    });
+  };
+
   const respondReview = async (decision: 'approved' | 'rejected' | 'cancelled') => {
     if (!workspaceId || !selectedRoomId) return;
-    const submissionId = Number(reviewSubmissionIdInput || lastReviewSubmission?.id || 0);
+    const submissionId = Number(selectedReviewSubmissionId || lastReviewSubmission?.id || 0);
     if (!Number.isFinite(submissionId) || submissionId <= 0) {
-      setStatusMessage('Set a valid review submission ID before responding.');
+      setStatusMessage('Select a review submission before responding.');
       return;
     }
 
@@ -1165,6 +1486,7 @@ const AnalyticsStudio: React.FC = () => {
       setLastReviewSubmission(response.data?.submission || null);
       setStatusMessage(`Review ${decision}.`);
       await refreshCommunication();
+      await refreshAnalystOps();
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
@@ -1296,12 +1618,27 @@ const AnalyticsStudio: React.FC = () => {
     try {
       const response = await studioAPI.createThread(workspaceId, selectedRoomId, {
         artifactId: newThreadArtifactId === 'room' ? null : Number(newThreadArtifactId),
-        anchor: newThreadAnchor.trim() ? { label: newThreadAnchor.trim() } : {},
+        anchor: (() => {
+          const anchorPayload: Record<string, any> = {};
+          if (newThreadAnchor.trim()) {
+            anchorPayload.label = newThreadAnchor.trim();
+          }
+          if (newThreadOwnerId) {
+            const owner = mentionableUsers.find((user) => String(user.id) === newThreadOwnerId);
+            if (owner) {
+              anchorPayload.ownerId = owner.id;
+              anchorPayload.ownerName = owner.fullName || owner.email;
+              anchorPayload.ownerHandle = owner.handle;
+            }
+          }
+          return anchorPayload;
+        })(),
         content: newThreadContent.trim()
       });
       const createdThreadId = response.data?.thread?.id;
       setNewThreadContent('');
       setNewThreadAnchor('');
+      setNewThreadOwnerId('');
       await refreshCommunication();
       if (createdThreadId) {
         setSelectedThreadId(String(createdThreadId));
@@ -1691,6 +2028,69 @@ const AnalyticsStudio: React.FC = () => {
                     </div>
                     <ChartWidget chart={visualApiChartSpec} data={visualApiRows} height={280} />
                     <DataGridWidget data={visualApiRows} height={240} title={`Advanced Visual Rows (${visualApiRows.length})`} />
+                    <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
+                      <div className="text-[11px] font-semibold uppercase text-slate-500">Visual Annotations</div>
+                      <textarea
+                        value={visualAnnotationText}
+                        onChange={(e) => setVisualAnnotationText(e.target.value)}
+                        placeholder="Add insight note for this visual"
+                        className="w-full h-16 px-2 py-1 text-xs rounded border"
+                      />
+                      <input
+                        value={visualAnnotationAnchorInput}
+                        onChange={(e) => setVisualAnnotationAnchorInput(e.target.value)}
+                        placeholder='Anchor JSON (optional), e.g. {"row":"owner=Alex"}'
+                        className="w-full px-2 py-1 text-xs rounded border"
+                      />
+                      <button
+                        onClick={annotateVisualViaApi}
+                        disabled={!visualApiVisualId || annotateVisualBusy}
+                        className="px-3 py-1 text-xs rounded border disabled:opacity-50"
+                      >
+                        {annotateVisualBusy ? 'Saving...' : 'Add Annotation'}
+                      </button>
+                      <div className="space-y-1">
+                        {visualAnnotations.length === 0 && (
+                          <div className="text-[11px] text-slate-500">No annotations yet.</div>
+                        )}
+                        {visualAnnotations.slice(0, 8).map((annotation) => (
+                          <div key={annotation.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="font-semibold">{annotation.text}</div>
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] ${
+                                pinnedVisualAnnotationIds.includes(annotation.id)
+                                  ? 'bg-amber-100 text-amber-700'
+                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
+                              }`}>
+                                {pinnedVisualAnnotationIds.includes(annotation.id) ? 'pinned' : 'unpinned'}
+                              </span>
+                            </div>
+                            <div className="text-slate-500 mt-1">
+                              {annotation.createdAt ? new Date(annotation.createdAt).toLocaleString() : 'unknown time'}
+                            </div>
+                            <div className="text-slate-500 mt-1">
+                              Anchor: {annotation.anchor && Object.keys(annotation.anchor).length > 0 ? JSON.stringify(annotation.anchor) : 'none'}
+                            </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                              <button onClick={() => togglePinnedVisualAnnotation(annotation.id)} className="px-2 py-0.5 rounded border">
+                                {pinnedVisualAnnotationIds.includes(annotation.id) ? 'Unpin' : 'Pin'}
+                              </button>
+                              <button onClick={() => addVisualAnnotationToReportDraft(annotation)} className="px-2 py-0.5 rounded border">
+                                Add to Report Draft
+                              </button>
+                              <button onClick={() => createThreadFromVisualAnnotation(annotation)} className="px-2 py-0.5 rounded border">
+                                Send to Comms
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                        {pinnedVisualAnnotationIds.length > 0 && (
+                          <div className="text-[11px] rounded border border-amber-200 bg-amber-50 text-amber-800 p-2">
+                            Pinned insights: {pinnedVisualAnnotationIds.length}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1745,34 +2145,87 @@ const AnalyticsStudio: React.FC = () => {
                   placeholder="@revops-lead @sales-manager (optional mention prompt before publish)"
                   className="w-full px-2 py-1 text-xs rounded border"
                 />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => applyMentionPresetToReport('manager')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Notify Manager Group
+                  </button>
+                  <button
+                    onClick={() => applyMentionPresetToReport('exec')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Notify Executive Group
+                  </button>
+                  <button
+                    onClick={() => applyMentionPresetToReport('owner_group')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Notify Owner Group
+                  </button>
+                  <span className="text-[10px] text-slate-500">
+                    Routing presets are optional and role-based.
+                  </span>
+                </div>
 
                 <div className="rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
                   <div className="text-[11px] font-semibold uppercase text-slate-500">Review Lane</div>
+                  <div className="text-[11px] text-slate-500">
+                    Flow: Analyst draft -&gt; Manager approve -&gt; Executive notify.
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    <input
+                    <select
                       value={reviewBundleIdInput}
                       onChange={(e) => setReviewBundleIdInput(e.target.value)}
-                      placeholder={reportV2Bundle?.bundleId ? `Bundle ID (${reportV2Bundle.bundleId})` : 'Bundle ID (optional)'}
                       className="px-2 py-1 text-xs rounded border"
-                    />
-                    <input
+                    >
+                      <option value="">Use latest bundle</option>
+                      {reportV2Bundle?.bundleId ? (
+                        <option value={reportV2Bundle.bundleId}>{reportV2Bundle.bundleId}</option>
+                      ) : null}
+                      {reviewSubmissions
+                        .map((submission) => submission.bundleId)
+                        .filter((value, index, arr) => arr.indexOf(value) === index)
+                        .map((bundleId) => (
+                          <option key={bundleId} value={bundleId}>{bundleId}</option>
+                        ))}
+                    </select>
+                    <select
                       value={reviewStageInput}
                       onChange={(e) => setReviewStageInput(e.target.value)}
-                      placeholder="Stage (manager_review)"
                       className="px-2 py-1 text-xs rounded border"
-                    />
-                    <input
-                      value={reviewerIdInput}
-                      onChange={(e) => setReviewerIdInput(e.target.value)}
-                      placeholder="Reviewer user ID (optional)"
+                    >
+                      {reviewStageOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedReviewerId}
+                      onChange={(e) => setSelectedReviewerId(e.target.value)}
                       className="px-2 py-1 text-xs rounded border"
-                    />
-                    <input
-                      value={reviewSubmissionIdInput}
-                      onChange={(e) => setReviewSubmissionIdInput(e.target.value)}
-                      placeholder="Submission ID for response"
+                    >
+                      <option value="">No reviewer (open)</option>
+                      {mentionableUsers.map((user) => (
+                        <option key={user.id} value={String(user.id)}>
+                          {user.fullName || user.email} ({user.role})
+                        </option>
+                      ))}
+                    </select>
+                    <select
+                      value={selectedReviewSubmissionId}
+                      onChange={(e) => setSelectedReviewSubmissionId(e.target.value)}
                       className="px-2 py-1 text-xs rounded border"
-                    />
+                    >
+                      <option value="">Select submission to respond</option>
+                      {reviewSubmissions.map((submission) => (
+                        <option key={submission.id} value={String(submission.id)}>
+                          #{submission.id} - {submission.status} - {submission.bundleId}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <textarea
                     value={reviewNoteInput}
@@ -1787,6 +2240,12 @@ const AnalyticsStudio: React.FC = () => {
                     className="w-full h-14 px-2 py-1 text-xs rounded border"
                   />
                   <div className="flex flex-wrap items-center gap-2">
+                    <button onClick={submitDraftForManagerReview} className="px-3 py-1 text-xs rounded bg-slate-800 text-white">
+                      Submit Draft -&gt; Manager
+                    </button>
+                    <button onClick={notifyExecutiveReview} className="px-3 py-1 text-xs rounded border">
+                      Notify Exec Review
+                    </button>
                     <button onClick={submitReview} className="px-3 py-1 text-xs rounded border">
                       Submit Review
                     </button>
@@ -1796,11 +2255,42 @@ const AnalyticsStudio: React.FC = () => {
                     <button onClick={() => respondReview('rejected')} className="px-3 py-1 text-xs rounded bg-rose-600 text-white">
                       Reject Review
                     </button>
+                    <button onClick={() => respondReview('cancelled')} className="px-3 py-1 text-xs rounded border">
+                      Cancel Review
+                    </button>
                     {lastReviewSubmission && (
                       <span className="text-[11px] text-slate-500">
                         Last review #{lastReviewSubmission.id}: {lastReviewSubmission.status}
                       </span>
                     )}
+                    {selectedReviewSubmission && (
+                      <span className="text-[11px] text-slate-500">
+                        Active submission stage: {selectedReviewSubmission.stage}
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    {reviewSubmissions.length === 0 && (
+                      <div className="text-[11px] text-slate-500 rounded border border-slate-200 dark:border-slate-700 p-2">
+                        No review submissions yet.
+                      </div>
+                    )}
+                    {reviewSubmissions.slice(0, 5).map((submission) => (
+                      <button
+                        key={submission.id}
+                        onClick={() => setSelectedReviewSubmissionId(String(submission.id))}
+                        className={`w-full text-left text-[11px] rounded border p-2 ${
+                          String(submission.id) === selectedReviewSubmissionId
+                            ? 'border-blue-300 bg-blue-50 dark:bg-slate-800'
+                            : 'border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        <div className="font-semibold">#{submission.id} - {submission.status}</div>
+                        <div className="text-slate-500">
+                          Bundle: {submission.bundleId} | Stage: {submission.stage}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -2171,6 +2661,18 @@ const AnalyticsStudio: React.FC = () => {
                   placeholder="Anchor (row/metric optional)"
                   className="w-full px-2 py-1 text-xs rounded border"
                 />
+                <select
+                  value={newThreadOwnerId}
+                  onChange={(e) => setNewThreadOwnerId(e.target.value)}
+                  className="w-full px-2 py-1 text-xs rounded border"
+                >
+                  <option value="">Thread owner (optional)</option>
+                  {mentionableUsers.map((user) => (
+                    <option key={user.id} value={String(user.id)}>
+                      {user.fullName || user.email} ({user.role})
+                    </option>
+                  ))}
+                </select>
                 <textarea
                   value={newThreadContent}
                   onChange={(e) => setNewThreadContent(e.target.value)}
@@ -2178,6 +2680,24 @@ const AnalyticsStudio: React.FC = () => {
                   className="w-full h-16 px-2 py-1 text-xs rounded border"
                 />
                 <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => applyMentionPresetToThreadComposer('manager')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Mention Managers
+                  </button>
+                  <button
+                    onClick={() => applyMentionPresetToThreadComposer('exec')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Mention Execs
+                  </button>
+                  <button
+                    onClick={() => applyMentionPresetToThreadComposer('owner_group')}
+                    className="px-2 py-1 text-[11px] rounded border"
+                  >
+                    Mention Owners
+                  </button>
                   <button onClick={createThread} disabled={!selectedRoomId || !newThreadContent.trim()} className="px-3 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
                     Start Thread
                   </button>
@@ -2207,11 +2727,21 @@ const AnalyticsStudio: React.FC = () => {
                         }`}
                       >
                         <div className="font-semibold truncate">{thread.artifactTitle || 'Room discussion'}</div>
+                        {thread.anchor?.ownerHandle && (
+                          <div className="text-[10px] text-indigo-600 truncate">
+                            Owner: {thread.anchor.ownerHandle}
+                          </div>
+                        )}
+                        {thread.anchor?.label && (
+                          <div className="text-[10px] text-slate-500 truncate">
+                            Anchor: {String(thread.anchor.label)}
+                          </div>
+                        )}
                         <div className="text-[10px] text-slate-500 truncate">
                           {thread.lastCommentContent || 'No messages yet'}
                         </div>
                         <div className="text-[10px] text-slate-400 mt-1">
-                          {thread.commentCount} comment(s)
+                          {thread.commentCount} comment(s) | {thread.resolution?.status || 'open'}
                         </div>
                       </button>
                     ))}
@@ -2237,6 +2767,20 @@ const AnalyticsStudio: React.FC = () => {
                           </button>
                         </div>
                       </div>
+                      <div className="rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-500 space-y-1">
+                        <div>Anchor label: {selectedThread.anchor?.label ? String(selectedThread.anchor.label) : 'none'}</div>
+                        <div>Assigned owner: {selectedThread.anchor?.ownerHandle || selectedThread.anchor?.ownerName || 'none'}</div>
+                        <div>
+                          Resolution timeline:
+                          {' '}
+                          {selectedThread.resolution?.resolvedAt
+                            ? new Date(selectedThread.resolution.resolvedAt).toLocaleString()
+                            : 'not resolved yet'}
+                        </div>
+                        {selectedThread.resolution?.resolutionNote && (
+                          <div>Resolution note: {selectedThread.resolution.resolutionNote}</div>
+                        )}
+                      </div>
                       <div className="max-h-56 overflow-auto space-y-2">
                         {threadComments.map((comment) => (
                           <div key={comment.id} className="text-xs border rounded p-2">
@@ -2254,6 +2798,17 @@ const AnalyticsStudio: React.FC = () => {
                         placeholder="Reply to thread..."
                         className="w-full h-14 px-2 py-1 text-xs rounded border"
                       />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button onClick={() => applyMentionPresetToThreadReply('manager')} className="px-2 py-1 text-[11px] rounded border">
+                          Mention Managers
+                        </button>
+                        <button onClick={() => applyMentionPresetToThreadReply('exec')} className="px-2 py-1 text-[11px] rounded border">
+                          Mention Execs
+                        </button>
+                        <button onClick={() => applyMentionPresetToThreadReply('owner_group')} className="px-2 py-1 text-[11px] rounded border">
+                          Mention Owners
+                        </button>
+                      </div>
                       <button
                         onClick={addCommentToThread}
                         disabled={!newThreadComment.trim()}
