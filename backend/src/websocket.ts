@@ -12,6 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { query } from './db.js';
 import jwt from 'jsonwebtoken';
 import { config } from './config.js';
+import { setRealtimeServer } from './realtime.js';
 
 // Types
 interface Message {
@@ -56,6 +57,41 @@ export function setupWebSocket(httpServer: any) {
     const userSockets = new Map<string, Set<string>>(); // userId -> Set<socketId>
     const roomParticipants = new Map<string, Set<string>>(); // roomId -> Set<userId>
 
+    setRealtimeServer(io);
+
+    const canAccessWorkspace = async (workspaceId: number, userId: string): Promise<boolean> => {
+        if (!Number.isFinite(workspaceId) || workspaceId <= 0) return false;
+        const result = await query(
+            `
+            SELECT w.id
+            FROM workspaces w
+            LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
+            WHERE w.id = $1
+              AND (w.user_id = $2 OR wm.user_id = $2)
+            LIMIT 1
+            `,
+            [workspaceId, userId]
+        );
+        return result.rows.length > 0;
+    };
+
+    const canAccessDecisionRoom = async (workspaceId: number, roomId: number, userId: string): Promise<boolean> => {
+        if (!Number.isFinite(roomId) || roomId <= 0) return false;
+        if (!(await canAccessWorkspace(workspaceId, userId))) return false;
+        const result = await query(
+            `
+            SELECT id
+            FROM analysis_rooms
+            WHERE id = $1
+              AND workspace_id = $2
+              AND is_archived = false
+            LIMIT 1
+            `,
+            [roomId, workspaceId]
+        );
+        return result.rows.length > 0;
+    };
+
     io.on('connection', (socket: Socket) => {
         console.log(`[WS] Client connected: ${socket.id}`);
 
@@ -98,6 +134,8 @@ export function setupWebSocket(httpServer: any) {
             socket.data.userId = authedUserId;
             socket.data.userName = userName;
 
+            socket.join(`user:${authedUserId}`);
+
             // Track user sockets
             if (!userSockets.has(authedUserId)) {
                 userSockets.set(authedUserId, new Set());
@@ -111,6 +149,77 @@ export function setupWebSocket(httpServer: any) {
             });
 
             console.log(`[WS] User authenticated: ${userName} (${authedUserId})`);
+        });
+
+        socket.on('join-workspace', async (workspaceIdRaw: string | number) => {
+            try {
+                if (!socket.data.userId) {
+                    socket.emit('auth-error', { error: 'Not authenticated' });
+                    return;
+                }
+
+                const workspaceId = Number(workspaceIdRaw);
+                if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
+                    socket.emit('workspace-error', { error: 'Invalid workspace id' });
+                    return;
+                }
+
+                const allowed = await canAccessWorkspace(workspaceId, socket.data.userId);
+                if (!allowed) {
+                    socket.emit('workspace-error', { error: 'Workspace access denied' });
+                    return;
+                }
+
+                socket.join(`workspace:${workspaceId}`);
+                socket.emit('workspace-joined', { workspaceId });
+            } catch (err) {
+                console.error('[WS] join-workspace failed:', err);
+                socket.emit('workspace-error', { error: 'Failed to join workspace' });
+            }
+        });
+
+        socket.on('leave-workspace', (workspaceIdRaw: string | number) => {
+            const workspaceId = Number(workspaceIdRaw);
+            if (!Number.isFinite(workspaceId) || workspaceId <= 0) return;
+            socket.leave(`workspace:${workspaceId}`);
+            socket.emit('workspace-left', { workspaceId });
+        });
+
+        socket.on('join-decision-room', async (payload: { workspaceId: string | number; roomId: string | number }) => {
+            try {
+                if (!socket.data.userId) {
+                    socket.emit('auth-error', { error: 'Not authenticated' });
+                    return;
+                }
+
+                const workspaceId = Number(payload?.workspaceId);
+                const roomId = Number(payload?.roomId);
+                if (!Number.isFinite(workspaceId) || workspaceId <= 0 || !Number.isFinite(roomId) || roomId <= 0) {
+                    socket.emit('room-error', { error: 'Invalid room reference' });
+                    return;
+                }
+
+                const allowed = await canAccessDecisionRoom(workspaceId, roomId, socket.data.userId);
+                if (!allowed) {
+                    socket.emit('room-error', { error: 'Decision room access denied' });
+                    return;
+                }
+
+                socket.join(`workspace:${workspaceId}`);
+                socket.join(`decision-room:${workspaceId}:${roomId}`);
+                socket.emit('decision-room-joined', { workspaceId, roomId });
+            } catch (err) {
+                console.error('[WS] join-decision-room failed:', err);
+                socket.emit('room-error', { error: 'Failed to join decision room' });
+            }
+        });
+
+        socket.on('leave-decision-room', (payload: { workspaceId: string | number; roomId: string | number }) => {
+            const workspaceId = Number(payload?.workspaceId);
+            const roomId = Number(payload?.roomId);
+            if (!Number.isFinite(workspaceId) || workspaceId <= 0 || !Number.isFinite(roomId) || roomId <= 0) return;
+            socket.leave(`decision-room:${workspaceId}:${roomId}`);
+            socket.emit('decision-room-left', { workspaceId, roomId });
         });
 
         // --- Chat ---

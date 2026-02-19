@@ -39,6 +39,41 @@ describe('Studio MVP API Contracts', () => {
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/status/draft', { persist: true });
   });
 
+  it('calls room threads endpoint', () => {
+    studioAPI.listThreads('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/threads');
+  });
+
+  it('calls create thread endpoint', () => {
+    studioAPI.createThread('12', '77', { artifactId: 11, content: 'Need review @ops' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/threads', { artifactId: 11, content: 'Need review @ops' });
+  });
+
+  it('calls thread comment endpoint', () => {
+    studioAPI.addThreadComment('12', '77', 99, { content: 'Approved' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/threads/99/comments', { content: 'Approved' });
+  });
+
+  it('calls room approvals endpoint', () => {
+    studioAPI.listApprovals('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/approvals');
+  });
+
+  it('calls decision checkpoints endpoint', () => {
+    studioAPI.listDecisionCheckpoints('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/decision-checkpoints');
+  });
+
+  it('calls create decision checkpoint endpoint', () => {
+    studioAPI.createDecisionCheckpoint('12', '77', { decision: 'Approve plan', artifactId: 55 });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/decision-checkpoints', { decision: 'Approve plan', artifactId: 55 });
+  });
+
+  it('calls respond decision checkpoint endpoint', () => {
+    studioAPI.respondDecisionCheckpoint('12', '77', 5, { decision: 'approved' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/decision-checkpoints/5/respond', { decision: 'approved' });
+  });
+
   it('calls MVP KPI snapshot endpoint', () => {
     analyticsAPI.getMvpKpis('12', 45);
     expect(mockGet).toHaveBeenCalledWith('/analytics/workspaces/12/mvp-kpis', { params: { days: 45 } });
@@ -52,4 +87,3 @@ describe('Studio MVP API Contracts', () => {
     });
   });
 });
-

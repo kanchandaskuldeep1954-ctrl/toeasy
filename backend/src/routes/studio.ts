@@ -4,6 +4,7 @@ import { authenticateToken, AuthRequest } from '../middleware/auth.js';
 import { checkSubscription } from '../middleware/subscription.js';
 import { SafeExecutor } from '../utils/safeExecutor.js';
 import { GroqService } from '../services/groq.service.js';
+import { emitToDecisionRoom, emitToUser } from '../realtime.js';
 
 const router = Router();
 
@@ -95,6 +96,14 @@ interface SlackDeliveryResult {
   destination: string;
   messageTs?: string | null;
   error?: string;
+}
+
+interface MentionableUser {
+  id: number;
+  fullName: string;
+  email: string;
+  role: string;
+  handle: string;
 }
 
 const ARTIFACT_TYPES = new Set([
@@ -606,6 +615,377 @@ async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]) 
   };
 }
 
+function normalizeMentionToken(token: string): string {
+  return String(token || '')
+    .trim()
+    .replace(/^@+/, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]/g, '');
+}
+
+function extractMentionHandles(content: string): string[] {
+  const matches = String(content || '').match(/@([a-zA-Z0-9._-]{2,64})/g) || [];
+  const unique = new Set<string>();
+  matches.forEach((raw) => {
+    const normalized = normalizeMentionToken(raw);
+    if (normalized) unique.add(normalized);
+  });
+  return Array.from(unique);
+}
+
+async function listMentionableWorkspaceUsers(workspaceId: number): Promise<MentionableUser[]> {
+  const result = await query(
+    `
+    SELECT u.id, u.full_name, u.email, wm.role
+    FROM workspace_members wm
+    JOIN users u ON u.id = wm.user_id
+    WHERE wm.workspace_id = $1
+    UNION
+    SELECT u.id, u.full_name, u.email, 'admin' AS role
+    FROM workspaces w
+    JOIN users u ON u.id = w.user_id
+    WHERE w.id = $1
+    `,
+    [workspaceId]
+  );
+
+  const deduped = new Map<number, MentionableUser>();
+  result.rows.forEach((row) => {
+    const id = Number(row.id);
+    const email = String(row.email || '');
+    const emailLocal = email.split('@')[0] || `user${id}`;
+    const fullName = String(row.full_name || '').trim() || emailLocal;
+    const role = String(row.role || 'viewer');
+    const existing = deduped.get(id);
+
+    if (!existing || (existing.role !== 'admin' && role === 'admin')) {
+      deduped.set(id, {
+        id,
+        fullName,
+        email,
+        role,
+        handle: `@${emailLocal.toLowerCase()}`
+      });
+    }
+  });
+
+  return Array.from(deduped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName));
+}
+
+async function resolveMentionUserIds(workspaceId: number, content: string): Promise<number[]> {
+  const handles = extractMentionHandles(content);
+  if (!handles.length) return [];
+
+  const mentionableUsers = await listMentionableWorkspaceUsers(workspaceId);
+  const handleToUserId = new Map<string, number>();
+
+  mentionableUsers.forEach((user) => {
+    const emailLocal = normalizeMentionToken(user.email.split('@')[0] || '');
+    const fullNameRaw = String(user.fullName || '').toLowerCase();
+    const compactName = normalizeMentionToken(fullNameRaw.replace(/\s+/g, ''));
+    const nameTokens = fullNameRaw
+      .split(/[^a-z0-9._-]+/g)
+      .map(normalizeMentionToken)
+      .filter(Boolean);
+
+    [emailLocal, compactName, ...nameTokens]
+      .filter(Boolean)
+      .forEach((token) => {
+        if (!handleToUserId.has(token)) {
+          handleToUserId.set(token, user.id);
+        }
+      });
+  });
+
+  const mentionIds = new Set<number>();
+  handles.forEach((handle) => {
+    const mentionId = handleToUserId.get(handle);
+    if (mentionId) mentionIds.add(mentionId);
+  });
+
+  return Array.from(mentionIds);
+}
+
+async function getRoomThread(workspaceId: number, roomId: number, threadId: number) {
+  const result = await query(
+    `
+    SELECT id, workspace_id, room_id, artifact_id, anchor, created_by, created_at, updated_at
+    FROM comment_threads
+    WHERE id = $1 AND workspace_id = $2 AND room_id = $3
+    LIMIT 1
+    `,
+    [threadId, workspaceId, roomId]
+  );
+  return result.rows[0] || null;
+}
+
+async function listRoomThreads(workspaceId: number, roomId: number) {
+  const result = await query(
+    `
+    SELECT
+      t.id,
+      t.workspace_id,
+      t.room_id,
+      t.artifact_id,
+      t.anchor,
+      t.created_by,
+      t.created_at,
+      t.updated_at,
+      a.title AS artifact_title,
+      a.artifact_type,
+      u.full_name AS created_by_name,
+      u.email AS created_by_email,
+      (
+        SELECT COUNT(*)::int
+        FROM comments c
+        WHERE c.thread_id = t.id
+      ) AS comment_count,
+      (
+        SELECT c.created_at
+        FROM comments c
+        WHERE c.thread_id = t.id
+        ORDER BY c.created_at DESC
+        LIMIT 1
+      ) AS last_comment_at,
+      (
+        SELECT c.content
+        FROM comments c
+        WHERE c.thread_id = t.id
+        ORDER BY c.created_at DESC
+        LIMIT 1
+      ) AS last_comment_content
+    FROM comment_threads t
+    LEFT JOIN artifacts a ON a.id = t.artifact_id
+    LEFT JOIN users u ON u.id = t.created_by
+    WHERE t.workspace_id = $1
+      AND t.room_id = $2
+    ORDER BY COALESCE(
+      (
+        SELECT c.created_at
+        FROM comments c
+        WHERE c.thread_id = t.id
+        ORDER BY c.created_at DESC
+        LIMIT 1
+      ),
+      t.created_at
+    ) DESC
+    LIMIT 200
+    `,
+    [workspaceId, roomId]
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    workspaceId: Number(row.workspace_id),
+    roomId: Number(row.room_id),
+    artifactId: row.artifact_id ? Number(row.artifact_id) : null,
+    artifactTitle: row.artifact_title || null,
+    artifactType: row.artifact_type || null,
+    anchor: parseJsonMaybe(row.anchor, {}),
+    createdBy: row.created_by ? Number(row.created_by) : null,
+    createdByName: row.created_by_name || row.created_by_email || `User ${row.created_by || ''}`,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    commentCount: Number(row.comment_count || 0),
+    lastCommentAt: row.last_comment_at || null,
+    lastCommentContent: row.last_comment_content || null
+  }));
+}
+
+async function listThreadComments(threadId: number) {
+  const result = await query(
+    `
+    SELECT
+      c.id,
+      c.thread_id,
+      c.user_id,
+      c.content,
+      c.mentions,
+      c.created_at,
+      c.updated_at,
+      u.full_name,
+      u.email
+    FROM comments c
+    JOIN users u ON u.id = c.user_id
+    WHERE c.thread_id = $1
+    ORDER BY c.created_at ASC
+    LIMIT 500
+    `,
+    [threadId]
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    threadId: Number(row.thread_id),
+    userId: Number(row.user_id),
+    authorName: row.full_name || row.email || `User ${row.user_id}`,
+    authorEmail: row.email || null,
+    content: row.content || '',
+    mentions: parseJsonMaybe<number[]>(row.mentions, []).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+async function listRoomPendingApprovals(workspaceId: number, roomId: number) {
+  const result = await query(
+    `
+    SELECT
+      ar.id,
+      ar.room_id,
+      ar.automation_run_id,
+      ar.risk_level,
+      ar.status,
+      ar.reason,
+      ar.created_at,
+      ar.requested_by,
+      requester.full_name AS requested_by_name,
+      requester.email AS requested_by_email,
+      run.status AS run_status,
+      policy.action_type AS run_action_type,
+      policy.name AS policy_name
+    FROM approval_requests ar
+    LEFT JOIN users requester ON requester.id = ar.requested_by
+    LEFT JOIN automation_runs run ON run.id = ar.automation_run_id
+    LEFT JOIN automation_policies policy ON policy.id = run.automation_policy_id
+    WHERE ar.workspace_id = $1
+      AND (ar.room_id = $2 OR ar.room_id IS NULL)
+      AND ar.status = 'pending'
+    ORDER BY ar.created_at DESC
+    LIMIT 100
+    `,
+    [workspaceId, roomId]
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    roomId: row.room_id ? Number(row.room_id) : null,
+    automationRunId: row.automation_run_id ? Number(row.automation_run_id) : null,
+    riskLevel: String(row.risk_level || 'medium'),
+    status: String(row.status || 'pending'),
+    reason: row.reason || null,
+    requestedBy: row.requested_by ? Number(row.requested_by) : null,
+    requestedByName: row.requested_by_name || row.requested_by_email || 'Unknown',
+    runStatus: row.run_status || null,
+    runActionType: row.run_action_type || null,
+    policyName: row.policy_name || null,
+    createdAt: row.created_at
+  }));
+}
+
+async function resolveUserDisplayName(userId: string | number): Promise<string> {
+  const result = await query(
+    `SELECT full_name, email FROM users WHERE id = $1 LIMIT 1`,
+    [userId]
+  );
+  if (result.rows.length === 0) return `User ${userId}`;
+  const row = result.rows[0];
+  return String(row.full_name || row.email || `User ${userId}`);
+}
+
+async function createMentionNotifications(params: {
+  workspaceId: number;
+  roomId: number;
+  threadId: number;
+  artifactTitle?: string | null;
+  commentContent: string;
+  mentionedUserIds: number[];
+  actorUserId: string;
+}) {
+  const recipients = Array.from(new Set(params.mentionedUserIds.map((id) => Number(id))))
+    .filter((id) => Number.isFinite(id))
+    .filter((id) => String(id) !== String(params.actorUserId));
+
+  if (!recipients.length) return;
+
+  const actorName = await resolveUserDisplayName(params.actorUserId);
+  const contextLabel = params.artifactTitle ? `artifact "${params.artifactTitle}"` : 'room discussion';
+  const messagePreview = String(params.commentContent || '').replace(/\s+/g, ' ').trim();
+  const clippedPreview = messagePreview.length > 140 ? `${messagePreview.slice(0, 137)}...` : messagePreview;
+
+  for (const userId of recipients) {
+    try {
+      const insertResult = await query(
+        `
+        INSERT INTO notifications (user_id, workspace_id, title, message, type, is_read, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+        RETURNING *
+        `,
+        [
+          userId,
+          params.workspaceId,
+          'Decision Room mention',
+          `${actorName} mentioned you in ${contextLabel} (thread #${params.threadId}): ${clippedPreview}`,
+          'mention'
+        ]
+      );
+
+      const notification = insertResult.rows[0];
+      emitToUser(userId, 'notification-created', {
+        ...notification,
+        roomId: params.roomId,
+        threadId: params.threadId
+      });
+    } catch (err) {
+      console.warn('Mention notification skipped:', err);
+    }
+  }
+}
+
+async function listRoomDecisionCheckpoints(workspaceId: number, roomId: number) {
+  const result = await query(
+    `
+    SELECT
+      dr.id,
+      dr.workspace_id,
+      dr.room_id,
+      dr.artifact_id,
+      dr.decision,
+      dr.rationale,
+      dr.status,
+      dr.created_by,
+      dr.decided_by,
+      dr.decided_at,
+      dr.created_at,
+      dr.updated_at,
+      creator.full_name AS created_by_name,
+      creator.email AS created_by_email,
+      decider.full_name AS decided_by_name,
+      decider.email AS decided_by_email,
+      a.title AS artifact_title,
+      a.artifact_type
+    FROM decision_records dr
+    LEFT JOIN users creator ON creator.id = dr.created_by
+    LEFT JOIN users decider ON decider.id = dr.decided_by
+    LEFT JOIN artifacts a ON a.id = dr.artifact_id
+    WHERE dr.workspace_id = $1
+      AND dr.room_id = $2
+    ORDER BY dr.created_at DESC
+    LIMIT 200
+    `,
+    [workspaceId, roomId]
+  );
+
+  return result.rows.map((row) => ({
+    id: Number(row.id),
+    workspaceId: Number(row.workspace_id),
+    roomId: Number(row.room_id),
+    artifactId: row.artifact_id ? Number(row.artifact_id) : null,
+    artifactTitle: row.artifact_title || null,
+    artifactType: row.artifact_type || null,
+    decision: String(row.decision || ''),
+    rationale: row.rationale || null,
+    status: String(row.status || 'pending'),
+    createdBy: row.created_by ? Number(row.created_by) : null,
+    createdByName: row.created_by_name || row.created_by_email || 'Unknown',
+    decidedBy: row.decided_by ? Number(row.decided_by) : null,
+    decidedByName: row.decided_by_name || row.decided_by_email || null,
+    decidedAt: row.decided_at || null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
 async function recordAnalyticsEvent(input: AnalyticsEventInput) {
   try {
     await query(
@@ -1033,6 +1413,521 @@ router.get('/:workspaceId/rooms/:roomId/state', async (req: WorkspaceRequest, re
   } catch (err) {
     console.error('Fetch room state failed:', err);
     return res.status(500).json({ error: 'Failed to fetch room state' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/threads', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const [threads, mentionableUsers] = await Promise.all([
+      listRoomThreads(workspaceId, roomId),
+      listMentionableWorkspaceUsers(workspaceId)
+    ]);
+
+    return res.json({
+      roomId,
+      threads,
+      mentionableUsers
+    });
+  } catch (err) {
+    console.error('List room threads failed:', err);
+    return res.status(500).json({ error: 'Failed to load room threads' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/threads', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifactIdRaw = req.body?.artifactId;
+    const artifactId = artifactIdRaw === null || artifactIdRaw === undefined || artifactIdRaw === ''
+      ? null
+      : Number(artifactIdRaw);
+    const anchor = req.body?.anchor && typeof req.body.anchor === 'object' ? req.body.anchor : {};
+    const content = String(req.body?.content || '').trim();
+
+    if (!content) {
+      return res.status(400).json({ error: 'content is required to create a thread' });
+    }
+
+    if (artifactId !== null) {
+      if (!Number.isFinite(artifactId) || artifactId <= 0) {
+        return res.status(400).json({ error: 'artifactId must be a positive number' });
+      }
+
+      const artifactResult = await query(
+        `
+        SELECT id
+        FROM artifacts
+        WHERE id = $1 AND workspace_id = $2 AND room_id = $3
+        LIMIT 1
+        `,
+        [artifactId, workspaceId, roomId]
+      );
+      if (artifactResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Referenced artifact not found in room' });
+      }
+    }
+
+    const threadResult = await query(
+      `
+      INSERT INTO comment_threads (workspace_id, room_id, artifact_id, anchor, created_by)
+      VALUES ($1, $2, $3, $4, $5)
+      RETURNING id, workspace_id, room_id, artifact_id, anchor, created_by, created_at, updated_at
+      `,
+      [workspaceId, roomId, artifactId, JSON.stringify(anchor), req.user!.id]
+    );
+    const thread = threadResult.rows[0];
+
+    const mentionIds = await resolveMentionUserIds(workspaceId, content);
+    const commentResult = await query(
+      `
+      INSERT INTO comments (thread_id, user_id, content, mentions)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, thread_id, user_id, content, mentions, created_at, updated_at
+      `,
+      [thread.id, req.user!.id, content, JSON.stringify(mentionIds)]
+    );
+
+    await query(
+      `
+      UPDATE comment_threads
+      SET updated_at = NOW()
+      WHERE id = $1
+      `,
+      [thread.id]
+    );
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_thread_created',
+      metadata: {
+        threadId: Number(thread.id),
+        artifactId: artifactId || null,
+        mentionCount: mentionIds.length
+      }
+    });
+
+    const [threadList, comments] = await Promise.all([
+      listRoomThreads(workspaceId, roomId),
+      listThreadComments(Number(thread.id))
+    ]);
+    const fullThread = threadList.find((entry) => entry.id === Number(thread.id)) || threadList[0] || {
+      id: Number(thread.id),
+      workspaceId,
+      roomId,
+      artifactId,
+      artifactTitle: null,
+      artifactType: null,
+      anchor: parseJsonMaybe(thread.anchor, {}),
+      createdBy: Number(thread.created_by),
+      createdByName: 'Unknown',
+      createdAt: thread.created_at,
+      updatedAt: thread.updated_at,
+      commentCount: 1,
+      lastCommentAt: commentResult.rows[0]?.created_at || thread.created_at,
+      lastCommentContent: content
+    };
+
+    await createMentionNotifications({
+      workspaceId,
+      roomId,
+      threadId: Number(thread.id),
+      artifactTitle: fullThread.artifactTitle,
+      commentContent: content,
+      mentionedUserIds: mentionIds,
+      actorUserId: req.user!.id
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:thread-created', {
+      roomId,
+      thread: fullThread,
+      comments
+    });
+
+    return res.status(201).json({
+      thread: fullThread,
+      comments
+    });
+  } catch (err) {
+    console.error('Create room thread failed:', err);
+    return res.status(500).json({ error: 'Failed to create room thread' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/threads/:threadId/comments', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const threadId = Number(req.params.threadId);
+
+    const thread = await getRoomThread(workspaceId, roomId, threadId);
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+
+    const comments = await listThreadComments(threadId);
+    return res.json({
+      threadId,
+      comments
+    });
+  } catch (err) {
+    console.error('List thread comments failed:', err);
+    return res.status(500).json({ error: 'Failed to load thread comments' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/threads/:threadId/comments', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const threadId = Number(req.params.threadId);
+    const content = String(req.body?.content || '').trim();
+    if (!content) {
+      return res.status(400).json({ error: 'content is required' });
+    }
+
+    const thread = await getRoomThread(workspaceId, roomId, threadId);
+    if (!thread) {
+      return res.status(404).json({ error: 'Thread not found' });
+    }
+
+    const mentionIds = await resolveMentionUserIds(workspaceId, content);
+    const commentResult = await query(
+      `
+      INSERT INTO comments (thread_id, user_id, content, mentions)
+      VALUES ($1, $2, $3, $4)
+      RETURNING id, thread_id, user_id, content, mentions, created_at, updated_at
+      `,
+      [threadId, req.user!.id, content, JSON.stringify(mentionIds)]
+    );
+
+    await query(
+      `
+      UPDATE comment_threads
+      SET updated_at = NOW()
+      WHERE id = $1
+      `,
+      [threadId]
+    );
+
+    const commentRow = commentResult.rows[0];
+    const authorResult = await query(
+      `SELECT full_name, email FROM users WHERE id = $1 LIMIT 1`,
+      [req.user!.id]
+    );
+    const author = authorResult.rows[0] || {};
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_comment_added',
+      metadata: {
+        threadId,
+        commentId: Number(commentRow.id),
+        mentionCount: mentionIds.length
+      }
+    });
+
+    const threadList = await listRoomThreads(workspaceId, roomId);
+    const threadSummary = threadList.find((entry) => entry.id === threadId) || null;
+
+    await createMentionNotifications({
+      workspaceId,
+      roomId,
+      threadId,
+      artifactTitle: threadSummary?.artifactTitle || null,
+      commentContent: commentRow.content,
+      mentionedUserIds: mentionIds,
+      actorUserId: req.user!.id
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:comment-added', {
+      roomId,
+      threadId,
+      comment: {
+        id: Number(commentRow.id),
+        threadId: Number(commentRow.thread_id),
+        userId: Number(commentRow.user_id),
+        authorName: author.full_name || author.email || `User ${commentRow.user_id}`,
+        authorEmail: author.email || null,
+        content: commentRow.content,
+        mentions: parseJsonMaybe<number[]>(commentRow.mentions, []).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+        createdAt: commentRow.created_at,
+        updatedAt: commentRow.updated_at
+      }
+    });
+
+    return res.status(201).json({
+      comment: {
+        id: Number(commentRow.id),
+        threadId: Number(commentRow.thread_id),
+        userId: Number(commentRow.user_id),
+        authorName: author.full_name || author.email || `User ${commentRow.user_id}`,
+        authorEmail: author.email || null,
+        content: commentRow.content,
+        mentions: parseJsonMaybe<number[]>(commentRow.mentions, []).map((id) => Number(id)).filter((id) => Number.isFinite(id)),
+        createdAt: commentRow.created_at,
+        updatedAt: commentRow.updated_at
+      }
+    });
+  } catch (err) {
+    console.error('Create thread comment failed:', err);
+    return res.status(500).json({ error: 'Failed to create thread comment' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/approvals', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const approvals = await listRoomPendingApprovals(workspaceId, roomId);
+    return res.json({
+      roomId,
+      approvals
+    });
+  } catch (err) {
+    console.error('List room approvals failed:', err);
+    return res.status(500).json({ error: 'Failed to load room approvals' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/decision-checkpoints', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const checkpoints = await listRoomDecisionCheckpoints(workspaceId, roomId);
+    return res.json({
+      roomId,
+      checkpoints
+    });
+  } catch (err) {
+    console.error('List decision checkpoints failed:', err);
+    return res.status(500).json({ error: 'Failed to load decision checkpoints' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/decision-checkpoints', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const decision = String(req.body?.decision || '').trim();
+    if (!decision) {
+      return res.status(400).json({ error: 'decision is required' });
+    }
+
+    const rationale = req.body?.rationale ? String(req.body.rationale).trim() : null;
+    const artifactIdRaw = req.body?.artifactId;
+    const artifactId = artifactIdRaw === null || artifactIdRaw === undefined || artifactIdRaw === ''
+      ? null
+      : Number(artifactIdRaw);
+
+    if (artifactId !== null) {
+      if (!Number.isFinite(artifactId) || artifactId <= 0) {
+        return res.status(400).json({ error: 'artifactId must be a positive number' });
+      }
+
+      const artifactResult = await query(
+        `SELECT id FROM artifacts WHERE id = $1 AND workspace_id = $2 AND room_id = $3 LIMIT 1`,
+        [artifactId, workspaceId, roomId]
+      );
+      if (artifactResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Referenced artifact not found in room' });
+      }
+    }
+
+    const insertResult = await query(
+      `
+      INSERT INTO decision_records (workspace_id, room_id, artifact_id, decision, rationale, status, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, 'pending', $6, NOW(), NOW())
+      RETURNING id
+      `,
+      [workspaceId, roomId, artifactId, decision, rationale, req.user!.id]
+    );
+
+    const checkpointId = Number(insertResult.rows[0].id);
+    const checkpoints = await listRoomDecisionCheckpoints(workspaceId, roomId);
+    const checkpoint = checkpoints.find((entry) => entry.id === checkpointId) || null;
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_checkpoint_created',
+      metadata: {
+        checkpointId,
+        artifactId: artifactId || null
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:checkpoint-created', {
+      roomId,
+      checkpoint
+    });
+
+    return res.status(201).json({
+      checkpoint
+    });
+  } catch (err) {
+    console.error('Create decision checkpoint failed:', err);
+    return res.status(500).json({ error: 'Failed to create decision checkpoint' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/decision-checkpoints/:checkpointId/respond', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const checkpointId = Number(req.params.checkpointId);
+    const decisionRaw = String(req.body?.decision || req.body?.status || '').toLowerCase();
+    const nextStatus = decisionRaw === 'approved' ? 'approved' : decisionRaw === 'rejected' ? 'rejected' : null;
+
+    if (!nextStatus) {
+      return res.status(400).json({ error: "decision must be 'approved' or 'rejected'" });
+    }
+
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const existingResult = await query(
+      `
+      SELECT id, status, created_by, decision
+      FROM decision_records
+      WHERE id = $1 AND workspace_id = $2 AND room_id = $3
+      LIMIT 1
+      `,
+      [checkpointId, workspaceId, roomId]
+    );
+    if (existingResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Decision checkpoint not found' });
+    }
+
+    const existing = existingResult.rows[0];
+    if (String(existing.status) !== 'pending') {
+      return res.status(400).json({ error: `Decision checkpoint is already ${existing.status}` });
+    }
+
+    const responseNote = req.body?.note ? String(req.body.note).trim() : '';
+    const updatedRationale = responseNote
+      ? `${existing.decision}\n\nReviewer note (${nextStatus}): ${responseNote}`
+      : null;
+
+    await query(
+      `
+      UPDATE decision_records
+      SET status = $1,
+          rationale = COALESCE($2, rationale),
+          decided_by = $3,
+          decided_at = NOW(),
+          updated_at = NOW()
+      WHERE id = $4
+      `,
+      [nextStatus, updatedRationale, req.user!.id, checkpointId]
+    );
+
+    const checkpoints = await listRoomDecisionCheckpoints(workspaceId, roomId);
+    const checkpoint = checkpoints.find((entry) => entry.id === checkpointId) || null;
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_checkpoint_responded',
+      metadata: {
+        checkpointId,
+        status: nextStatus
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:checkpoint-updated', {
+      roomId,
+      checkpoint
+    });
+
+    const creatorId = Number(existing.created_by || 0);
+    if (creatorId > 0 && String(creatorId) !== String(req.user!.id)) {
+      try {
+        const reviewerName = await resolveUserDisplayName(req.user!.id);
+        const notificationInsert = await query(
+          `
+          INSERT INTO notifications (user_id, workspace_id, title, message, type, is_read, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+          RETURNING *
+          `,
+          [
+            creatorId,
+            workspaceId,
+            'Decision checkpoint updated',
+            `${reviewerName} ${nextStatus} your decision checkpoint in room "${room.name}".`,
+            'decision'
+          ]
+        );
+        emitToUser(creatorId, 'notification-created', {
+          ...notificationInsert.rows[0],
+          roomId,
+          checkpointId
+        });
+      } catch (notifyError) {
+        console.warn('Decision checkpoint notification skipped:', notifyError);
+      }
+    }
+
+    return res.json({
+      checkpoint
+    });
+  } catch (err) {
+    console.error('Respond decision checkpoint failed:', err);
+    return res.status(500).json({ error: 'Failed to respond decision checkpoint' });
   }
 });
 
@@ -2207,6 +3102,13 @@ router.post('/:workspaceId/automations/:automationId/execute', async (req: Works
       [run.id]
     );
 
+    if (approvalRequest && policy.room_id) {
+      emitToDecisionRoom(workspaceId, Number(policy.room_id), 'decision-room:approval-created', {
+        roomId: Number(policy.room_id),
+        approval: approvalRequest
+      });
+    }
+
     return res.status(201).json({
       run: awaiting.rows[0],
       approvalRequest
@@ -2283,6 +3185,40 @@ router.post('/:workspaceId/approvals/:approvalId/respond', async (req: Workspace
         [runStatus, JSON.stringify(output), decision === 'rejected' ? 'Rejected by approver' : null, approval.automation_run_id]
       );
       updatedRun = runUpdate.rows[0] || null;
+    }
+
+    if (approval.room_id) {
+      emitToDecisionRoom(workspaceId, Number(approval.room_id), 'decision-room:approval-updated', {
+        roomId: Number(approval.room_id),
+        approval: updateApproval.rows[0]
+      });
+    }
+
+    if (approval.requested_by && String(approval.requested_by) !== String(req.user!.id)) {
+      try {
+        const responderName = await resolveUserDisplayName(req.user!.id);
+        const notificationInsert = await query(
+          `
+          INSERT INTO notifications (user_id, workspace_id, title, message, type, is_read, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, false, NOW(), NOW())
+          RETURNING *
+          `,
+          [
+            Number(approval.requested_by),
+            workspaceId,
+            'Approval request updated',
+            `${responderName} ${decision} your approval request.`,
+            'approval'
+          ]
+        );
+        emitToUser(Number(approval.requested_by), 'notification-created', {
+          ...notificationInsert.rows[0],
+          roomId: approval.room_id ? Number(approval.room_id) : null,
+          approvalId
+        });
+      } catch (notifyError) {
+        console.warn('Approval notification skipped:', notifyError);
+      }
     }
 
     return res.json({

@@ -310,6 +310,77 @@ export interface StatusDraft {
   };
 }
 
+export interface RoomMentionableUser {
+  id: number;
+  fullName: string;
+  email: string;
+  role: string;
+  handle: string;
+}
+
+export interface RoomThread {
+  id: number;
+  workspaceId: number;
+  roomId: number;
+  artifactId: number | null;
+  artifactTitle: string | null;
+  artifactType: string | null;
+  anchor: Record<string, any>;
+  createdBy: number | null;
+  createdByName: string;
+  createdAt: string;
+  updatedAt: string;
+  commentCount: number;
+  lastCommentAt: string | null;
+  lastCommentContent: string | null;
+}
+
+export interface RoomThreadComment {
+  id: number;
+  threadId: number;
+  userId: number;
+  authorName: string;
+  authorEmail: string | null;
+  content: string;
+  mentions: number[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoomApproval {
+  id: number;
+  roomId: number | null;
+  automationRunId: number | null;
+  riskLevel: 'low' | 'medium' | 'high' | string;
+  status: 'pending' | 'approved' | 'rejected' | string;
+  reason: string | null;
+  requestedBy: number | null;
+  requestedByName: string;
+  runStatus: string | null;
+  runActionType: string | null;
+  policyName: string | null;
+  createdAt: string;
+}
+
+export interface RoomDecisionCheckpoint {
+  id: number;
+  workspaceId: number;
+  roomId: number;
+  artifactId: number | null;
+  artifactTitle: string | null;
+  artifactType: string | null;
+  decision: string;
+  rationale: string | null;
+  status: 'pending' | 'approved' | 'rejected' | string;
+  createdBy: number | null;
+  createdByName: string;
+  decidedBy: number | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const studioAPI = {
   listProjects: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/projects`),
@@ -328,6 +399,44 @@ export const studioAPI = {
 
   getGuide: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/guide`),
+
+  listThreads: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/threads`),
+
+  createThread: (
+    workspaceId: string,
+    roomId: string,
+    data: { artifactId?: string | number | null; anchor?: Record<string, any>; content: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/threads`, data),
+
+  listThreadComments: (workspaceId: string, roomId: string, threadId: string | number) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/threads/${threadId}/comments`),
+
+  addThreadComment: (
+    workspaceId: string,
+    roomId: string,
+    threadId: string | number,
+    data: { content: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/threads/${threadId}/comments`, data),
+
+  listApprovals: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/approvals`),
+
+  listDecisionCheckpoints: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/decision-checkpoints`),
+
+  createDecisionCheckpoint: (
+    workspaceId: string,
+    roomId: string,
+    data: { decision: string; rationale?: string; artifactId?: string | number | null }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/decision-checkpoints`, data),
+
+  respondDecisionCheckpoint: (
+    workspaceId: string,
+    roomId: string,
+    checkpointId: string | number,
+    data: { decision: 'approved' | 'rejected'; note?: string }
+  ) => getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/decision-checkpoints/${checkpointId}/respond`, data),
 
   completeGuideStep: (workspaceId: string, roomId: string, stepId: string) =>
     getClient().post(`/workspaces/${workspaceId}/rooms/${roomId}/guide/complete-step`, { stepId }),

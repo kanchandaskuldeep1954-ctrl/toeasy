@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bell, Check, Trash2 } from 'lucide-react';
 import { notificationsAPI } from '../../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useSocket } from '../../context/SocketContext';
 
 const NotificationCenter: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [notifications, setNotifications] = useState<any[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
+    const { socket, isConnected } = useSocket();
 
     const loadNotifications = async () => {
         try {
@@ -25,6 +27,23 @@ const NotificationCenter: React.FC = () => {
         const interval = setInterval(loadNotifications, 30000);
         return () => clearInterval(interval);
     }, []);
+
+    useEffect(() => {
+        if (!socket || !isConnected) return;
+        const onNotificationCreated = (payload: any) => {
+            setNotifications((prev) => {
+                const exists = prev.some((item) => String(item.id) === String(payload?.id));
+                if (exists) return prev;
+                return [payload, ...prev].slice(0, 50);
+            });
+            setUnreadCount((prev) => prev + 1);
+        };
+
+        socket.on('notification-created', onNotificationCreated);
+        return () => {
+            socket.off('notification-created', onNotificationCreated);
+        };
+    }, [socket, isConnected]);
 
     // Close on click outside
     useEffect(() => {

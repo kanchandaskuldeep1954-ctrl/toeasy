@@ -2,9 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { useDataset } from '../hooks/useDataset';
-import { analyticsAPI, datasetAPI, NextBestStep, RoomGuideStep, StatusDraft, studioAPI } from '../services/api';
+import {
+  analyticsAPI,
+  datasetAPI,
+  NextBestStep,
+  RoomApproval,
+  RoomDecisionCheckpoint,
+  RoomGuideStep,
+  RoomMentionableUser,
+  RoomThread,
+  RoomThreadComment,
+  StatusDraft,
+  studioAPI
+} from '../services/api';
+import { useSocket } from '../context/SocketContext';
 import { DataGridWidget } from './Widgets/DataGridWidget';
+import { ChartWidget } from './Widgets/ChartWidget';
 import { PivotConfig, PivotWidget } from './Widgets/PivotWidget';
+import { ChartSpec } from '../../types';
 
 type StudioPanel = 'sheets' | 'query' | 'pivot' | 'report' | 'actions';
 type RunMode = 'sql' | 'nl' | 'sheet_op';
@@ -44,7 +59,7 @@ interface MvpKpiSnapshot {
 }
 
 const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'report', 'actions'];
-const EVIDENCE_ARTIFACT_TYPES = new Set(['dataset_version', 'query_run', 'pivot', 'report_block', 'decision_brief']);
+const EVIDENCE_ARTIFACT_TYPES = new Set(['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief']);
 
 const parseDatasetRows = (rawData: any, headers?: string[]) => {
   if (!rawData) return [];
@@ -122,6 +137,23 @@ const AnalyticsStudio: React.FC = () => {
   const [slackChannel, setSlackChannel] = useState('#revops');
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
   const [slackBotToken, setSlackBotToken] = useState('');
+  const [threads, setThreads] = useState<RoomThread[]>([]);
+  const [mentionableUsers, setMentionableUsers] = useState<RoomMentionableUser[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string>('');
+  const [threadComments, setThreadComments] = useState<RoomThreadComment[]>([]);
+  const [newThreadArtifactId, setNewThreadArtifactId] = useState<string>('room');
+  const [newThreadAnchor, setNewThreadAnchor] = useState('');
+  const [newThreadContent, setNewThreadContent] = useState('');
+  const [newThreadComment, setNewThreadComment] = useState('');
+  const [pendingApprovals, setPendingApprovals] = useState<RoomApproval[]>([]);
+  const [decisionCheckpoints, setDecisionCheckpoints] = useState<RoomDecisionCheckpoint[]>([]);
+  const [decisionTitle, setDecisionTitle] = useState('');
+  const [decisionRationale, setDecisionRationale] = useState('');
+  const [decisionArtifactId, setDecisionArtifactId] = useState<string>('room');
+  const [visualType, setVisualType] = useState<string>('bar');
+  const [visualXField, setVisualXField] = useState<string>('');
+  const [visualYField, setVisualYField] = useState<string>('');
+  const { socket, isConnected } = useSocket();
 
   const datasetRows = useMemo(() => {
     const rows = (activeDataset as any)?.data || (activeDataset as any)?.raw_data || [];
@@ -146,6 +178,71 @@ const AnalyticsStudio: React.FC = () => {
     [artifacts]
   );
 
+  const selectedThread = useMemo(
+    () => threads.find((thread) => String(thread.id) === selectedThreadId) || null,
+    [threads, selectedThreadId]
+  );
+
+  const mentionHints = useMemo(
+    () => mentionableUsers.slice(0, 6).map((user) => user.handle).join(', '),
+    [mentionableUsers]
+  );
+
+  const numericFields = useMemo(() => {
+    if (!currentRows.length) return [];
+    return fields.filter((field) =>
+      currentRows.slice(0, 60).some((row) => {
+        const value = row?.[field];
+        if (typeof value === 'number') return Number.isFinite(value);
+        if (typeof value === 'string' && value.trim() !== '') return Number.isFinite(Number(value));
+        return false;
+      })
+    );
+  }, [currentRows, fields]);
+
+  const visualPreviewData = useMemo(() => {
+    const xField = visualXField || fields[0] || '';
+    if (!xField) return [];
+
+    const rows = currentRows.slice(0, 1000);
+    const aggregateMap = new Map<string, { x: string; value: number; rawCount: number }>();
+
+    rows.forEach((row) => {
+      const xValue = String(row?.[xField] ?? '(blank)');
+      const numericValue = visualYField
+        ? Number(row?.[visualYField] ?? 0)
+        : 1;
+      const resolvedValue = Number.isFinite(numericValue) ? numericValue : 0;
+
+      const bucket = aggregateMap.get(xValue) || { x: xValue, value: 0, rawCount: 0 };
+      bucket.value += resolvedValue;
+      bucket.rawCount += 1;
+      aggregateMap.set(xValue, bucket);
+    });
+
+    return Array.from(aggregateMap.values())
+      .map((row) => ({
+        [xField]: row.x,
+        value: Number(row.value.toFixed(3)),
+        count: row.rawCount
+      }))
+      .sort((a, b) => Number(b.value) - Number(a.value))
+      .slice(0, 30);
+  }, [currentRows, fields, visualXField, visualYField]);
+
+  const visualChartSpec = useMemo<ChartSpec>(() => {
+    const xField = visualXField || fields[0] || 'label';
+    const defaultY = visualYField || 'value';
+    return {
+      id: `studio-visual-${selectedRoomId || 'preview'}`,
+      type: visualType,
+      title: `Visual - ${xField}${visualYField ? ` vs ${visualYField}` : ' (count)'}`,
+      xAxis: xField,
+      yAxis: defaultY,
+      data: visualPreviewData
+    };
+  }, [fields, selectedRoomId, visualPreviewData, visualType, visualXField, visualYField]);
+
   const refreshRoomState = useCallback(async () => {
     if (!workspaceId || !selectedRoomId) return;
     const [stateResponse, guideResponse] = await Promise.all([
@@ -161,6 +258,43 @@ const AnalyticsStudio: React.FC = () => {
     setNextBestStep(guideResponse.data?.nextBestStep || null);
     setGuideCompletionRatio(Number(guideResponse.data?.completionRatio || 0));
   }, [workspaceId, selectedRoomId]);
+
+  const refreshCommunication = useCallback(async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    const [threadsResponse, approvalsResponse, checkpointsResponse] = await Promise.all([
+      studioAPI.listThreads(workspaceId, selectedRoomId),
+      studioAPI.listApprovals(workspaceId, selectedRoomId),
+      studioAPI.listDecisionCheckpoints(workspaceId, selectedRoomId)
+    ]);
+
+    const roomThreads: RoomThread[] = threadsResponse.data?.threads || [];
+    setThreads(roomThreads);
+    setMentionableUsers(threadsResponse.data?.mentionableUsers || []);
+    setPendingApprovals(approvalsResponse.data?.approvals || []);
+    setDecisionCheckpoints(checkpointsResponse.data?.checkpoints || []);
+
+    if (!roomThreads.length) {
+      setSelectedThreadId('');
+      setThreadComments([]);
+      return;
+    }
+
+    const hasSelectedThread = roomThreads.some((thread) => String(thread.id) === selectedThreadId);
+    if (!hasSelectedThread) {
+      setSelectedThreadId(String(roomThreads[0].id));
+    }
+  }, [workspaceId, selectedRoomId, selectedThreadId]);
+
+  const refreshThreadComments = useCallback(async (threadId?: string) => {
+    const targetThreadId = threadId || selectedThreadId;
+    if (!workspaceId || !selectedRoomId || !targetThreadId) {
+      setThreadComments([]);
+      return;
+    }
+
+    const response = await studioAPI.listThreadComments(workspaceId, selectedRoomId, targetThreadId);
+    setThreadComments(response.data?.comments || []);
+  }, [workspaceId, selectedRoomId, selectedThreadId]);
 
   const refreshMvpKpis = useCallback(async () => {
     if (!workspaceId) return;
@@ -244,10 +378,64 @@ const AnalyticsStudio: React.FC = () => {
   }, [refreshRoomState]);
 
   useEffect(() => {
+    refreshCommunication().catch((error) => {
+      console.error('Failed to refresh room communication:', error);
+    });
+  }, [refreshCommunication]);
+
+  useEffect(() => {
+    if (!socket || !isConnected || !workspaceId || !selectedRoomId) return;
+    const workspaceNumeric = Number(workspaceId);
+    const roomNumeric = Number(selectedRoomId);
+    if (!Number.isFinite(workspaceNumeric) || !Number.isFinite(roomNumeric)) return;
+
+    const handleRoomEvent = (payload: any) => {
+      const eventRoomId = Number(payload?.roomId || payload?.thread?.roomId || payload?.checkpoint?.roomId || 0);
+      if (eventRoomId && eventRoomId !== roomNumeric) return;
+      refreshCommunication().catch((error) => {
+        console.error('Realtime communication refresh failed:', error);
+      });
+
+      const eventThreadId = payload?.threadId ? String(payload.threadId) : payload?.comment?.threadId ? String(payload.comment.threadId) : '';
+      if (eventThreadId && eventThreadId === selectedThreadId) {
+        refreshThreadComments(eventThreadId).catch((error) => {
+          console.error('Realtime thread refresh failed:', error);
+        });
+      }
+    };
+
+    socket.emit('join-workspace', workspaceNumeric);
+    socket.emit('join-decision-room', { workspaceId: workspaceNumeric, roomId: roomNumeric });
+
+    socket.on('decision-room:thread-created', handleRoomEvent);
+    socket.on('decision-room:comment-added', handleRoomEvent);
+    socket.on('decision-room:approval-created', handleRoomEvent);
+    socket.on('decision-room:approval-updated', handleRoomEvent);
+    socket.on('decision-room:checkpoint-created', handleRoomEvent);
+    socket.on('decision-room:checkpoint-updated', handleRoomEvent);
+
+    return () => {
+      socket.emit('leave-decision-room', { workspaceId: workspaceNumeric, roomId: roomNumeric });
+      socket.off('decision-room:thread-created', handleRoomEvent);
+      socket.off('decision-room:comment-added', handleRoomEvent);
+      socket.off('decision-room:approval-created', handleRoomEvent);
+      socket.off('decision-room:approval-updated', handleRoomEvent);
+      socket.off('decision-room:checkpoint-created', handleRoomEvent);
+      socket.off('decision-room:checkpoint-updated', handleRoomEvent);
+    };
+  }, [socket, isConnected, workspaceId, selectedRoomId, selectedThreadId, refreshCommunication, refreshThreadComments]);
+
+  useEffect(() => {
     refreshMvpKpis().catch((error) => {
       console.error('Failed to refresh MVP KPI snapshot:', error);
     });
   }, [refreshMvpKpis, selectedRoomId]);
+
+  useEffect(() => {
+    refreshThreadComments().catch((error) => {
+      console.error('Failed to load thread comments:', error);
+    });
+  }, [refreshThreadComments]);
 
   useEffect(() => {
     setSelectedEvidenceIds([]);
@@ -255,6 +443,17 @@ const AnalyticsStudio: React.FC = () => {
     setLineage(null);
     setRunRows([]);
     setRunInfo({});
+    setThreads([]);
+    setMentionableUsers([]);
+    setSelectedThreadId('');
+    setThreadComments([]);
+    setNewThreadContent('');
+    setNewThreadComment('');
+    setPendingApprovals([]);
+    setDecisionCheckpoints([]);
+    setDecisionTitle('');
+    setDecisionRationale('');
+    setDecisionArtifactId('room');
   }, [selectedRoomId]);
 
   useEffect(() => {
@@ -263,6 +462,20 @@ const AnalyticsStudio: React.FC = () => {
     const defaults = evidenceArtifacts.slice(0, 3).map((artifact) => artifact.id);
     setSelectedEvidenceIds(defaults);
   }, [selectedRoomId, evidenceArtifacts, selectedEvidenceIds.length]);
+
+  useEffect(() => {
+    if (!fields.length) return;
+    if (!visualXField) {
+      setVisualXField(fields[0]);
+    }
+  }, [fields, visualXField]);
+
+  useEffect(() => {
+    if (!numericFields.length) return;
+    if (!visualYField || !numericFields.includes(visualYField)) {
+      setVisualYField(numericFields[0]);
+    }
+  }, [numericFields, visualYField]);
 
   const setPanel = (nextPanel: StudioPanel) => {
     const next = new URLSearchParams(searchParams);
@@ -340,6 +553,26 @@ const AnalyticsStudio: React.FC = () => {
     setStatusMessage('Pivot artifact saved with lineage.');
   };
 
+  const saveVisualArtifact = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    if (!visualPreviewData.length) {
+      setStatusMessage('Run analysis or adjust chart fields to generate visual data.');
+      return;
+    }
+
+    await studioAPI.createArtifact(workspaceId, selectedRoomId, {
+      artifactType: 'chart',
+      title: visualChartSpec.title,
+      payload: {
+        chart: visualChartSpec,
+        previewRows: visualPreviewData
+      },
+      parentArtifactIds: evidenceArtifacts.slice(0, 5).map((artifact) => artifact.id)
+    });
+    await refreshRoomState();
+    setStatusMessage('Chart artifact saved with lineage.');
+  };
+
   const generateBrief = async () => {
     if (!workspaceId || !selectedRoomId) return;
     const result = await studioAPI.generateBrief(workspaceId, selectedRoomId, {
@@ -414,6 +647,95 @@ const AnalyticsStudio: React.FC = () => {
       setStatusMessage('Status draft generated from room execution logs.');
       await refreshRoomState();
       await refreshMvpKpis();
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const createThread = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    if (!newThreadContent.trim()) {
+      setStatusMessage('Add a message to start a communication thread.');
+      return;
+    }
+
+    try {
+      const response = await studioAPI.createThread(workspaceId, selectedRoomId, {
+        artifactId: newThreadArtifactId === 'room' ? null : Number(newThreadArtifactId),
+        anchor: newThreadAnchor.trim() ? { label: newThreadAnchor.trim() } : {},
+        content: newThreadContent.trim()
+      });
+      const createdThreadId = response.data?.thread?.id;
+      setNewThreadContent('');
+      setNewThreadAnchor('');
+      await refreshCommunication();
+      if (createdThreadId) {
+        setSelectedThreadId(String(createdThreadId));
+      }
+      setStatusMessage('Thread created.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const addCommentToThread = async () => {
+    if (!workspaceId || !selectedRoomId || !selectedThreadId) return;
+    if (!newThreadComment.trim()) return;
+
+    try {
+      await studioAPI.addThreadComment(workspaceId, selectedRoomId, selectedThreadId, {
+        content: newThreadComment.trim()
+      });
+      setNewThreadComment('');
+      await refreshThreadComments(selectedThreadId);
+      await refreshCommunication();
+      setStatusMessage('Comment posted.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const respondApproval = async (approvalId: number, decision: 'approved' | 'rejected') => {
+    if (!workspaceId) return;
+    try {
+      await studioAPI.respondApproval(workspaceId, approvalId, { decision });
+      await refreshCommunication();
+      await refreshRoomState();
+      setStatusMessage(`Approval ${decision}.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const createDecisionCheckpoint = async () => {
+    if (!workspaceId || !selectedRoomId) return;
+    if (!decisionTitle.trim()) {
+      setStatusMessage('Decision title is required.');
+      return;
+    }
+
+    try {
+      await studioAPI.createDecisionCheckpoint(workspaceId, selectedRoomId, {
+        decision: decisionTitle.trim(),
+        rationale: decisionRationale.trim() || undefined,
+        artifactId: decisionArtifactId === 'room' ? null : Number(decisionArtifactId)
+      });
+      setDecisionTitle('');
+      setDecisionRationale('');
+      setDecisionArtifactId('room');
+      await refreshCommunication();
+      setStatusMessage('Decision checkpoint created.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
+  };
+
+  const respondDecisionCheckpoint = async (checkpointId: number, decision: 'approved' | 'rejected') => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      await studioAPI.respondDecisionCheckpoint(workspaceId, selectedRoomId, checkpointId, { decision });
+      await refreshCommunication();
+      setStatusMessage(`Decision checkpoint ${decision}.`);
     } catch (error: any) {
       setStatusMessage(toErrorMessage(error));
     }
@@ -595,9 +917,55 @@ const AnalyticsStudio: React.FC = () => {
                 onConfigChange={setPivotConfig}
                 height={520}
               />
-              <button onClick={savePivotArtifact} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
-                Save Pivot Artifact
-              </button>
+              <div className="flex items-center gap-2">
+                <button onClick={savePivotArtifact} disabled={!selectedRoomId} className="px-3 py-1.5 text-xs rounded bg-emerald-600 text-white disabled:opacity-50">
+                  Save Pivot Artifact
+                </button>
+                <span className="text-xs text-slate-500">
+                  Pivot groups data for fast summaries. Chart Builder turns those summaries into visuals.
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 space-y-3">
+                <h3 className="text-xs font-bold uppercase text-slate-500">Visual Builder (Tableau-style preview)</h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    value={visualType}
+                    onChange={(e) => setVisualType(e.target.value)}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="bar">Bar</option>
+                    <option value="line">Line</option>
+                    <option value="area">Area</option>
+                    <option value="pie">Pie</option>
+                    <option value="donut">Donut</option>
+                  </select>
+                  <select
+                    value={visualXField}
+                    onChange={(e) => setVisualXField(e.target.value)}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="">X field</option>
+                    {fields.map((field) => (
+                      <option key={field} value={field}>{field}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={visualYField}
+                    onChange={(e) => setVisualYField(e.target.value)}
+                    className="px-2 py-1 text-xs rounded border"
+                  >
+                    <option value="">Count rows</option>
+                    {numericFields.map((field) => (
+                      <option key={field} value={field}>{field}</option>
+                    ))}
+                  </select>
+                  <button onClick={saveVisualArtifact} disabled={!selectedRoomId || !visualPreviewData.length} className="px-3 py-1.5 text-xs rounded bg-indigo-600 text-white disabled:opacity-50">
+                    Save Chart Artifact
+                  </button>
+                </div>
+                <ChartWidget chart={visualChartSpec} data={visualPreviewData} height={320} />
+              </div>
             </div>
           )}
 
@@ -756,6 +1124,212 @@ const AnalyticsStudio: React.FC = () => {
                 </div>
                 {!step.completed && step.blockingIssues.length > 0 && (
                   <div className="text-[10px] text-amber-600 mt-1">{step.blockingIssues[0]}</div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Communication</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <select
+              value={newThreadArtifactId}
+              onChange={(e) => setNewThreadArtifactId(e.target.value)}
+              className="w-full px-2 py-1 text-xs rounded border"
+            >
+              <option value="room">Room-level thread</option>
+              {artifacts.slice(0, 40).map((artifact) => (
+                <option key={artifact.id} value={artifact.id}>
+                  {artifact.title} ({artifact.artifact_type})
+                </option>
+              ))}
+            </select>
+            <input
+              value={newThreadAnchor}
+              onChange={(e) => setNewThreadAnchor(e.target.value)}
+              placeholder="Anchor (row/metric optional)"
+              className="w-full px-2 py-1 text-xs rounded border"
+            />
+            <textarea
+              value={newThreadContent}
+              onChange={(e) => setNewThreadContent(e.target.value)}
+              placeholder="Start a thread. Mention teammates with @handle."
+              className="w-full h-16 px-2 py-1 text-xs rounded border"
+            />
+            <button onClick={createThread} disabled={!selectedRoomId || !newThreadContent.trim()} className="w-full px-2 py-1 text-xs rounded bg-blue-600 text-white disabled:opacity-50">
+              Start Thread
+            </button>
+            <div className="text-[10px] text-slate-500">
+              Mentions: {mentionHints || 'No workspace members detected.'}
+            </div>
+          </div>
+
+          <div className="space-y-2 mt-2">
+            {threads.length === 0 && (
+              <div className="text-[11px] text-slate-500 border rounded p-2">
+                No threads yet.
+              </div>
+            )}
+            {threads.slice(0, 12).map((thread) => (
+              <button
+                key={thread.id}
+                onClick={() => setSelectedThreadId(String(thread.id))}
+                className={`w-full text-left text-xs border rounded p-2 ${
+                  String(thread.id) === selectedThreadId
+                    ? 'border-blue-300 bg-blue-50 dark:bg-slate-800'
+                    : 'border-slate-200 dark:border-slate-700'
+                }`}
+              >
+                <div className="font-semibold truncate">{thread.artifactTitle || 'Room discussion'}</div>
+                <div className="text-[10px] text-slate-500 truncate">
+                  {thread.lastCommentContent || 'No messages yet'}
+                </div>
+                <div className="text-[10px] text-slate-400 mt-1">
+                  {thread.commentCount} comment(s)
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {selectedThread && (
+            <div className="mt-2 rounded border border-slate-200 dark:border-slate-700 p-2 space-y-2">
+              <div className="text-xs font-semibold">
+                Thread #{selectedThread.id} {selectedThread.artifactTitle ? `- ${selectedThread.artifactTitle}` : '- Room'}
+              </div>
+              <div className="max-h-48 overflow-auto space-y-2">
+                {threadComments.map((comment) => (
+                  <div key={comment.id} className="text-xs border rounded p-2">
+                    <div className="text-[10px] text-slate-500">{comment.authorName}</div>
+                    <div className="mt-1 whitespace-pre-wrap break-words">{comment.content}</div>
+                  </div>
+                ))}
+                {threadComments.length === 0 && (
+                  <div className="text-[11px] text-slate-500">No comments in this thread yet.</div>
+                )}
+              </div>
+              <textarea
+                value={newThreadComment}
+                onChange={(e) => setNewThreadComment(e.target.value)}
+                placeholder="Reply to thread..."
+                className="w-full h-14 px-2 py-1 text-xs rounded border"
+              />
+              <button
+                onClick={addCommentToThread}
+                disabled={!newThreadComment.trim()}
+                className="w-full px-2 py-1 text-xs rounded bg-slate-800 text-white disabled:opacity-50"
+              >
+                Send Reply
+              </button>
+            </div>
+          )}
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Approval Inbox</h3>
+          <div className="space-y-2">
+            {pendingApprovals.length === 0 && (
+              <div className="text-[11px] text-slate-500 border rounded p-2">
+                No pending approvals.
+              </div>
+            )}
+            {pendingApprovals.map((approval) => (
+              <div key={approval.id} className="text-xs border rounded p-2 space-y-2">
+                <div className="font-semibold">
+                  {approval.policyName || 'Automation'} ({approval.riskLevel})
+                </div>
+                <div className="text-[11px] text-slate-500">
+                  Requested by {approval.requestedByName}
+                </div>
+                {approval.reason && (
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300">{approval.reason}</div>
+                )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => respondApproval(approval.id, 'approved')}
+                    className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => respondApproval(approval.id, 'rejected')}
+                    className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Decision Checkpoints</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <input
+              value={decisionTitle}
+              onChange={(e) => setDecisionTitle(e.target.value)}
+              placeholder="Decision checkpoint title"
+              className="w-full px-2 py-1 text-xs rounded border"
+            />
+            <textarea
+              value={decisionRationale}
+              onChange={(e) => setDecisionRationale(e.target.value)}
+              placeholder="Rationale and decision context"
+              className="w-full h-16 px-2 py-1 text-xs rounded border"
+            />
+            <select
+              value={decisionArtifactId}
+              onChange={(e) => setDecisionArtifactId(e.target.value)}
+              className="w-full px-2 py-1 text-xs rounded border"
+            >
+              <option value="room">Room-level checkpoint</option>
+              {artifacts.slice(0, 40).map((artifact) => (
+                <option key={artifact.id} value={artifact.id}>
+                  {artifact.title} ({artifact.artifact_type})
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={createDecisionCheckpoint}
+              disabled={!decisionTitle.trim()}
+              className="w-full px-2 py-1 text-xs rounded bg-indigo-600 text-white disabled:opacity-50"
+            >
+              Create Checkpoint
+            </button>
+          </div>
+
+          <div className="space-y-2 mt-2">
+            {decisionCheckpoints.length === 0 && (
+              <div className="text-[11px] text-slate-500 border rounded p-2">
+                No checkpoints yet.
+              </div>
+            )}
+            {decisionCheckpoints.slice(0, 12).map((checkpoint) => (
+              <div key={checkpoint.id} className="text-xs border rounded p-2 space-y-2">
+                <div className="font-semibold">{checkpoint.decision}</div>
+                <div className="text-[10px] text-slate-500">
+                  Status: {checkpoint.status} | Owner: {checkpoint.createdByName}
+                </div>
+                {checkpoint.artifactTitle && (
+                  <div className="text-[10px] text-slate-500">
+                    Evidence: {checkpoint.artifactTitle}
+                  </div>
+                )}
+                {checkpoint.rationale && (
+                  <div className="text-[11px] text-slate-600 dark:text-slate-300 whitespace-pre-wrap break-words">
+                    {checkpoint.rationale}
+                  </div>
+                )}
+                {checkpoint.status === 'pending' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => respondDecisionCheckpoint(checkpoint.id, 'approved')}
+                      className="px-2 py-1 text-[11px] rounded bg-emerald-600 text-white"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => respondDecisionCheckpoint(checkpoint.id, 'rejected')}
+                      className="px-2 py-1 text-[11px] rounded bg-rose-600 text-white"
+                    >
+                      Reject
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
