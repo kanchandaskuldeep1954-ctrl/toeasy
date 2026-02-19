@@ -79,9 +79,19 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
         return `/app/studio?${query.toString()}`;
     };
 
+    const buildControlTowerPath = () => {
+        const query = new URLSearchParams();
+        if (workspaceId) query.set('workspace', String(workspaceId));
+        if (datasetId) query.set('dataset', String(datasetId));
+        if (projectId) query.set('project', String(projectId));
+        if (roomId) query.set('room', String(roomId));
+        return `/app/control-tower?${query.toString()}`;
+    };
+
     const navItems = [
         { name: 'Home', path: '/app/home', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
         { name: 'Decision Room', path: buildStudioPath('sheets'), icon: 'M4 5h7v7H4V5zm9 0h7v4h-7V5zM4 14h7v5H4v-5zm9-3h7v8h-7v-8z' },
+        { name: 'Control Tower', path: buildControlTowerPath(), icon: 'M9 3h6v4H9V3zm-5 6h16v10H4V9zm3 2v6h10v-6H7z' },
         { name: 'Data', path: buildWorkspacePath('/app/datasets'), icon: 'M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4' },
         { name: 'Chat', path: buildWorkspacePath('/app/chat'), icon: 'M8 10h8M8 14h5m6 7l-4-4H6a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z' },
         { name: 'Team', path: '/app/team', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },

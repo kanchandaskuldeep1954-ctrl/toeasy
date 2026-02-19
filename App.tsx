@@ -44,6 +44,7 @@ const TasksView = React.lazy(() => import('./src/components/Tasks/TasksView'));
 const DocsView = React.lazy(() => import('./src/components/Docs/DocsView'));
 const FormsView = React.lazy(() => import('./src/components/Forms/FormsView'));
 const FilesView = React.lazy(() => import('./src/components/Files/FilesView'));
+const ControlTowerView = React.lazy(() => import('./src/components/Manager/ControlTowerView'));
 
 // Legal & Public Pages
 import PublicLayout from './src/components/Layout/PublicLayout';
@@ -75,6 +76,7 @@ const AppLayout: React.FC = () => {
           <Route path="profile" element={<ProfilePage />} />
           <Route path="team" element={<TeamView />} />
           <Route path="studio" element={<StudioEntryRedirect source="studio_route" />} />
+          <Route path="control-tower" element={<ControlTowerView />} />
 
           {/* Connect & Upload */}
           <Route path="create" element={<Navigate to="/app/upload" replace />} />

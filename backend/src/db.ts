@@ -13,13 +13,27 @@ pool.on('error', (err) => {
   process.exit(-1);
 });
 
+type QueryOverrideFn = (text: string, params?: any[]) => Promise<any>;
+let queryOverride: QueryOverrideFn | null = null;
+
 export async function query(text: string, params?: any[]) {
+  if (queryOverride) {
+    return queryOverride(text, params);
+  }
   const client = await pool.connect();
   try {
     return await client.query(text, params);
   } finally {
     client.release();
   }
+}
+
+export function setQueryOverrideForTests(fn: QueryOverrideFn | null) {
+  queryOverride = fn;
+}
+
+export function resetQueryOverrideForTests() {
+  queryOverride = null;
 }
 
 export async function getClient() {

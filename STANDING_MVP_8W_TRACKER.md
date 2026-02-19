@@ -31,15 +31,15 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Frontend API contract tests for readiness endpoints.
 - [x] Backend unit tests for readiness gate decisioning.
 - [x] Backend unit tests for reliability score internals (MTTR + failure buckets).
-- [ ] Backend integration tests for visuals/metrics/attribution.
-- [ ] Backend integration tests for profile/query-version/review/idempotency paths.
+- [x] Backend integration tests for visuals/metrics/attribution.
+- [x] Backend integration tests for profile/query-version/review/idempotency paths.
 - [ ] Queue retry/backoff + duplicate prevention integration tests.
 - [ ] Weekly full-flow E2E automation test.
 
 ### Weeks 5-6: Manager Control Tower V1
 - [x] Pending approvals + blocked publishes + overdue actions + automation failure summary.
 - [x] Recommended manager actions in summary payload.
-- [ ] Dedicated manager-mode screen (currently right-rail card in Studio).
+- [x] Dedicated manager-mode screen (`/app/control-tower`) with direct nav access.
 
 ### Weeks 7-8: Pilot Proof + Conversion Readiness
 - [ ] 3 paid pilot telemetry review loop.
@@ -61,8 +61,6 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 
 ## 5) Next Concrete Build Slice
 
-1. Add backend integration harness for Studio route-level tests.
-2. Implement idempotency replay integration tests for report publish + actions sync + automation schedule.
-3. Implement queue reliability integration tests (retry, dedupe, recovery).
-4. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
-
+1. Implement queue reliability integration tests (retry, dedupe, recovery).
+2. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
+3. Expand idempotency replay integration coverage from schedule to publish + action sync endpoints.

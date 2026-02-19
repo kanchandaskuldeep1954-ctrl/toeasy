@@ -143,8 +143,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] API contract tests updated for completion APIs (profile/query-version/pivot/annotate/review/coverage/roi).
 - [x] Backend readiness gate unit tests (`readinessDecisionService`) for go/no-go pass/fail logic.
 - [x] Backend reliability score math unit tests (`reliabilityScorecardService`) for MTTR and failure bucketing.
-- [ ] backend integration tests for visual build/drill, metrics validate, and attribution.
-- [ ] backend integration tests for profile/query-version/review/idempotency paths.
+- [x] backend integration tests for visual build/drill, metrics validate, and attribution.
+- [x] backend integration tests for profile/query-version/review/idempotency paths.
 - [ ] end-to-end flow test:
   - [ ] connect -> run -> pivot -> visual -> report -> publish -> action -> status draft
 - [ ] queue reliability tests:
@@ -167,6 +167,28 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Studio route integration-test tranche):
+  - Added backend route-level integration test harness with query override:
+    - `backend/src/db.ts` (`setQueryOverrideForTests`, `resetQueryOverrideForTests`)
+    - `backend/src/routes/studio.integration.test.ts`
+  - Added passing integration coverage for:
+    - visual build + drill
+    - metrics validate
+    - outcomes attribution
+    - data profile + trust summary
+    - query version save/list
+    - review submit/respond lifecycle
+    - automation schedule idempotency replay
+- 2026-02-19 (Manager Control Tower dedicated surface tranche):
+  - Added dedicated manager screen:
+    - `src/components/Manager/ControlTowerView.tsx`
+    - route: `/app/control-tower`
+  - Wired sidebar primary nav to include `Control Tower` direct entry.
+  - Control Tower now renders room-scoped:
+    - go/no-go decision summary
+    - reliability scorecard and failure buckets
+    - manager risk/recommendation view
+    - quick actions into Studio `report/actions/comms` panels.
 - 2026-02-19 (Reliability score math hardening tranche):
   - Extracted reliability score internals into shared backend service:
     - `backend/src/services/reliabilityScorecardService.ts`
