@@ -235,6 +235,27 @@ describe('Studio MVP API Contracts', () => {
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/roi');
   });
 
+  it('calls reliability scorecard endpoint', () => {
+    studioAPI.getReliabilityScorecard('12', '77', { periodDays: 14 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/reliability/scorecard', {
+      params: { periodDays: 14 }
+    });
+  });
+
+  it('calls manager summary endpoint', () => {
+    studioAPI.getManagerSummary('12', '77', { periodDays: 7 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/manager/summary', {
+      params: { periodDays: 7 }
+    });
+  });
+
+  it('calls go/no-go readiness endpoint', () => {
+    studioAPI.getReadinessDecision('12', '77', { periodDays: 30 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/readiness/go-no-go', {
+      params: { periodDays: 30 }
+    });
+  });
+
   it('calls persona profile get endpoint', () => {
     studioAPI.getPersonaProfile('12');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/preferences/profile');

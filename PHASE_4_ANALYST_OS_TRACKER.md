@@ -141,6 +141,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 ## 7) Test Coverage Tracker
 - [x] Studio API contract coverage for new phase-4 endpoints.
 - [x] API contract tests updated for completion APIs (profile/query-version/pivot/annotate/review/coverage/roi).
+- [x] Backend readiness gate unit tests (`readinessDecisionService`) for go/no-go pass/fail logic.
+- [x] Backend reliability score math unit tests (`reliabilityScorecardService`) for MTTR and failure bucketing.
 - [ ] backend integration tests for visual build/drill, metrics validate, and attribution.
 - [ ] backend integration tests for profile/query-version/review/idempotency paths.
 - [ ] end-to-end flow test:
@@ -165,6 +167,46 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Reliability score math hardening tranche):
+  - Extracted reliability score internals into shared backend service:
+    - `backend/src/services/reliabilityScorecardService.ts`
+  - Added deterministic unit coverage for:
+    - MTTR computation from run sequences
+    - failure bucket counting with terminal/retryable flags
+  - Updated Studio route reliability score endpoint to use shared, tested score math.
+  - Added consecutive weekly reliability streak tracking to support standing-MVP go/no-go ruling.
+  - Added failure-bucket runbook hints (`operatorAction`) so scorecards surface immediate operator guidance.
+  - Added standing-MVP execution tracker:
+    - `STANDING_MVP_8W_TRACKER.md`
+- 2026-02-19 (Readiness gate testability tranche):
+  - Extracted go/no-go gate evaluation into reusable backend service:
+    - `backend/src/services/readinessDecisionService.ts`
+  - Added backend unit tests for readiness gate behavior:
+    - `backend/src/services/readinessDecisionService.test.ts`
+  - Route-level readiness endpoint now reuses shared gate logic, keeping API contract unchanged.
+- 2026-02-19 (Standing MVP readiness + manager clarity tranche):
+  - Added standing-MVP reliability and readiness APIs:
+    - `GET /api/workspaces/:id/rooms/:roomId/reliability/scorecard`
+    - `GET /api/workspaces/:id/rooms/:roomId/manager/summary`
+    - `GET /api/workspaces/:id/rooms/:roomId/readiness/go-no-go`
+  - Implemented deterministic score computation from persisted run/event artifacts:
+    - scheduled run success rate
+    - report publish success rate
+    - duplicate side-effect detection
+    - MTTR and failure-code buckets
+    - open critical incident count
+  - Added manager control summary aggregation:
+    - pending approvals
+    - blocked publish count
+    - overdue action count
+    - 24h automation failure count
+    - top risk + recommended action synthesis
+  - Added go/no-go gate evaluation contract for weekly pilot readiness.
+  - Wired Studio right rail with new cards:
+    - Go/No-Go gate card (overview)
+    - Reliability scorecard (metrics)
+    - Manager Control Tower snapshot (comms)
+  - Extended frontend API contracts + tests for new readiness endpoints.
 - 2026-02-19 (Right-rail separation UX tranche):
   - Reworked Studio right rail from long stacked feed to segmented views:
     - `Overview`, `Metrics`, `Comms`, `Artifacts`.

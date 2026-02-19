@@ -11,11 +11,14 @@ import {
   CoverageTrendPoint,
   datasetAPI,
   DatasetProfileArtifact,
+  ManagerSummary,
   MetricCatalogItem,
   NextBestStep,
   OnboardingPlaybookStep,
   OutcomeAttribution,
   PersonaProfile,
+  ReadinessDecision,
+  ReliabilityScorecard,
   ReportV2Bundle,
   ReportV2Quality,
   ReviewSubmission,
@@ -376,6 +379,10 @@ const AnalyticsStudio: React.FC = () => {
     overallStatus: string;
     items: RoomRoiTargetStatus[];
   } | null>(null);
+  const [reliabilityScorecard, setReliabilityScorecard] = useState<ReliabilityScorecard | null>(null);
+  const [managerSummary, setManagerSummary] = useState<ManagerSummary | null>(null);
+  const [readinessDecision, setReadinessDecision] = useState<ReadinessDecision | null>(null);
+  const [readinessPeriodDays, setReadinessPeriodDays] = useState<number>(7);
   const [personaProfile, setPersonaProfile] = useState<PersonaProfile | null>(null);
   const [personaBusy, setPersonaBusy] = useState(false);
   const [onboardingPlaybook, setOnboardingPlaybook] = useState<{
@@ -719,12 +726,30 @@ const AnalyticsStudio: React.FC = () => {
       setCoverageTrendPoints([]);
       setRoomRoiSnapshot(null);
       setRoomRoiScorecard(null);
+      setReliabilityScorecard(null);
+      setManagerSummary(null);
+      setReadinessDecision(null);
       setOnboardingPlaybook(null);
       setPersonaProfile(null);
       return;
     }
 
-    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse, reviewSubmissionsResponse, profileResponse, onboardingResponse] = await Promise.all([
+    const [
+      metricsResponse,
+      playbookResponse,
+      outcomeResponse,
+      automationResponse,
+      queueStateResponse,
+      trustResponse,
+      coverageTrendResponse,
+      roiResponse,
+      reliabilityResponse,
+      managerSummaryResponse,
+      readinessResponse,
+      reviewSubmissionsResponse,
+      profileResponse,
+      onboardingResponse
+    ] = await Promise.all([
       studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Metric catalog refresh failed:', error);
         return null;
@@ -760,6 +785,24 @@ const AnalyticsStudio: React.FC = () => {
       studioAPI.getRoomRoi(workspaceId, selectedRoomId).catch((error) => {
         if (error?.response?.status !== 404) {
           console.warn('Room ROI refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getReliabilityScorecard(workspaceId, selectedRoomId, { periodDays: readinessPeriodDays }).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Reliability scorecard refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getManagerSummary(workspaceId, selectedRoomId, { periodDays: readinessPeriodDays }).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Manager summary refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getReadinessDecision(workspaceId, selectedRoomId, { periodDays: readinessPeriodDays }).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Readiness decision refresh failed:', error);
         }
         return null;
       }),
@@ -832,6 +875,45 @@ const AnalyticsStudio: React.FC = () => {
       setRoomRoiSnapshot(null);
       setRoomRoiScorecard(null);
     }
+    if (reliabilityResponse?.data?.scorecard) {
+      setReliabilityScorecard(reliabilityResponse.data.scorecard);
+    } else {
+      setReliabilityScorecard(null);
+    }
+    if (managerSummaryResponse?.data?.summary) {
+      setManagerSummary(managerSummaryResponse.data.summary);
+    } else {
+      setManagerSummary(null);
+    }
+    if (readinessResponse?.data) {
+      setReadinessDecision({
+        gateResults: Array.isArray(readinessResponse.data.gateResults) ? readinessResponse.data.gateResults : [],
+        overall: readinessResponse.data.overall === 'go' ? 'go' : 'no_go',
+        blockers: Array.isArray(readinessResponse.data.blockers) ? readinessResponse.data.blockers : [],
+        checkedAt: readinessResponse.data.checkedAt || new Date().toISOString(),
+        snapshot: readinessResponse.data.snapshot || {
+          timeToInsightMin: null,
+          insightToActionMin: null,
+          manualUpdateReductionPct: 0,
+          evidenceCoverageRatio: 0
+        },
+        reliability: readinessResponse.data.reliability || reliabilityResponse?.data?.scorecard || {
+          periodDays: readinessPeriodDays,
+          scheduledRunSuccessRate: null,
+          publishSuccessRate: null,
+          duplicateSideEffects: 0,
+          mttrMinutes: null,
+          consecutiveWeeklyReliabilityFailures: 0,
+          weeklyScheduledRunSuccessRates: [],
+          failureByCode: [],
+          openCriticalIncidents: 0,
+          sampleSizes: { scheduledRuns: 0, publishAttempts: 0, failureEvents: 0 }
+        },
+        managerSummary: readinessResponse.data.managerSummary || managerSummaryResponse?.data?.summary
+      });
+    } else {
+      setReadinessDecision(null);
+    }
     if (reviewSubmissionsResponse) {
       const submissions = Array.isArray(reviewSubmissionsResponse.data?.submissions)
         ? reviewSubmissionsResponse.data.submissions
@@ -857,7 +939,7 @@ const AnalyticsStudio: React.FC = () => {
         steps: Array.isArray(onboardingResponse.data?.steps) ? onboardingResponse.data.steps : []
       });
     }
-  }, [workspaceId, selectedRoomId, selectedReviewSubmissionId]);
+  }, [workspaceId, selectedRoomId, selectedReviewSubmissionId, readinessPeriodDays]);
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams);
@@ -1093,6 +1175,9 @@ const AnalyticsStudio: React.FC = () => {
     setCoverageTrendPoints([]);
     setRoomRoiSnapshot(null);
     setRoomRoiScorecard(null);
+    setReliabilityScorecard(null);
+    setManagerSummary(null);
+    setReadinessDecision(null);
     setOnboardingPlaybook(null);
     setProfileBusy(false);
     setReviewBundleIdInput('');
@@ -3706,11 +3791,108 @@ const AnalyticsStudio: React.FC = () => {
             )}
           </div>
 
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Go / No-Go</h3>
+          <div className="text-[11px] text-slate-600 dark:text-slate-300 space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            <div className="flex items-center gap-2">
+              <select
+                value={readinessPeriodDays}
+                onChange={(e) => setReadinessPeriodDays(Number(e.target.value) || 7)}
+                className="flex-1 px-2 py-1 text-[11px] rounded border"
+              >
+                <option value={7}>7-day gate window</option>
+                <option value={14}>14-day gate window</option>
+                <option value={30}>30-day gate window</option>
+              </select>
+              <button
+                onClick={() => {
+                  refreshAnalystOps().catch((error) => {
+                    console.error('Failed to refresh readiness view:', error);
+                  });
+                }}
+                className="px-2 py-1 rounded border text-[11px]"
+              >
+                Refresh
+              </button>
+            </div>
+            {readinessDecision ? (
+              <>
+                <div>
+                  Overall:{' '}
+                  <span className={readinessDecision.overall === 'go' ? 'text-emerald-600 font-semibold' : 'text-rose-600 font-semibold'}>
+                    {readinessDecision.overall === 'go' ? 'GO' : 'NO-GO'}
+                  </span>
+                </div>
+                <div>
+                  Gates passed: {readinessDecision.gateResults.filter((gate) => gate.passed).length}/{readinessDecision.gateResults.length}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Checked: {readinessDecision.checkedAt ? new Date(readinessDecision.checkedAt).toLocaleString() : 'n/a'}
+                </div>
+                <div className="space-y-1">
+                  {readinessDecision.gateResults.slice(0, 5).map((gate) => (
+                    <div key={gate.key} className="flex items-start justify-between gap-2 text-[10px]">
+                      <span className="truncate">{gate.label}</span>
+                      <span className={gate.passed ? 'text-emerald-600' : 'text-amber-700'}>
+                        {gate.passed ? 'pass' : 'fail'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {readinessDecision.blockers.length > 0 && (
+                  <div className="rounded border border-amber-200 bg-amber-50 text-amber-800 px-2 py-1 text-[10px]">
+                    {readinessDecision.blockers[0]}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div>No readiness decision yet.</div>
+            )}
+          </div>
+
             </>
           )}
 
           {rightRailView === 'metrics' && (
             <>
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Reliability Scorecard</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
+            {reliabilityScorecard ? (
+              <>
+                <div>Scheduled success: {reliabilityScorecard.scheduledRunSuccessRate != null ? `${(reliabilityScorecard.scheduledRunSuccessRate * 100).toFixed(1)}%` : 'n/a'}</div>
+                <div>Publish success: {reliabilityScorecard.publishSuccessRate != null ? `${(reliabilityScorecard.publishSuccessRate * 100).toFixed(1)}%` : 'n/a'}</div>
+                <div>Duplicate side effects: {reliabilityScorecard.duplicateSideEffects}</div>
+                <div>MTTR: {reliabilityScorecard.mttrMinutes != null ? `${reliabilityScorecard.mttrMinutes.toFixed(1)} min` : 'n/a'}</div>
+                <div>Consecutive sub-threshold weeks: {reliabilityScorecard.consecutiveWeeklyReliabilityFailures}</div>
+                <div>Open critical incidents (24h): {reliabilityScorecard.openCriticalIncidents}</div>
+                <div className="text-[10px] text-slate-500">
+                  Samples - runs {reliabilityScorecard.sampleSizes.scheduledRuns}, publish {reliabilityScorecard.sampleSizes.publishAttempts}, failures {reliabilityScorecard.sampleSizes.failureEvents}
+                </div>
+                {reliabilityScorecard.weeklyScheduledRunSuccessRates.length > 0 && (
+                  <div className="text-[10px] text-slate-500">
+                    Weekly reliability: {reliabilityScorecard.weeklyScheduledRunSuccessRates
+                      .slice(0, 3)
+                      .map((week) => `${new Date(week.weekStart).toLocaleDateString()} ${(week.successRate != null ? `${(week.successRate * 100).toFixed(1)}%` : 'n/a')}`)
+                      .join(' | ')}
+                  </div>
+                )}
+                {reliabilityScorecard.failureByCode.length > 0 && (
+                  <>
+                    <div className="text-[10px] text-slate-500">
+                      Failure mix: {reliabilityScorecard.failureByCode.slice(0, 4).map((bucket) => `${bucket.code}:${bucket.count}`).join(' | ')}
+                    </div>
+                    {reliabilityScorecard.failureByCode[0]?.operatorAction && (
+                      <div className="text-[10px] text-amber-700">
+                        Runbook: {reliabilityScorecard.failureByCode[0].operatorAction}
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            ) : (
+              <div>No reliability scorecard yet.</div>
+            )}
+          </div>
+
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Persona Preset</h3>
           <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
             <select
@@ -3879,6 +4061,34 @@ const AnalyticsStudio: React.FC = () => {
             >
               Open Comms Panel
             </button>
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Manager Control Tower</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
+            {managerSummary ? (
+              <>
+                <div>Pending approvals: {managerSummary.pendingApprovals}</div>
+                <div>Blocked publishes: {managerSummary.blockedPublishes}</div>
+                <div>Overdue actions: {managerSummary.overdueActions}</div>
+                <div>Automation failures (24h): {managerSummary.automationFailures24h}</div>
+                <div className="text-[10px] text-slate-500">
+                  Top risk: {managerSummary.topRisks[0] || 'n/a'}
+                </div>
+                <div className="text-[10px] text-slate-500">
+                  Next action: {managerSummary.recommendedActions[0] || 'n/a'}
+                </div>
+              </>
+            ) : (
+              <div>No manager summary available yet.</div>
+            )}
+            <div className="flex items-center gap-2">
+              <button onClick={() => setPanel('report')} className="px-2 py-1 text-[11px] rounded border">
+                Open Report
+              </button>
+              <button onClick={() => setPanel('actions')} className="px-2 py-1 text-[11px] rounded border">
+                Open Actions
+              </button>
+            </div>
           </div>
 
             </>

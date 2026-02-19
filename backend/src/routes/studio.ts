@@ -9,6 +9,8 @@ import { GroqService } from '../services/groq.service.js';
 import { emitToDecisionRoom, emitToUser } from '../realtime.js';
 import { AutomationExecutionError, executeAutomationPolicy } from '../services/automationExecutionService.js';
 import { getAutomationQueueState, requestAutomationDispatch } from '../services/automationQueueService.js';
+import { evaluateReadinessGates } from '../services/readinessDecisionService.js';
+import { buildFailureBucketsFromEvents, computeMttrMinutesFromRuns } from '../services/reliabilityScorecardService.js';
 
 const router = Router();
 
@@ -359,6 +361,70 @@ interface RoomRoiTargetStatus {
   comparator: 'lte' | 'gte';
   unit: 'minutes' | 'percent' | 'ratio';
   met: boolean;
+}
+
+interface FailureBucket {
+  code: string;
+  count: number;
+  terminalCount: number;
+  retryableCount: number;
+  operatorAction?: string;
+}
+
+interface ReliabilityScorecard {
+  periodDays: number;
+  scheduledRunSuccessRate: number | null;
+  publishSuccessRate: number | null;
+  duplicateSideEffects: number;
+  mttrMinutes: number | null;
+  consecutiveWeeklyReliabilityFailures: number;
+  weeklyScheduledRunSuccessRates: Array<{
+    weekStart: string;
+    successRate: number | null;
+    resolvedRuns: number;
+  }>;
+  failureByCode: FailureBucket[];
+  openCriticalIncidents: number;
+  sampleSizes: {
+    scheduledRuns: number;
+    publishAttempts: number;
+    failureEvents: number;
+  };
+}
+
+interface ManagerSummary {
+  pendingApprovals: number;
+  blockedPublishes: number;
+  overdueActions: number;
+  automationFailures24h: number;
+  topRisks: string[];
+  recommendedActions: string[];
+}
+
+interface GateResult {
+  key: string;
+  label: string;
+  threshold: string;
+  actual: number | string | null;
+  passed: boolean;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  note?: string;
+}
+
+interface PilotKpiSnapshot {
+  timeToInsightMin: number | null;
+  insightToActionMin: number | null;
+  manualUpdateReductionPct: number;
+  evidenceCoverageRatio: number;
+}
+
+interface ReadinessDecision {
+  gateResults: GateResult[];
+  overall: 'go' | 'no_go';
+  blockers: string[];
+  checkedAt: string;
+  snapshot: PilotKpiSnapshot;
+  reliability: ReliabilityScorecard;
 }
 
 interface UserPreferenceProfile {
@@ -3064,6 +3130,492 @@ function toRounded(value: number, digits: number = 4): number {
 function clampUnit(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.min(1, value));
+}
+
+function normalizePeriodDays(input: any, fallback: number = 7): number {
+  const parsed = Number(input);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(1, Math.min(90, Math.floor(parsed)));
+}
+
+async function computeRoomPilotKpiSnapshot(
+  workspaceId: number,
+  roomId: number,
+  roomCreatedAtIso: string,
+  periodDays: number
+): Promise<PilotKpiSnapshot> {
+  const [firstRunResult, firstActionResult, statusDraftEventsResult, latestBundleId] = await Promise.all([
+    query(
+      `
+      SELECT created_at
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type = 'query_run'
+      ORDER BY created_at ASC
+      LIMIT 1
+      `,
+      [workspaceId, roomId]
+    ),
+    query(
+      `
+      SELECT created_at
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type = 'action_item'
+      ORDER BY created_at ASC
+      LIMIT 1
+      `,
+      [workspaceId, roomId]
+    ),
+    query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE event_type = 'decision_room_status_draft_generated')::int AS drafted_count,
+        COUNT(*) FILTER (WHERE event_type = 'decision_room_actions_synced')::int AS synced_count
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    getLatestReportV2BundleId(workspaceId, roomId)
+  ]);
+
+  const roomCreatedAt = new Date(roomCreatedAtIso).getTime();
+  const firstRunAt = firstRunResult.rows[0]?.created_at ? new Date(firstRunResult.rows[0].created_at).getTime() : null;
+  const firstActionAt = firstActionResult.rows[0]?.created_at ? new Date(firstActionResult.rows[0].created_at).getTime() : null;
+  const timeToInsightMin = firstRunAt ? toRounded(Math.max(0, (firstRunAt - roomCreatedAt) / 60000), 2) : null;
+  const timeToActionMin = firstRunAt && firstActionAt
+    ? toRounded(Math.max(0, (firstActionAt - firstRunAt) / 60000), 2)
+    : null;
+
+  let evidenceCoverageRatio = 0;
+  if (latestBundleId) {
+    const bundle = await loadReportV2Bundle(workspaceId, roomId, latestBundleId);
+    if (bundle) {
+      const quality = await evaluateBundleClaimSupport(workspaceId, roomId, bundle);
+      evidenceCoverageRatio = clampUnit(Number(quality.quality.evidenceCoverageRatio || 0));
+    }
+  }
+
+  if (evidenceCoverageRatio === 0) {
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 400);
+    const actions = artifacts.filter((artifact) => artifact.artifact_type === 'action_item');
+    if (actions.length > 0) {
+      const { evidenceByAction } = await getActionEvidenceMap(
+        workspaceId,
+        roomId,
+        actions.map((artifact) => Number(artifact.id))
+      );
+      const covered = actions.filter((action) => (evidenceByAction.get(Number(action.id)) || 0) > 0).length;
+      evidenceCoverageRatio = clampUnit(covered / actions.length);
+    }
+  }
+
+  const draftedCount = Number(statusDraftEventsResult.rows[0]?.drafted_count || 0);
+  const syncedCount = Number(statusDraftEventsResult.rows[0]?.synced_count || 0);
+  const manualUpdateReductionPct = draftedCount > 0
+    ? Math.min(95, 30 + (syncedCount * 10) + (draftedCount * 12))
+    : 0;
+
+  return {
+    timeToInsightMin,
+    insightToActionMin: timeToActionMin,
+    manualUpdateReductionPct: toRounded(manualUpdateReductionPct, 2),
+    evidenceCoverageRatio: toRounded(evidenceCoverageRatio, 5)
+  };
+}
+
+async function computeReliabilityScorecard(
+  workspaceId: number,
+  roomId: number,
+  periodDaysInput: any
+): Promise<ReliabilityScorecard> {
+  const periodDays = normalizePeriodDays(periodDaysInput, 7);
+
+  const [
+    scheduledStatsResult,
+    weeklyScheduledStatsResult,
+    publishAttemptsResult,
+    publishFallbackResult,
+    duplicateActionTasksResult,
+    duplicatePublishResult,
+    mttrRunsResult,
+    failureEventsResult,
+    criticalEventsResult
+  ] = await Promise.all([
+    query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_count,
+        COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
+        COUNT(*) FILTER (WHERE status IN ('completed', 'failed'))::int AS total_resolved
+      FROM automation_runs
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND COALESCE(input->>'scheduleId', '') <> ''
+        AND COALESCE(started_at, created_at) >= NOW() - ($3::int * INTERVAL '1 day')
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT
+        DATE_TRUNC('week', COALESCE(started_at, created_at))::date AS week_start,
+        COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_count,
+        COUNT(*) FILTER (WHERE status = 'failed')::int AS failed_count,
+        COUNT(*) FILTER (WHERE status IN ('completed', 'failed'))::int AS resolved_count
+      FROM automation_runs
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND COALESCE(input->>'scheduleId', '') <> ''
+        AND COALESCE(started_at, created_at) >= NOW() - INTERVAL '35 days'
+      GROUP BY DATE_TRUNC('week', COALESCE(started_at, created_at))
+      ORDER BY week_start DESC
+      LIMIT 8
+      `,
+      [workspaceId, roomId]
+    ),
+    query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE status_code BETWEEN 200 AND 299)::int AS success_count,
+        COUNT(*) FILTER (WHERE status_code IS NOT NULL)::int AS total_count
+      FROM idempotency_keys
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND endpoint_key LIKE 'reports_v2_publish:%'
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT
+        COUNT(*) FILTER (WHERE event_type = 'decision_room_report_v2_published')::int AS published_count,
+        COUNT(*) FILTER (WHERE event_type = 'decision_room_report_v2_publish_blocked')::int AS blocked_count
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT COALESCE(SUM(duplicate_count), 0)::int AS duplicate_count
+      FROM (
+        SELECT (COUNT(*) - 1)::int AS duplicate_count
+        FROM tasks t
+        CROSS JOIN LATERAL jsonb_array_elements_text(COALESCE(t.tags, '[]'::jsonb)) AS tag(value)
+        WHERE t.workspace_id = $1
+          AND t.tags ? $2
+          AND t.created_at >= NOW() - ($3::int * INTERVAL '1 day')
+          AND tag.value LIKE 'room-action:%'
+        GROUP BY tag.value
+        HAVING COUNT(*) > 1
+      ) duplicates
+      `,
+      [workspaceId, `room:${roomId}`, periodDays]
+    ),
+    query(
+      `
+      SELECT COALESCE(SUM(duplicate_count), 0)::int AS duplicate_count
+      FROM (
+        SELECT (COUNT(*) - 1)::int AS duplicate_count
+        FROM analytics_events
+        WHERE workspace_id = $1
+          AND room_id = $2
+          AND event_type = 'decision_room_report_v2_published'
+          AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+        GROUP BY COALESCE(metadata->>'bundleId', '')
+        HAVING COUNT(*) > 1
+      ) duplicates
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT
+        automation_policy_id,
+        status,
+        COALESCE(completed_at, started_at, created_at) AS ts
+      FROM automation_runs
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND COALESCE(input->>'scheduleId', '') <> ''
+        AND COALESCE(started_at, created_at) >= NOW() - ($3::int * INTERVAL '1 day')
+      ORDER BY automation_policy_id ASC, COALESCE(completed_at, started_at, created_at) ASC
+      LIMIT 4000
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT event_type, status, error, metadata, created_at
+      FROM automation_run_events
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+        AND (
+          status = 'failed'
+          OR event_type IN ('execution_failed', 'execution_failed_terminal', 'execution_retry_scheduled')
+        )
+      ORDER BY created_at DESC
+      LIMIT 3000
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT COUNT(*)::int AS open_critical
+      FROM automation_run_events
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND created_at >= NOW() - INTERVAL '24 hours'
+        AND (
+          event_type = 'execution_failed_terminal'
+          OR LOWER(COALESCE(metadata->>'failureTerminal', 'false')) IN ('true', 't', '1', 'yes')
+        )
+        AND LOWER(COALESCE(metadata->>'failureSeverity', 'critical')) IN ('high', 'critical')
+      `,
+      [workspaceId, roomId]
+    )
+  ]);
+
+  const scheduledCompleted = Number(scheduledStatsResult.rows[0]?.completed_count || 0);
+  const scheduledFailed = Number(scheduledStatsResult.rows[0]?.failed_count || 0);
+  const scheduledResolved = Number(scheduledStatsResult.rows[0]?.total_resolved || 0);
+  const scheduledRunSuccessRate = scheduledResolved > 0
+    ? toRounded(clampUnit(scheduledCompleted / scheduledResolved), 5)
+    : null;
+
+  const weeklyScheduledRunSuccessRates = weeklyScheduledStatsResult.rows
+    .map((row: any) => {
+      const completed = Number(row.completed_count || 0);
+      const resolved = Number(row.resolved_count || 0);
+      return {
+        weekStart: row.week_start ? new Date(row.week_start).toISOString() : '',
+        successRate: resolved > 0 ? toRounded(clampUnit(completed / resolved), 5) : null,
+        resolvedRuns: Math.max(0, resolved)
+      };
+    })
+    .filter((row: { weekStart: string }) => Boolean(row.weekStart))
+    .sort((a: { weekStart: string }, b: { weekStart: string }) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime());
+
+  let consecutiveWeeklyReliabilityFailures = 0;
+  for (const weekly of weeklyScheduledRunSuccessRates) {
+    if (weekly.resolvedRuns <= 0 || weekly.successRate === null) {
+      continue;
+    }
+    if (weekly.successRate < 0.995) {
+      consecutiveWeeklyReliabilityFailures += 1;
+      continue;
+    }
+    break;
+  }
+
+  let publishSuccessCount = Number(publishAttemptsResult.rows[0]?.success_count || 0);
+  let publishAttemptCount = Number(publishAttemptsResult.rows[0]?.total_count || 0);
+  if (publishAttemptCount === 0) {
+    const published = Number(publishFallbackResult.rows[0]?.published_count || 0);
+    const blocked = Number(publishFallbackResult.rows[0]?.blocked_count || 0);
+    publishSuccessCount = published;
+    publishAttemptCount = published + blocked;
+  }
+  const publishSuccessRate = publishAttemptCount > 0
+    ? toRounded(clampUnit(publishSuccessCount / publishAttemptCount), 5)
+    : null;
+
+  const duplicateActionSideEffects = Number(duplicateActionTasksResult.rows[0]?.duplicate_count || 0);
+  const duplicatePublishSideEffects = Number(duplicatePublishResult.rows[0]?.duplicate_count || 0);
+  const duplicateSideEffects = Math.max(0, duplicateActionSideEffects + duplicatePublishSideEffects);
+
+  const mttrMinutes = computeMttrMinutesFromRuns(
+    mttrRunsResult.rows.map((row: any) => ({
+      automationPolicyId: Number(row.automation_policy_id || 0),
+      status: String(row.status || ''),
+      ts: row.ts || null
+    }))
+  );
+
+  const failureByCode = buildFailureBucketsFromEvents(
+    failureEventsResult.rows.map((row: any) => ({
+      eventType: String(row.event_type || ''),
+      status: String(row.status || ''),
+      error: row.error || null,
+      metadata: parseJsonMaybe<Record<string, any>>(row.metadata, {})
+    }))
+  );
+
+  return {
+    periodDays,
+    scheduledRunSuccessRate,
+    publishSuccessRate,
+    duplicateSideEffects,
+    mttrMinutes,
+    consecutiveWeeklyReliabilityFailures,
+    weeklyScheduledRunSuccessRates,
+    failureByCode,
+    openCriticalIncidents: Number(criticalEventsResult.rows[0]?.open_critical || 0),
+    sampleSizes: {
+      scheduledRuns: Math.max(0, scheduledResolved),
+      publishAttempts: Math.max(0, publishAttemptCount),
+      failureEvents: failureEventsResult.rows.length
+    }
+  };
+}
+
+async function buildManagerSummary(
+  workspaceId: number,
+  roomId: number,
+  periodDaysInput: any
+): Promise<ManagerSummary> {
+  const periodDays = normalizePeriodDays(periodDaysInput, 7);
+
+  const [pendingApprovalsResult, blockedPublishesResult, actionItemsResult, automationFailuresResult] = await Promise.all([
+    query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM approval_requests
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND status = 'pending'
+      `,
+      [workspaceId, roomId]
+    ),
+    query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND event_type = 'decision_room_report_v2_publish_blocked'
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+      `,
+      [workspaceId, roomId, periodDays]
+    ),
+    query(
+      `
+      SELECT id, payload
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type = 'action_item'
+      ORDER BY created_at DESC
+      LIMIT 600
+      `,
+      [workspaceId, roomId]
+    ),
+    query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM automation_run_events
+      WHERE workspace_id = $1
+        AND (room_id = $2 OR room_id IS NULL)
+        AND created_at >= NOW() - INTERVAL '24 hours'
+        AND (
+          status = 'failed'
+          OR event_type IN ('execution_failed', 'execution_failed_terminal')
+        )
+      `,
+      [workspaceId, roomId]
+    )
+  ]);
+
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const actionRows = actionItemsResult.rows as Array<{ id: number; payload: any }>;
+  const overdueActions = actionRows.reduce((count, row) => {
+    const payload = parseJsonMaybe<Record<string, any>>(row.payload, {});
+    const rawStatus = String(payload.status || '').trim().toLowerCase();
+    const completedStatuses = new Set(['done', 'completed', 'closed', 'resolved', 'cancelled']);
+    if (completedStatuses.has(rawStatus)) return count;
+    const dueDateRaw = payload.dueDate || payload.due_date;
+    if (!dueDateRaw) return count;
+    const dueDate = new Date(dueDateRaw);
+    if (!Number.isFinite(dueDate.getTime())) return count;
+    if (dueDate.getTime() < todayStart.getTime()) {
+      return count + 1;
+    }
+    return count;
+  }, 0);
+
+  const pendingApprovals = Number(pendingApprovalsResult.rows[0]?.count || 0);
+  const blockedPublishes = Number(blockedPublishesResult.rows[0]?.count || 0);
+  const automationFailures24h = Number(automationFailuresResult.rows[0]?.count || 0);
+
+  const topRisks: string[] = [];
+  const recommendedActions: string[] = [];
+
+  if (pendingApprovals > 0) {
+    topRisks.push(`${pendingApprovals} approval request(s) are waiting on decision.`);
+    recommendedActions.push('Clear pending approvals in Comms to keep weekly decision flow moving.');
+  }
+  if (blockedPublishes > 0) {
+    topRisks.push(`${blockedPublishes} report publish attempt(s) were blocked in the selected period.`);
+    recommendedActions.push('Open Report V2 quality blockers and resolve unsupported claims before publish.');
+  }
+  if (overdueActions > 0) {
+    topRisks.push(`${overdueActions} action item(s) are overdue.`);
+    recommendedActions.push('Reassign overdue actions and update owners in the accountability board.');
+  }
+  if (automationFailures24h > 0) {
+    topRisks.push(`${automationFailures24h} automation failure event(s) occurred in the last 24 hours.`);
+    recommendedActions.push('Review automation run timeline and apply the failure-code runbook guidance.');
+  }
+
+  if (topRisks.length === 0) {
+    topRisks.push('No critical operational risks detected for this room.');
+    recommendedActions.push('Maintain current cadence and monitor reliability scorecard weekly.');
+  }
+
+  return {
+    pendingApprovals,
+    blockedPublishes,
+    overdueActions,
+    automationFailures24h,
+    topRisks,
+    recommendedActions
+  };
+}
+
+async function buildReadinessDecision(params: {
+  workspaceId: number;
+  roomId: number;
+  roomCreatedAt: string;
+  periodDays: number;
+  reliability: ReliabilityScorecard;
+  managerSummary: ManagerSummary;
+}): Promise<ReadinessDecision> {
+  const snapshot = await computeRoomPilotKpiSnapshot(
+    params.workspaceId,
+    params.roomId,
+    params.roomCreatedAt,
+    params.periodDays
+  );
+
+  const decision = evaluateReadinessGates({
+    snapshot,
+    reliability: {
+      scheduledRunSuccessRate: params.reliability.scheduledRunSuccessRate,
+      publishSuccessRate: params.reliability.publishSuccessRate,
+      duplicateSideEffects: params.reliability.duplicateSideEffects,
+      consecutiveWeeklyReliabilityFailures: params.reliability.consecutiveWeeklyReliabilityFailures
+    },
+    managerSummary: {
+      pendingApprovals: params.managerSummary.pendingApprovals,
+      blockedPublishes: params.managerSummary.blockedPublishes
+    }
+  });
+
+  return {
+    ...decision,
+    reliability: params.reliability
+  };
 }
 
 function normalizeIdempotencyKey(input: any): string | null {
@@ -6168,6 +6720,87 @@ router.get('/:workspaceId/rooms/:roomId/roi', async (req: WorkspaceRequest, res:
   } catch (err) {
     console.error('Load room ROI failed:', err);
     return res.status(500).json({ error: 'Failed to load room ROI snapshot' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/reliability/scorecard', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 7);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const scorecard = await computeReliabilityScorecard(workspaceId, roomId, periodDays);
+    return res.json({
+      roomId,
+      scorecard
+    });
+  } catch (err) {
+    console.error('Load reliability scorecard failed:', err);
+    return res.status(500).json({ error: 'Failed to load reliability scorecard' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/manager/summary', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 7);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const summary = await buildManagerSummary(workspaceId, roomId, periodDays);
+    return res.json({
+      roomId,
+      summary
+    });
+  } catch (err) {
+    console.error('Load manager summary failed:', err);
+    return res.status(500).json({ error: 'Failed to load manager summary' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/readiness/go-no-go', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 7);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const [reliability, managerSummary] = await Promise.all([
+      computeReliabilityScorecard(workspaceId, roomId, periodDays),
+      buildManagerSummary(workspaceId, roomId, periodDays)
+    ]);
+    const decision = await buildReadinessDecision({
+      workspaceId,
+      roomId,
+      roomCreatedAt: String(room.created_at),
+      periodDays,
+      reliability,
+      managerSummary
+    });
+
+    return res.json({
+      roomId,
+      gateResults: decision.gateResults,
+      overall: decision.overall,
+      blockers: decision.blockers,
+      checkedAt: decision.checkedAt,
+      snapshot: decision.snapshot,
+      reliability: decision.reliability,
+      managerSummary
+    });
+  } catch (err) {
+    console.error('Load go/no-go readiness failed:', err);
+    return res.status(500).json({ error: 'Failed to load go/no-go readiness decision' });
   }
 });
 

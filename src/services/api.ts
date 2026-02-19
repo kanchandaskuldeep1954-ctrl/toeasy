@@ -688,6 +688,71 @@ export interface RoomRoiTargetStatus {
   met: boolean;
 }
 
+export interface FailureBucket {
+  code: string;
+  count: number;
+  terminalCount: number;
+  retryableCount: number;
+  operatorAction?: string;
+}
+
+export interface ReliabilityScorecard {
+  periodDays: number;
+  scheduledRunSuccessRate: number | null;
+  publishSuccessRate: number | null;
+  duplicateSideEffects: number;
+  mttrMinutes: number | null;
+  consecutiveWeeklyReliabilityFailures: number;
+  weeklyScheduledRunSuccessRates: Array<{
+    weekStart: string;
+    successRate: number | null;
+    resolvedRuns: number;
+  }>;
+  failureByCode: FailureBucket[];
+  openCriticalIncidents: number;
+  sampleSizes: {
+    scheduledRuns: number;
+    publishAttempts: number;
+    failureEvents: number;
+  };
+}
+
+export interface ManagerSummary {
+  pendingApprovals: number;
+  blockedPublishes: number;
+  overdueActions: number;
+  automationFailures24h: number;
+  topRisks: string[];
+  recommendedActions: string[];
+}
+
+export interface GateResult {
+  key: string;
+  label: string;
+  threshold: string;
+  actual: number | string | null;
+  passed: boolean;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  note?: string;
+}
+
+export interface PilotKpiSnapshot {
+  timeToInsightMin: number | null;
+  insightToActionMin: number | null;
+  manualUpdateReductionPct: number;
+  evidenceCoverageRatio: number;
+}
+
+export interface ReadinessDecision {
+  gateResults: GateResult[];
+  overall: 'go' | 'no_go';
+  blockers: string[];
+  checkedAt: string;
+  snapshot: PilotKpiSnapshot;
+  reliability: ReliabilityScorecard;
+  managerSummary?: ManagerSummary;
+}
+
 export interface PersonaProfile {
   workspaceId: number;
   userId: number;
@@ -959,6 +1024,33 @@ export const studioAPI = {
 
   getRoomRoi: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/roi`),
+
+  getReliabilityScorecard: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{ roomId: number; scorecard: ReliabilityScorecard }>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/reliability/scorecard`,
+    { params }
+  ),
+
+  getManagerSummary: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{ roomId: number; summary: ManagerSummary }>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/manager/summary`,
+    { params }
+  ),
+
+  getReadinessDecision: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{ roomId: number } & ReadinessDecision>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/readiness/go-no-go`,
+    { params }
+  ),
 
   getPersonaProfile: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/preferences/profile`),
