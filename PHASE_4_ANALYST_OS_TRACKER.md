@@ -148,8 +148,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [ ] end-to-end flow test:
   - [ ] connect -> run -> pivot -> visual -> report -> publish -> action -> status draft
 - [ ] queue reliability tests:
-  - [ ] retry/backoff
-  - [ ] duplicate prevention
+  - [x] retry/backoff
+  - [x] duplicate prevention
   - [ ] failed schedule recovery
 
 ## 8) Risks and Mitigations
@@ -167,6 +167,11 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Queue reliability integration-test tranche):
+  - Extended `backend/src/routes/studio.integration.test.ts` with queue-focused route coverage:
+    - schedule dedupe behavior for repeated dedupe keys
+    - automation runs + queue-state retry/backoff visibility
+  - Standing-MVP queue reliability integration checkbox moved to complete.
 - 2026-02-19 (Studio route integration-test tranche):
   - Added backend route-level integration test harness with query override:
     - `backend/src/db.ts` (`setQueryOverrideForTests`, `resetQueryOverrideForTests`)

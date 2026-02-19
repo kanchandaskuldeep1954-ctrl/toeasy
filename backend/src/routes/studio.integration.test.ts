@@ -539,6 +539,88 @@ function createStudioQueryMock() {
       return { rows };
     }
 
+    if (sql.includes('from automation_runs r') && sql.includes('where r.workspace_id = $1')) {
+      return {
+        rows: [
+          {
+            id: 5011,
+            workspace_id: 1,
+            room_id: 101,
+            automation_policy_id: 501,
+            status: 'failed',
+            error: 'transient slack timeout',
+            output: JSON.stringify({ artifactIds: [102] }),
+            started_at: '2026-02-19T09:00:00.000Z',
+            completed_at: '2026-02-19T09:02:00.000Z',
+            created_at: '2026-02-19T09:00:00.000Z'
+          }
+        ]
+      };
+    }
+
+    if (sql.includes('from automation_run_events e') && sql.includes('where e.workspace_id = $1')) {
+      return {
+        rows: [
+          {
+            id: 7101,
+            workspace_id: 1,
+            room_id: 101,
+            automation_run_id: 5011,
+            event_type: 'execution_failed',
+            status: 'retrying',
+            attempt: 1,
+            error: 'HTTP 429 too many requests',
+            metadata: JSON.stringify({ queueAttempt: 1, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
+            created_at: '2026-02-19T09:00:30.000Z'
+          },
+          {
+            id: 7102,
+            workspace_id: 1,
+            room_id: 101,
+            automation_run_id: 5011,
+            event_type: 'execution_retry_scheduled',
+            status: 'retrying',
+            attempt: 2,
+            error: null,
+            metadata: JSON.stringify({ queueAttempt: 2, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
+            created_at: '2026-02-19T09:01:00.000Z'
+          }
+        ]
+      };
+    }
+
+    if (sql.includes('from automation_schedules') && sql.includes('order by updated_at desc')) {
+      const [workspaceId, roomId] = params;
+      const rows = state.automationSchedules.filter(
+        (item) =>
+          Number(item.workspace_id) === Number(workspaceId) &&
+          (item.room_id == null || Number(item.room_id) === Number(roomId))
+      );
+      return { rows };
+    }
+
+    if (sql.includes('count(*) filter (where is_active = true)::int as active_schedules') && sql.includes('from automation_schedules')) {
+      return {
+        rows: [
+          {
+            active_schedules: 1,
+            due_schedules: 0
+          }
+        ]
+      };
+    }
+
+    if (sql.includes('count(*) filter (where status = \'running\')::int as running_runs') && sql.includes('from automation_runs')) {
+      return {
+        rows: [
+          {
+            running_runs: 0,
+            awaiting_approval_runs: 1
+          }
+        ]
+      };
+    }
+
     if (sql.includes('insert into automation_schedules') && sql.includes('returning *')) {
       const row = {
         id: nextScheduleId++,
@@ -817,6 +899,87 @@ test('automation schedule endpoint replays deterministic response for same idemp
     assert.equal(second.response.status, 201);
     assert.equal(second.payload.replayed, true);
     assert.equal(second.payload.schedule?.id, first.payload.schedule?.id);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('automation schedule dedupe returns existing schedule for same dedupe key intent', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const first = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/automations/schedule',
+      body: {
+        policyId: 501,
+        cron: '0 9 * * 1',
+        timezone: 'UTC',
+        dedupeKey: 'revops-weekly-sync'
+      },
+      headers: {
+        'Idempotency-Key': 'schedule-idem-dedupe-a'
+      }
+    });
+    assert.equal(first.response.status, 201);
+    const createdScheduleId = Number(first.payload.schedule?.id);
+    assert.ok(Number.isFinite(createdScheduleId));
+
+    const second = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/automations/schedule',
+      body: {
+        policyId: 501,
+        cron: '0 9 * * 1',
+        timezone: 'UTC',
+        dedupeKey: 'revops-weekly-sync'
+      },
+      headers: {
+        'Idempotency-Key': 'schedule-idem-dedupe-b'
+      }
+    });
+    assert.equal(second.response.status, 200);
+    assert.equal(second.payload.deduped, true);
+    assert.equal(Number(second.payload.schedule?.id), createdScheduleId);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('automation runs and queue-state endpoints surface retry/backoff visibility', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const runsResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/rooms/101/automations/runs'
+    });
+    assert.equal(runsResult.response.status, 200);
+    assert.equal(Array.isArray(runsResult.payload.runs), true);
+    assert.equal(runsResult.payload.runs.length, 1);
+    assert.equal(runsResult.payload.runs[0].attempts, 2);
+    assert.equal(Array.isArray(runsResult.payload.events), true);
+    assert.equal(runsResult.payload.events.some((event: any) => event.eventType === 'execution_retry_scheduled'), true);
+
+    const queueStateResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/rooms/101/automations/queue-state'
+    });
+    assert.equal(queueStateResult.response.status, 200);
+    assert.equal(queueStateResult.payload.metrics.activeSchedules, 1);
+    assert.equal(queueStateResult.payload.metrics.awaitingApprovalRuns, 1);
   } finally {
     await stopStudioServer(server);
   }

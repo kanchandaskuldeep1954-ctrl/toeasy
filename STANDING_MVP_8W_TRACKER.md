@@ -33,7 +33,7 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Backend unit tests for reliability score internals (MTTR + failure buckets).
 - [x] Backend integration tests for visuals/metrics/attribution.
 - [x] Backend integration tests for profile/query-version/review/idempotency paths.
-- [ ] Queue retry/backoff + duplicate prevention integration tests.
+- [x] Queue retry/backoff + duplicate prevention integration tests.
 - [ ] Weekly full-flow E2E automation test.
 
 ### Weeks 5-6: Manager Control Tower V1
@@ -61,6 +61,6 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 
 ## 5) Next Concrete Build Slice
 
-1. Implement queue reliability integration tests (retry, dedupe, recovery).
-2. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
-3. Expand idempotency replay integration coverage from schedule to publish + action sync endpoints.
+1. Add weekly full-flow E2E test (connect -> run -> pivot -> visuals -> report -> review -> publish -> sync -> status).
+2. Expand idempotency replay integration coverage from schedule to publish + action sync endpoints.
+3. Add failed schedule recovery integration scenario in route-level test harness.
