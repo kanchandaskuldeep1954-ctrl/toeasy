@@ -133,9 +133,9 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 - [x] extend idempotency and dedupe guarantees to remaining mutating endpoints
 
 ### Phase F (Weeks 21-24): Launch Readiness
-- [ ] persona presets finalized (analyst/manager/executive)
-- [ ] guided onboarding playbooks from first room to first publish
-- [ ] ROI dashboard tied to program KPIs
+- [x] persona presets finalized (analyst/manager/executive)
+- [x] guided onboarding playbooks from first room to first publish
+- [x] ROI dashboard tied to program KPIs
 - [ ] pilot conversion package and GTM launch checklist
 
 ## 7) Test Coverage Tracker
@@ -165,6 +165,21 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Validate end-to-end flow with one design-partner dataset and Slack handoff.
 
 ## 10) Change Log
+- 2026-02-19 (Persona + onboarding + ROI scorecard tranche):
+  - Added workspace persona profile APIs:
+    - `GET /api/workspaces/:id/preferences/profile`
+    - `POST /api/workspaces/:id/preferences/profile`
+    - auto-seeded profile defaults per workspace/user when absent.
+  - Added onboarding playbook API:
+    - `GET /api/workspaces/:id/rooms/:roomId/playbooks/onboarding`
+    - returns guided step cards with recommended panel routing and blockers.
+  - Upgraded room ROI endpoint with program KPI scorecard:
+    - target/actual status for time-to-insight, insight-to-action, manual update reduction, evidence coverage
+    - overall status classification (`on_track|mixed|at_risk|unknown`).
+  - Wired Studio right-rail UX:
+    - persona preset selector (persona + mode)
+    - onboarding playbook quick actions (`Open step`, `Mark done`)
+    - ROI target attainment scorecard tied to program KPIs.
 - 2026-02-19 (Analyst depth + metric policy tranche):
   - Shipped pivot UX depth controls for calculated workflows:
     - toggles for `% of total`, rank ordering, custom formula expression

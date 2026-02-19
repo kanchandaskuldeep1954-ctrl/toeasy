@@ -350,6 +350,28 @@ interface RoomRoiSnapshot {
   evidenceCoverageRatio: number;
 }
 
+interface RoomRoiTargetStatus {
+  key: string;
+  label: string;
+  target: number;
+  actual: number | null;
+  comparator: 'lte' | 'gte';
+  unit: 'minutes' | 'percent' | 'ratio';
+  met: boolean;
+}
+
+interface UserPreferenceProfile {
+  workspaceId: number;
+  userId: number;
+  persona: 'analyst' | 'manager' | 'executive';
+  uiMode: 'guided' | 'expert';
+  reportStyle: string;
+  aiStyle: string;
+  notificationPreferences: Record<string, any>;
+  panelPreferences: Record<string, any>;
+  updatedAt: string;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -3390,6 +3412,114 @@ function toReviewSubmissionRecord(row: any): ReviewSubmission {
   };
 }
 
+function normalizeUserPreferenceRow(row: any): UserPreferenceProfile {
+  const personaRaw = String(row.persona || 'analyst').toLowerCase();
+  const persona: UserPreferenceProfile['persona'] =
+    personaRaw === 'manager' || personaRaw === 'executive'
+      ? (personaRaw as UserPreferenceProfile['persona'])
+      : 'analyst';
+  const uiModeRaw = String(row.ui_mode || 'guided').toLowerCase();
+  const uiMode: UserPreferenceProfile['uiMode'] = uiModeRaw === 'expert' ? 'expert' : 'guided';
+
+  return {
+    workspaceId: Number(row.workspace_id),
+    userId: Number(row.user_id),
+    persona,
+    uiMode,
+    reportStyle: String(row.report_style || 'concise'),
+    aiStyle: String(row.ai_style || 'tactical'),
+    notificationPreferences: parseJsonMaybe<Record<string, any>>(row.notification_preferences, {}),
+    panelPreferences: parseJsonMaybe<Record<string, any>>(row.panel_preferences, {}),
+    updatedAt: String(row.updated_at || row.created_at || new Date().toISOString())
+  };
+}
+
+async function getOrCreateUserPreferenceProfile(workspaceId: number, userId: number): Promise<UserPreferenceProfile> {
+  const existing = await query(
+    `
+    SELECT *
+    FROM user_preference_profiles
+    WHERE workspace_id = $1
+      AND user_id = $2
+    LIMIT 1
+    `,
+    [workspaceId, userId]
+  );
+
+  if (existing.rows.length > 0) {
+    return normalizeUserPreferenceRow(existing.rows[0]);
+  }
+
+  const inserted = await query(
+    `
+    INSERT INTO user_preference_profiles (
+      workspace_id,
+      user_id,
+      persona,
+      ui_mode,
+      report_style,
+      ai_style,
+      notification_preferences,
+      panel_preferences
+    )
+    VALUES ($1,$2,'analyst','guided','concise','tactical',$3,$4)
+    RETURNING *
+    `,
+    [workspaceId, userId, JSON.stringify({}), JSON.stringify({})]
+  );
+
+  return normalizeUserPreferenceRow(inserted.rows[0]);
+}
+
+async function updateUserPreferenceProfile(params: {
+  workspaceId: number;
+  userId: number;
+  persona?: 'analyst' | 'manager' | 'executive';
+  uiMode?: 'guided' | 'expert';
+  reportStyle?: string;
+  aiStyle?: string;
+  notificationPreferences?: Record<string, any>;
+  panelPreferences?: Record<string, any>;
+}) {
+  const current = await getOrCreateUserPreferenceProfile(params.workspaceId, params.userId);
+  const next = {
+    persona: params.persona || current.persona,
+    uiMode: params.uiMode || current.uiMode,
+    reportStyle: params.reportStyle || current.reportStyle,
+    aiStyle: params.aiStyle || current.aiStyle,
+    notificationPreferences: params.notificationPreferences || current.notificationPreferences || {},
+    panelPreferences: params.panelPreferences || current.panelPreferences || {}
+  };
+
+  const updated = await query(
+    `
+    UPDATE user_preference_profiles
+    SET persona = $1,
+        ui_mode = $2,
+        report_style = $3,
+        ai_style = $4,
+        notification_preferences = $5,
+        panel_preferences = $6,
+        updated_at = NOW()
+    WHERE workspace_id = $7
+      AND user_id = $8
+    RETURNING *
+    `,
+    [
+      next.persona,
+      next.uiMode,
+      next.reportStyle,
+      next.aiStyle,
+      JSON.stringify(next.notificationPreferences || {}),
+      JSON.stringify(next.panelPreferences || {}),
+      params.workspaceId,
+      params.userId
+    ]
+  );
+
+  return normalizeUserPreferenceRow(updated.rows[0]);
+}
+
 async function listVisualAnnotations(workspaceId: number, roomId: number, visualId: number): Promise<VisualAnnotation[]> {
   const result = await query(
     `
@@ -3629,6 +3759,76 @@ router.get('/:workspaceId/studio/navigation', async (req: WorkspaceRequest, res:
   } catch (err) {
     console.error('Studio navigation state failed:', err);
     return res.status(500).json({ error: 'Failed to load Studio navigation state' });
+  }
+});
+
+router.get('/:workspaceId/preferences/profile', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const profile = await getOrCreateUserPreferenceProfile(workspaceId, Number(req.user!.id));
+    return res.json({ profile });
+  } catch (err) {
+    console.error('Load preference profile failed:', err);
+    return res.status(500).json({ error: 'Failed to load preference profile' });
+  }
+});
+
+router.post('/:workspaceId/preferences/profile', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const personaRaw = req.body?.persona;
+    const uiModeRaw = req.body?.uiMode;
+    const reportStyleRaw = req.body?.reportStyle;
+    const aiStyleRaw = req.body?.aiStyle;
+
+    const persona = ['analyst', 'manager', 'executive'].includes(String(personaRaw))
+      ? (String(personaRaw) as UserPreferenceProfile['persona'])
+      : undefined;
+    const uiMode = ['guided', 'expert'].includes(String(uiModeRaw))
+      ? (String(uiModeRaw) as UserPreferenceProfile['uiMode'])
+      : undefined;
+    const reportStyle = typeof reportStyleRaw === 'string' && reportStyleRaw.trim()
+      ? reportStyleRaw.trim().slice(0, 40)
+      : undefined;
+    const aiStyle = typeof aiStyleRaw === 'string' && aiStyleRaw.trim()
+      ? aiStyleRaw.trim().slice(0, 40)
+      : undefined;
+
+    const notificationPreferences = req.body?.notificationPreferences && typeof req.body.notificationPreferences === 'object'
+      ? req.body.notificationPreferences
+      : undefined;
+    const panelPreferences = req.body?.panelPreferences && typeof req.body.panelPreferences === 'object'
+      ? req.body.panelPreferences
+      : undefined;
+
+    const profile = await updateUserPreferenceProfile({
+      workspaceId,
+      userId: Number(req.user!.id),
+      persona,
+      uiMode,
+      reportStyle,
+      aiStyle,
+      notificationPreferences,
+      panelPreferences
+    });
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: null,
+      userId: req.user!.id,
+      eventType: 'decision_room_persona_profile_updated',
+      metadata: {
+        persona: profile.persona,
+        uiMode: profile.uiMode,
+        reportStyle: profile.reportStyle,
+        aiStyle: profile.aiStyle
+      }
+    });
+
+    return res.json({ profile });
+  } catch (err) {
+    console.error('Update preference profile failed:', err);
+    return res.status(500).json({ error: 'Failed to update preference profile' });
   }
 });
 
@@ -5900,9 +6100,64 @@ router.get('/:workspaceId/rooms/:roomId/roi', async (req: WorkspaceRequest, res:
       evidenceCoverageRatio: toRounded(evidenceCoverageRatio, 5)
     };
 
+    const scorecard: RoomRoiTargetStatus[] = [
+      {
+        key: 'time_to_first_insight',
+        label: 'Time to first insight',
+        target: 30,
+        actual: snapshot.timeToInsightMin,
+        comparator: 'lte',
+        unit: 'minutes',
+        met: snapshot.timeToInsightMin !== null && snapshot.timeToInsightMin <= 30
+      },
+      {
+        key: 'insight_to_action',
+        label: 'Insight to assigned action',
+        target: 24 * 60,
+        actual: snapshot.timeToActionMin,
+        comparator: 'lte',
+        unit: 'minutes',
+        met: snapshot.timeToActionMin !== null && snapshot.timeToActionMin <= (24 * 60)
+      },
+      {
+        key: 'manual_status_reduction',
+        label: 'Manual status update reduction',
+        target: 60,
+        actual: snapshot.manualUpdateReductionPct,
+        comparator: 'gte',
+        unit: 'percent',
+        met: snapshot.manualUpdateReductionPct >= 60
+      },
+      {
+        key: 'evidence_coverage',
+        label: 'Published evidence coverage',
+        target: 0.9,
+        actual: snapshot.evidenceCoverageRatio,
+        comparator: 'gte',
+        unit: 'ratio',
+        met: snapshot.evidenceCoverageRatio >= 0.9
+      }
+    ];
+    const scoredTargets = scorecard.filter((item) => item.actual !== null);
+    const metTargets = scoredTargets.filter((item) => item.met).length;
+    const overallStatus = scoredTargets.length === 0
+      ? 'unknown'
+      : metTargets === scoredTargets.length
+        ? 'on_track'
+        : metTargets >= Math.ceil(scoredTargets.length / 2)
+          ? 'mixed'
+          : 'at_risk';
+
     return res.json({
       roomId,
       snapshot,
+      scorecard: {
+        totalTargets: scorecard.length,
+        measuredTargets: scoredTargets.length,
+        metTargets,
+        overallStatus,
+        items: scorecard
+      },
       basedOn: {
         latestBundleId: latestBundleId || null,
         draftedStatusEvents: draftedCount,
@@ -6448,6 +6703,52 @@ router.get('/:workspaceId/rooms/:roomId/playbooks/recommendations', async (req: 
   } catch (err) {
     console.error('Playbook recommendations failed:', err);
     return res.status(500).json({ error: 'Failed to load playbook recommendations' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/playbooks/onboarding', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const profile = await getOrCreateUserPreferenceProfile(workspaceId, Number(req.user!.id));
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+
+    const panelMap: Record<string, 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms'> = {
+      connect_data: 'sheets',
+      analyze_data: 'query',
+      build_brief: 'report',
+      assign_actions: 'actions',
+      sync_actions: 'actions'
+    };
+
+    const onboardingSteps = guide.steps.map((step) => ({
+      id: step.id,
+      label: step.label,
+      stage: step.stage,
+      completed: step.completed,
+      completedAt: step.completedAt,
+      blockers: step.blockingIssues || [],
+      panel: panelMap[step.id] || 'sheets',
+      actionLabel: step.completed ? 'Review' : 'Open step'
+    }));
+
+    return res.json({
+      roomId,
+      persona: profile.persona,
+      uiMode: profile.uiMode,
+      completionRatio: guide.completionRatio,
+      nextBestStep: guide.nextBestStep,
+      steps: onboardingSteps
+    });
+  } catch (err) {
+    console.error('Onboarding playbook load failed:', err);
+    return res.status(500).json({ error: 'Failed to load onboarding playbook' });
   }
 });
 

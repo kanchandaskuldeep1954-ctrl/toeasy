@@ -235,6 +235,19 @@ describe('Studio MVP API Contracts', () => {
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/roi');
   });
 
+  it('calls persona profile get endpoint', () => {
+    studioAPI.getPersonaProfile('12');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/preferences/profile');
+  });
+
+  it('calls persona profile update endpoint', () => {
+    studioAPI.updatePersonaProfile('12', { persona: 'manager', uiMode: 'guided' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/preferences/profile', {
+      persona: 'manager',
+      uiMode: 'guided'
+    });
+  });
+
   it('calls review submit endpoint', () => {
     studioAPI.submitReview('12', '77', { bundleId: 'bundle_7', reviewerId: 13, stage: 'manager_review' });
     expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/review/submit', {
@@ -261,6 +274,11 @@ describe('Studio MVP API Contracts', () => {
   it('calls playbook recommendations endpoint', () => {
     studioAPI.getPlaybookRecommendations('12', '77');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/playbooks/recommendations');
+  });
+
+  it('calls onboarding playbook endpoint', () => {
+    studioAPI.getOnboardingPlaybook('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/playbooks/onboarding');
   });
 
   it('calls schedule automation endpoint', () => {

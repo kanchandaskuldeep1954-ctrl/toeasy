@@ -13,7 +13,9 @@ import {
   DatasetProfileArtifact,
   MetricCatalogItem,
   NextBestStep,
+  OnboardingPlaybookStep,
   OutcomeAttribution,
+  PersonaProfile,
   ReportV2Bundle,
   ReportV2Quality,
   ReviewSubmission,
@@ -22,6 +24,7 @@ import {
   RoomGuideStep,
   RoomMentionableUser,
   RoomRoiSnapshot,
+  RoomRoiTargetStatus,
   RoomThread,
   RoomThreadComment,
   StatusDraft,
@@ -365,6 +368,20 @@ const AnalyticsStudio: React.FC = () => {
   const [roomTrustQuality, setRoomTrustQuality] = useState<{ qualityScore: number; threshold: number; publishBlocked: boolean } | null>(null);
   const [coverageTrendPoints, setCoverageTrendPoints] = useState<CoverageTrendPoint[]>([]);
   const [roomRoiSnapshot, setRoomRoiSnapshot] = useState<RoomRoiSnapshot | null>(null);
+  const [roomRoiScorecard, setRoomRoiScorecard] = useState<{
+    totalTargets: number;
+    measuredTargets: number;
+    metTargets: number;
+    overallStatus: string;
+    items: RoomRoiTargetStatus[];
+  } | null>(null);
+  const [personaProfile, setPersonaProfile] = useState<PersonaProfile | null>(null);
+  const [personaBusy, setPersonaBusy] = useState(false);
+  const [onboardingPlaybook, setOnboardingPlaybook] = useState<{
+    completionRatio: number;
+    nextBestStep?: { stepId: string; reason: string; blockingIssues: string[] } | null;
+    steps: OnboardingPlaybookStep[];
+  } | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [pivotPercentOfTotalEnabled, setPivotPercentOfTotalEnabled] = useState(true);
   const [pivotRankEnabled, setPivotRankEnabled] = useState(true);
@@ -697,10 +714,13 @@ const AnalyticsStudio: React.FC = () => {
       setRoomTrustQuality(null);
       setCoverageTrendPoints([]);
       setRoomRoiSnapshot(null);
+      setRoomRoiScorecard(null);
+      setOnboardingPlaybook(null);
+      setPersonaProfile(null);
       return;
     }
 
-    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse, reviewSubmissionsResponse] = await Promise.all([
+    const [metricsResponse, playbookResponse, outcomeResponse, automationResponse, queueStateResponse, trustResponse, coverageTrendResponse, roiResponse, reviewSubmissionsResponse, profileResponse, onboardingResponse] = await Promise.all([
       studioAPI.getMetricsCatalog(workspaceId, selectedRoomId).catch((error) => {
         console.warn('Metric catalog refresh failed:', error);
         return null;
@@ -742,6 +762,18 @@ const AnalyticsStudio: React.FC = () => {
       studioAPI.listReviewSubmissions(workspaceId, selectedRoomId).catch((error) => {
         if (error?.response?.status !== 404) {
           console.warn('Review submissions refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getPersonaProfile(workspaceId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Persona profile refresh failed:', error);
+        }
+        return null;
+      }),
+      studioAPI.getOnboardingPlaybook(workspaceId, selectedRoomId).catch((error) => {
+        if (error?.response?.status !== 404) {
+          console.warn('Onboarding playbook refresh failed:', error);
         }
         return null;
       })
@@ -791,6 +823,10 @@ const AnalyticsStudio: React.FC = () => {
     }
     if (roiResponse?.data?.snapshot) {
       setRoomRoiSnapshot(roiResponse.data.snapshot);
+      setRoomRoiScorecard(roiResponse.data?.scorecard || null);
+    } else {
+      setRoomRoiSnapshot(null);
+      setRoomRoiScorecard(null);
     }
     if (reviewSubmissionsResponse) {
       const submissions = Array.isArray(reviewSubmissionsResponse.data?.submissions)
@@ -806,6 +842,16 @@ const AnalyticsStudio: React.FC = () => {
         setLastReviewSubmission(null);
         setSelectedReviewSubmissionId('');
       }
+    }
+    if (profileResponse?.data?.profile) {
+      setPersonaProfile(profileResponse.data.profile);
+    }
+    if (onboardingResponse?.data) {
+      setOnboardingPlaybook({
+        completionRatio: Number(onboardingResponse.data?.completionRatio || 0),
+        nextBestStep: onboardingResponse.data?.nextBestStep || null,
+        steps: Array.isArray(onboardingResponse.data?.steps) ? onboardingResponse.data.steps : []
+      });
     }
   }, [workspaceId, selectedRoomId, selectedReviewSubmissionId]);
 
@@ -1042,6 +1088,8 @@ const AnalyticsStudio: React.FC = () => {
     setRoomTrustQuality(null);
     setCoverageTrendPoints([]);
     setRoomRoiSnapshot(null);
+    setRoomRoiScorecard(null);
+    setOnboardingPlaybook(null);
     setProfileBusy(false);
     setReviewBundleIdInput('');
     setReviewStageInput('manager_review');
@@ -1111,6 +1159,46 @@ const AnalyticsStudio: React.FC = () => {
     if (selectedProjectId) next.set('project', selectedProjectId);
     if (selectedRoomId) next.set('room', selectedRoomId);
     setSearchParams(next);
+  };
+
+  const updatePersonaProfile = async (updates: Partial<PersonaProfile>) => {
+    if (!workspaceId) return;
+    setPersonaBusy(true);
+    try {
+      const response = await studioAPI.updatePersonaProfile(workspaceId, {
+        persona: updates.persona,
+        uiMode: updates.uiMode,
+        reportStyle: updates.reportStyle,
+        aiStyle: updates.aiStyle,
+        notificationPreferences: updates.notificationPreferences,
+        panelPreferences: updates.panelPreferences
+      });
+      if (response.data?.profile) {
+        setPersonaProfile(response.data.profile);
+      }
+      setStatusMessage('Persona preferences saved.');
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    } finally {
+      setPersonaBusy(false);
+    }
+  };
+
+  const openOnboardingStep = (step: OnboardingPlaybookStep) => {
+    setPanel(step.panel);
+    setStatusMessage(`Opened onboarding step "${step.label}" in ${step.panel}.`);
+  };
+
+  const completeOnboardingStep = async (stepId: string) => {
+    if (!workspaceId || !selectedRoomId) return;
+    try {
+      await studioAPI.completeGuideStep(workspaceId, selectedRoomId, stepId);
+      await refreshRoomState();
+      await refreshAnalystOps();
+      setStatusMessage(`Marked onboarding step "${stepId}" as complete.`);
+    } catch (error: any) {
+      setStatusMessage(toErrorMessage(error));
+    }
   };
 
   const createProject = async () => {
@@ -3490,6 +3578,90 @@ const AnalyticsStudio: React.FC = () => {
             <div>Insight to action: {roomRoiSnapshot?.timeToActionMin != null ? `${roomRoiSnapshot.timeToActionMin.toFixed(1)} min` : 'n/a'}</div>
             <div>Manual update reduction: {roomRoiSnapshot?.manualUpdateReductionPct != null ? `${roomRoiSnapshot.manualUpdateReductionPct.toFixed(0)}%` : 'n/a'}</div>
             <div>Evidence ratio: {roomRoiSnapshot?.evidenceCoverageRatio != null ? `${(roomRoiSnapshot.evidenceCoverageRatio * 100).toFixed(0)}%` : 'n/a'}</div>
+            {roomRoiScorecard && (
+              <div className="mt-1 rounded border border-slate-200 dark:border-slate-700 p-2">
+                <div className="font-semibold">
+                  KPI scorecard: {roomRoiScorecard.metTargets}/{roomRoiScorecard.measuredTargets} targets met
+                </div>
+                <div className="text-[10px] text-slate-500 mb-1">Status: {roomRoiScorecard.overallStatus}</div>
+                <div className="space-y-1">
+                  {roomRoiScorecard.items.map((item) => (
+                    <div key={item.key} className="flex items-center justify-between gap-2 text-[10px]">
+                      <span>{item.label}</span>
+                      <span className={item.met ? 'text-emerald-600' : 'text-amber-700'}>
+                        {item.actual == null
+                          ? 'n/a'
+                          : item.unit === 'minutes'
+                            ? `${item.actual.toFixed(1)}m`
+                            : item.unit === 'percent'
+                              ? `${item.actual.toFixed(0)}%`
+                              : `${(item.actual * 100).toFixed(0)}%`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Persona Preset</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2 text-[11px] text-slate-600 dark:text-slate-300">
+            <select
+              value={personaProfile?.persona || 'analyst'}
+              onChange={(e) => updatePersonaProfile({ persona: e.target.value as PersonaProfile['persona'] })}
+              disabled={personaBusy}
+              className="w-full px-2 py-1 text-xs rounded border"
+            >
+              <option value="analyst">Analyst (deep)</option>
+              <option value="manager">Manager (operational)</option>
+              <option value="executive">Executive (digest-first)</option>
+            </select>
+            <select
+              value={personaProfile?.uiMode || 'guided'}
+              onChange={(e) => updatePersonaProfile({ uiMode: e.target.value as PersonaProfile['uiMode'] })}
+              disabled={personaBusy}
+              className="w-full px-2 py-1 text-xs rounded border"
+            >
+              <option value="guided">Guided mode</option>
+              <option value="expert">Expert mode</option>
+            </select>
+            <div className="text-[10px] text-slate-500">
+              AI style: {personaProfile?.aiStyle || 'tactical'} | Report style: {personaProfile?.reportStyle || 'concise'}
+            </div>
+          </div>
+
+          <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">Onboarding Playbook</h3>
+          <div className="space-y-2 rounded border border-slate-200 dark:border-slate-700 p-2">
+            {onboardingPlaybook ? (
+              <>
+                <div className="text-[11px] text-slate-600 dark:text-slate-300">
+                  Completion: {(onboardingPlaybook.completionRatio * 100).toFixed(0)}%
+                </div>
+                {onboardingPlaybook.steps.slice(0, 5).map((step) => (
+                  <div key={step.id} className="text-[11px] rounded border border-slate-200 dark:border-slate-700 p-2">
+                    <div className="font-semibold">{step.label}</div>
+                    <div className="text-[10px] text-slate-500">
+                      {step.completed ? 'Completed' : `Pending (${step.stage})`}
+                    </div>
+                    {step.blockers.length > 0 && !step.completed && (
+                      <div className="text-[10px] text-amber-700 mt-1">{step.blockers[0]}</div>
+                    )}
+                    <div className="mt-1 flex items-center gap-1">
+                      <button onClick={() => openOnboardingStep(step)} className="px-2 py-0.5 rounded border text-[10px]">
+                        {step.actionLabel}
+                      </button>
+                      {!step.completed && step.blockers.length === 0 && (
+                        <button onClick={() => completeOnboardingStep(step.id)} className="px-2 py-0.5 rounded border text-[10px]">
+                          Mark done
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <div className="text-[11px] text-slate-500">No onboarding playbook loaded yet.</div>
+            )}
           </div>
 
           <h3 className="text-xs font-bold uppercase text-slate-500 mt-4 mb-2">MVP KPI Snapshot</h3>

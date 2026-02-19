@@ -643,6 +643,39 @@ export interface RoomRoiSnapshot {
   evidenceCoverageRatio: number;
 }
 
+export interface RoomRoiTargetStatus {
+  key: string;
+  label: string;
+  target: number;
+  actual: number | null;
+  comparator: 'lte' | 'gte';
+  unit: 'minutes' | 'percent' | 'ratio';
+  met: boolean;
+}
+
+export interface PersonaProfile {
+  workspaceId: number;
+  userId: number;
+  persona: 'analyst' | 'manager' | 'executive';
+  uiMode: 'guided' | 'expert';
+  reportStyle: string;
+  aiStyle: string;
+  notificationPreferences: Record<string, any>;
+  panelPreferences: Record<string, any>;
+  updatedAt: string;
+}
+
+export interface OnboardingPlaybookStep {
+  id: string;
+  label: string;
+  stage: string;
+  completed: boolean;
+  completedAt: string | null;
+  blockers: string[];
+  panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+  actionLabel: string;
+}
+
 export interface StudioBootstrapRequest {
   datasetId?: number;
   source?: 'login' | 'upload' | 'dataset_library' | 'deep_link';
@@ -892,8 +925,26 @@ export const studioAPI = {
   getRoomRoi: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/roi`),
 
+  getPersonaProfile: (workspaceId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/preferences/profile`),
+
+  updatePersonaProfile: (
+    workspaceId: string,
+    data: {
+      persona?: 'analyst' | 'manager' | 'executive';
+      uiMode?: 'guided' | 'expert';
+      reportStyle?: string;
+      aiStyle?: string;
+      notificationPreferences?: Record<string, any>;
+      panelPreferences?: Record<string, any>;
+    }
+  ) => getClient().post(`/workspaces/${workspaceId}/preferences/profile`, data || {}),
+
   getPlaybookRecommendations: (workspaceId: string, roomId: string) =>
     getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/playbooks/recommendations`),
+
+  getOnboardingPlaybook: (workspaceId: string, roomId: string) =>
+    getClient().get(`/workspaces/${workspaceId}/rooms/${roomId}/playbooks/onboarding`),
 
   createAutomation: (workspaceId: string, data: any) =>
     getClient().post(`/workspaces/${workspaceId}/automations`, data),
