@@ -748,7 +748,7 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
           room_id: 101,
           automation_policy_id: 501,
           status: 'completed',
-          error: null,
+          error: '',
           output: JSON.stringify({ artifactIds: [102], recoveredFromRunId: 5011 }),
           started_at: '2026-02-19T09:04:00.000Z',
           completed_at: '2026-02-19T09:05:00.000Z',
@@ -782,7 +782,7 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
           event_type: 'execution_retry_scheduled',
           status: 'retrying',
           attempt: 2,
-          error: null,
+          error: '',
           metadata: JSON.stringify({ queueAttempt: 2, queueMaxAttempts: 3, retryBackoffMs: 2000 }),
           created_at: '2026-02-19T09:01:00.000Z'
         }
@@ -796,7 +796,7 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
           event_type: 'execution_completed',
           status: 'completed',
           attempt: 2,
-          error: null,
+          error: '',
           metadata: JSON.stringify({ queueAttempt: 2, recoveredFromRunId: 5011 }),
           created_at: '2026-02-19T09:05:00.000Z'
         });

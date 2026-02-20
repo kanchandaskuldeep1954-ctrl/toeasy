@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Hash,
@@ -34,11 +35,60 @@ interface Channel {
     description?: string;
     unread?: number;
     memberCount?: number;
+    context_room_id?: number | null;
+    context_project_id?: number | null;
+}
+
+interface RoomContextPayload {
+    workspaceId: number;
+    room: {
+        id: number;
+        name: string;
+        stage: string;
+        projectId: number | null;
+        projectName: string | null;
+        datasetId: number | null;
+        updatedAt?: string;
+    };
+    summary: {
+        artifactsByType: Record<string, number>;
+        queryRuns: number;
+        pivots: number;
+        charts: number;
+        reports: number;
+        actions: number;
+        pendingApprovals: number;
+        latestReportBundleId: string | null;
+        latestReportGeneratedAt: string | null;
+        statusDraftCount: number;
+        actionSyncCount: number;
+    };
+    recentEvents: Array<{
+        eventType: string;
+        label: string;
+        metadata: Record<string, any>;
+        createdAt: string;
+    }>;
+    channel?: {
+        id: string;
+        name: string;
+        description?: string;
+        type: 'public' | 'private' | 'direct';
+        contextProjectId?: number | null;
+        contextRoomId?: number | null;
+    } | null;
 }
 
 export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId }) => {
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
     const { activeWorkspace } = useWorkspace();
-    const workspaceId = propWorkspaceId || (activeWorkspace?.id ? String(activeWorkspace.id) : undefined);
+    const workspaceId = propWorkspaceId
+        || searchParams.get('workspace')
+        || (activeWorkspace?.id ? String(activeWorkspace.id) : undefined);
+    const roomId = searchParams.get('room') || '';
+    const projectId = searchParams.get('project') || '';
+    const datasetId = searchParams.get('dataset') || '';
 
     const [channels, setChannels] = useState<Channel[]>([]);
     const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
@@ -51,10 +101,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
     const [newChannelName, setNewChannelName] = useState('');
     const [newChannelDesc, setNewChannelDesc] = useState('');
     const [createLoading, setCreateLoading] = useState(false);
+    const [roomContext, setRoomContext] = useState<RoomContextPayload | null>(null);
+    const [roomContextLoading, setRoomContextLoading] = useState(false);
+    const [roomContextError, setRoomContextError] = useState('');
+    const [publishingContextUpdate, setPublishingContextUpdate] = useState(false);
 
     const [replyTo, setReplyTo] = useState<{ id: string; userName: string; content: string } | null>(null);
     const { socket } = useSocket();
     const { user } = useAuth();
+    const contextRoomId = roomId || (activeChannel?.context_room_id ? String(activeChannel.context_room_id) : '');
+    const contextProjectId = projectId || (activeChannel?.context_project_id ? String(activeChannel.context_project_id) : '');
 
     const currentUserId = user?.id ? String(user.id) : 'current-user';
     const currentUserName = user?.name || user?.email || 'You';
@@ -71,13 +127,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         clientMessageId?: string;
     };
 
-    // Workspaces are currently single-owner (no team workspace membership yet).
-    // Show the current user as the only member to avoid fake/mock data.
+    // Member roster API is not wired in this screen yet.
+    // Keep a truthful fallback (current authenticated user only).
     const members = user ? [
         { id: currentUserId, name: currentUserName, status: (socket?.connected ? 'online' : 'offline') as 'online' | 'offline' }
     ] : [];
 
-    // Fetch channels on mount
+    // Fetch channels + ensure room-context channel (when room query param exists)
     useEffect(() => {
         const fetchChannels = async () => {
             if (!workspaceId) {
@@ -86,10 +142,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
             }
             setLoading(true);
             try {
-                const data = await chatService.getChannels(workspaceId);
-                setChannels(data || []);
-                if (data && data.length > 0 && !activeChannel) {
-                    setActiveChannel(data[0]);
+                let nextChannels: Channel[] = (await chatService.getChannels(workspaceId)) || [];
+
+                if (roomId) {
+                    try {
+                        const ensured = await chatService.ensureRoomContextChannel(workspaceId, roomId, { autoPostSummary: false });
+                        const ensuredChannel = ensured?.channel as Channel | undefined;
+                        if (ensuredChannel?.id) {
+                            const alreadyExists = nextChannels.some((channel) => channel.id === ensuredChannel.id);
+                            if (!alreadyExists) {
+                                nextChannels = [...nextChannels, ensuredChannel];
+                            }
+                            setActiveChannel((prev) => {
+                                if (!prev) return ensuredChannel;
+                                if (prev.id === ensuredChannel.id) return prev;
+                                return ensuredChannel;
+                            });
+                        }
+                    } catch (contextChannelErr) {
+                        console.warn('Failed to ensure room context channel:', contextChannelErr);
+                    }
+                }
+
+                setChannels(nextChannels);
+                if (nextChannels.length > 0 && !activeChannel) {
+                    setActiveChannel(nextChannels[0]);
                 }
             } catch (error) {
                 console.error('Failed to fetch channels:', error);
@@ -100,7 +177,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
             }
         };
         fetchChannels();
-    }, [workspaceId]);
+    }, [workspaceId, roomId]);
+
+    useEffect(() => {
+        const fetchRoomContext = async () => {
+            if (!workspaceId || !contextRoomId) {
+                setRoomContext(null);
+                setRoomContextError('');
+                return;
+            }
+
+            setRoomContextLoading(true);
+            setRoomContextError('');
+            try {
+                const contextPayload = await chatService.getRoomContext(workspaceId, contextRoomId);
+                setRoomContext(contextPayload || null);
+            } catch (error: any) {
+                console.error('Failed to load room context:', error);
+                setRoomContext(null);
+                setRoomContextError(
+                    error?.response?.data?.error || error?.message || 'Unable to load room context.'
+                );
+            } finally {
+                setRoomContextLoading(false);
+            }
+        };
+        fetchRoomContext();
+    }, [workspaceId, contextRoomId]);
 
     // Fetch messages when active channel changes
     useEffect(() => {
@@ -305,11 +408,56 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         }
     };
 
+    const handleOpenRoomInStudio = () => {
+        if (!workspaceId || !contextRoomId) return;
+        const query = new URLSearchParams();
+        query.set('workspace', workspaceId);
+        if (datasetId) query.set('dataset', datasetId);
+        if (contextProjectId) query.set('project', contextProjectId);
+        query.set('room', contextRoomId);
+        query.set('panel', 'comms');
+        navigate(`/app/studio?${query.toString()}`);
+    };
+
+    const handlePublishContextUpdate = async () => {
+        if (!workspaceId || !contextRoomId || !activeChannel) return;
+        setPublishingContextUpdate(true);
+        try {
+            const response = await chatService.publishRoomContextUpdate(workspaceId, contextRoomId, {
+                channelId: activeChannel.id
+            });
+            const message = response?.message;
+            if (message && String(message.channel_id || '') === String(activeChannel.id)) {
+                setMessages((prev) => [
+                    ...prev,
+                    {
+                        id: String(message.id),
+                        content: String(message.content || ''),
+                        userId: String(message.user_id || currentUserId),
+                        userName: message.user?.full_name || message.user?.email || currentUserName,
+                        timestamp: new Date(message.created_at || new Date().toISOString()),
+                        reactions: {},
+                        attachments: []
+                    }
+                ]);
+            }
+            if (workspaceId && contextRoomId) {
+                const refreshed = await chatService.getRoomContext(workspaceId, contextRoomId);
+                setRoomContext(refreshed || null);
+            }
+        } catch (error) {
+            console.error('Failed to publish room context update:', error);
+        } finally {
+            setPublishingContextUpdate(false);
+        }
+    };
+
     // Transform channels for ChannelList component
     const channelListData = channels.map(c => ({
         id: c.id,
         name: c.name,
         type: c.type === 'direct' ? 'dm' as const : c.type as 'public' | 'private',
+        context_room_id: c.context_room_id ?? null,
     }));
 
     if (loading) {
@@ -339,6 +487,91 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
             <div className="flex-1 flex flex-col min-w-0">
                 {activeChannel ? (
                     <>
+                        {contextRoomId && (
+                            <div className="px-4 py-3 border-b border-slate-800 bg-slate-900/70">
+                                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                    <div className="text-xs font-semibold text-blue-300 uppercase tracking-wide">
+                                        Decision Room Context
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={handleOpenRoomInStudio}
+                                            className="!px-2 !py-1 text-[11px]"
+                                        >
+                                            Open in Studio
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            onClick={handlePublishContextUpdate}
+                                            disabled={publishingContextUpdate || roomContextLoading}
+                                            className="!px-2 !py-1 text-[11px]"
+                                        >
+                                            {publishingContextUpdate ? 'Publishing...' : 'Post Context Update'}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {roomContextLoading ? (
+                                    <div className="text-[11px] text-slate-400">Loading room context...</div>
+                                ) : roomContextError ? (
+                                    <div className="text-[11px] text-rose-300">{roomContextError}</div>
+                                ) : roomContext ? (
+                                    <>
+                                        <div className="text-[11px] text-slate-300 mb-2">
+                                            <span className="font-semibold text-white">{roomContext.room.name}</span>
+                                            {' '}| stage: <span className="uppercase">{roomContext.room.stage}</span>
+                                            {' '}| project: <span>{roomContext.room.projectName || 'Not set'}</span>
+                                            {roomContext.room.datasetId ? (
+                                                <>
+                                                    {' '}| dataset: <span>{roomContext.room.datasetId}</span>
+                                                </>
+                                            ) : null}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px]">
+                                            <div className="rounded border border-slate-700 p-2">
+                                                <div className="text-slate-400">Runs</div>
+                                                <div className="text-white font-semibold">{roomContext.summary.queryRuns}</div>
+                                            </div>
+                                            <div className="rounded border border-slate-700 p-2">
+                                                <div className="text-slate-400">Actions</div>
+                                                <div className="text-white font-semibold">{roomContext.summary.actions}</div>
+                                            </div>
+                                            <div className="rounded border border-slate-700 p-2">
+                                                <div className="text-slate-400">Pending Approvals</div>
+                                                <div className="text-white font-semibold">{roomContext.summary.pendingApprovals}</div>
+                                            </div>
+                                            <div className="rounded border border-slate-700 p-2">
+                                                <div className="text-slate-400">Latest Report</div>
+                                                <div className="text-white font-semibold truncate">
+                                                    {roomContext.summary.latestReportBundleId || 'none'}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {roomContext.recentEvents.length > 0 && (
+                                            <div className="mt-2 text-[11px] text-slate-400">
+                                                <div className="font-semibold text-slate-300 mb-1">Recent room activity</div>
+                                                <div className="space-y-1">
+                                                    {roomContext.recentEvents.slice(0, 3).map((event) => (
+                                                        <div key={`${event.eventType}-${event.createdAt}`} className="truncate">
+                                                            {event.label} • {new Date(event.createdAt).toLocaleString()}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <div className="text-[11px] text-slate-400">
+                                        No room context available for this chat view.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* Channel Header */}
                         < header className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900/50 backdrop-blur-xl" >
                             <div className="flex items-center gap-3">

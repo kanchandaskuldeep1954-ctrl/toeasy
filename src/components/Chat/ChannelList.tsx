@@ -20,6 +20,7 @@ interface Channel {
     name: string;
     type: 'public' | 'private' | 'dm';
     unread?: number;
+    context_room_id?: number | null;
     participants?: { id: string; name: string; avatar?: string }[];
     lastMessage?: string;
     starred?: boolean;
@@ -142,6 +143,11 @@ export const ChannelList: React.FC<ChannelListProps> = ({
                                     <span className="flex-1 text-left truncate">
                                         {channel.name}
                                     </span>
+                                    {channel.context_room_id ? (
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-200 border border-blue-500/40">
+                                            room
+                                        </span>
+                                    ) : null}
                                     {channel.unread && (
                                         <Badge variant="primary" size="sm">
                                             {channel.unread}

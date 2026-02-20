@@ -76,6 +76,40 @@ export const chatService = {
         return res.data.messages;
     },
 
+    getRoomContext: async (workspaceId: string, roomId: string) => {
+        const res = await axios.get(
+            `${API_BASE}/chat/workspaces/${workspaceId}/rooms/${roomId}/context`,
+            { headers: getAuthHeaders() }
+        );
+        return res.data;
+    },
+
+    ensureRoomContextChannel: async (
+        workspaceId: string,
+        roomId: string,
+        data?: { autoPostSummary?: boolean }
+    ) => {
+        const res = await axios.post(
+            `${API_BASE}/chat/workspaces/${workspaceId}/rooms/${roomId}/context/channel`,
+            data || {},
+            { headers: getAuthHeaders() }
+        );
+        return res.data;
+    },
+
+    publishRoomContextUpdate: async (
+        workspaceId: string,
+        roomId: string,
+        data?: { channelId?: string }
+    ) => {
+        const res = await axios.post(
+            `${API_BASE}/chat/workspaces/${workspaceId}/rooms/${roomId}/context/publish`,
+            data || {},
+            { headers: getAuthHeaders() }
+        );
+        return res.data;
+    },
+
     sendMessage: async (channelId: string, content: string, parentId?: string) => {
         const res = await axios.post(`${API_BASE}/chat/channels/${channelId}/messages`, { content, parent_id: parentId }, { headers: getAuthHeaders() });
         return res.data.message;

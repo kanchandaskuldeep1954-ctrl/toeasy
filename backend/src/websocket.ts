@@ -233,7 +233,9 @@ export function setupWebSocket(httpServer: any) {
                 `SELECT c.id
                  FROM channels c
                  JOIN workspaces w ON w.id = c.workspace_id
-                 WHERE c.id = $1 AND w.user_id = $2`,
+                 LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
+                 WHERE c.id = $1
+                   AND (w.user_id = $2 OR wm.user_id = $2)`,
                 [channelId, socket.data.userId]
             );
             if (channelAccess.rows.length === 0) {
@@ -289,7 +291,9 @@ export function setupWebSocket(httpServer: any) {
                     `SELECT c.id
                      FROM channels c
                      JOIN workspaces w ON w.id = c.workspace_id
-                     WHERE c.id = $1 AND w.user_id = $2`,
+                     LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
+                     WHERE c.id = $1
+                       AND (w.user_id = $2 OR wm.user_id = $2)`,
                     [data.channelId, socket.data.userId]
                 );
                 if (channelAccess.rows.length === 0) {
@@ -373,7 +377,10 @@ export function setupWebSocket(httpServer: any) {
                      FROM messages m
                      JOIN channels c ON c.id = m.channel_id
                      JOIN workspaces w ON w.id = c.workspace_id
-                     WHERE m.id = $1 AND m.channel_id = $2 AND w.user_id = $3`,
+                     LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $3
+                     WHERE m.id = $1
+                       AND m.channel_id = $2
+                       AND (w.user_id = $3 OR wm.user_id = $3)`,
                     [data.messageId, data.channelId, socket.data.userId]
                 );
                 if (msgResult.rows.length === 0) return;

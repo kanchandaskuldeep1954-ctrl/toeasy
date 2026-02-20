@@ -167,6 +167,18 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Keep route integration suite green as release guardrail.
 
 ## 10) Change Log
+- 2026-02-20 (Context-aware chat tranche):
+  - Added Decision Room context-aware chat backend APIs:
+    - `GET /api/chat/workspaces/:workspaceId/rooms/:roomId/context`
+    - `POST /api/chat/workspaces/:workspaceId/rooms/:roomId/context/channel`
+    - `POST /api/chat/workspaces/:workspaceId/rooms/:roomId/context/publish`
+  - Added additive migration:
+    - `backend/migrations/035_decision_room_chat_context.js` (`decision_room_chat_channels` mapping table)
+  - Upgraded chat access model for team collaboration:
+    - chat HTTP routes and websocket channel/reaction checks now allow workspace members (not owner-only).
+  - Upgraded frontend chat UX:
+    - sidebar passes workspace/project/room context into `/app/chat`
+    - Chat screen renders Decision Room context bar with stage, run/action/approval/report status, recent room events, and one-click context update publish.
 - 2026-02-19 (Standing-MVP closure tranche):
   - Extended `backend/src/routes/studio.integration.test.ts` with:
     - full weekly route-level E2E flow:

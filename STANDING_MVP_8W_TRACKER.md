@@ -41,6 +41,7 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Pending approvals + blocked publishes + overdue actions + automation failure summary.
 - [x] Recommended manager actions in summary payload.
 - [x] Dedicated manager-mode screen (`/app/control-tower`) with direct nav access.
+- [x] Context-aware chat handoff from active room (`/app/chat?workspace&project&room`) with room-state summary and one-click context update publish.
 
 ### Weeks 7-8: Pilot Proof + Conversion Readiness
 - [ ] 3 paid pilot telemetry review loop.
