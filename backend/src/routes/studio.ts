@@ -427,6 +427,49 @@ interface ReadinessDecision {
   reliability: ReliabilityScorecard;
 }
 
+type IncidentSeverity = 'critical' | 'high' | 'medium' | 'low';
+type IncidentStatus = 'open' | 'acknowledged' | 'resolved';
+
+interface PilotIncident {
+  id: number;
+  workspaceId: number;
+  roomId: number | null;
+  sourceType: string;
+  sourceKey: string;
+  code: string;
+  severity: IncidentSeverity;
+  status: IncidentStatus;
+  ownerId: number | null;
+  ownerName: string | null;
+  openedAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  slaDueAt: string | null;
+  runbookAction: string | null;
+  resolutionNote: string | null;
+  metadata: Record<string, any>;
+}
+
+interface WorkspacePilotReadiness {
+  periodDays: number;
+  roomCount: number;
+  checkedAt: string;
+  gateResults: GateResult[];
+  overall: 'go' | 'no_go';
+  blockers: string[];
+  snapshot: PilotKpiSnapshot;
+  reliability: ReliabilityScorecard;
+  managerSummary: ManagerSummary;
+  roomDecisions: Array<{
+    roomId: number;
+    roomName: string;
+    overall: 'go' | 'no_go';
+    gatePasses: number;
+    gateTotal: number;
+    blockers: string[];
+  }>;
+}
+
 interface UserPreferenceProfile {
   workspaceId: number;
   userId: number;
@@ -3618,6 +3661,511 @@ async function buildReadinessDecision(params: {
   };
 }
 
+function averageNumber(values: Array<number | null | undefined>): number | null {
+  const scoped = values.filter((value): value is number => value != null && Number.isFinite(value));
+  if (!scoped.length) return null;
+  return scoped.reduce((sum, value) => sum + value, 0) / scoped.length;
+}
+
+function medianNumber(values: Array<number | null | undefined>): number | null {
+  const scoped = values
+    .filter((value): value is number => value != null && Number.isFinite(value))
+    .sort((a, b) => a - b);
+  if (!scoped.length) return null;
+  const middle = Math.floor(scoped.length / 2);
+  if (scoped.length % 2 === 1) return scoped[middle];
+  return (scoped[middle - 1] + scoped[middle]) / 2;
+}
+
+function normalizeIncidentSeverity(value: any, fallback: IncidentSeverity = 'high'): IncidentSeverity {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'critical' || normalized === 'high' || normalized === 'medium' || normalized === 'low') {
+    return normalized;
+  }
+  return fallback;
+}
+
+function getIncidentSlaHours(severity: IncidentSeverity): number {
+  if (severity === 'critical') return 4;
+  if (severity === 'high') return 8;
+  if (severity === 'medium') return 24;
+  return 48;
+}
+
+function toIsoOrNull(input: any): string | null {
+  if (!input) return null;
+  const parsed = new Date(input);
+  if (!Number.isFinite(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
+function mergeFailureBuckets(scorecards: ReliabilityScorecard[]): FailureBucket[] {
+  const bucketMap = new Map<string, FailureBucket>();
+  scorecards.forEach((scorecard) => {
+    scorecard.failureByCode.forEach((bucket) => {
+      const existing = bucketMap.get(bucket.code);
+      if (existing) {
+        existing.count += Number(bucket.count || 0);
+        existing.terminalCount += Number(bucket.terminalCount || 0);
+        existing.retryableCount += Number(bucket.retryableCount || 0);
+        if (!existing.operatorAction && bucket.operatorAction) {
+          existing.operatorAction = bucket.operatorAction;
+        }
+      } else {
+        bucketMap.set(bucket.code, {
+          code: bucket.code,
+          count: Number(bucket.count || 0),
+          terminalCount: Number(bucket.terminalCount || 0),
+          retryableCount: Number(bucket.retryableCount || 0),
+          operatorAction: bucket.operatorAction
+        });
+      }
+    });
+  });
+
+  return Array.from(bucketMap.values()).sort((a, b) => b.count - a.count);
+}
+
+function mergeWeeklyReliabilityTrends(scorecards: ReliabilityScorecard[]) {
+  const weeklyMap = new Map<string, { rateSum: number; rateCount: number; resolvedRuns: number }>();
+  scorecards.forEach((scorecard) => {
+    scorecard.weeklyScheduledRunSuccessRates.forEach((entry) => {
+      if (!entry.weekStart) return;
+      const current = weeklyMap.get(entry.weekStart) || { rateSum: 0, rateCount: 0, resolvedRuns: 0 };
+      if (entry.successRate !== null && Number.isFinite(entry.successRate)) {
+        current.rateSum += entry.successRate;
+        current.rateCount += 1;
+      }
+      current.resolvedRuns += Number(entry.resolvedRuns || 0);
+      weeklyMap.set(entry.weekStart, current);
+    });
+  });
+
+  return Array.from(weeklyMap.entries())
+    .map(([weekStart, value]) => ({
+      weekStart,
+      successRate: value.rateCount > 0 ? toRounded(clampUnit(value.rateSum / value.rateCount), 5) : null,
+      resolvedRuns: Math.max(0, value.resolvedRuns)
+    }))
+    .sort((a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime());
+}
+
+function aggregateReliabilityScorecards(periodDays: number, scorecards: ReliabilityScorecard[]): ReliabilityScorecard {
+  if (!scorecards.length) {
+    return {
+      periodDays,
+      scheduledRunSuccessRate: null,
+      publishSuccessRate: null,
+      duplicateSideEffects: 0,
+      mttrMinutes: null,
+      consecutiveWeeklyReliabilityFailures: 0,
+      weeklyScheduledRunSuccessRates: [],
+      failureByCode: [],
+      openCriticalIncidents: 0,
+      sampleSizes: {
+        scheduledRuns: 0,
+        publishAttempts: 0,
+        failureEvents: 0
+      }
+    };
+  }
+
+  const scheduledRates = scorecards
+    .map((entry) => entry.scheduledRunSuccessRate)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+  const publishRates = scorecards
+    .map((entry) => entry.publishSuccessRate)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+
+  const mttrValues = scorecards
+    .map((entry) => entry.mttrMinutes)
+    .filter((value): value is number => value !== null && Number.isFinite(value));
+
+  return {
+    periodDays,
+    scheduledRunSuccessRate: scheduledRates.length ? toRounded(Math.min(...scheduledRates), 5) : null,
+    publishSuccessRate: publishRates.length ? toRounded(Math.min(...publishRates), 5) : null,
+    duplicateSideEffects: scorecards.reduce((sum, entry) => sum + Number(entry.duplicateSideEffects || 0), 0),
+    mttrMinutes: mttrValues.length ? toRounded(averageNumber(mttrValues) || 0, 3) : null,
+    consecutiveWeeklyReliabilityFailures: scorecards.reduce(
+      (max, entry) => Math.max(max, Number(entry.consecutiveWeeklyReliabilityFailures || 0)),
+      0
+    ),
+    weeklyScheduledRunSuccessRates: mergeWeeklyReliabilityTrends(scorecards),
+    failureByCode: mergeFailureBuckets(scorecards),
+    openCriticalIncidents: scorecards.reduce((sum, entry) => sum + Number(entry.openCriticalIncidents || 0), 0),
+    sampleSizes: {
+      scheduledRuns: scorecards.reduce((sum, entry) => sum + Number(entry.sampleSizes?.scheduledRuns || 0), 0),
+      publishAttempts: scorecards.reduce((sum, entry) => sum + Number(entry.sampleSizes?.publishAttempts || 0), 0),
+      failureEvents: scorecards.reduce((sum, entry) => sum + Number(entry.sampleSizes?.failureEvents || 0), 0)
+    }
+  };
+}
+
+function aggregateManagerSummaries(summaries: ManagerSummary[]): ManagerSummary {
+  if (!summaries.length) {
+    return {
+      pendingApprovals: 0,
+      blockedPublishes: 0,
+      overdueActions: 0,
+      automationFailures24h: 0,
+      topRisks: ['No rooms available yet for manager evaluation.'],
+      recommendedActions: ['Create a room and run one full weekly cycle to generate manager telemetry.']
+    };
+  }
+
+  const topRisks = Array.from(
+    new Set(summaries.flatMap((entry) => entry.topRisks || []).map((item) => String(item || '').trim()).filter(Boolean))
+  ).slice(0, 8);
+  const recommendedActions = Array.from(
+    new Set(summaries.flatMap((entry) => entry.recommendedActions || []).map((item) => String(item || '').trim()).filter(Boolean))
+  ).slice(0, 8);
+
+  return {
+    pendingApprovals: summaries.reduce((sum, entry) => sum + Number(entry.pendingApprovals || 0), 0),
+    blockedPublishes: summaries.reduce((sum, entry) => sum + Number(entry.blockedPublishes || 0), 0),
+    overdueActions: summaries.reduce((sum, entry) => sum + Number(entry.overdueActions || 0), 0),
+    automationFailures24h: summaries.reduce((sum, entry) => sum + Number(entry.automationFailures24h || 0), 0),
+    topRisks: topRisks.length ? topRisks : ['No critical operational risks detected for the selected period.'],
+    recommendedActions: recommendedActions.length
+      ? recommendedActions
+      : ['Maintain current cadence and keep monitoring weekly gate health.']
+  };
+}
+
+function aggregatePilotSnapshot(decisions: ReadinessDecision[]): PilotKpiSnapshot {
+  if (!decisions.length) {
+    return {
+      timeToInsightMin: null,
+      insightToActionMin: null,
+      manualUpdateReductionPct: 0,
+      evidenceCoverageRatio: 0
+    };
+  }
+
+  const timeToInsight = medianNumber(decisions.map((entry) => entry.snapshot.timeToInsightMin));
+  const insightToAction = medianNumber(decisions.map((entry) => entry.snapshot.insightToActionMin));
+  const manualReduction = averageNumber(decisions.map((entry) => entry.snapshot.manualUpdateReductionPct));
+  const evidenceCoverage = averageNumber(decisions.map((entry) => entry.snapshot.evidenceCoverageRatio));
+
+  return {
+    timeToInsightMin: timeToInsight === null ? null : toRounded(timeToInsight, 3),
+    insightToActionMin: insightToAction === null ? null : toRounded(insightToAction, 3),
+    manualUpdateReductionPct: manualReduction === null ? 0 : toRounded(manualReduction, 3),
+    evidenceCoverageRatio: evidenceCoverage === null ? 0 : toRounded(evidenceCoverage, 5)
+  };
+}
+
+async function buildWorkspacePilotReadiness(workspaceId: number, periodDaysInput: any): Promise<WorkspacePilotReadiness> {
+  const periodDays = normalizePeriodDays(periodDaysInput, 7);
+  const roomsResult = await query(
+    `
+    SELECT id, name, created_at
+    FROM analysis_rooms
+    WHERE workspace_id = $1
+      AND COALESCE(is_archived, false) = false
+    ORDER BY updated_at DESC NULLS LAST, created_at DESC
+    LIMIT 120
+    `,
+    [workspaceId]
+  );
+
+  const rooms = roomsResult.rows as Array<{ id: number; name: string; created_at: string }>;
+  if (!rooms.length) {
+    const reliability = aggregateReliabilityScorecards(periodDays, []);
+    const managerSummary = aggregateManagerSummaries([]);
+    const fallbackSnapshot: PilotKpiSnapshot = {
+      timeToInsightMin: null,
+      insightToActionMin: null,
+      manualUpdateReductionPct: 0,
+      evidenceCoverageRatio: 0
+    };
+    const decision = evaluateReadinessGates({
+      snapshot: fallbackSnapshot,
+      reliability: {
+        scheduledRunSuccessRate: reliability.scheduledRunSuccessRate,
+        publishSuccessRate: reliability.publishSuccessRate,
+        duplicateSideEffects: reliability.duplicateSideEffects,
+        consecutiveWeeklyReliabilityFailures: reliability.consecutiveWeeklyReliabilityFailures
+      },
+      managerSummary: {
+        pendingApprovals: managerSummary.pendingApprovals,
+        blockedPublishes: managerSummary.blockedPublishes
+      }
+    });
+
+    return {
+      periodDays,
+      roomCount: 0,
+      checkedAt: decision.checkedAt,
+      gateResults: decision.gateResults,
+      overall: decision.overall,
+      blockers: decision.blockers,
+      snapshot: decision.snapshot,
+      reliability,
+      managerSummary,
+      roomDecisions: []
+    };
+  }
+
+  const roomDecisionRows = await Promise.all(
+    rooms.map(async (room) => {
+      const roomId = Number(room.id);
+      const reliability = await computeReliabilityScorecard(workspaceId, roomId, periodDays);
+      const managerSummary = await buildManagerSummary(workspaceId, roomId, periodDays);
+      const readiness = await buildReadinessDecision({
+        workspaceId,
+        roomId,
+        roomCreatedAt: String(room.created_at),
+        periodDays,
+        reliability,
+        managerSummary
+      });
+      return {
+        roomId,
+        roomName: String(room.name || `Room ${roomId}`),
+        reliability,
+        managerSummary,
+        readiness
+      };
+    })
+  );
+
+  const reliability = aggregateReliabilityScorecards(
+    periodDays,
+    roomDecisionRows.map((entry) => entry.reliability)
+  );
+  const managerSummary = aggregateManagerSummaries(roomDecisionRows.map((entry) => entry.managerSummary));
+  const snapshot = aggregatePilotSnapshot(roomDecisionRows.map((entry) => entry.readiness));
+
+  const readinessDecision = evaluateReadinessGates({
+    snapshot,
+    reliability: {
+      scheduledRunSuccessRate: reliability.scheduledRunSuccessRate,
+      publishSuccessRate: reliability.publishSuccessRate,
+      duplicateSideEffects: reliability.duplicateSideEffects,
+      consecutiveWeeklyReliabilityFailures: reliability.consecutiveWeeklyReliabilityFailures
+    },
+    managerSummary: {
+      pendingApprovals: managerSummary.pendingApprovals,
+      blockedPublishes: managerSummary.blockedPublishes
+    }
+  });
+
+  const roomDecisions = roomDecisionRows.map((entry) => ({
+    roomId: entry.roomId,
+    roomName: entry.roomName,
+    overall: entry.readiness.overall,
+    gatePasses: entry.readiness.gateResults.filter((gate) => gate.passed).length,
+    gateTotal: entry.readiness.gateResults.length,
+    blockers: entry.readiness.blockers.slice(0, 8)
+  }));
+  const roomLevelNoGoCount = roomDecisions.filter((entry) => entry.overall === 'no_go').length;
+  const blockers = [...readinessDecision.blockers];
+  if (roomLevelNoGoCount > 0) {
+    blockers.push(`${roomLevelNoGoCount} room(s) are currently no-go and need remediation before scale.`);
+  }
+
+  return {
+    periodDays,
+    roomCount: roomDecisions.length,
+    checkedAt: readinessDecision.checkedAt,
+    gateResults: readinessDecision.gateResults,
+    overall: blockers.length === 0 ? 'go' : 'no_go',
+    blockers,
+    snapshot: readinessDecision.snapshot,
+    reliability,
+    managerSummary,
+    roomDecisions
+  };
+}
+
+async function upsertReliabilityIncident(params: {
+  workspaceId: number;
+  roomId: number | null;
+  sourceType: string;
+  sourceKey: string;
+  code: string;
+  severity: IncidentSeverity;
+  runbookAction?: string | null;
+  openedAt?: string | null;
+  metadata?: Record<string, any>;
+}) {
+  const openedAtIso = toIsoOrNull(params.openedAt) || new Date().toISOString();
+  const openedAt = new Date(openedAtIso);
+  const slaDueAt = new Date(openedAt.getTime() + getIncidentSlaHours(params.severity) * 60 * 60 * 1000).toISOString();
+
+  await query(
+    `
+    INSERT INTO reliability_incidents (
+      workspace_id,
+      room_id,
+      source_type,
+      source_key,
+      code,
+      severity,
+      status,
+      opened_at,
+      sla_due_at,
+      runbook_action,
+      metadata
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,'open',$7,$8,$9,$10)
+    ON CONFLICT (workspace_id, source_key)
+    DO UPDATE SET
+      room_id = COALESCE(reliability_incidents.room_id, EXCLUDED.room_id),
+      code = EXCLUDED.code,
+      severity = EXCLUDED.severity,
+      runbook_action = COALESCE(reliability_incidents.runbook_action, EXCLUDED.runbook_action),
+      metadata = EXCLUDED.metadata,
+      updated_at = NOW()
+    `,
+    [
+      params.workspaceId,
+      params.roomId,
+      params.sourceType,
+      params.sourceKey,
+      params.code,
+      params.severity,
+      openedAtIso,
+      slaDueAt,
+      params.runbookAction || null,
+      JSON.stringify(params.metadata || {})
+    ]
+  );
+}
+
+async function seedPilotIncidentsFromSignals(workspaceId: number, periodDaysInput: any) {
+  const periodDays = normalizePeriodDays(periodDaysInput, 56);
+  const [automationFailuresResult, analyticsSignalsResult] = await Promise.all([
+    query(
+      `
+      SELECT id, room_id, event_type, status, error, metadata, created_at
+      FROM automation_run_events
+      WHERE workspace_id = $1
+        AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
+        AND (
+          status = 'failed'
+          OR event_type IN ('execution_failed', 'execution_failed_terminal')
+        )
+      ORDER BY created_at DESC
+      LIMIT 600
+      `,
+      [workspaceId, periodDays]
+    ),
+    query(
+      `
+      SELECT id, room_id, event_type, metadata, created_at
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND created_at >= NOW() - ($2::int * INTERVAL '1 day')
+        AND event_type IN ('decision_room_report_v2_publish_blocked', 'decision_room_actions_sync_failed')
+      ORDER BY created_at DESC
+      LIMIT 600
+      `,
+      [workspaceId, periodDays]
+    )
+  ]);
+
+  for (const event of automationFailuresResult.rows) {
+    const metadata = parseJsonMaybe<Record<string, any>>(event.metadata, {});
+    const severity = normalizeIncidentSeverity(
+      metadata.failureSeverity || metadata.severity,
+      String(event.event_type || '').toLowerCase().includes('terminal') ? 'critical' : 'high'
+    );
+    const code = String(metadata.failureCode || metadata.code || 'automation_execution_failed');
+    const runbookAction = String(metadata.operatorAction || '').trim() || 'Inspect automation run timeline and retry from operator panel.';
+    await upsertReliabilityIncident({
+      workspaceId,
+      roomId: event.room_id == null ? null : Number(event.room_id),
+      sourceType: 'automation_run_event',
+      sourceKey: `automation_run_event:${event.id}`,
+      code,
+      severity,
+      runbookAction,
+      openedAt: event.created_at ? String(event.created_at) : null,
+      metadata: {
+        eventType: event.event_type,
+        status: event.status,
+        error: event.error || null,
+        ...metadata
+      }
+    });
+  }
+
+  for (const event of analyticsSignalsResult.rows) {
+    const metadata = parseJsonMaybe<Record<string, any>>(event.metadata, {});
+    const eventType = String(event.event_type || '');
+    const severity: IncidentSeverity = eventType === 'decision_room_actions_sync_failed' ? 'high' : 'medium';
+    const code = eventType === 'decision_room_actions_sync_failed'
+      ? 'actions_sync_failed'
+      : 'report_publish_blocked';
+    const runbookAction = eventType === 'decision_room_actions_sync_failed'
+      ? 'Validate Slack credentials/channel and rerun action sync with idempotency key.'
+      : 'Resolve report blockers (unsupported claims or metric policy) before republishing.';
+    await upsertReliabilityIncident({
+      workspaceId,
+      roomId: event.room_id == null ? null : Number(event.room_id),
+      sourceType: 'analytics_event',
+      sourceKey: `analytics_event:${event.id}`,
+      code,
+      severity,
+      runbookAction,
+      openedAt: event.created_at ? String(event.created_at) : null,
+      metadata: {
+        eventType,
+        ...metadata
+      }
+    });
+  }
+}
+
+function toPilotIncident(row: any): PilotIncident {
+  return {
+    id: Number(row.id),
+    workspaceId: Number(row.workspace_id),
+    roomId: row.room_id == null ? null : Number(row.room_id),
+    sourceType: String(row.source_type || ''),
+    sourceKey: String(row.source_key || ''),
+    code: String(row.code || ''),
+    severity: normalizeIncidentSeverity(row.severity, 'high'),
+    status: String(row.status || 'open') as IncidentStatus,
+    ownerId: row.owner_id == null ? null : Number(row.owner_id),
+    ownerName: row.owner_name ? String(row.owner_name) : null,
+    openedAt: toIsoOrNull(row.opened_at) || new Date().toISOString(),
+    acknowledgedAt: toIsoOrNull(row.acknowledged_at),
+    resolvedAt: toIsoOrNull(row.resolved_at),
+    slaDueAt: toIsoOrNull(row.sla_due_at),
+    runbookAction: row.runbook_action ? String(row.runbook_action) : null,
+    resolutionNote: row.resolution_note ? String(row.resolution_note) : null,
+    metadata: parseJsonMaybe<Record<string, any>>(row.metadata, {})
+  };
+}
+
+function escapeCsvCell(value: any): string {
+  if (value === null || value === undefined) return '';
+  const raw = String(value);
+  if (/["\n,\r]/.test(raw)) {
+    return `"${raw.replace(/"/g, '""')}"`;
+  }
+  return raw;
+}
+
+function toCsv(rows: Record<string, any>[]): { columns: string[]; csv: string } {
+  if (!rows.length) {
+    return { columns: [], csv: '' };
+  }
+  const columns = extractColumns(rows);
+  const header = columns.map((column) => escapeCsvCell(column)).join(',');
+  const body = rows
+    .map((row) => columns.map((column) => escapeCsvCell(row?.[column])).join(','))
+    .join('\n');
+  return {
+    columns,
+    csv: `${header}\n${body}`
+  };
+}
+
 function normalizeIdempotencyKey(input: any): string | null {
   const value = String(input || '').trim();
   if (!value) return null;
@@ -6804,6 +7352,302 @@ router.get('/:workspaceId/rooms/:roomId/readiness/go-no-go', async (req: Workspa
   }
 });
 
+router.get('/:workspaceId/pilot/scorecard', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 7);
+    const readiness = await buildWorkspacePilotReadiness(workspaceId, periodDays);
+    const weekStartIso = new Date();
+    weekStartIso.setHours(0, 0, 0, 0);
+    weekStartIso.setDate(weekStartIso.getDate() - weekStartIso.getDay());
+
+    try {
+      await query(
+        `
+        INSERT INTO pilot_weekly_snapshots (
+          workspace_id,
+          week_start,
+          room_id,
+          period_days,
+          scorecard_json,
+          readiness_json,
+          created_by
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7)
+        `,
+        [
+          workspaceId,
+          weekStartIso.toISOString().slice(0, 10),
+          null,
+          periodDays,
+          JSON.stringify({
+            roomCount: readiness.roomCount,
+            reliability: readiness.reliability,
+            managerSummary: readiness.managerSummary
+          }),
+          JSON.stringify({
+            gateResults: readiness.gateResults,
+            overall: readiness.overall,
+            blockers: readiness.blockers,
+            snapshot: readiness.snapshot,
+            roomDecisions: readiness.roomDecisions
+          }),
+          req.user!.id
+        ]
+      );
+    } catch (snapshotErr) {
+      console.warn('Pilot weekly snapshot insert skipped:', snapshotErr);
+    }
+
+    return res.json({
+      periodDays: readiness.periodDays,
+      roomCount: readiness.roomCount,
+      checkedAt: readiness.checkedAt,
+      overall: readiness.overall,
+      gateResults: readiness.gateResults,
+      blockers: readiness.blockers,
+      snapshot: readiness.snapshot,
+      reliability: readiness.reliability,
+      managerSummary: readiness.managerSummary,
+      roomDecisions: readiness.roomDecisions
+    });
+  } catch (err) {
+    console.error('Load pilot scorecard failed:', err);
+    return res.status(500).json({ error: 'Failed to load pilot scorecard' });
+  }
+});
+
+router.get('/:workspaceId/pilot/readiness/go-no-go', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 56);
+    const readiness = await buildWorkspacePilotReadiness(workspaceId, periodDays);
+    return res.json({
+      gateResults: readiness.gateResults,
+      overall: readiness.overall,
+      blockers: readiness.blockers,
+      checkedAt: readiness.checkedAt,
+      snapshot: readiness.snapshot,
+      reliability: readiness.reliability,
+      managerSummary: readiness.managerSummary,
+      roomCount: readiness.roomCount,
+      roomDecisions: readiness.roomDecisions
+    });
+  } catch (err) {
+    console.error('Load pilot go/no-go failed:', err);
+    return res.status(500).json({ error: 'Failed to load pilot go/no-go readiness' });
+  }
+});
+
+router.get('/:workspaceId/pilot/incidents', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const periodDays = normalizePeriodDays(req.query?.periodDays, 56);
+    const requestedStatus = String(req.query?.status || 'open').toLowerCase();
+    const requestedSeverity = String(req.query?.severity || 'all').toLowerCase();
+    const status = (requestedStatus === 'all' || requestedStatus === 'open' || requestedStatus === 'acknowledged' || requestedStatus === 'resolved')
+      ? requestedStatus
+      : 'open';
+    const severity = (requestedSeverity === 'all' || requestedSeverity === 'critical' || requestedSeverity === 'high' || requestedSeverity === 'medium' || requestedSeverity === 'low')
+      ? requestedSeverity
+      : 'all';
+
+    await seedPilotIncidentsFromSignals(workspaceId, periodDays);
+
+    const incidentsResult = await query(
+      `
+      SELECT i.*, u.full_name AS owner_name
+      FROM reliability_incidents i
+      LEFT JOIN users u ON u.id = i.owner_id
+      WHERE i.workspace_id = $1
+        AND i.opened_at >= NOW() - ($2::int * INTERVAL '1 day')
+        AND ($3::text = 'all' OR i.status = $3)
+        AND ($4::text = 'all' OR i.severity = $4)
+      ORDER BY
+        CASE i.severity
+          WHEN 'critical' THEN 1
+          WHEN 'high' THEN 2
+          WHEN 'medium' THEN 3
+          ELSE 4
+        END ASC,
+        COALESCE(i.sla_due_at, i.opened_at) ASC
+      LIMIT 400
+      `,
+      [workspaceId, periodDays, status, severity]
+    );
+
+    const countRows = await query(
+      `
+      SELECT status, COUNT(*)::int AS count
+      FROM reliability_incidents
+      WHERE workspace_id = $1
+        AND opened_at >= NOW() - ($2::int * INTERVAL '1 day')
+      GROUP BY status
+      `,
+      [workspaceId, periodDays]
+    );
+    const statusCounts = countRows.rows.reduce((acc: Record<string, number>, row: any) => {
+      acc[String(row.status || '').toLowerCase()] = Number(row.count || 0);
+      return acc;
+    }, {});
+
+    return res.json({
+      workspaceId,
+      periodDays,
+      status,
+      severity,
+      counts: {
+        open: Number(statusCounts.open || 0),
+        acknowledged: Number(statusCounts.acknowledged || 0),
+        resolved: Number(statusCounts.resolved || 0),
+        total: Number(statusCounts.open || 0) + Number(statusCounts.acknowledged || 0) + Number(statusCounts.resolved || 0)
+      },
+      incidents: incidentsResult.rows.map((row: any) => toPilotIncident(row))
+    });
+  } catch (err) {
+    console.error('List pilot incidents failed:', err);
+    return res.status(500).json({ error: 'Failed to list pilot incidents' });
+  }
+});
+
+router.post('/:workspaceId/pilot/incidents/:incidentId/ack', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const incidentId = Number(req.params.incidentId);
+    if (!Number.isFinite(incidentId) || incidentId <= 0) {
+      return res.status(400).json({ error: 'incidentId must be a positive number' });
+    }
+
+    const incidentResult = await query(
+      `SELECT * FROM reliability_incidents WHERE workspace_id = $1 AND id = $2 LIMIT 1`,
+      [workspaceId, incidentId]
+    );
+    if (!incidentResult.rows.length) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+    const current = incidentResult.rows[0];
+    if (String(current.status) === 'resolved') {
+      return res.status(409).json({ error: 'Resolved incidents cannot be acknowledged again.' });
+    }
+
+    const ownerIdRaw = req.body?.ownerId;
+    const ownerId = ownerIdRaw == null ? Number(req.user!.id) : Number(ownerIdRaw);
+    const note = String(req.body?.note || '').trim();
+    const updateResult = await query(
+      `
+      UPDATE reliability_incidents
+      SET status = 'acknowledged',
+          owner_id = $3,
+          acknowledged_at = COALESCE(acknowledged_at, NOW()),
+          resolution_note = CASE WHEN $4::text <> '' THEN $4 ELSE resolution_note END,
+          updated_at = NOW()
+      WHERE workspace_id = $1
+        AND id = $2
+      RETURNING *
+      `,
+      [workspaceId, incidentId, ownerId, note]
+    );
+
+    const updatedIncident = updateResult.rows[0];
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: updatedIncident.room_id ? Number(updatedIncident.room_id) : null,
+      userId: req.user!.id,
+      eventType: 'pilot_incident_acknowledged',
+      metadata: {
+        incidentId,
+        code: updatedIncident.code,
+        severity: updatedIncident.severity,
+        ownerId
+      }
+    });
+
+    return res.json({
+      incident: toPilotIncident(updatedIncident),
+      message: 'Incident acknowledged.'
+    });
+  } catch (err) {
+    console.error('Acknowledge pilot incident failed:', err);
+    return res.status(500).json({ error: 'Failed to acknowledge pilot incident' });
+  }
+});
+
+router.post('/:workspaceId/pilot/incidents/:incidentId/resolve', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const incidentId = Number(req.params.incidentId);
+    if (!Number.isFinite(incidentId) || incidentId <= 0) {
+      return res.status(400).json({ error: 'incidentId must be a positive number' });
+    }
+
+    const incidentResult = await query(
+      `SELECT * FROM reliability_incidents WHERE workspace_id = $1 AND id = $2 LIMIT 1`,
+      [workspaceId, incidentId]
+    );
+    if (!incidentResult.rows.length) {
+      return res.status(404).json({ error: 'Incident not found' });
+    }
+
+    const current = incidentResult.rows[0];
+    if (String(current.status) === 'resolved') {
+      return res.json({
+        incident: toPilotIncident(current),
+        message: 'Incident is already resolved.'
+      });
+    }
+
+    const ownerIdRaw = req.body?.ownerId;
+    const ownerId = ownerIdRaw == null ? Number(req.user!.id) : Number(ownerIdRaw);
+    const resolutionNote = String(req.body?.resolutionNote || req.body?.note || '').trim();
+
+    const updateResult = await query(
+      `
+      UPDATE reliability_incidents
+      SET status = 'resolved',
+          owner_id = COALESCE(owner_id, $3),
+          acknowledged_at = COALESCE(acknowledged_at, NOW()),
+          resolved_at = NOW(),
+          resolution_note = CASE WHEN $4::text <> '' THEN $4 ELSE resolution_note END,
+          updated_at = NOW()
+      WHERE workspace_id = $1
+        AND id = $2
+      RETURNING *
+      `,
+      [workspaceId, incidentId, ownerId, resolutionNote]
+    );
+
+    const updatedIncident = updateResult.rows[0];
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: updatedIncident.room_id ? Number(updatedIncident.room_id) : null,
+      userId: req.user!.id,
+      eventType: 'pilot_incident_resolved',
+      metadata: {
+        incidentId,
+        code: updatedIncident.code,
+        severity: updatedIncident.severity,
+        ownerId
+      }
+    });
+
+    return res.json({
+      incident: toPilotIncident(updatedIncident),
+      message: 'Incident resolved.'
+    });
+  } catch (err) {
+    console.error('Resolve pilot incident failed:', err);
+    return res.status(500).json({ error: 'Failed to resolve pilot incident' });
+  }
+});
+
 router.get('/:workspaceId/rooms/:roomId/guide', async (req: WorkspaceRequest, res: Response) => {
   try {
     const workspaceId = Number(req.params.workspaceId);
@@ -9053,6 +9897,317 @@ router.post('/:workspaceId/rooms/:roomId/actions/sync', async (req: WorkspaceReq
   } catch (err) {
     console.error('Sync actions failed:', err);
     return res.status(500).json({ error: 'Failed to sync actions' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/bi-bridge/export', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifactId = Number(req.body?.artifactId);
+    if (!Number.isFinite(artifactId) || artifactId <= 0) {
+      return res.status(400).json({ error: 'artifactId must be a positive number.' });
+    }
+
+    const exportType = String(req.body?.exportType || 'csv').toLowerCase();
+    const allowedExportTypes = new Set(['csv', 'google_sheet', 'sql_view']);
+    if (!allowedExportTypes.has(exportType)) {
+      return res.status(400).json({ error: 'exportType must be csv, google_sheet, or sql_view.' });
+    }
+
+    const artifactResult = await query(
+      `
+      SELECT *
+      FROM artifacts
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [artifactId, workspaceId, roomId]
+    );
+    if (!artifactResult.rows.length) {
+      return res.status(404).json({ error: 'Artifact not found in this room.' });
+    }
+    const sourceArtifact = artifactResult.rows[0];
+    const sourcePayload = parseJsonMaybe<Record<string, any>>(sourceArtifact.payload, {});
+    const sourceRows = parseArtifactRowsFromPayload(sourcePayload);
+    const maxRows = Math.max(1, Math.min(10000, Number(req.body?.maxRows || 5000)));
+    const scopedRows = sourceRows.slice(0, maxRows);
+    const { columns, csv } = toCsv(scopedRows);
+    const inferredSql = String(
+      sourcePayload.generatedSql ||
+      sourcePayload.query ||
+      sourcePayload.sql ||
+      ''
+    ).trim();
+
+    if (exportType === 'csv' && !scopedRows.length) {
+      return res.status(400).json({ error: 'Selected artifact does not contain tabular rows to export as CSV.' });
+    }
+    if (exportType === 'sql_view' && !inferredSql) {
+      return res.status(400).json({ error: 'Selected artifact does not contain SQL text for sql_view export.' });
+    }
+
+    const target = exportType === 'google_sheet'
+      ? 'google_sheets'
+      : exportType === 'sql_view'
+        ? 'sql_view'
+        : 'csv_file';
+    const filename = `toeasy_room_${roomId}_artifact_${artifactId}_${new Date().toISOString().slice(0, 10)}.csv`;
+    const generatedAt = new Date().toISOString();
+
+    const exportArtifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id ? Number(room.project_id) : null,
+      roomId,
+      artifactType: 'report_block',
+      title: `BI Bridge Export (${exportType})`,
+      description: `Interoperable export generated from artifact #${artifactId}.`,
+      payload: {
+        bridgeType: 'bi_export',
+        exportType,
+        target,
+        sourceArtifactId: artifactId,
+        rowCount: scopedRows.length,
+        columnCount: columns.length,
+        columns,
+        maxRows,
+        truncated: sourceRows.length > scopedRows.length,
+        filename: exportType === 'csv' ? filename : null,
+        sql: exportType === 'sql_view' ? inferredSql : null,
+        generatedAt
+      },
+      metadata: {
+        sourceArtifactType: sourceArtifact.artifact_type,
+        sourceArtifactId: artifactId
+      },
+      datasetVersionId: sourceArtifact.dataset_version_id ? Number(sourceArtifact.dataset_version_id) : null,
+      sourceDatasetId: sourceArtifact.source_dataset_id ? Number(sourceArtifact.source_dataset_id) : null,
+      createdBy: req.user!.id
+    });
+
+    await createLineageEdges({
+      workspaceId,
+      roomId,
+      parentArtifactIds: [artifactId],
+      childArtifactId: Number(exportArtifact.id),
+      relationType: 'derived_from',
+      createdBy: req.user!.id
+    });
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_bi_bridge_exported',
+      metadata: {
+        sourceArtifactId: artifactId,
+        sourceArtifactType: sourceArtifact.artifact_type,
+        exportType,
+        target,
+        rowCount: scopedRows.length
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:bi-bridge-exported', {
+      roomId,
+      sourceArtifactId: artifactId,
+      exportArtifactId: Number(exportArtifact.id),
+      exportType,
+      target
+    });
+
+    return res.status(201).json({
+      exportType,
+      artifactId: Number(exportArtifact.id),
+      target,
+      status: 'ready',
+      generatedAt,
+      rowCount: scopedRows.length,
+      columnCount: columns.length,
+      columns,
+      truncated: sourceRows.length > scopedRows.length,
+      filename: exportType === 'csv' ? filename : null,
+      csv: exportType === 'csv' ? csv : null,
+      sql: exportType === 'sql_view' ? inferredSql : null,
+      url: req.body?.targetUrl ? String(req.body.targetUrl) : null
+    });
+  } catch (err) {
+    console.error('BI bridge export failed:', err);
+    return res.status(500).json({ error: 'Failed to export BI bridge artifact' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/bi-bridge/share', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifactId = Number(req.body?.artifactId);
+    if (!Number.isFinite(artifactId) || artifactId <= 0) {
+      return res.status(400).json({ error: 'artifactId must be a positive number.' });
+    }
+
+    const artifactResult = await query(
+      `
+      SELECT *
+      FROM artifacts
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [artifactId, workspaceId, roomId]
+    );
+    if (!artifactResult.rows.length) {
+      return res.status(404).json({ error: 'Artifact not found in this room.' });
+    }
+    const sourceArtifact = artifactResult.rows[0];
+
+    const channel = String(req.body?.channel || 'slack').toLowerCase();
+    if (!['slack', 'link', 'in_app'].includes(channel)) {
+      return res.status(400).json({ error: 'channel must be slack, link, or in_app.' });
+    }
+
+    const targetUrl = req.body?.targetUrl ? String(req.body.targetUrl) : '';
+    const message = String(req.body?.message || '').trim();
+    let slackDelivery: SlackDeliveryResult | null = null;
+
+    if (channel === 'slack') {
+      const slackConnection = await getSlackConnection(workspaceId, req.user!.id);
+      if (!slackConnection) {
+        return res.status(400).json({ error: 'Slack integration is not connected.' });
+      }
+      const credentials = normalizeSlackCredentials(slackConnection.credentials);
+      if (!credentials.webhookUrl && !credentials.botToken) {
+        return res.status(400).json({ error: 'Slack integration is connected but missing webhookUrl/botToken credentials.' });
+      }
+
+      const defaultMessage = [
+        `*Decision Room BI Share*`,
+        `Room: ${room.name}`,
+        `Artifact: #${artifactId} (${String(sourceArtifact.artifact_type)})`,
+        targetUrl ? `Link: ${targetUrl}` : '',
+        message
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      slackDelivery = await postSlackWithRetry({
+        webhookUrl: credentials.webhookUrl,
+        botToken: credentials.botToken,
+        channel: credentials.channel || '#general',
+        payload: { text: defaultMessage, blocks: [] }
+      });
+
+      if (!slackDelivery.posted) {
+        await upsertReliabilityIncident({
+          workspaceId,
+          roomId,
+          sourceType: 'bi_bridge_share',
+          sourceKey: `bi_bridge_share:${roomId}:${artifactId}:${Date.now()}`,
+          code: 'bi_bridge_share_failed',
+          severity: 'high',
+          runbookAction: 'Validate Slack integration credentials and retry BI share from Control Tower.',
+          metadata: {
+            channel,
+            artifactId,
+            error: slackDelivery.error || 'slack_delivery_failed'
+          }
+        });
+        return res.status(502).json({
+          error: `Slack share failed: ${slackDelivery.error || 'unknown error'}`,
+          channel
+        });
+      }
+    }
+
+    const shareArtifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id ? Number(room.project_id) : null,
+      roomId,
+      artifactType: 'report_block',
+      title: `BI Bridge Share (${channel})`,
+      description: `BI share activity generated for artifact #${artifactId}.`,
+      payload: {
+        bridgeType: 'bi_share',
+        channel,
+        sourceArtifactId: artifactId,
+        targetUrl: targetUrl || null,
+        message: message || null,
+        slackDelivery,
+        sharedAt: new Date().toISOString()
+      },
+      metadata: {
+        sourceArtifactType: sourceArtifact.artifact_type,
+        sourceArtifactId: artifactId,
+        channel
+      },
+      datasetVersionId: sourceArtifact.dataset_version_id ? Number(sourceArtifact.dataset_version_id) : null,
+      sourceDatasetId: sourceArtifact.source_dataset_id ? Number(sourceArtifact.source_dataset_id) : null,
+      createdBy: req.user!.id
+    });
+
+    await createLineageEdges({
+      workspaceId,
+      roomId,
+      parentArtifactIds: [artifactId],
+      childArtifactId: Number(shareArtifact.id),
+      relationType: 'derived_from',
+      createdBy: req.user!.id
+    });
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_bi_bridge_shared',
+      metadata: {
+        sourceArtifactId: artifactId,
+        sourceArtifactType: sourceArtifact.artifact_type,
+        channel,
+        targetUrl: targetUrl || null,
+        slackPosted: Boolean(slackDelivery?.posted)
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:bi-bridge-shared', {
+      roomId,
+      sourceArtifactId: artifactId,
+      shareArtifactId: Number(shareArtifact.id),
+      channel
+    });
+
+    return res.status(201).json({
+      channel,
+      status: 'shared',
+      artifactId: Number(shareArtifact.id),
+      sourceArtifactId: artifactId,
+      targetUrl: targetUrl || null,
+      slackDelivery,
+      sharedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('BI bridge share failed:', err);
+    return res.status(500).json({ error: 'Failed to share BI bridge artifact' });
   }
 });
 

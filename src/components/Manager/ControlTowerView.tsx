@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useWorkspace } from '../../hooks/useWorkspace';
 import {
   ManagerSummary,
+  PilotIncident,
+  PilotScorecard,
   ReadinessDecision,
   ReliabilityScorecard,
   StudioNavigationState,
@@ -25,6 +27,13 @@ const formatGateActual = (value: number | string | null) => {
   return String(value);
 };
 
+const getSeverityBadgeClass = (severity: string) => {
+  if (severity === 'critical') return 'text-rose-700 bg-rose-100 dark:bg-rose-900/30 dark:text-rose-300';
+  if (severity === 'high') return 'text-amber-700 bg-amber-100 dark:bg-amber-900/30 dark:text-amber-300';
+  if (severity === 'medium') return 'text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300';
+  return 'text-slate-700 bg-slate-100 dark:bg-slate-800 dark:text-slate-200';
+};
+
 const ControlTowerView: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -42,6 +51,8 @@ const ControlTowerView: React.FC = () => {
   const [managerSummary, setManagerSummary] = useState<ManagerSummary | null>(null);
   const [reliabilityScorecard, setReliabilityScorecard] = useState<ReliabilityScorecard | null>(null);
   const [readinessDecision, setReadinessDecision] = useState<ReadinessDecision | null>(null);
+  const [pilotScorecard, setPilotScorecard] = useState<PilotScorecard | null>(null);
+  const [pilotIncidents, setPilotIncidents] = useState<PilotIncident[]>([]);
 
   const roomOptions = navigationState?.rooms || [];
   const selectedRoom = useMemo(
@@ -106,15 +117,19 @@ const ControlTowerView: React.FC = () => {
     setLoadingSummary(true);
     setErrorMessage('');
     try {
-      const [summaryResponse, reliabilityResponse, readinessResponse] = await Promise.all([
+      const [summaryResponse, reliabilityResponse, readinessResponse, pilotScorecardResponse, pilotIncidentsResponse] = await Promise.all([
         studioAPI.getManagerSummary(workspaceId, selectedRoomId, { periodDays }),
         studioAPI.getReliabilityScorecard(workspaceId, selectedRoomId, { periodDays }),
-        studioAPI.getReadinessDecision(workspaceId, selectedRoomId, { periodDays })
+        studioAPI.getReadinessDecision(workspaceId, selectedRoomId, { periodDays }),
+        studioAPI.getPilotScorecard(workspaceId, { periodDays }),
+        studioAPI.listPilotIncidents(workspaceId, { periodDays: Math.max(14, periodDays), status: 'open', severity: 'all' })
       ]);
 
       setManagerSummary(summaryResponse.data?.summary || null);
       setReliabilityScorecard(reliabilityResponse.data?.scorecard || null);
       setReadinessDecision(readinessResponse.data || null);
+      setPilotScorecard(pilotScorecardResponse.data || null);
+      setPilotIncidents(Array.isArray(pilotIncidentsResponse.data?.incidents) ? pilotIncidentsResponse.data.incidents : []);
     } catch (error) {
       setErrorMessage(toErrorMessage(error));
     } finally {
@@ -147,6 +162,30 @@ const ControlTowerView: React.FC = () => {
       dataset: datasetId || null,
       periodDays: String(days)
     });
+  };
+
+  const acknowledgeIncident = async (incidentId: number) => {
+    if (!workspaceId) return;
+    try {
+      await studioAPI.acknowledgePilotIncident(workspaceId, incidentId, {
+        note: 'Acknowledged from control tower'
+      });
+      await refreshControlTower();
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    }
+  };
+
+  const resolveIncident = async (incidentId: number) => {
+    if (!workspaceId) return;
+    try {
+      await studioAPI.resolvePilotIncident(workspaceId, incidentId, {
+        resolutionNote: 'Resolved from control tower'
+      });
+      await refreshControlTower();
+    } catch (error) {
+      setErrorMessage(toErrorMessage(error));
+    }
   };
 
   const openStudioPanel = (panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms') => {
@@ -277,7 +316,7 @@ const ControlTowerView: React.FC = () => {
 
       {workspaceId && selectedRoomId && (
         <>
-          <section className="grid gap-4 lg:grid-cols-3">
+          <section className="grid gap-4 lg:grid-cols-4">
             <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
               <div className="text-xs uppercase font-semibold text-slate-500">Go / No-Go</div>
               <div className="mt-2 text-2xl font-black">
@@ -310,6 +349,21 @@ const ControlTowerView: React.FC = () => {
                 <div>Report publish success: {formatPercent(reliabilityScorecard?.publishSuccessRate ?? null)}</div>
                 <div>Duplicate side effects: {reliabilityScorecard?.duplicateSideEffects ?? 0}</div>
                 <div>MTTR: {reliabilityScorecard?.mttrMinutes != null ? `${reliabilityScorecard.mttrMinutes.toFixed(1)} min` : 'n/a'}</div>
+              </div>
+            </article>
+
+            <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+              <div className="text-xs uppercase font-semibold text-slate-500">Pilot Readiness</div>
+              <div className="mt-2 text-2xl font-black">
+                <span className={pilotScorecard?.overall === 'go' ? 'text-emerald-600' : 'text-rose-600'}>
+                  {pilotScorecard?.overall === 'go' ? 'GO' : 'NO-GO'}
+                </span>
+              </div>
+              <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                Rooms in scope: {pilotScorecard?.roomCount ?? 0}
+              </div>
+              <div className="mt-1 text-xs text-slate-500">
+                Open incidents: {pilotIncidents.length}
               </div>
             </article>
           </section>
@@ -400,6 +454,63 @@ const ControlTowerView: React.FC = () => {
                 Samples: runs {reliabilityScorecard?.sampleSizes?.scheduledRuns ?? 0}, publish {reliabilityScorecard?.sampleSizes?.publishAttempts ?? 0}, failures {reliabilityScorecard?.sampleSizes?.failureEvents ?? 0}
               </div>
             </article>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-xs uppercase font-semibold text-slate-500">Incident SLA Lane</div>
+                <div className="text-sm text-slate-600 dark:text-slate-300 mt-1">
+                  Open pilot incidents sourced from publish/sync/automation failures.
+                </div>
+              </div>
+              <button
+                onClick={() => refreshControlTower().catch((error) => setErrorMessage(toErrorMessage(error)))}
+                className="px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-sm"
+              >
+                Refresh incidents
+              </button>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {pilotIncidents.slice(0, 8).map((incident) => (
+                <div key={incident.id} className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm font-semibold">{incident.code}</div>
+                    <span className={`text-[11px] px-2 py-1 rounded-full font-semibold ${getSeverityBadgeClass(incident.severity)}`}>
+                      {incident.severity}
+                    </span>
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Status: {incident.status} | Room: {incident.roomId ?? 'n/a'} | SLA: {incident.slaDueAt ? new Date(incident.slaDueAt).toLocaleString() : 'n/a'}
+                  </div>
+                  {incident.runbookAction && (
+                    <div className="text-xs text-amber-700 mt-1">{incident.runbookAction}</div>
+                  )}
+                  <div className="mt-2 flex items-center gap-2">
+                    {incident.status === 'open' && (
+                      <button
+                        onClick={() => acknowledgeIncident(incident.id)}
+                        className="px-2 py-1 rounded-md border border-slate-300 dark:border-slate-700 text-xs"
+                      >
+                        Ack
+                      </button>
+                    )}
+                    {incident.status !== 'resolved' && (
+                      <button
+                        onClick={() => resolveIncident(incident.id)}
+                        className="px-2 py-1 rounded-md bg-emerald-600 text-white text-xs"
+                      >
+                        Resolve
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {pilotIncidents.length === 0 && (
+                <div className="text-sm text-slate-500">No open incidents for selected window.</div>
+              )}
+            </div>
           </section>
         </>
       )}

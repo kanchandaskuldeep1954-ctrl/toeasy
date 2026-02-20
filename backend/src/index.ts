@@ -36,6 +36,7 @@ import metricsRoutes from './routes/metrics.js';
 import reportRoutes from './routes/reports.js';
 import classificationRoutes from './routes/classification.js';
 import studioRoutes from './routes/studio.js';
+import billingRoutes from './routes/billing.js';
 
 // Work OS Modules
 import chatRoutes from './routes/chat.js';
@@ -165,6 +166,7 @@ app.use('/api/files', authenticateToken, filesRoutes);
 app.use('/api/alerts', authenticateToken, alertsRoutes);
 app.use('/api/notifications', authenticateToken, notificationsRoutes);
 app.use('/api/invites', invitesRoutes); // invites has its own auth middleware inside
+app.use('/api/billing', authenticateToken, billingRoutes);
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

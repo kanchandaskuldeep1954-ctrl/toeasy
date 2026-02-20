@@ -1,6 +1,6 @@
 # Toeasy Analyst OS Phase 4 Tracker
 
-Last updated: February 19, 2026
+Last updated: February 20, 2026
 Owner: Product + Engineering
 Execution window: 24 weeks
 Scope: RevOps-first Analyst Team OS
@@ -167,6 +167,32 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Keep route integration suite green as release guardrail.
 
 ## 10) Change Log
+- 2026-02-20 (Real PMF + Product Plan tranche):
+  - Added PMF pilot ops schema migration:
+    - `backend/migrations/036_pmf_pilot_ops.js`
+    - `reliability_incidents`, `pilot_weekly_snapshots`
+  - Added workspace-level PMF control endpoints:
+    - `GET /api/workspaces/:id/pilot/scorecard`
+    - `GET /api/workspaces/:id/pilot/readiness/go-no-go`
+    - `GET /api/workspaces/:id/pilot/incidents`
+    - `POST /api/workspaces/:id/pilot/incidents/:incidentId/ack`
+    - `POST /api/workspaces/:id/pilot/incidents/:incidentId/resolve`
+  - Added BI bridge anti-churn endpoints:
+    - `POST /api/workspaces/:id/rooms/:roomId/bi-bridge/export`
+    - `POST /api/workspaces/:id/rooms/:roomId/bi-bridge/share`
+  - Added billing PMF feeder APIs:
+    - `GET /api/billing/plans`
+    - `GET /api/billing/subscription`
+    - `POST /api/billing/checkout`
+  - Added backend route tests:
+    - `backend/src/routes/billing.test.ts`
+    - extended `backend/src/routes/studio.integration.test.ts` for pilot incidents/BI bridge/workspace scorecard flows
+  - Updated Manager Control Tower with pilot readiness and incident SLA lane (ack/resolve).
+  - Validation:
+    - backend build PASS
+    - backend targeted tests PASS (`studio.integration.test.ts`, `billing.test.ts`)
+    - frontend API contract tests PASS (`studioMvpApi.test.ts`)
+    - frontend production build PASS
 - 2026-02-20 (Context-aware chat tranche):
   - Added Decision Room context-aware chat backend APIs:
     - `GET /api/chat/workspaces/:workspaceId/rooms/:roomId/context`

@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { analyticsAPI, initializeAPIClient, studioAPI } from '../services/api';
+import { analyticsAPI, billingAPI, initializeAPIClient, studioAPI } from '../services/api';
 
 jest.mock('axios');
 
@@ -359,6 +359,89 @@ describe('Studio MVP API Contracts', () => {
   it('calls automation queue state endpoint', () => {
     studioAPI.getAutomationQueueState('12', '77');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/automations/queue-state');
+  });
+
+  it('calls workspace pilot scorecard endpoint', () => {
+    studioAPI.getPilotScorecard('12', { periodDays: 7 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/pilot/scorecard', {
+      params: { periodDays: 7 }
+    });
+  });
+
+  it('calls workspace pilot go/no-go endpoint', () => {
+    studioAPI.getPilotReadinessGoNoGo('12', { periodDays: 56 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/pilot/readiness/go-no-go', {
+      params: { periodDays: 56 }
+    });
+  });
+
+  it('calls pilot incidents list endpoint', () => {
+    studioAPI.listPilotIncidents('12', { periodDays: 30, status: 'open', severity: 'high' });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/pilot/incidents', {
+      params: { periodDays: 30, status: 'open', severity: 'high' }
+    });
+  });
+
+  it('calls pilot incident acknowledge endpoint', () => {
+    studioAPI.acknowledgePilotIncident('12', 44, { ownerId: 2, note: 'Owner assigned' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/pilot/incidents/44/ack', {
+      ownerId: 2,
+      note: 'Owner assigned'
+    });
+  });
+
+  it('calls pilot incident resolve endpoint', () => {
+    studioAPI.resolvePilotIncident('12', 44, { resolutionNote: 'Resolved after retry' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/pilot/incidents/44/resolve', {
+      resolutionNote: 'Resolved after retry'
+    });
+  });
+
+  it('calls BI bridge export endpoint', () => {
+    studioAPI.exportBiBridge('12', '77', { artifactId: 33, exportType: 'csv', maxRows: 2500 });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/bi-bridge/export', {
+      artifactId: 33,
+      exportType: 'csv',
+      maxRows: 2500
+    });
+  });
+
+  it('calls BI bridge share endpoint', () => {
+    studioAPI.shareBiBridge('12', '77', { artifactId: 33, channel: 'slack', message: 'Sharing trend chart' });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/bi-bridge/share', {
+      artifactId: 33,
+      channel: 'slack',
+      message: 'Sharing trend chart'
+    });
+  });
+
+  it('calls billing plans endpoint', () => {
+    billingAPI.getPlans();
+    expect(mockGet).toHaveBeenCalledWith('/billing/plans');
+  });
+
+  it('calls billing subscription endpoint', () => {
+    billingAPI.getSubscription('12');
+    expect(mockGet).toHaveBeenCalledWith('/billing/subscription', {
+      params: { workspaceId: '12' }
+    });
+  });
+
+  it('calls billing checkout endpoint', () => {
+    billingAPI.checkout({
+      workspaceId: 12,
+      tier: 'solo_analyst',
+      billingCycle: 'monthly',
+      seats: 1,
+      currency: 'USD'
+    });
+    expect(mockPost).toHaveBeenCalledWith('/billing/checkout', {
+      workspaceId: 12,
+      tier: 'solo_analyst',
+      billingCycle: 'monthly',
+      seats: 1,
+      currency: 'USD'
+    });
   });
 
   it('calls MVP KPI snapshot endpoint', () => {

@@ -753,6 +753,98 @@ export interface ReadinessDecision {
   managerSummary?: ManagerSummary;
 }
 
+export interface PilotScorecard {
+  periodDays: number;
+  roomCount: number;
+  checkedAt: string;
+  overall: 'go' | 'no_go';
+  gateResults: GateResult[];
+  blockers: string[];
+  snapshot: PilotKpiSnapshot;
+  reliability: ReliabilityScorecard;
+  managerSummary: ManagerSummary;
+  roomDecisions: Array<{
+    roomId: number;
+    roomName: string;
+    overall: 'go' | 'no_go';
+    gatePasses: number;
+    gateTotal: number;
+    blockers: string[];
+  }>;
+}
+
+export interface PilotIncident {
+  id: number;
+  workspaceId: number;
+  roomId: number | null;
+  sourceType: string;
+  sourceKey: string;
+  code: string;
+  severity: 'critical' | 'high' | 'medium' | 'low';
+  status: 'open' | 'acknowledged' | 'resolved';
+  ownerId: number | null;
+  ownerName: string | null;
+  openedAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  slaDueAt: string | null;
+  runbookAction: string | null;
+  resolutionNote: string | null;
+  metadata: Record<string, any>;
+}
+
+export interface PilotIncidentsResponse {
+  workspaceId: number;
+  periodDays: number;
+  status: 'open' | 'acknowledged' | 'resolved' | 'all';
+  severity: 'critical' | 'high' | 'medium' | 'low' | 'all';
+  counts: {
+    open: number;
+    acknowledged: number;
+    resolved: number;
+    total: number;
+  };
+  incidents: PilotIncident[];
+}
+
+export interface BiBridgeExport {
+  exportType: 'csv' | 'google_sheet' | 'sql_view';
+  artifactId: number;
+  target: 'csv_file' | 'google_sheets' | 'sql_view';
+  status: 'ready' | 'shared';
+  url: string | null;
+  generatedAt?: string;
+  sharedAt?: string;
+  rowCount?: number;
+  columnCount?: number;
+  columns?: string[];
+  truncated?: boolean;
+  filename?: string | null;
+  csv?: string | null;
+  sql?: string | null;
+  sourceArtifactId?: number;
+  channel?: 'slack' | 'link' | 'in_app';
+}
+
+export interface PlanTier {
+  id: 'solo_analyst' | 'decision_room_pilot' | 'decision_room_annual';
+  name: string;
+  monthlyUsd: number | null;
+  annualUsd: number | null;
+  limits: Record<string, any>;
+}
+
+export interface SubscriptionState {
+  workspaceId: number | null;
+  tier: 'solo_analyst' | 'decision_room_pilot' | 'decision_room_annual';
+  status: string;
+  seats: number;
+  renewalAt: string | null;
+  currentPeriodStart: string | null;
+  currentPeriodEnd: string | null;
+  sourceTier: string;
+}
+
 export interface PersonaProfile {
   workspaceId: number;
   userId: number;
@@ -1052,6 +1144,80 @@ export const studioAPI = {
     { params }
   ),
 
+  getPilotScorecard: (
+    workspaceId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<PilotScorecard>(
+    `/workspaces/${workspaceId}/pilot/scorecard`,
+    { params }
+  ),
+
+  getPilotReadinessGoNoGo: (
+    workspaceId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<PilotScorecard>(
+    `/workspaces/${workspaceId}/pilot/readiness/go-no-go`,
+    { params }
+  ),
+
+  listPilotIncidents: (
+    workspaceId: string,
+    params?: {
+      periodDays?: number;
+      status?: 'open' | 'acknowledged' | 'resolved' | 'all';
+      severity?: 'critical' | 'high' | 'medium' | 'low' | 'all';
+    }
+  ) => getClient().get<PilotIncidentsResponse>(
+    `/workspaces/${workspaceId}/pilot/incidents`,
+    { params }
+  ),
+
+  acknowledgePilotIncident: (
+    workspaceId: string,
+    incidentId: string | number,
+    data?: { ownerId?: number; note?: string }
+  ) => getClient().post<{ incident: PilotIncident; message: string }>(
+    `/workspaces/${workspaceId}/pilot/incidents/${incidentId}/ack`,
+    data || {}
+  ),
+
+  resolvePilotIncident: (
+    workspaceId: string,
+    incidentId: string | number,
+    data?: { ownerId?: number; resolutionNote?: string; note?: string }
+  ) => getClient().post<{ incident: PilotIncident; message: string }>(
+    `/workspaces/${workspaceId}/pilot/incidents/${incidentId}/resolve`,
+    data || {}
+  ),
+
+  exportBiBridge: (
+    workspaceId: string,
+    roomId: string,
+    data: {
+      artifactId: number;
+      exportType?: 'csv' | 'google_sheet' | 'sql_view';
+      targetUrl?: string;
+      maxRows?: number;
+    }
+  ) => getClient().post<BiBridgeExport>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/bi-bridge/export`,
+    data
+  ),
+
+  shareBiBridge: (
+    workspaceId: string,
+    roomId: string,
+    data: {
+      artifactId: number;
+      channel?: 'slack' | 'link' | 'in_app';
+      targetUrl?: string;
+      message?: string;
+    }
+  ) => getClient().post<BiBridgeExport>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/bi-bridge/share`,
+    data
+  ),
+
   getPersonaProfile: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/preferences/profile`),
 
@@ -1208,6 +1374,28 @@ export const paymentAPI = {
 
   listTransactions: () =>
     getClient().get('/payments/transactions')
+};
+
+// ============================================
+// Billing Endpoints (PMF / Pilot Packaging)
+// ============================================
+
+export const billingAPI = {
+  getPlans: () =>
+    getClient().get<{ plans: PlanTier[]; defaults: Record<string, number> }>('/billing/plans'),
+
+  getSubscription: (workspaceId?: string | number) =>
+    getClient().get<SubscriptionState>('/billing/subscription', {
+      params: workspaceId ? { workspaceId } : undefined
+    }),
+
+  checkout: (data: {
+    workspaceId?: number;
+    tier: 'solo_analyst' | 'decision_room_pilot' | 'decision_room_annual';
+    billingCycle: 'monthly' | 'annual' | 'pilot_90d';
+    seats?: number;
+    currency?: 'USD' | 'INR';
+  }) => getClient().post('/billing/checkout', data)
 };
 
 // ============================================
@@ -1391,6 +1579,7 @@ export default {
   user: userAPI,
   subscription: subscriptionAPI,
   payment: paymentAPI,
+  billing: billingAPI,
   analytics: analyticsAPI,
   cleaning: cleaningAPI,
   sharing: sharingAPI,

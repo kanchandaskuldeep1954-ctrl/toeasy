@@ -1,6 +1,6 @@
 # Toeasy Standing-MVP Tracker (8 Weeks)
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20
 Scope: RevOps weekly Decision Room standing MVP
 Execution mode: 80% reliability/QA, 20% manager UX clarity
 
@@ -23,6 +23,9 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Reliability scorecard endpoint.
 - [x] Manager summary endpoint.
 - [x] Readiness go/no-go endpoint.
+- [x] Workspace pilot scorecard endpoint.
+- [x] Workspace pilot go/no-go endpoint.
+- [x] Pilot incident SLA endpoints (list/ack/resolve).
 - [x] Failure taxonomy incorporated in score math output.
 - [x] Consecutive weekly reliability streak rule support.
 - [x] Go/No-Go + Reliability + Manager cards in Studio right rail.
@@ -41,6 +44,7 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Pending approvals + blocked publishes + overdue actions + automation failure summary.
 - [x] Recommended manager actions in summary payload.
 - [x] Dedicated manager-mode screen (`/app/control-tower`) with direct nav access.
+- [x] Incident SLA lane with acknowledge/resolve actions in manager surface.
 - [x] Context-aware chat handoff from active room (`/app/chat?workspace&project&room`) with room-state summary and one-click context update publish.
 
 ### Weeks 7-8: Pilot Proof + Conversion Readiness
@@ -53,6 +57,16 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] `GET /api/workspaces/:id/rooms/:roomId/reliability/scorecard`
 - [x] `GET /api/workspaces/:id/rooms/:roomId/manager/summary`
 - [x] `GET /api/workspaces/:id/rooms/:roomId/readiness/go-no-go`
+- [x] `GET /api/workspaces/:id/pilot/scorecard`
+- [x] `GET /api/workspaces/:id/pilot/readiness/go-no-go`
+- [x] `GET /api/workspaces/:id/pilot/incidents`
+- [x] `POST /api/workspaces/:id/pilot/incidents/:incidentId/ack`
+- [x] `POST /api/workspaces/:id/pilot/incidents/:incidentId/resolve`
+- [x] `POST /api/workspaces/:id/rooms/:roomId/bi-bridge/export`
+- [x] `POST /api/workspaces/:id/rooms/:roomId/bi-bridge/share`
+- [x] `GET /api/billing/plans`
+- [x] `GET /api/billing/subscription`
+- [x] `POST /api/billing/checkout`
 
 ## 4) Validation Log
 
@@ -65,3 +79,4 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 
 1. Keep hard-gate telemetry collection running in pilot workspaces for two consecutive weekly cycles.
 2. Run reliability incident review cadence and close unresolved critical incidents within SLA.
+3. Run 3 paid pilot accounts through weekly scorecard + incident review cycle and capture conversion readiness evidence.

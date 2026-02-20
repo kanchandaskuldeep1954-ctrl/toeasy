@@ -188,7 +188,8 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
     roomOutcomeAttributions: [] as MockRow[],
     automationSchedules: [] as MockRow[],
     idempotencyKeys: [] as MockRow[],
-    datasetProfiles: [] as MockRow[]
+    datasetProfiles: [] as MockRow[],
+    reliabilityIncidents: [] as MockRow[]
   };
 
   const query = async (text: string, params: any[] = []) => {
@@ -223,6 +224,22 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
       const [roomId, workspaceId] = params.map(Number);
       if (roomId === state.analysisRoom.id && workspaceId === state.analysisRoom.workspace_id) {
         return { rows: [state.analysisRoom] };
+      }
+      return { rows: [] };
+    }
+
+    if (sql.includes('from analysis_rooms') && sql.includes('where workspace_id = $1') && !sql.includes('where id = $1 and workspace_id = $2')) {
+      const workspaceId = Number(params[0]);
+      if (workspaceId === Number(state.analysisRoom.workspace_id)) {
+        return {
+          rows: [
+            {
+              id: state.analysisRoom.id,
+              name: state.analysisRoom.name,
+              created_at: state.analysisRoom.created_at || nowIso()
+            }
+          ]
+        };
       }
       return { rows: [] };
     }
@@ -306,6 +323,17 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
         )
         .map((row) => ({ id: Number(row.id) }));
       return { rows };
+    }
+
+    if (sql.includes('select * from artifacts where id = $1 and workspace_id = $2 and room_id = $3 limit 1')) {
+      const [artifactId, workspaceId, roomId] = params.map(Number);
+      const row = state.artifacts.find(
+        (item) =>
+          Number(item.id) === artifactId &&
+          Number(item.workspace_id) === workspaceId &&
+          Number(item.room_id) === roomId
+      );
+      return { rows: row ? [row] : [] };
     }
 
     if (
@@ -806,6 +834,43 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
       };
     }
 
+    if (sql.includes('from automation_run_events') && sql.includes("status = 'failed'")) {
+      return {
+        rows: [
+          {
+            id: 8101,
+            room_id: 101,
+            event_type: 'execution_failed_terminal',
+            status: 'failed',
+            error: 'connector auth expired',
+            metadata: JSON.stringify({
+              failureCode: 'connector_auth',
+              failureSeverity: 'critical',
+              operatorAction: 'Reconnect connector credentials and rerun the schedule.'
+            }),
+            created_at: '2026-02-19T10:00:00.000Z'
+          }
+        ]
+      };
+    }
+
+    if (sql.includes('from analytics_events') && sql.includes('decision_room_report_v2_publish_blocked')) {
+      return {
+        rows: [
+          {
+            id: 9101,
+            room_id: 101,
+            event_type: 'decision_room_report_v2_publish_blocked',
+            metadata: JSON.stringify({
+              unsupportedClaims: 1,
+              reason: 'claim_missing_evidence'
+            }),
+            created_at: '2026-02-19T10:05:00.000Z'
+          }
+        ]
+      };
+    }
+
     if (sql.includes('from automation_schedules') && sql.includes('order by updated_at desc')) {
       const [workspaceId, roomId] = params;
       const rows = state.automationSchedules.filter(
@@ -856,6 +921,113 @@ function createStudioQueryMock(options: StudioQueryMockOptions = {}) {
         updated_at: nowIso()
       };
       state.automationSchedules.push(row);
+      return { rows: [row] };
+    }
+
+    if (sql.includes('insert into pilot_weekly_snapshots')) {
+      return { rows: [] };
+    }
+
+    if (sql.includes('insert into reliability_incidents')) {
+      const [workspaceId, roomId, sourceType, sourceKey, code, severity, openedAt, slaDueAt, runbookAction, metadata] = params;
+      const existing = state.reliabilityIncidents.find(
+        (item) =>
+          Number(item.workspace_id) === Number(workspaceId) &&
+          String(item.source_key) === String(sourceKey)
+      );
+      if (existing) {
+        existing.room_id = existing.room_id ?? (roomId == null ? null : Number(roomId));
+        existing.code = String(code);
+        existing.severity = String(severity);
+        existing.runbook_action = existing.runbook_action || runbookAction || null;
+        existing.metadata = metadata;
+        existing.updated_at = nowIso();
+        return { rows: [] };
+      }
+      const row = {
+        id: state.reliabilityIncidents.length + 1,
+        workspace_id: Number(workspaceId),
+        room_id: roomId == null ? null : Number(roomId),
+        source_type: String(sourceType),
+        source_key: String(sourceKey),
+        code: String(code),
+        severity: String(severity),
+        status: 'open',
+        owner_id: null,
+        opened_at: openedAt || nowIso(),
+        acknowledged_at: null,
+        resolved_at: null,
+        sla_due_at: slaDueAt || null,
+        runbook_action: runbookAction || null,
+        resolution_note: null,
+        metadata: metadata || JSON.stringify({}),
+        created_at: nowIso(),
+        updated_at: nowIso()
+      };
+      state.reliabilityIncidents.push(row);
+      return { rows: [] };
+    }
+
+    if (sql.includes('from reliability_incidents i') && sql.includes('left join users')) {
+      const [workspaceId, _periodDays, status, severity] = params;
+      const rows = state.reliabilityIncidents
+        .filter((item) => Number(item.workspace_id) === Number(workspaceId))
+        .filter((item) => String(status) === 'all' || String(item.status) === String(status))
+        .filter((item) => String(severity) === 'all' || String(item.severity) === String(severity))
+        .map((item) => ({
+          ...item,
+          owner_name: Number(item.owner_id) === 2 ? 'Manager User' : Number(item.owner_id) === 1 ? 'Analyst User' : null
+        }));
+      return { rows };
+    }
+
+    if (sql.includes('select status, count(*)::int as count') && sql.includes('from reliability_incidents')) {
+      const [workspaceId] = params;
+      const scoped = state.reliabilityIncidents.filter((item) => Number(item.workspace_id) === Number(workspaceId));
+      const grouped = scoped.reduce((acc: Record<string, number>, item) => {
+        const key = String(item.status || 'open');
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+      }, {});
+      return {
+        rows: Object.entries(grouped).map(([status, count]) => ({ status, count }))
+      };
+    }
+
+    if (sql.includes('select * from reliability_incidents where workspace_id = $1 and id = $2 limit 1')) {
+      const [workspaceId, incidentId] = params.map(Number);
+      const row = state.reliabilityIncidents.find(
+        (item) => Number(item.workspace_id) === workspaceId && Number(item.id) === incidentId
+      );
+      return { rows: row ? [row] : [] };
+    }
+
+    if (sql.includes('update reliability_incidents') && sql.includes('set status = \'acknowledged\'')) {
+      const [workspaceId, incidentId, ownerId, note] = params;
+      const row = state.reliabilityIncidents.find(
+        (item) => Number(item.workspace_id) === Number(workspaceId) && Number(item.id) === Number(incidentId)
+      );
+      if (!row) return { rows: [] };
+      row.status = 'acknowledged';
+      row.owner_id = Number(ownerId);
+      row.acknowledged_at = row.acknowledged_at || nowIso();
+      row.resolution_note = note || row.resolution_note;
+      row.updated_at = nowIso();
+      return { rows: [row] };
+    }
+
+    if (sql.includes('update reliability_incidents') && sql.includes('set status = \'resolved\'')) {
+      const [workspaceId, incidentId, ownerId, resolutionNote] = params;
+      const row = state.reliabilityIncidents.find(
+        (item) => Number(item.workspace_id) === Number(workspaceId) && Number(item.id) === Number(incidentId)
+      );
+      if (!row) return { rows: [] };
+      row.status = 'resolved';
+      row.owner_id = row.owner_id || Number(ownerId);
+      row.acknowledged_at = row.acknowledged_at || nowIso();
+      row.resolved_at = nowIso();
+      row.resolution_note = resolutionNote || row.resolution_note;
+      row.updated_at = nowIso();
       return { rows: [row] };
     }
 
@@ -1281,6 +1453,125 @@ test('automation runs and queue-state endpoints surface retry/backoff visibility
     assert.equal(queueStateResult.response.status, 200);
     assert.equal(queueStateResult.payload.metrics.activeSchedules, 1);
     assert.equal(queueStateResult.payload.metrics.awaitingApprovalRuns, 1);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('workspace pilot scorecard and readiness endpoints return aggregated gate results', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const scorecardResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/pilot/scorecard?periodDays=7'
+    });
+    assert.equal(scorecardResult.response.status, 200, JSON.stringify(scorecardResult.payload));
+    assert.ok(Number(scorecardResult.payload.roomCount) >= 1);
+    assert.equal(Array.isArray(scorecardResult.payload.gateResults), true);
+    assert.ok(scorecardResult.payload.gateResults.length > 0);
+
+    const readinessResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/pilot/readiness/go-no-go?periodDays=56'
+    });
+    assert.equal(readinessResult.response.status, 200, JSON.stringify(readinessResult.payload));
+    assert.ok(['go', 'no_go'].includes(String(readinessResult.payload.overall)));
+    assert.equal(Array.isArray(readinessResult.payload.roomDecisions), true);
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('pilot incidents endpoint seeds incidents from failure signals and supports ack/resolve lifecycle', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const listResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'GET',
+      path: '/api/workspaces/1/pilot/incidents?status=all&periodDays=56'
+    });
+    assert.equal(listResult.response.status, 200, JSON.stringify(listResult.payload));
+    assert.ok(Array.isArray(listResult.payload.incidents));
+    assert.ok(listResult.payload.incidents.length >= 1);
+    const incidentId = Number(listResult.payload.incidents[0]?.id);
+    assert.ok(Number.isFinite(incidentId));
+
+    const ackResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: `/api/workspaces/1/pilot/incidents/${incidentId}/ack`,
+      body: {
+        ownerId: 2,
+        note: 'Owner assigned from control tower'
+      }
+    });
+    assert.equal(ackResult.response.status, 200, JSON.stringify(ackResult.payload));
+    assert.equal(ackResult.payload.incident.status, 'acknowledged');
+
+    const resolveResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: `/api/workspaces/1/pilot/incidents/${incidentId}/resolve`,
+      body: {
+        resolutionNote: 'Recovered after retry policy'
+      }
+    });
+    assert.equal(resolveResult.response.status, 200, JSON.stringify(resolveResult.payload));
+    assert.equal(resolveResult.payload.incident.status, 'resolved');
+  } finally {
+    await stopStudioServer(server);
+  }
+});
+
+test('BI bridge export and share endpoints create interoperable artifacts', async () => {
+  const mock = createStudioQueryMock();
+  const { server, baseUrl } = await startStudioServer(mock.query);
+  const token = generateToken('1', 'analyst@example.com', 'pro');
+
+  try {
+    const exportResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/bi-bridge/export',
+      body: {
+        artifactId: 101,
+        exportType: 'csv',
+        maxRows: 2
+      }
+    });
+    assert.equal(exportResult.response.status, 201, JSON.stringify(exportResult.payload));
+    assert.equal(exportResult.payload.exportType, 'csv');
+    assert.ok(Number(exportResult.payload.rowCount) >= 1);
+    assert.equal(typeof exportResult.payload.csv, 'string');
+
+    const shareResult = await requestJson({
+      baseUrl,
+      token,
+      method: 'POST',
+      path: '/api/workspaces/1/rooms/101/bi-bridge/share',
+      body: {
+        artifactId: Number(exportResult.payload.artifactId),
+        channel: 'in_app',
+        message: 'Share in-app for manager review'
+      }
+    });
+    assert.equal(shareResult.response.status, 201, JSON.stringify(shareResult.payload));
+    assert.equal(shareResult.payload.status, 'shared');
+    assert.equal(shareResult.payload.channel, 'in_app');
   } finally {
     await stopStudioServer(server);
   }
