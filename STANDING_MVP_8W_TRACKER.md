@@ -112,3 +112,6 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
   - Validation:
     - backend build PASS
     - frontend Studio API contract tests PASS
+  - UX follow-up:
+    - Added sidebar Simple/Pro mode switch with persisted workspace mode updates and mode-aware Decision Room routing.
+    - Expanded `SimpleModeHome` to show room dashboards, create dashboard action, and RevOps template quick-launch chips.

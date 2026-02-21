@@ -10,6 +10,7 @@ import {
 } from '../services/api';
 
 type StudioPanel = 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+const validStudioPanels: StudioPanel[] = ['sheets', 'query', 'pivot', 'visuals', 'report', 'actions', 'comms'];
 
 const fallbackRecommendation: NextActionRecommendation = {
   id: 'connect_data',
@@ -48,6 +49,9 @@ const SimpleModeHome: React.FC = () => {
   const [home, setHome] = useState<SimpleHomeState>(fallbackHome);
   const [health, setHealth] = useState<WorkflowHealth>(fallbackHealth);
   const [managerSummary, setManagerSummary] = useState<ManagerSummary | null>(null);
+  const [dashboards, setDashboards] = useState<Array<{ id: number; name: string; timeframeDays?: number; tileIds?: number[] }>>([]);
+  const [templates, setTemplates] = useState<Array<{ id: string; name: string; panel: StudioPanel }>>([]);
+  const [dashboardBusy, setDashboardBusy] = useState(false);
 
   const workspaceId = useMemo(() => {
     const fromUrl = searchParams.get('workspace');
@@ -79,15 +83,28 @@ const SimpleModeHome: React.FC = () => {
       setLoading(true);
       setError(null);
       try {
-        const [homeResult, managerResult] = await Promise.all([
+        const [homeResult, managerResult, dashboardsResult, templatesResult] = await Promise.all([
           studioAPI.getSimpleHome(workspaceId, roomId, { periodDays: 7 }),
-          studioAPI.getSimpleManagerSummary(workspaceId, roomId, { periodDays: 7 })
+          studioAPI.getSimpleManagerSummary(workspaceId, roomId, { periodDays: 7 }),
+          studioAPI.listRoomDashboards(workspaceId, roomId),
+          studioAPI.getRevopsTemplates(workspaceId, roomId)
         ]);
 
         if (cancelled) return;
         setHome(homeResult.data?.home || fallbackHome);
         setHealth(homeResult.data?.workflowHealth || fallbackHealth);
         setManagerSummary(managerResult.data?.summary || null);
+        setDashboards((dashboardsResult.data?.dashboards || []).map((entry: any) => ({
+          id: Number(entry.id),
+          name: String(entry.name || `Dashboard ${entry.id}`),
+          timeframeDays: entry.timeframeDays ? Number(entry.timeframeDays) : 7,
+          tileIds: Array.isArray(entry.tileIds) ? entry.tileIds : []
+        })));
+        setTemplates((templatesResult.data?.templates || []).map((entry: any) => ({
+          id: String(entry.id),
+          name: String(entry.name || 'Template'),
+          panel: validStudioPanels.includes(entry.panel as StudioPanel) ? entry.panel as StudioPanel : 'visuals'
+        })));
       } catch (err: any) {
         if (cancelled) return;
         setError(err?.response?.data?.error || err?.message || 'Failed to load simple mode state.');
@@ -120,6 +137,34 @@ const SimpleModeHome: React.FC = () => {
       // noop: route still switches even if preference save fails
     }
     navigate(buildStudioUrl(home.nextStep.panel || 'sheets'));
+  };
+
+  const handleCreateDashboard = async () => {
+    if (!workspaceId || !roomId || dashboardBusy) return;
+    setDashboardBusy(true);
+    try {
+      const created = await studioAPI.createRoomDashboard(workspaceId, roomId, {
+        name: `Weekly Dashboard ${new Date().toISOString().slice(5, 10)}`,
+        description: 'Auto-created from Simple Mode.',
+        timeframeDays: 7
+      });
+      const dashboard = created.data?.dashboard;
+      if (dashboard) {
+        setDashboards((prev) => [
+          {
+            id: Number(dashboard.id),
+            name: String(dashboard.name || `Dashboard ${dashboard.id}`),
+            timeframeDays: dashboard.timeframeDays ? Number(dashboard.timeframeDays) : 7,
+            tileIds: Array.isArray(dashboard.tileIds) ? dashboard.tileIds : []
+          },
+          ...prev
+        ]);
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to create dashboard.');
+    } finally {
+      setDashboardBusy(false);
+    }
   };
 
   if (!workspaceId) {
@@ -186,6 +231,56 @@ const SimpleModeHome: React.FC = () => {
             <div className="text-sm font-semibold text-slate-900">Review Actions</div>
             <div className="text-xs text-slate-600 mt-1">Assign owners and sync follow-up to Slack.</div>
           </button>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="bg-white border border-slate-200 rounded-xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-sm font-semibold text-slate-900">Room dashboards</div>
+              <button
+                onClick={handleCreateDashboard}
+                disabled={dashboardBusy}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-semibold disabled:opacity-60"
+              >
+                {dashboardBusy ? 'Creating...' : 'New dashboard'}
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {dashboards.length === 0 && (
+                <div className="text-xs text-slate-500">No room dashboards yet. Create one to track weekly trends.</div>
+              )}
+              {dashboards.slice(0, 4).map((dashboard) => (
+                <button
+                  key={dashboard.id}
+                  onClick={() => navigate(buildStudioUrl('visuals'))}
+                  className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:border-indigo-300"
+                >
+                  <div className="text-xs font-semibold text-slate-900">{dashboard.name}</div>
+                  <div className="text-[11px] text-slate-500">
+                    {dashboard.tileIds?.length || 0} tile(s) • {dashboard.timeframeDays || 7} days
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="bg-white border border-slate-200 rounded-xl p-4">
+            <div className="text-sm font-semibold text-slate-900">RevOps templates</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {templates.length === 0 && (
+                <div className="text-xs text-slate-500">Templates will appear after room initialization.</div>
+              )}
+              {templates.slice(0, 8).map((template) => (
+                <button
+                  key={template.id}
+                  onClick={() => navigate(buildStudioUrl(template.panel))}
+                  className="px-2.5 py-1.5 rounded-full border border-slate-300 text-xs text-slate-700 hover:border-indigo-300 hover:text-indigo-700"
+                >
+                  {template.name}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

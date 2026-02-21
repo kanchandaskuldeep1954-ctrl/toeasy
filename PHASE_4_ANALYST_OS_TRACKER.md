@@ -196,6 +196,8 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - Frontend wiring:
     - new `/app/simple` surface (`src/components/SimpleModeHome.tsx`)
     - Studio entry route now respects stored mode and redirects to Simple vs Pro
+    - Sidebar now includes Simple/Pro mode switch with persisted mode updates
+    - Simple mode home now includes room dashboard list/create + RevOps template quick actions
     - API client contracts + tests added for all new endpoints
   - Validation:
     - backend build PASS
