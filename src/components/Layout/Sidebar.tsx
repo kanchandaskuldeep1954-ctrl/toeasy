@@ -23,6 +23,8 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
     const { buildPath: buildWorkspacePath } = useWorkspaceNavigation();
     const [collapsed, setCollapsed] = useState(false);
     const [navigationState, setNavigationState] = useState<StudioNavigationState | null>(null);
+    const [uxMode, setUxMode] = useState<'simple' | 'pro'>('simple');
+    const [modeUpdating, setModeUpdating] = useState(false);
 
     const workspaceId = activeWorkspace?.id || searchParams.get('workspace');
     const datasetId = searchParams.get('dataset') || String(activeDataset?.id || navigationState?.active?.datasetId || '');
@@ -55,6 +57,26 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
         };
     }, [workspaceId, location.pathname, location.search]);
 
+    useEffect(() => {
+        if (!workspaceId) return;
+        let cancelled = false;
+
+        const loadMode = async () => {
+            try {
+                const response = await studioAPI.getMode(String(workspaceId));
+                const mode = response.data?.mode === 'pro' ? 'pro' : 'simple';
+                if (!cancelled) setUxMode(mode);
+            } catch {
+                if (!cancelled) setUxMode('simple');
+            }
+        };
+
+        loadMode();
+        return () => {
+            cancelled = true;
+        };
+    }, [workspaceId]);
+
     const activeRoom = useMemo(() => {
         if (!roomId || !navigationState?.rooms?.length) return null;
         return navigationState.rooms.find((room) => String(room.id) === String(roomId)) || null;
@@ -76,7 +98,36 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
         if (roomOverride?.roomId) query.set('room', String(roomOverride.roomId));
         else if (roomId) query.set('room', String(roomId));
         query.set('panel', panel);
-        return `/app/studio?${query.toString()}`;
+        const basePath = uxMode === 'simple' ? '/app/simple' : '/app/studio';
+        return `${basePath}?${query.toString()}`;
+    };
+
+    const buildModeStudioPath = (mode: 'simple' | 'pro', panel: string = 'sheets') => {
+        const query = new URLSearchParams();
+        if (workspaceId) query.set('workspace', String(workspaceId));
+        if (datasetId) query.set('dataset', String(datasetId));
+        if (projectId) query.set('project', String(projectId));
+        if (roomId) query.set('room', String(roomId));
+        query.set('panel', panel);
+        const basePath = mode === 'simple' ? '/app/simple' : '/app/studio';
+        return `${basePath}?${query.toString()}`;
+    };
+
+    const handleModeSwitch = async (mode: 'simple' | 'pro') => {
+        if (!workspaceId || modeUpdating || mode === uxMode) return;
+        setModeUpdating(true);
+        try {
+            await studioAPI.setMode(String(workspaceId), mode);
+            setUxMode(mode);
+            const currentPanel = searchParams.get('panel') || 'sheets';
+            if (location.pathname.startsWith('/app/studio') || location.pathname.startsWith('/app/simple') || location.pathname === '/app') {
+                navigate(buildModeStudioPath(mode, currentPanel));
+            }
+        } catch {
+            // Silent fallback; mode remains unchanged on error.
+        } finally {
+            setModeUpdating(false);
+        }
     };
 
     const buildControlTowerPath = () => {
@@ -167,6 +218,32 @@ const Sidebar: React.FC<SidebarProps> = ({ mobileOpen = false, onClose }) => {
                                 <div className="mt-2 text-[10px] text-slate-500 dark:text-slate-400 space-y-1 pl-7">
                                     <div>Project: {activeProject?.name || 'Not selected'}</div>
                                     <div>Room: {activeRoom?.name || 'Not selected'}</div>
+                                </div>
+                                <div className="mt-3 pl-7">
+                                    <div className="inline-flex rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden">
+                                        <button
+                                            onClick={() => handleModeSwitch('simple')}
+                                            disabled={modeUpdating}
+                                            className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                                                uxMode === 'simple'
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            Simple
+                                        </button>
+                                        <button
+                                            onClick={() => handleModeSwitch('pro')}
+                                            disabled={modeUpdating}
+                                            className={`px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                                                uxMode === 'pro'
+                                                    ? 'bg-blue-600 text-white'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                                            }`}
+                                        >
+                                            Pro
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         ) : (
