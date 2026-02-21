@@ -14,12 +14,25 @@ interface StudioEntryRedirectProps {
 
 const VALID_PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'visuals', 'report', 'actions', 'comms'];
 
+const applyUxModeToRoute = (route: string, mode: 'simple' | 'pro') => {
+  if (mode === 'simple') {
+    if (route.startsWith('/app/studio?')) return route.replace('/app/studio?', '/app/simple?');
+    if (route === '/app/studio') return '/app/simple';
+  }
+  if (mode === 'pro') {
+    if (route.startsWith('/app/simple?')) return route.replace('/app/simple?', '/app/studio?');
+    if (route === '/app/simple') return '/app/studio';
+  }
+  return route;
+};
+
 const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { workspaces, activeWorkspace, setActiveWorkspace } = useWorkspace();
   const [resolvedRoute, setResolvedRoute] = useState<string | null>(null);
   const [bootstrapError, setBootstrapError] = useState<string | null>(null);
+  const [uxMode, setUxMode] = useState<'simple' | 'pro' | null>(null);
 
   const workspaceIdFromUrl = searchParams.get('workspace');
   const projectFromUrl = searchParams.get('project');
@@ -39,6 +52,29 @@ const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => 
 
   useEffect(() => {
     if (!workspaceId) return;
+    let cancelled = false;
+
+    const loadMode = async () => {
+      try {
+        const response = await studioAPI.getMode(workspaceId);
+        const mode = response.data?.mode === 'pro' ? 'pro' : 'simple';
+        if (!cancelled) setUxMode(mode);
+      } catch {
+        if (!cancelled) setUxMode('simple');
+      }
+    };
+
+    setUxMode(null);
+    loadMode();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    if (uxMode === null) return;
     if (hasCompleteStudioContext) return;
 
     const workspace = workspaces.find((item) => String(item.id) === String(workspaceId));
@@ -58,7 +94,7 @@ const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => 
           source: bootstrapSource,
           preferredPanel
         });
-        const route = response.data?.route;
+        const route = response.data?.route ? applyUxModeToRoute(response.data.route, uxMode) : null;
         if (route) {
           setResolvedRoute(route);
         } else {
@@ -73,6 +109,7 @@ const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => 
   }, [
     source,
     workspaceId,
+    uxMode,
     hasCompleteStudioContext,
     panelFromUrl,
     datasetFromUrl,
@@ -80,6 +117,22 @@ const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => 
     activeWorkspace,
     setActiveWorkspace
   ]);
+
+  useEffect(() => {
+    if (!workspaceId || !hasCompleteStudioContext || uxMode === null) return;
+
+    const params = new URLSearchParams(location.search);
+    if (!params.get('panel') || !isPanelValid) {
+      params.set('panel', isPanelValid ? String(panelFromUrl) : 'sheets');
+    }
+
+    const targetBase = uxMode === 'simple' ? '/app/simple' : '/app/studio';
+    const targetRoute = `${targetBase}?${params.toString()}`;
+    const currentWithQuery = `${location.pathname}${location.search}`;
+    if (targetRoute !== currentWithQuery) {
+      setResolvedRoute(targetRoute);
+    }
+  }, [workspaceId, hasCompleteStudioContext, uxMode, location.pathname, location.search, panelFromUrl, isPanelValid]);
 
   if (!workspaceId && workspaces.length === 0) {
     return <Navigate to="/app/workspaces" replace />;
@@ -97,6 +150,14 @@ const StudioEntryRedirect: React.FC<StudioEntryRedirectProps> = ({ source }) => 
   }
 
   if (!hasCompleteStudioContext) {
+    return (
+      <div className="flex items-center justify-center h-full w-full">
+        <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (uxMode === null) {
     return (
       <div className="flex items-center justify-center h-full w-full">
         <div className="w-8 h-8 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin" />

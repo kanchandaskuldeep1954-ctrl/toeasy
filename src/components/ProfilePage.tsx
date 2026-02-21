@@ -1,407 +1,358 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { useWorkspace } from '../hooks/useWorkspace';
+import {
+  billingAPI,
+  ManagerSummary,
+  ReadinessDecision,
+  studioAPI,
+  SubscriptionState,
+  userAPI,
+  UserProfile,
+  UserUsage
+} from '../services/api';
 
-// Safely access environment variables
-const BACKEND_URL = (import.meta as any).env?.VITE_BACKEND_URL || 'http://localhost:3000/api';
-
-interface UserUsage {
-  tier: string;
-  limits: {
-    maxWorkspaces: number;
-    maxDatasets: number;
-    aiQueriesPerDay: number;
-    maxRowsPerDataset: number;
-    maxGenerateRows: number;
-  };
-  stats: {
-    workspaces: number;
-    datasets: number;
-    dashboards: number;
-    queriesExecuted: number;
-  };
-}
-
-interface UserProfile {
-  id: number;
-  email: string;
-  full_name: string;
-  avatar_url?: string;
-  created_at: string;
-  tier: string;
-}
+type PasswordState = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
 
 export const ProfilePage: React.FC = () => {
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { activeWorkspace } = useWorkspace();
+  const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : '';
+
+  const [loading, setLoading] = useState(true);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savingPassword, setSavingPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [usage, setUsage] = useState<UserUsage | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [passwordChange, setPasswordChange] = useState({
+  const [subscription, setSubscription] = useState<SubscriptionState | null>(null);
+  const [managerSummary, setManagerSummary] = useState<ManagerSummary | null>(null);
+  const [readiness, setReadiness] = useState<ReadinessDecision | null>(null);
+  const [openIncidents, setOpenIncidents] = useState(0);
+  const [activeRoomName, setActiveRoomName] = useState('No active room');
+
+  const [displayName, setDisplayName] = useState('');
+  const [passwordState, setPasswordState] = useState<PasswordState>({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
-  const [passwordLoading, setPasswordLoading] = useState(false);
-  const [passwordMessage, setPasswordMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const initials = useMemo(() => {
+    const name = profile?.full_name || user?.email || 'U';
+    const parts = name.split(' ').filter(Boolean);
+    if (!parts.length) return 'U';
+    if (parts.length === 1) return parts[0][0]?.toUpperCase() || 'U';
+    return `${parts[0][0] || ''}${parts[1][0] || ''}`.toUpperCase();
+  }, [profile?.full_name, user?.email]);
 
   useEffect(() => {
-    fetchAllData();
-  }, []);
-
-  const fetchAllData = async () => {
-    try {
+    const load = async () => {
       setLoading(true);
-      const token = localStorage.getItem('auth_token');
-      if (!token) {
-        navigate('/login');
-        return;
-      }
+      setError('');
+      try {
+        const [profileResult, usageResult, subscriptionResult, navResult] = await Promise.all([
+          userAPI.getProfile(),
+          userAPI.getUsage(),
+          workspaceId ? billingAPI.getSubscription(workspaceId) : Promise.resolve({ data: null }),
+          workspaceId ? studioAPI.getNavigationState(workspaceId) : Promise.resolve({ data: null })
+        ]);
 
-      const headers = {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      };
+        const nextProfile = profileResult.data;
+        setProfile(nextProfile);
+        setDisplayName(nextProfile?.full_name || '');
+        setUsage(usageResult.data || null);
+        setSubscription(subscriptionResult.data || null);
 
-      // Fetch profile and usage in parallel
-      const [profileRes, usageRes] = await Promise.all([
-        fetch(`${BACKEND_URL}/users/me`, { headers }),
-        fetch(`${BACKEND_URL}/users/me/usage`, { headers })
-      ]);
+        const nav = navResult.data;
+        if (workspaceId && nav) {
+          const roomId = nav?.active?.roomId || nav?.rooms?.[0]?.id;
+          const roomLabel = nav?.rooms?.find((room) => Number(room.id) === Number(roomId))?.name;
+          setActiveRoomName(roomLabel || 'No active room');
 
-      if (!profileRes.ok || !usageRes.ok) {
-        if (profileRes.status === 401 || usageRes.status === 401) {
+          if (roomId) {
+            const [summaryResult, readinessResult, incidentsResult] = await Promise.all([
+              studioAPI.getManagerSummary(workspaceId, String(roomId), { periodDays: 14 }),
+              studioAPI.getReadinessDecision(workspaceId, String(roomId), { periodDays: 14 }),
+              studioAPI.listPilotIncidents(workspaceId, { periodDays: 14, status: 'open', severity: 'all' })
+            ]);
+            setManagerSummary(summaryResult.data?.summary || null);
+            setReadiness(readinessResult.data || null);
+            setOpenIncidents(Number(incidentsResult.data?.counts?.open || 0));
+          } else {
+            setManagerSummary(null);
+            setReadiness(null);
+            setOpenIncidents(0);
+          }
+        } else {
+          setManagerSummary(null);
+          setReadiness(null);
+          setOpenIncidents(0);
+          setActiveRoomName('No active room');
+        }
+      } catch (err: any) {
+        if (err?.response?.status === 401) {
           navigate('/login');
           return;
         }
-        throw new Error('Failed to fetch account data');
+        setError(err?.response?.data?.error || err?.message || 'Failed to load profile data');
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const profileData = await profileRes.json();
-      const usageData = await usageRes.json();
+    load();
+  }, [workspaceId, navigate]);
 
-      setProfile(profileData);
-      setUsage(usageData);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load profile');
+  const saveDisplayName = async () => {
+    if (!displayName.trim()) {
+      setError('Name cannot be empty.');
+      return;
+    }
+    setSavingProfile(true);
+    setError('');
+    setSuccess('');
+    try {
+      const result = await userAPI.updateProfile({ full_name: displayName.trim() });
+      setProfile(result.data || profile);
+      setSuccess('Profile updated.');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to update profile');
     } finally {
-      setLoading(false);
+      setSavingProfile(false);
     }
   };
 
-  const handlePasswordChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setPasswordMessage(null);
+  const updatePassword = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError('');
+    setSuccess('');
 
-    if (passwordChange.newPassword !== passwordChange.confirmPassword) {
-      setPasswordMessage({ type: 'error', text: 'Passwords do not match' });
+    if (passwordState.newPassword !== passwordState.confirmPassword) {
+      setError('New password and confirmation do not match.');
       return;
     }
-    if (passwordChange.newPassword.length < 8) {
-      setPasswordMessage({ type: 'error', text: 'Password must be at least 8 characters' });
+    if (passwordState.newPassword.length < 8) {
+      setError('New password must be at least 8 characters.');
       return;
     }
 
+    setSavingPassword(true);
     try {
-      setPasswordLoading(true);
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${BACKEND_URL}/users/change-password`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          currentPassword: passwordChange.currentPassword,
-          newPassword: passwordChange.newPassword
-        })
+      await userAPI.changePassword(passwordState.currentPassword, passwordState.newPassword);
+      setPasswordState({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: ''
       });
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to change password');
-      }
-
-      setPasswordMessage({ type: 'success', text: 'Password updated successfully' });
-      setPasswordChange({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (err) {
-      setPasswordMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'Failed to change password'
-      });
+      setSuccess('Password updated.');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Failed to update password');
     } finally {
-      setPasswordLoading(false);
+      setSavingPassword(false);
     }
   };
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 dark:bg-slate-950">
-        <div className="relative">
-          <div className="w-16 h-16 border-4 border-indigo-500/10 border-t-indigo-600 rounded-full animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-2 h-2 bg-indigo-600 rounded-full"></div>
-          </div>
-        </div>
-        <p className="mt-6 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400">Synchronizing Data...</p>
+      <div className="min-h-full p-8 flex items-center justify-center">
+        <div className="h-10 w-10 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-full p-6 md:p-12 max-w-6xl mx-auto space-y-10">
-      {/* Premium Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter uppercase">Settings</h1>
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Configure your personal hub and security</p>
-          </div>
-        </div>
+    <div className="min-h-full p-6 md:p-10 max-w-7xl mx-auto space-y-6">
+      <header className="flex flex-col gap-1">
+        <h1 className="text-3xl md:text-4xl font-black text-slate-900 dark:text-white tracking-tight">Profile and Operations</h1>
+        <p className="text-sm text-slate-500 dark:text-slate-400">
+          Manage account identity, security, plan, and workspace operations context in one place.
+        </p>
+      </header>
 
-        <div className="flex items-center gap-4 bg-white/50 dark:bg-slate-900/50 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/50 p-2 rounded-2xl">
-          <div className="flex -space-x-2">
-            {[1, 2, 3].map(i => (
-              <div key={i} className={`w-8 h-8 rounded-full border-2 border-white dark:border-slate-900 bg-slate-${200 + i * 100}`}></div>
-            ))}
-          </div>
-          <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2">
-            {usage?.stats.workspaces || 0} active workspaces
-          </span>
-        </div>
-      </div>
-
-      {error && (
-        <div className="p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-2xl text-xs font-black uppercase tracking-widest text-center shadow-xl">
-          {error}
+      {(error || success) && (
+        <div
+          className={`rounded-xl border px-4 py-3 text-sm ${
+            error ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          }`}
+        >
+          {error || success}
         </div>
       )}
 
-      {profile && (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-
-          {/* Left Panel: Profile Detail */}
-          <div className="lg:col-span-4 space-y-6">
-            <div className="glass-card rounded-[32px] overflow-hidden relative group">
-              {/* Banner */}
-              <div className="h-32 bg-blue-600 relative">
-                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_50%_50%,#fff,transparent)] scale-150"></div>
+      <div className="grid gap-6 xl:grid-cols-3">
+        <section className="xl:col-span-2 space-y-6">
+          <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5">
+            <div className="flex items-start gap-4">
+              <div className="h-14 w-14 rounded-xl bg-indigo-600 text-white flex items-center justify-center text-lg font-black">
+                {initials}
               </div>
-
-              <div className="px-8 pb-8 flex flex-col items-center text-center -mt-12">
-                <div className="w-24 h-24 rounded-[28px] bg-white dark:bg-slate-950 p-1.5 shadow-2xl relative z-10 group-hover:scale-105 transition-transform duration-500">
-                  <div className="w-full h-full rounded-[20px] bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-900 flex items-center justify-center text-3xl font-black text-indigo-600 shadow-inner">
-                    {profile.full_name?.charAt(0) || profile.email.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 border-4 border-white dark:border-slate-950 rounded-full flex items-center justify-center text-white">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" /></svg>
-                  </div>
-                </div>
-
-                <div className="mt-4 space-y-1">
-                  <h2 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter">{profile.full_name || 'System User'}</h2>
-                  <p className="text-xs font-mono text-slate-500 uppercase tracking-widest">{profile.email}</p>
-                </div>
-
-                <div className="w-full grid grid-cols-2 gap-4 mt-8 pt-8 border-t border-slate-100 dark:border-slate-800/50">
-                  <div className="text-center group/stat">
-                    <p className="text-2xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-indigo-600">{usage?.stats.workspaces || 0}</p>
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Workspaces</p>
-                  </div>
-                  <div className="text-center group/stat border-l border-slate-100 dark:border-slate-800/50">
-                    <p className="text-2xl font-black text-slate-900 dark:text-white transition-colors group-hover/stat:text-indigo-600">{usage?.stats.datasets || 0}</p>
-                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Datasets</p>
-                  </div>
-                </div>
-
-                <div className="w-full mt-8 flex flex-col gap-2">
-                  <button className="w-full py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all active:translate-y-0">
-                    Edit Public Profile
-                  </button>
-                  <button
-                    onClick={logout}
-                    className="w-full py-4 bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-500 hover:text-white dark:hover:bg-rose-600/20 dark:hover:text-rose-400 transition-all"
-                  >
-                    Terminate Session
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Subscription Mini Card */}
-            <div className="glass-card rounded-[32px] p-8 space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Current Tier</span>
-                <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wide border ${profile.tier === 'pro' || profile.tier === 'enterprise'
-                  ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
-                  }`}>
-                  {profile.tier || 'Basic'}
-                </span>
-              </div>
-              <div className="pt-2">
-                <h3 className="text-lg font-black text-slate-900 dark:text-white capitalize">{profile.tier === 'basic' ? 'Free Forever' : `${profile.tier} Access`}</h3>
-                <p className="text-xs text-slate-500 mt-1">Full access to AI features through 2026.</p>
-              </div>
-              <button
-                onClick={() => navigate('/app/billing')}
-                className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:opacity-90 transition-opacity"
-              >
-                Manage Subscription
-              </button>
-            </div>
-          </div>
-
-          {/* Right Panel: Metrics & Security */}
-          <div className="lg:col-span-8 space-y-8">
-
-            {/* Real-time Metrics */}
-            <div className="glass-card rounded-[32px] p-8">
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex-1 space-y-3">
                 <div>
-                  <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-widest">Usage Insights</h3>
-                  <p className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Accurate account telemetry</p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-slate-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                  <svg className="w-5 h-5 font-bold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {[
-                  { label: 'Workspaces Created', value: usage?.stats.workspaces || 0, color: 'indigo', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6', target: usage?.limits?.maxWorkspaces || 1 },
-                  { label: 'AI Queries (Last 24h)', value: usage?.stats.queriesExecuted || 0, color: 'emerald', icon: 'M13 10V3L4 14h7v7l9-11h-7z', target: usage?.limits?.aiQueriesPerDay || 10 }
-                ].map((stat, idx) => (
-                  <div key={idx} className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800/50 group hover:border-indigo-500/30 transition-all">
-                    <div className="flex justify-between items-start mb-4">
-                      <div className={`p-2 bg-${stat.color}-100 dark:bg-${stat.color}-900/30 rounded-lg text-${stat.color}-600 dark:text-${stat.color}-400`}>
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d={stat.icon} /></svg>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-black text-slate-900 dark:text-white">{stat.value.toLocaleString()} / {stat.target > 10000 ? '∞' : stat.target}</p>
-                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">{stat.label}</p>
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-slate-400">
-                        <span>Current Progress</span>
-                        <span>{Math.min(100, Math.round((stat.value / stat.target) * 100))}%</span>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className={`bg-${stat.color}-500 h-full rounded-full shadow-lg shadow-${stat.color}-500/20 transition-all duration-1000`}
-                          style={{ width: `${Math.min(100, (stat.value / stat.target) * 100)}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Security Section Refresh */}
-            <div className="glass-card rounded-[32px] p-8">
-              <div className="flex items-center gap-4 mb-8">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/30 flex items-center justify-center text-rose-600">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight">Security & Encryption</h3>
-                  <p className="text-xs text-slate-500 font-medium">Update password and manage session keys</p>
-                </div>
-              </div>
-
-              <form onSubmit={handlePasswordChange} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">New Password</label>
-                    <input
-                      type="password"
-                      value={passwordChange.newPassword}
-                      onChange={(e) => setPasswordChange({ ...passwordChange, newPassword: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      placeholder="Min 8 characters"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Confirm New Password</label>
-                    <input
-                      type="password"
-                      value={passwordChange.confirmPassword}
-                      onChange={(e) => setPasswordChange({ ...passwordChange, confirmPassword: e.target.value })}
-                      className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                      placeholder="Repeat password"
-                      required
-                    />
-                  </div>
+                  <div className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Account</div>
+                  <div className="text-sm text-slate-700 dark:text-slate-200">{profile?.email || user?.email}</div>
+                  <div className="text-xs text-slate-500">Joined {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : 'n/a'}</div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Current Password (Identity Verification)</label>
+                <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                   <input
-                    type="password"
-                    value={passwordChange.currentPassword}
-                    onChange={(e) => setPasswordChange({ ...passwordChange, currentPassword: e.target.value })}
-                    className="w-full px-5 py-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-2xl text-sm outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
-                    placeholder="Enter current password"
-                    required
+                    value={displayName}
+                    onChange={(event) => setDisplayName(event.target.value)}
+                    className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                    placeholder="Your display name"
                   />
-                </div>
-
-                {passwordMessage && (
-                  <div className={`p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest animate-in fade-in slide-in-from-top-2 duration-300 ${passwordMessage.type === 'success'
-                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100'
-                    : 'bg-rose-50 text-rose-600 border border-rose-100'
-                    }`}>
-                    {passwordMessage.text}
-                  </div>
-                )}
-
-                <div className="flex justify-end">
                   <button
-                    type="submit"
-                    disabled={passwordLoading}
-                    className="px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-indigo-600/20 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50"
+                    onClick={saveDisplayName}
+                    disabled={savingProfile}
+                    className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                   >
-                    {passwordLoading ? 'Verifying...' : 'Update Security Key'}
+                    {savingProfile ? 'Saving...' : 'Save Name'}
                   </button>
                 </div>
-              </form>
-            </div>
-
-            {/* Legal Links Refresh */}
-            <div className="glass-card rounded-[32px] p-8">
-              <h3 className="text-[11px] font-black uppercase text-slate-400 tracking-widest mb-6">Legal & Transparency</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { name: 'Support', path: '/contact', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z' },
-                  { name: 'Terms of Use', path: '/terms', icon: 'M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z' },
-                  { name: 'Data Privacy', path: '/privacy', icon: 'M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z' },
-                  { name: 'Refunds', path: '/refunds', icon: 'M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z' }
-                ].map((item, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => navigate(item.path)}
-                    className="flex items-center justify-between p-5 rounded-2xl bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800/50 hover:border-indigo-500/50 hover:bg-white dark:hover:bg-slate-900 transition-all group"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-xl bg-slate-200/50 dark:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} /></svg>
-                      </div>
-                      <span className="text-sm font-black text-slate-600 dark:text-slate-300 tracking-tight">{item.name}</span>
-                    </div>
-                    <svg className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" /></svg>
-                  </button>
-                ))}
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Workspace Ops Snapshot</h2>
+            <div className="text-xs text-slate-500">Active room: {activeRoomName}</div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="text-[11px] text-slate-500">Readiness</div>
+                <div className={`text-xl font-black ${
+                  readiness?.overall === 'go' ? 'text-emerald-600' : readiness?.overall === 'no_go' ? 'text-rose-600' : 'text-slate-500'
+                }`}>
+                  {readiness?.overall === 'go' ? 'GO' : readiness?.overall === 'no_go' ? 'NO-GO' : 'N/A'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="text-[11px] text-slate-500">Pending Approvals</div>
+                <div className="text-xl font-black text-slate-900 dark:text-white">{managerSummary?.pendingApprovals ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="text-[11px] text-slate-500">Blocked Publishes</div>
+                <div className="text-xl font-black text-amber-600">{managerSummary?.blockedPublishes ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-3">
+                <div className="text-[11px] text-slate-500">Open Incidents</div>
+                <div className="text-xl font-black text-rose-600">{openIncidents}</div>
+              </div>
+            </div>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-4">
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Security</h2>
+            <form onSubmit={updatePassword} className="grid gap-3 md:grid-cols-2">
+              <input
+                type="password"
+                value={passwordState.currentPassword}
+                onChange={(event) => setPasswordState((prev) => ({ ...prev, currentPassword: event.target.value }))}
+                placeholder="Current password"
+                className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                required
+              />
+              <input
+                type="password"
+                value={passwordState.newPassword}
+                onChange={(event) => setPasswordState((prev) => ({ ...prev, newPassword: event.target.value }))}
+                placeholder="New password"
+                className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
+                required
+              />
+              <input
+                type="password"
+                value={passwordState.confirmPassword}
+                onChange={(event) => setPasswordState((prev) => ({ ...prev, confirmPassword: event.target.value }))}
+                placeholder="Confirm new password"
+                className="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm md:col-span-2"
+                required
+              />
+              <div className="md:col-span-2 flex justify-end">
+                <button
+                  type="submit"
+                  disabled={savingPassword}
+                  className="rounded-lg bg-slate-900 dark:bg-white px-4 py-2 text-sm font-semibold text-white dark:text-slate-900 disabled:opacity-50"
+                >
+                  {savingPassword ? 'Updating...' : 'Update Password'}
+                </button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <aside className="space-y-6">
+          <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Usage and Plan</h2>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+                <div className="text-slate-500">Workspaces</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{usage?.stats?.workspaces ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+                <div className="text-slate-500">Datasets</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{usage?.stats?.datasets ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+                <div className="text-slate-500">Dashboards</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{usage?.stats?.dashboards ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 p-2">
+                <div className="text-slate-500">Queries</div>
+                <div className="text-lg font-black text-slate-900 dark:text-white">{usage?.stats?.queriesExecuted ?? 0}</div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/60 dark:bg-indigo-900/10 p-3">
+              <div className="text-xs text-indigo-700 dark:text-indigo-300">
+                Tier: <span className="font-semibold">{subscription?.tier || usage?.tier || 'basic'}</span>
+              </div>
+              <div className="text-xs text-indigo-700 dark:text-indigo-300">
+                Status: <span className="font-semibold">{subscription?.status || 'active'}</span>
+              </div>
+              <div className="text-xs text-indigo-700 dark:text-indigo-300">
+                Renewal: <span className="font-semibold">{subscription?.renewalAt ? new Date(subscription.renewalAt).toLocaleDateString() : 'n/a'}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => navigate('/app/billing')}
+              className="w-full rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white"
+            >
+              Manage Billing
+            </button>
+          </article>
+
+          <article className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 space-y-3">
+            <h2 className="text-sm font-black uppercase tracking-wide text-slate-700 dark:text-slate-200">Quick Access</h2>
+            <div className="grid gap-2">
+              <Link to="/app/settings" className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+                Settings Control Center
+              </Link>
+              <Link to="/app/team" className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+                Team Workspace
+              </Link>
+              <Link to="/app/chat" className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+                Workspace Chat
+              </Link>
+              <Link to="/app/control-tower" className="rounded-lg border border-slate-200 dark:border-slate-800 px-3 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-800">
+                Manager Control Tower
+              </Link>
+            </div>
+            <button
+              onClick={logout}
+              className="w-full rounded-lg border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-700"
+            >
+              Sign Out
+            </button>
+          </article>
+        </aside>
+      </div>
     </div>
   );
 };

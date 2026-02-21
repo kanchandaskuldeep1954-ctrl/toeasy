@@ -1,6 +1,6 @@
 # Toeasy Standing-MVP Tracker (8 Weeks)
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 Scope: RevOps weekly Decision Room standing MVP
 Execution mode: 80% reliability/QA, 20% manager UX clarity
 
@@ -46,6 +46,12 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 - [x] Dedicated manager-mode screen (`/app/control-tower`) with direct nav access.
 - [x] Incident SLA lane with acknowledge/resolve actions in manager surface.
 - [x] Context-aware chat handoff from active room (`/app/chat?workspace&project&room`) with room-state summary and one-click context update publish.
+- [x] Context quick-actions in chat (create follow-up task + post status draft).
+- [x] Team page upgraded with operational summary cards (approvals/blocked publishes/open incidents/readiness).
+- [x] Home page upgraded with operations pulse card from active room governance metrics.
+- [x] Settings Control Center and profile/account pages upgraded for workspace policy controls and operational context.
+- [x] Workspace member role/update/remove APIs wired to team management UI.
+- [x] Studio workspace comfort improved with context rail overlay/docked modes + width control and panel purpose helper.
 
 ### Weeks 7-8: Pilot Proof + Conversion Readiness
 - [ ] 3 paid pilot telemetry review loop.
@@ -80,3 +86,29 @@ Execution mode: 80% reliability/QA, 20% manager UX clarity
 1. Keep hard-gate telemetry collection running in pilot workspaces for two consecutive weekly cycles.
 2. Run reliability incident review cadence and close unresolved critical incidents within SLA.
 3. Run 3 paid pilot accounts through weekly scorecard + incident review cycle and capture conversion readiness evidence.
+
+## 6) Change Log
+
+- 2026-02-21:
+  - Added workspace UX mode APIs:
+    - `GET /api/workspaces/:id/mode`
+    - `POST /api/workspaces/:id/mode`
+  - Added Simple Mode operational APIs:
+    - `GET /api/workspaces/:id/rooms/:roomId/simple/home`
+    - `GET /api/workspaces/:id/rooms/:roomId/workflow/health`
+    - `GET /api/workspaces/:id/rooms/:roomId/adoption/friction`
+    - `POST /api/workspaces/:id/rooms/:roomId/assistant/recommend-next`
+    - `GET /api/workspaces/:id/rooms/:roomId/templates/revops`
+    - `GET /api/workspaces/:id/rooms/:roomId/simple/manager-summary`
+  - Added room-level convenience surfaces:
+    - `POST /api/workspaces/:id/rooms/:roomId/dashboards`
+    - `GET /api/workspaces/:id/rooms/:roomId/dashboards`
+    - `POST /api/workspaces/:id/rooms/:roomId/dashboards/:dashboardId/tiles`
+    - `POST /api/workspaces/:id/rooms/:roomId/tables/view`
+  - Added frontend Simple Mode shell:
+    - new route `/app/simple`
+    - new component `src/components/SimpleModeHome.tsx`
+    - `StudioEntryRedirect` now resolves mode and routes to Simple/Pro accordingly
+  - Validation:
+    - backend build PASS
+    - frontend Studio API contract tests PASS

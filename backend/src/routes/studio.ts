@@ -53,6 +53,12 @@ interface NextBestStep {
   blockingIssues: string[];
 }
 
+interface RoomGuideState {
+  steps: RoomGuideStep[];
+  nextBestStep: NextBestStep | null;
+  completionRatio: number;
+}
+
 interface StatusDraft {
   summary: string;
   completedActions: Array<{ id: number; title: string; owner: string; dueDate: string | null }>;
@@ -482,6 +488,59 @@ interface UserPreferenceProfile {
   updatedAt: string;
 }
 
+type UxMode = 'simple' | 'pro';
+
+interface WorkflowHealth {
+  completionPct: number;
+  blockers: string[];
+  missingRequiredArtifacts: string[];
+  stageLatency: Array<{ stage: RoomStage; latencyMin: number | null }>;
+}
+
+interface FrictionSignal {
+  stage: string;
+  dropoffRate: number;
+  topErrors: string[];
+  topAbandons: string[];
+}
+
+interface NextActionRecommendation {
+  id: string;
+  panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+  reason: string;
+  requiredInputs: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+interface SimpleHomeState {
+  nextStep: NextActionRecommendation;
+  blockers: string[];
+  kpiSnapshot: PilotKpiSnapshot;
+  pendingApprovals: number;
+  overdueActions: number;
+}
+
+interface DashboardTileRecord {
+  id: number;
+  artifactId: number;
+  tileType: string;
+  title: string;
+  config: Record<string, any>;
+  evidenceIds: number[];
+}
+
+interface DashboardRecord {
+  id: number;
+  roomId: number;
+  name: string;
+  timeframeDays: number;
+  filters: Record<string, any>;
+  tileIds: number[];
+  tiles: DashboardTileRecord[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 const ARTIFACT_TYPES = new Set([
   'dataset_version',
   'query_run',
@@ -557,6 +616,15 @@ function toStudioPanel(value: any): 'sheets' | 'query' | 'pivot' | 'visuals' | '
     return normalized as 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
   }
   return 'sheets';
+}
+
+function toUxMode(value: any): UxMode {
+  const normalized = String(value || '').toLowerCase();
+  return normalized === 'pro' ? 'pro' : 'simple';
+}
+
+function getUxModeFromProfile(profile: UserPreferenceProfile): UxMode {
+  return toUxMode(profile.panelPreferences?.uxMode);
 }
 
 function parseJsonMaybe<T = any>(value: any, fallback: T): T {
@@ -1098,7 +1166,7 @@ async function getActionEvidenceMap(workspaceId: number, roomId: number, actionA
   return { evidenceByAction, evidenceArtifactIds: Array.from(evidenceArtifactIds) };
 }
 
-async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]) {
+async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]): Promise<RoomGuideState> {
   const runContext = parseRoomRunContext(room.run_context);
   const completedStepIds = new Set(runContext.mvpGuide?.completedStepIds || []);
   const stepCompletedAt = runContext.mvpGuide?.stepCompletedAt || {};
@@ -1202,6 +1270,141 @@ async function buildRoomGuide(workspaceId: number, room: any, artifacts: any[]) 
         }
       : null,
     completionRatio
+  };
+}
+
+function mapGuideStepToPanel(stepId: string): 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms' {
+  if (stepId === 'connect_data') return 'sheets';
+  if (stepId === 'analyze_data') return 'query';
+  if (stepId === 'build_brief') return 'report';
+  if (stepId === 'assign_actions') return 'actions';
+  if (stepId === 'sync_actions') return 'comms';
+  return 'sheets';
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function buildWorkflowHealth(room: any, guide: RoomGuideState, artifacts: any[]): WorkflowHealth {
+  const artifactTypes = new Set(artifacts.map((artifact) => String(artifact.artifact_type || '')));
+  const missingRequiredArtifacts = uniqueStrings(
+    guide.steps
+      .filter((step) => !step.completed)
+      .flatMap((step) => step.requiredArtifacts.filter((required) => !artifactTypes.has(required)))
+  );
+  const blockers = uniqueStrings(
+    guide.steps
+      .filter((step) => !step.completed)
+      .flatMap((step) => step.blockingIssues)
+  );
+
+  const runContext = parseRoomRunContext(room.run_context);
+  const stepCompletedAt = runContext.mvpGuide?.stepCompletedAt || {};
+  let previousTs = room.created_at ? new Date(room.created_at) : new Date();
+  if (!Number.isFinite(previousTs.getTime())) {
+    previousTs = new Date();
+  }
+
+  const stageLatency = GUIDED_ROOM_STEPS.map((step) => {
+    const completedAtRaw = stepCompletedAt[step.id];
+    const completedAt = completedAtRaw ? new Date(completedAtRaw) : null;
+    let latencyMin: number | null = null;
+    if (completedAt && Number.isFinite(completedAt.getTime()) && Number.isFinite(previousTs.getTime())) {
+      latencyMin = toRounded(Math.max(0, (completedAt.getTime() - previousTs.getTime()) / 60000), 2);
+      previousTs = completedAt;
+    }
+    return {
+      stage: step.stage,
+      latencyMin
+    };
+  });
+
+  return {
+    completionPct: toRounded(Math.max(0, Math.min(100, guide.completionRatio * 100)), 2),
+    blockers,
+    missingRequiredArtifacts,
+    stageLatency
+  };
+}
+
+function buildNextActionRecommendation(guide: RoomGuideState): NextActionRecommendation {
+  if (!guide.nextBestStep) {
+    return {
+      id: 'maintain-cadence',
+      panel: 'comms',
+      reason: 'Core workflow is complete. Review outcomes and keep weekly cadence running.',
+      requiredInputs: [],
+      confidence: 'high'
+    };
+  }
+
+  return {
+    id: guide.nextBestStep.stepId,
+    panel: mapGuideStepToPanel(guide.nextBestStep.stepId),
+    reason: guide.nextBestStep.reason,
+    requiredInputs: guide.nextBestStep.blockingIssues,
+    confidence: guide.nextBestStep.blockingIssues.length > 0 ? 'medium' : 'high'
+  };
+}
+
+function normalizeDashboardTileRecord(input: any): DashboardTileRecord | null {
+  const parsedId = Number(input?.id);
+  const parsedArtifactId = Number(input?.artifactId);
+  if (!Number.isFinite(parsedId) || parsedId <= 0) return null;
+  if (!Number.isFinite(parsedArtifactId) || parsedArtifactId <= 0) return null;
+
+  return {
+    id: parsedId,
+    artifactId: parsedArtifactId,
+    tileType: String(input?.tileType || 'chart'),
+    title: String(input?.title || `Tile ${parsedId}`),
+    config: input?.config && typeof input.config === 'object'
+      ? input.config as Record<string, any>
+      : {},
+    evidenceIds: Array.isArray(input?.evidenceIds)
+      ? Array.from(
+          new Set(
+            input.evidenceIds
+              .map((id: any) => Number(id))
+              .filter((id: number) => Number.isFinite(id) && id > 0)
+          )
+        )
+      : []
+  };
+}
+
+function normalizeDashboardRecord(artifactRow: any): DashboardRecord | null {
+  const payload = parseJsonMaybe<Record<string, any>>(artifactRow.payload, {});
+  if (payload.kind !== 'room_dashboard') return null;
+
+  const tiles = Array.isArray(payload.tiles)
+    ? payload.tiles
+      .map((tile: any) => normalizeDashboardTileRecord(tile))
+      .filter((tile: DashboardTileRecord | null): tile is DashboardTileRecord => Boolean(tile))
+    : [];
+
+  const roomId = Number(payload.roomId || artifactRow.room_id || 0);
+  if (!Number.isFinite(roomId) || roomId <= 0) return null;
+
+  return {
+    id: Number(artifactRow.id),
+    roomId,
+    name: String(payload.name || artifactRow.title || `Dashboard ${artifactRow.id}`),
+    timeframeDays: normalizePeriodDays(payload.timeframeDays, 7),
+    filters: payload.filters && typeof payload.filters === 'object'
+      ? payload.filters as Record<string, any>
+      : {},
+    tileIds: tiles.map((tile) => tile.id),
+    tiles,
+    createdAt: String(artifactRow.created_at || new Date().toISOString()),
+    updatedAt: String(artifactRow.updated_at || artifactRow.created_at || new Date().toISOString())
   };
 }
 
@@ -2486,6 +2689,67 @@ async function resolveStudioFeatureFlags(workspaceId: number) {
     visualsTabEnabled,
     commsTabEnabled
   };
+}
+
+type WorkspacePolicyKey =
+  | 'aiAssistiveModeEnabled'
+  | 'approvalGateEnforced'
+  | 'autoCreateReportThreads'
+  | 'slackPublishRequiresReview'
+  | 'managerExceptionDigestEnabled'
+  | 'legacySurfacesEnabled'
+  | 'studioVisualsTabEnabled'
+  | 'studioCommsTabEnabled';
+
+const WORKSPACE_POLICY_FLAG_MAP: Record<WorkspacePolicyKey, { flagKey: string; defaultValue: boolean }> = {
+  aiAssistiveModeEnabled: { flagKey: 'ai_assistive_mode_enabled', defaultValue: true },
+  approvalGateEnforced: { flagKey: 'approval_gate_enforced', defaultValue: true },
+  autoCreateReportThreads: { flagKey: 'auto_create_report_threads', defaultValue: true },
+  slackPublishRequiresReview: { flagKey: 'slack_publish_requires_review', defaultValue: true },
+  managerExceptionDigestEnabled: { flagKey: 'manager_exception_digest_enabled', defaultValue: true },
+  legacySurfacesEnabled: { flagKey: 'legacy_surfaces_enabled', defaultValue: false },
+  studioVisualsTabEnabled: { flagKey: 'studio_visuals_tab_enabled', defaultValue: true },
+  studioCommsTabEnabled: { flagKey: 'studio_comms_tab_enabled', defaultValue: true }
+};
+
+async function ensureWorkspaceFeatureFlagsTableExists() {
+  const existsResult = await query(`SELECT to_regclass('public.workspace_feature_flags') AS table_name`);
+  return Boolean(existsResult.rows[0]?.table_name);
+}
+
+async function loadWorkspacePolicySettings(workspaceId: number) {
+  const policies = {} as Record<WorkspacePolicyKey, boolean>;
+  const keys = Object.keys(WORKSPACE_POLICY_FLAG_MAP) as WorkspacePolicyKey[];
+  for (const key of keys) {
+    const definition = WORKSPACE_POLICY_FLAG_MAP[key];
+    policies[key] = await isWorkspaceFeatureEnabled(workspaceId, definition.flagKey, definition.defaultValue);
+  }
+  return policies;
+}
+
+async function upsertWorkspacePolicySettings(
+  workspaceId: number,
+  userId: number,
+  updates: Partial<Record<WorkspacePolicyKey, boolean>>
+) {
+  const keys = Object.keys(WORKSPACE_POLICY_FLAG_MAP) as WorkspacePolicyKey[];
+  for (const key of keys) {
+    const value = updates[key];
+    if (typeof value !== 'boolean') continue;
+    const definition = WORKSPACE_POLICY_FLAG_MAP[key];
+    await query(
+      `
+      INSERT INTO workspace_feature_flags (workspace_id, flag_key, is_enabled, updated_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW())
+      ON CONFLICT (workspace_id, flag_key)
+      DO UPDATE SET
+        is_enabled = EXCLUDED.is_enabled,
+        updated_by = EXCLUDED.updated_by,
+        updated_at = NOW()
+      `,
+      [workspaceId, definition.flagKey, value, userId]
+    );
+  }
 }
 
 async function getLatestReportV2BundleId(workspaceId: number, roomId: number): Promise<string | null> {
@@ -4860,6 +5124,659 @@ router.get('/:workspaceId/studio/navigation', async (req: WorkspaceRequest, res:
   } catch (err) {
     console.error('Studio navigation state failed:', err);
     return res.status(500).json({ error: 'Failed to load Studio navigation state' });
+  }
+});
+
+router.get('/:workspaceId/mode', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const profile = await getOrCreateUserPreferenceProfile(workspaceId, Number(req.user!.id));
+    const mode = getUxModeFromProfile(profile);
+    return res.json({
+      mode,
+      updatedAt: profile.updatedAt,
+      updatedBy: profile.userId
+    });
+  } catch (err) {
+    console.error('Load UX mode failed:', err);
+    return res.status(500).json({ error: 'Failed to load workspace mode' });
+  }
+});
+
+router.post('/:workspaceId/mode', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const mode = toUxMode(req.body?.mode);
+
+    const profile = await getOrCreateUserPreferenceProfile(workspaceId, Number(req.user!.id));
+    const panelPreferences = {
+      ...(profile.panelPreferences || {}),
+      uxMode: mode
+    };
+
+    const updated = await updateUserPreferenceProfile({
+      workspaceId,
+      userId: Number(req.user!.id),
+      panelPreferences
+    });
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: null,
+      userId: req.user!.id,
+      eventType: 'decision_room_mode_updated',
+      metadata: {
+        mode
+      }
+    });
+
+    return res.json({
+      mode,
+      updatedAt: updated.updatedAt,
+      updatedBy: updated.userId
+    });
+  } catch (err) {
+    console.error('Update UX mode failed:', err);
+    return res.status(500).json({ error: 'Failed to update workspace mode' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/simple/home', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const periodDays = normalizePeriodDays(req.query.periodDays, 7);
+    const profile = await getOrCreateUserPreferenceProfile(workspaceId, Number(req.user!.id));
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const workflowHealth = buildWorkflowHealth(room, guide, artifacts);
+    const managerSummary = await buildManagerSummary(workspaceId, roomId, periodDays);
+    const kpiSnapshot = await computeRoomPilotKpiSnapshot(
+      workspaceId,
+      roomId,
+      String(room.created_at || new Date().toISOString()),
+      periodDays
+    );
+    const nextStep = buildNextActionRecommendation(guide);
+
+    const state: SimpleHomeState = {
+      nextStep,
+      blockers: workflowHealth.blockers,
+      kpiSnapshot,
+      pendingApprovals: managerSummary.pendingApprovals,
+      overdueActions: managerSummary.overdueActions
+    };
+
+    return res.json({
+      mode: getUxModeFromProfile(profile),
+      periodDays,
+      roomId,
+      roomStage: String(room.stage || 'ingest'),
+      home: state,
+      workflowHealth,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Load simple home failed:', err);
+    return res.status(500).json({ error: 'Failed to load simple home state' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/workflow/health', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const health = buildWorkflowHealth(room, guide, artifacts);
+
+    return res.json({
+      roomId,
+      roomStage: String(room.stage || 'ingest'),
+      health,
+      nextBestStep: guide.nextBestStep,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Load workflow health failed:', err);
+    return res.status(500).json({ error: 'Failed to load workflow health' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/adoption/friction', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const periodDays = normalizePeriodDays(req.query.periodDays, 14);
+    const eventsResult = await query(
+      `
+      SELECT event_type, metadata, error, status, created_at
+      FROM analytics_events
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND created_at >= NOW() - ($3::int * INTERVAL '1 day')
+      ORDER BY created_at DESC
+      LIMIT 2000
+      `,
+      [workspaceId, roomId, periodDays]
+    );
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const stageBlockers = new Map<string, string[]>();
+    guide.steps
+      .filter((step) => !step.completed)
+      .forEach((step) => {
+        stageBlockers.set(step.stage, uniqueStrings(step.blockingIssues));
+      });
+
+    const stageStats = new Map<string, { attempts: number; failures: number; errors: Map<string, number> }>();
+    eventsResult.rows.forEach((row: any) => {
+      const metadata = parseJsonMaybe<Record<string, any>>(row.metadata, {});
+      const fallbackStage = metadata.stage || metadata.stepId || 'room';
+      const stage = String(fallbackStage || 'room').trim().toLowerCase();
+      const bucket = stageStats.get(stage) || { attempts: 0, failures: 0, errors: new Map<string, number>() };
+      bucket.attempts += 1;
+
+      const eventType = String(row.event_type || '').toLowerCase();
+      const hasFailure = eventType.includes('failed') || eventType.includes('blocked') || String(row.status || '').toLowerCase() === 'failed';
+      if (hasFailure) {
+        bucket.failures += 1;
+        const errorLabel = String(metadata.error || row.error || row.event_type || 'unknown_error')
+          .trim()
+          .slice(0, 120);
+        bucket.errors.set(errorLabel, (bucket.errors.get(errorLabel) || 0) + 1);
+      }
+
+      stageStats.set(stage, bucket);
+    });
+
+    const frictionSignals: FrictionSignal[] = Array.from(stageStats.entries())
+      .map(([stage, stats]) => ({
+        stage,
+        dropoffRate: stats.attempts > 0 ? toRounded(clampUnit(stats.failures / stats.attempts), 5) : 0,
+        topErrors: Array.from(stats.errors.entries())
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([label]) => label),
+        topAbandons: stageBlockers.get(stage) || []
+      }))
+      .sort((a, b) => b.dropoffRate - a.dropoffRate);
+
+    return res.json({
+      periodDays,
+      roomId,
+      signals: frictionSignals,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Load adoption friction failed:', err);
+    return res.status(500).json({ error: 'Failed to load adoption friction signals' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/assistant/recommend-next', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const artifacts = await listRoomArtifacts(workspaceId, roomId, 500);
+    const guide = await buildRoomGuide(workspaceId, room, artifacts);
+    const workflowHealth = buildWorkflowHealth(room, guide, artifacts);
+    const recommendation = buildNextActionRecommendation(guide);
+
+    return res.json({
+      recommendation,
+      workflowHealth,
+      checkedAt: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error('Recommend next step failed:', err);
+    return res.status(500).json({ error: 'Failed to generate next-step recommendation' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/templates/revops', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const templates = [
+      { id: 'pipeline_trend', name: 'Pipeline Trend', panel: 'visuals', chartType: 'line', dimensions: ['created_date'], measures: ['pipeline_created_amount'] },
+      { id: 'win_rate_trend', name: 'Win Rate Trend', panel: 'visuals', chartType: 'line', dimensions: ['close_date'], measures: ['win_rate'] },
+      { id: 'stage_aging', name: 'Stage Aging', panel: 'visuals', chartType: 'bar', dimensions: ['stage'], measures: ['cycle_time_days'] },
+      { id: 'owner_concentration', name: 'Owner Concentration', panel: 'visuals', chartType: 'bar', dimensions: ['owner'], measures: ['pipeline_created_amount'] },
+      { id: 'segment_shift', name: 'Segment Shift', panel: 'visuals', chartType: 'stacked_bar', dimensions: ['segment'], measures: ['closed_won_amount'] },
+      { id: 'loss_reason_mix', name: 'Loss Pattern', panel: 'pivot', chartType: 'table', dimensions: ['stage'], measures: ['closed_lost_count'] },
+      { id: 'brief_weekly', name: 'Weekly Brief Template', panel: 'report', chartType: 'none', dimensions: [], measures: ['pipeline_created_amount', 'closed_won_amount'] },
+      { id: 'action_board', name: 'Action Board Template', panel: 'actions', chartType: 'none', dimensions: ['owner'], measures: ['open_actions'] }
+    ];
+    return res.json({
+      focus: 'revops_weekly',
+      templates,
+      count: templates.length
+    });
+  } catch (err) {
+    console.error('Load revops templates failed:', err);
+    return res.status(500).json({ error: 'Failed to load RevOps templates' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/simple/manager-summary', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const periodDays = normalizePeriodDays(req.query.periodDays, 7);
+    const [summary, reliability] = await Promise.all([
+      buildManagerSummary(workspaceId, roomId, periodDays),
+      computeReliabilityScorecard(workspaceId, roomId, periodDays)
+    ]);
+    const readiness = await buildReadinessDecision({
+      workspaceId,
+      roomId,
+      roomCreatedAt: String(room.created_at || new Date().toISOString()),
+      periodDays,
+      reliability,
+      managerSummary: summary
+    });
+
+    return res.json({
+      roomId,
+      periodDays,
+      summary,
+      reliability,
+      readiness
+    });
+  } catch (err) {
+    console.error('Load simple manager summary failed:', err);
+    return res.status(500).json({ error: 'Failed to load simple manager summary' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/dashboards', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const name = String(req.body?.name || '').trim();
+    if (!name) {
+      return res.status(400).json({ error: 'name is required' });
+    }
+    const timeframeDays = normalizePeriodDays(req.body?.timeframeDays, 7);
+    const filters = req.body?.filters && typeof req.body.filters === 'object'
+      ? req.body.filters as Record<string, any>
+      : {};
+
+    const dashboardArtifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id ? Number(room.project_id) : null,
+      roomId,
+      artifactType: 'report_block',
+      title: name,
+      description: String(req.body?.description || 'Room dashboard'),
+      payload: {
+        kind: 'room_dashboard',
+        roomId,
+        name,
+        timeframeDays,
+        filters,
+        tiles: []
+      },
+      metadata: {
+        surface: 'simple_mode',
+        artifactKind: 'dashboard'
+      },
+      datasetVersionId: null,
+      sourceDatasetId: null,
+      createdBy: req.user!.id
+    });
+
+    const normalized = normalizeDashboardRecord(dashboardArtifact);
+    if (!normalized) {
+      return res.status(500).json({ error: 'Failed to normalize dashboard artifact' });
+    }
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_dashboard_created',
+      metadata: {
+        dashboardId: normalized.id,
+        name: normalized.name,
+        timeframeDays
+      }
+    });
+
+    emitToDecisionRoom(workspaceId, roomId, 'decision-room:dashboard-created', {
+      roomId,
+      dashboardId: normalized.id,
+      name: normalized.name
+    });
+
+    return res.status(201).json({ dashboard: normalized });
+  } catch (err) {
+    console.error('Create room dashboard failed:', err);
+    return res.status(500).json({ error: 'Failed to create room dashboard' });
+  }
+});
+
+router.get('/:workspaceId/rooms/:roomId/dashboards', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const result = await query(
+      `
+      SELECT id, room_id, title, payload, created_at, updated_at
+      FROM artifacts
+      WHERE workspace_id = $1
+        AND room_id = $2
+        AND artifact_type = 'report_block'
+        AND payload::jsonb ->> 'kind' = 'room_dashboard'
+      ORDER BY updated_at DESC, created_at DESC
+      LIMIT 120
+      `,
+      [workspaceId, roomId]
+    );
+
+    const dashboards = result.rows
+      .map((row: any) => normalizeDashboardRecord(row))
+      .filter((dashboard: DashboardRecord | null): dashboard is DashboardRecord => Boolean(dashboard));
+
+    return res.json({ dashboards });
+  } catch (err) {
+    console.error('List room dashboards failed:', err);
+    return res.status(500).json({ error: 'Failed to list room dashboards' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/dashboards/:dashboardId/tiles', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const dashboardId = Number(req.params.dashboardId);
+    if (!Number.isFinite(dashboardId) || dashboardId <= 0) {
+      return res.status(400).json({ error: 'Invalid dashboard id' });
+    }
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const dashboardResult = await query(
+      `
+      SELECT *
+      FROM artifacts
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [dashboardId, workspaceId, roomId]
+    );
+    if (!dashboardResult.rows.length) {
+      return res.status(404).json({ error: 'Dashboard not found in this room' });
+    }
+
+    const dashboardRow = dashboardResult.rows[0];
+    const dashboardPayload = parseJsonMaybe<Record<string, any>>(dashboardRow.payload, {});
+    if (dashboardPayload.kind !== 'room_dashboard') {
+      return res.status(400).json({ error: 'Selected artifact is not a room dashboard' });
+    }
+
+    const artifactId = Number(req.body?.artifactId);
+    if (!Number.isFinite(artifactId) || artifactId <= 0) {
+      return res.status(400).json({ error: 'artifactId must be a positive number.' });
+    }
+
+    const sourceArtifactResult = await query(
+      `
+      SELECT id
+      FROM artifacts
+      WHERE id = $1
+        AND workspace_id = $2
+        AND room_id = $3
+      LIMIT 1
+      `,
+      [artifactId, workspaceId, roomId]
+    );
+    if (!sourceArtifactResult.rows.length) {
+      return res.status(404).json({ error: 'Tile source artifact not found in this room' });
+    }
+
+    const nextTileId = Date.now();
+    const tiles = Array.isArray(dashboardPayload.tiles) ? dashboardPayload.tiles : [];
+    const tile: DashboardTileRecord = {
+      id: nextTileId,
+      artifactId,
+      tileType: String(req.body?.tileType || 'chart'),
+      title: String(req.body?.title || `Tile ${tiles.length + 1}`),
+      config: req.body?.config && typeof req.body.config === 'object'
+        ? req.body.config as Record<string, any>
+        : {},
+      evidenceIds: Array.isArray(req.body?.evidenceIds)
+        ? Array.from(
+            new Set(
+              req.body.evidenceIds
+                .map((id: any) => Number(id))
+                .filter((id: number) => Number.isFinite(id) && id > 0)
+            )
+          )
+        : [artifactId]
+    };
+
+    const nextPayload = {
+      ...dashboardPayload,
+      tiles: [...tiles, tile]
+    };
+
+    const updatedResult = await query(
+      `
+      UPDATE artifacts
+      SET payload = $1,
+          updated_at = NOW()
+      WHERE id = $2
+        AND workspace_id = $3
+        AND room_id = $4
+      RETURNING *
+      `,
+      [JSON.stringify(nextPayload), dashboardId, workspaceId, roomId]
+    );
+
+    await createLineageEdges({
+      workspaceId,
+      roomId,
+      parentArtifactIds: [artifactId],
+      childArtifactId: dashboardId,
+      relationType: 'derived_from',
+      createdBy: req.user!.id
+    });
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId,
+      userId: req.user!.id,
+      eventType: 'decision_room_dashboard_tile_added',
+      metadata: {
+        dashboardId,
+        tileId: tile.id,
+        artifactId
+      }
+    });
+
+    const normalized = normalizeDashboardRecord(updatedResult.rows[0]);
+    return res.status(201).json({
+      tile,
+      dashboard: normalized
+    });
+  } catch (err) {
+    console.error('Add dashboard tile failed:', err);
+    return res.status(500).json({ error: 'Failed to add dashboard tile' });
+  }
+});
+
+router.post('/:workspaceId/rooms/:roomId/tables/view', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (!canWrite(req.workspaceRole)) {
+      return res.status(403).json({ error: 'Write access required' });
+    }
+
+    const workspaceId = Number(req.params.workspaceId);
+    const roomId = Number(req.params.roomId);
+    const room = await getRoom(workspaceId, roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    const name = String(req.body?.name || 'Untitled view').trim().slice(0, 120);
+    const filters = req.body?.filters && typeof req.body.filters === 'object'
+      ? req.body.filters as Record<string, any>
+      : {};
+    const grouping = Array.isArray(req.body?.grouping) ? req.body.grouping : [];
+    const sorting = Array.isArray(req.body?.sorting) ? req.body.sorting : [];
+    const visibleColumns = Array.isArray(req.body?.visibleColumns) ? req.body.visibleColumns : [];
+
+    const presetArtifact = await createArtifact({
+      workspaceId,
+      projectId: room.project_id ? Number(room.project_id) : null,
+      roomId,
+      artifactType: 'report_block',
+      title: `Table View: ${name}`,
+      description: 'Saved table view preset',
+      payload: {
+        kind: 'table_view_preset',
+        name,
+        filters,
+        grouping,
+        sorting,
+        visibleColumns
+      },
+      metadata: {
+        surface: 'simple_mode',
+        artifactKind: 'table_view_preset'
+      },
+      datasetVersionId: null,
+      sourceDatasetId: null,
+      createdBy: req.user!.id
+    });
+
+    return res.status(201).json({
+      preset: {
+        id: Number(presetArtifact.id),
+        roomId,
+        name,
+        filters,
+        grouping,
+        sorting,
+        visibleColumns,
+        createdAt: String(presetArtifact.created_at || new Date().toISOString())
+      }
+    });
+  } catch (err) {
+    console.error('Save table view preset failed:', err);
+    return res.status(500).json({ error: 'Failed to save table view preset' });
+  }
+});
+
+router.get('/:workspaceId/settings/policies', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    const workspaceId = Number(req.params.workspaceId);
+    const tableExists = await ensureWorkspaceFeatureFlagsTableExists();
+    if (!tableExists) {
+      return res.json({
+        workspaceId,
+        policies: await loadWorkspacePolicySettings(workspaceId),
+        source: 'defaults'
+      });
+    }
+
+    const policies = await loadWorkspacePolicySettings(workspaceId);
+    return res.json({
+      workspaceId,
+      policies,
+      source: 'workspace_feature_flags'
+    });
+  } catch (err) {
+    console.error('Load workspace policy settings failed:', err);
+    return res.status(500).json({ error: 'Failed to load workspace policy settings' });
+  }
+});
+
+router.post('/:workspaceId/settings/policies', async (req: WorkspaceRequest, res: Response) => {
+  try {
+    if (req.workspaceRole !== 'admin') {
+      return res.status(403).json({ error: 'Only workspace admins can update policy settings.' });
+    }
+    const workspaceId = Number(req.params.workspaceId);
+    const tableExists = await ensureWorkspaceFeatureFlagsTableExists();
+    if (!tableExists) {
+      return res.status(503).json({ error: 'workspace_feature_flags table is not available in this environment.' });
+    }
+
+    const payload = req.body?.policies && typeof req.body.policies === 'object'
+      ? req.body.policies as Partial<Record<WorkspacePolicyKey, boolean>>
+      : {};
+    await upsertWorkspacePolicySettings(workspaceId, Number(req.user!.id), payload);
+    const policies = await loadWorkspacePolicySettings(workspaceId);
+
+    await recordAnalyticsEvent({
+      workspaceId,
+      roomId: null,
+      userId: req.user!.id,
+      eventType: 'decision_room_workspace_policies_updated',
+      metadata: {
+        updatedKeys: Object.entries(payload)
+          .filter(([, value]) => typeof value === 'boolean')
+          .map(([key]) => key)
+      }
+    });
+
+    return res.json({
+      workspaceId,
+      policies,
+      message: 'Workspace policies updated'
+    });
+  } catch (err) {
+    console.error('Update workspace policy settings failed:', err);
+    return res.status(500).json({ error: 'Failed to update workspace policy settings' });
   }
 });
 

@@ -75,6 +75,42 @@ function getClient(): AxiosInstance {
   return apiClient;
 }
 
+export interface WorkspaceMember {
+  id: number;
+  full_name: string;
+  email: string;
+  role: 'admin' | 'editor' | 'viewer';
+  joined_at: string | null;
+  is_owner?: boolean;
+}
+
+export interface UserProfile {
+  id: number;
+  email: string;
+  full_name: string;
+  avatar_url?: string;
+  created_at: string;
+  onboarding_completed?: boolean;
+  tier: string;
+}
+
+export interface UserUsage {
+  tier: string;
+  limits: {
+    maxWorkspaces: number;
+    maxDatasets: number;
+    aiQueriesPerDay: number;
+    maxRowsPerDataset: number;
+    maxGenerateRows: number;
+  };
+  stats: {
+    workspaces: number;
+    datasets: number;
+    dashboards: number;
+    queriesExecuted: number;
+  };
+}
+
 // ============================================
 // Auth Endpoints
 // ============================================
@@ -114,7 +150,16 @@ export const workspaceAPI = {
     getClient().delete(`/workspaces/${id}`),
 
   getStats: (id: string) =>
-    getClient().get(`/workspaces/${id}/stats`)
+    getClient().get(`/workspaces/${id}/stats`),
+
+  listMembers: (id: string) =>
+    getClient().get<WorkspaceMember[]>(`/workspaces/${id}/members`),
+
+  updateMemberRole: (id: string, memberId: string | number, role: 'admin' | 'editor' | 'viewer') =>
+    getClient().put(`/workspaces/${id}/members/${memberId}`, { role }),
+
+  removeMember: (id: string, memberId: string | number) =>
+    getClient().delete(`/workspaces/${id}/members/${memberId}`)
 };
 
 // ============================================
@@ -908,12 +953,208 @@ export interface StudioNavigationState {
   recentDatasets: Array<{ id: number; name: string; updatedAt?: string; createdAt?: string }>;
 }
 
+export interface UxModeState {
+  mode: 'simple' | 'pro';
+  updatedAt?: string;
+  updatedBy?: number;
+}
+
+export interface DashboardTile {
+  id: number;
+  artifactId: number;
+  tileType: string;
+  title: string;
+  config: Record<string, any>;
+  evidenceIds: number[];
+}
+
+export interface Dashboard {
+  id: number;
+  roomId: number;
+  name: string;
+  timeframeDays: number;
+  filters: Record<string, any>;
+  tileIds: number[];
+  tiles: DashboardTile[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TableViewPreset {
+  id: number;
+  roomId: number;
+  name: string;
+  filters: Record<string, any>;
+  grouping: any[];
+  sorting: any[];
+  visibleColumns: string[];
+  createdAt?: string;
+}
+
+export interface WorkflowHealth {
+  completionPct: number;
+  blockers: string[];
+  missingRequiredArtifacts: string[];
+  stageLatency: Array<{ stage: string; latencyMin: number | null }>;
+}
+
+export interface FrictionSignal {
+  stage: string;
+  dropoffRate: number;
+  topErrors: string[];
+  topAbandons: string[];
+}
+
+export interface NextActionRecommendation {
+  id: string;
+  panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+  reason: string;
+  requiredInputs: string[];
+  confidence: 'high' | 'medium' | 'low';
+}
+
+export interface SimpleHomeState {
+  nextStep: NextActionRecommendation;
+  blockers: string[];
+  kpiSnapshot: PilotKpiSnapshot;
+  pendingApprovals: number;
+  overdueActions: number;
+}
+
+export interface WorkspacePolicySettings {
+  aiAssistiveModeEnabled: boolean;
+  approvalGateEnforced: boolean;
+  autoCreateReportThreads: boolean;
+  slackPublishRequiresReview: boolean;
+  managerExceptionDigestEnabled: boolean;
+  legacySurfacesEnabled: boolean;
+  studioVisualsTabEnabled: boolean;
+  studioCommsTabEnabled: boolean;
+}
+
 export const studioAPI = {
   bootstrap: (workspaceId: string, data?: StudioBootstrapRequest) =>
     getClient().post<StudioBootstrapResponse>(`/workspaces/${workspaceId}/studio/bootstrap`, data || {}),
 
   getNavigationState: (workspaceId: string) =>
     getClient().get<StudioNavigationState>(`/workspaces/${workspaceId}/studio/navigation`),
+
+  getMode: (workspaceId: string) =>
+    getClient().get<UxModeState>(`/workspaces/${workspaceId}/mode`),
+
+  setMode: (workspaceId: string, mode: 'simple' | 'pro') =>
+    getClient().post<UxModeState>(`/workspaces/${workspaceId}/mode`, { mode }),
+
+  getSimpleHome: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{
+    mode: 'simple' | 'pro';
+    periodDays: number;
+    roomId: number;
+    roomStage: string;
+    home: SimpleHomeState;
+    workflowHealth: WorkflowHealth;
+    checkedAt: string;
+  }>(`/workspaces/${workspaceId}/rooms/${roomId}/simple/home`, { params }),
+
+  createRoomDashboard: (
+    workspaceId: string,
+    roomId: string,
+    data: { name: string; description?: string; timeframeDays?: number; filters?: Record<string, any> }
+  ) => getClient().post<{ dashboard: Dashboard }>(`/workspaces/${workspaceId}/rooms/${roomId}/dashboards`, data),
+
+  listRoomDashboards: (workspaceId: string, roomId: string) =>
+    getClient().get<{ dashboards: Dashboard[] }>(`/workspaces/${workspaceId}/rooms/${roomId}/dashboards`),
+
+  addDashboardTile: (
+    workspaceId: string,
+    roomId: string,
+    dashboardId: string | number,
+    data: { artifactId: number; title?: string; tileType?: string; config?: Record<string, any>; evidenceIds?: number[] }
+  ) => getClient().post<{ tile: DashboardTile; dashboard: Dashboard | null }>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/dashboards/${dashboardId}/tiles`,
+    data
+  ),
+
+  saveTableViewPreset: (
+    workspaceId: string,
+    roomId: string,
+    data: {
+      name: string;
+      filters?: Record<string, any>;
+      grouping?: any[];
+      sorting?: any[];
+      visibleColumns?: string[];
+    }
+  ) => getClient().post<{ preset: TableViewPreset }>(`/workspaces/${workspaceId}/rooms/${roomId}/tables/view`, data),
+
+  getWorkflowHealth: (workspaceId: string, roomId: string) =>
+    getClient().get<{
+      roomId: number;
+      roomStage: string;
+      health: WorkflowHealth;
+      nextBestStep: { stepId: string; reason: string; blockingIssues: string[] } | null;
+      checkedAt: string;
+    }>(`/workspaces/${workspaceId}/rooms/${roomId}/workflow/health`),
+
+  getAdoptionFriction: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{ periodDays: number; roomId: number; signals: FrictionSignal[]; checkedAt: string }>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/adoption/friction`,
+    { params }
+  ),
+
+  recommendNextAction: (
+    workspaceId: string,
+    roomId: string,
+    data?: { context?: Record<string, any> }
+  ) => getClient().post<{ recommendation: NextActionRecommendation; workflowHealth: WorkflowHealth; checkedAt: string }>(
+    `/workspaces/${workspaceId}/rooms/${roomId}/assistant/recommend-next`,
+    data || {}
+  ),
+
+  getRevopsTemplates: (workspaceId: string, roomId: string) =>
+    getClient().get<{
+      focus: 'revops_weekly';
+      templates: Array<{
+        id: string;
+        name: string;
+        panel: 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'actions' | 'comms';
+        chartType: string;
+        dimensions: string[];
+        measures: string[];
+      }>;
+      count: number;
+    }>(`/workspaces/${workspaceId}/rooms/${roomId}/templates/revops`),
+
+  getSimpleManagerSummary: (
+    workspaceId: string,
+    roomId: string,
+    params?: { periodDays?: number }
+  ) => getClient().get<{
+    roomId: number;
+    periodDays: number;
+    summary: ManagerSummary;
+    reliability: ReliabilityScorecard;
+    readiness: ReadinessDecision;
+  }>(`/workspaces/${workspaceId}/rooms/${roomId}/simple/manager-summary`, { params }),
+
+  getWorkspacePolicySettings: (workspaceId: string) =>
+    getClient().get<{ workspaceId: number; policies: WorkspacePolicySettings; source: string }>(
+      `/workspaces/${workspaceId}/settings/policies`
+    ),
+
+  updateWorkspacePolicySettings: (
+    workspaceId: string,
+    policies: Partial<WorkspacePolicySettings>
+  ) => getClient().post<{ workspaceId: number; policies: WorkspacePolicySettings; message: string }>(
+    `/workspaces/${workspaceId}/settings/policies`,
+    { policies }
+  ),
 
   listProjects: (workspaceId: string) =>
     getClient().get(`/workspaces/${workspaceId}/projects`),
@@ -1323,10 +1564,13 @@ export const aiAPI = {
 
 export const userAPI = {
   getProfile: () =>
-    getClient().get('/users/me'),
+    getClient().get<UserProfile>('/users/me'),
+
+  getUsage: () =>
+    getClient().get<UserUsage>('/users/me/usage'),
 
   updateProfile: (data: any) =>
-    getClient().put('/users/me', data),
+    getClient().put<UserProfile>('/users/me', data),
 
   changePassword: (currentPassword: string, newPassword: string) =>
     getClient().post('/users/change-password', {

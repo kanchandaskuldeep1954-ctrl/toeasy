@@ -5,6 +5,31 @@ import { checkSubscription, checkTierLimit } from '../middleware/subscription.js
 
 const router = Router();
 
+interface WorkspaceAccessRow {
+  id: number;
+  owner_id: number;
+  role: string | null;
+}
+
+async function getWorkspaceAccess(workspaceId: number, userId: number): Promise<WorkspaceAccessRow | null> {
+  const accessResult = await query(
+    `
+    SELECT
+      w.id,
+      w.user_id AS owner_id,
+      wm.role
+    FROM workspaces w
+    LEFT JOIN workspace_members wm ON wm.workspace_id = w.id AND wm.user_id = $2
+    WHERE w.id = $1
+      AND (w.user_id = $2 OR wm.user_id = $2)
+    LIMIT 1
+    `,
+    [workspaceId, userId]
+  );
+  if (!accessResult.rows.length) return null;
+  return accessResult.rows[0] as WorkspaceAccessRow;
+}
+
 // Apply auth middleware to all workspace routes
 router.use(authenticateToken);
 router.use(checkSubscription);
@@ -103,6 +128,173 @@ router.get('/:id', async (req: AuthRequest, res) => {
   } catch (err) {
     console.error('Get workspace error:', err);
     res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// List workspace members
+router.get('/:id/members', async (req: AuthRequest, res) => {
+  try {
+    const workspaceId = Number(req.params.id);
+    if (!Number.isFinite(workspaceId) || workspaceId <= 0) {
+      return res.status(400).json({ error: 'Invalid workspace id' });
+    }
+
+    const access = await getWorkspaceAccess(workspaceId, Number(req.user!.id));
+    if (!access) {
+      return res.status(404).json({ error: 'Workspace not found or access denied' });
+    }
+
+    const membersResult = await query(
+      `
+      SELECT
+        u.id,
+        u.full_name,
+        u.email,
+        wm.role,
+        wm.created_at AS joined_at
+      FROM workspace_members wm
+      JOIN users u ON u.id = wm.user_id
+      WHERE wm.workspace_id = $1
+      ORDER BY
+        CASE wm.role
+          WHEN 'admin' THEN 1
+          WHEN 'editor' THEN 2
+          ELSE 3
+        END ASC,
+        COALESCE(u.full_name, u.email) ASC
+      `,
+      [workspaceId]
+    );
+
+    let members = membersResult.rows.map((row) => ({
+      id: Number(row.id),
+      full_name: row.full_name ? String(row.full_name) : '',
+      email: String(row.email || ''),
+      role: String(row.role || 'viewer'),
+      joined_at: row.joined_at || null,
+      is_owner: Number(row.id) === Number(access.owner_id)
+    }));
+
+    if (!members.some((member) => Number(member.id) === Number(access.owner_id))) {
+      const ownerResult = await query(
+        `SELECT id, full_name, email, created_at FROM users WHERE id = $1 LIMIT 1`,
+        [access.owner_id]
+      );
+      const owner = ownerResult.rows[0];
+      if (owner) {
+        members = [
+          {
+            id: Number(owner.id),
+            full_name: owner.full_name ? String(owner.full_name) : '',
+            email: String(owner.email || ''),
+            role: 'admin',
+            joined_at: owner.created_at || null,
+            is_owner: true
+          },
+          ...members
+        ];
+      }
+    }
+
+    return res.json(members);
+  } catch (err) {
+    console.error('List workspace members error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Update member role
+router.put('/:id/members/:memberId', async (req: AuthRequest, res) => {
+  try {
+    const workspaceId = Number(req.params.id);
+    const memberId = Number(req.params.memberId);
+    const role = String(req.body?.role || '').trim().toLowerCase();
+    if (!Number.isFinite(workspaceId) || workspaceId <= 0 || !Number.isFinite(memberId) || memberId <= 0) {
+      return res.status(400).json({ error: 'Invalid workspace/member id' });
+    }
+    if (!['admin', 'editor', 'viewer'].includes(role)) {
+      return res.status(400).json({ error: 'Role must be admin, editor, or viewer' });
+    }
+
+    const access = await getWorkspaceAccess(workspaceId, Number(req.user!.id));
+    if (!access) {
+      return res.status(404).json({ error: 'Workspace not found or access denied' });
+    }
+    const canManage = Number(access.owner_id) === Number(req.user!.id) || String(access.role || '').toLowerCase() === 'admin';
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only workspace admins can update member roles' });
+    }
+    if (memberId === Number(access.owner_id)) {
+      return res.status(400).json({ error: 'Cannot change owner role' });
+    }
+
+    const updateResult = await query(
+      `
+      UPDATE workspace_members
+      SET role = $3, updated_at = NOW()
+      WHERE workspace_id = $1 AND user_id = $2
+      RETURNING workspace_id, user_id, role, updated_at
+      `,
+      [workspaceId, memberId, role]
+    );
+    if (!updateResult.rows.length) {
+      return res.status(404).json({ error: 'Workspace member not found' });
+    }
+
+    const memberResult = await query(
+      `
+      SELECT u.id, u.full_name, u.email, wm.role, wm.created_at AS joined_at
+      FROM workspace_members wm
+      JOIN users u ON u.id = wm.user_id
+      WHERE wm.workspace_id = $1 AND wm.user_id = $2
+      LIMIT 1
+      `,
+      [workspaceId, memberId]
+    );
+    return res.json(memberResult.rows[0] || updateResult.rows[0]);
+  } catch (err) {
+    console.error('Update workspace member role error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Remove member from workspace
+router.delete('/:id/members/:memberId', async (req: AuthRequest, res) => {
+  try {
+    const workspaceId = Number(req.params.id);
+    const memberId = Number(req.params.memberId);
+    if (!Number.isFinite(workspaceId) || workspaceId <= 0 || !Number.isFinite(memberId) || memberId <= 0) {
+      return res.status(400).json({ error: 'Invalid workspace/member id' });
+    }
+
+    const access = await getWorkspaceAccess(workspaceId, Number(req.user!.id));
+    if (!access) {
+      return res.status(404).json({ error: 'Workspace not found or access denied' });
+    }
+    const canManage = Number(access.owner_id) === Number(req.user!.id) || String(access.role || '').toLowerCase() === 'admin';
+    if (!canManage) {
+      return res.status(403).json({ error: 'Only workspace admins can remove members' });
+    }
+    if (memberId === Number(access.owner_id)) {
+      return res.status(400).json({ error: 'Cannot remove workspace owner' });
+    }
+
+    const deleteResult = await query(
+      `
+      DELETE FROM workspace_members
+      WHERE workspace_id = $1 AND user_id = $2
+      RETURNING id
+      `,
+      [workspaceId, memberId]
+    );
+    if (!deleteResult.rows.length) {
+      return res.status(404).json({ error: 'Workspace member not found' });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Remove workspace member error:', err);
+    return res.status(500).json({ error: 'Internal server error' });
   }
 });
 

@@ -1,10 +1,55 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useWorkspace } from '../hooks/useWorkspace';
 import { TeamMembers } from './Workspaces/TeamMembers';
 import { Users } from 'lucide-react';
+import { ManagerSummary, ReadinessDecision, StudioNavigationState, studioAPI } from '../services/api';
 
 const TeamView: React.FC = () => {
     const { activeWorkspace, isLoading } = useWorkspace();
+    const workspaceId = activeWorkspace?.id ? String(activeWorkspace.id) : '';
+    const [navigationState, setNavigationState] = useState<StudioNavigationState | null>(null);
+    const [managerSummary, setManagerSummary] = useState<ManagerSummary | null>(null);
+    const [readiness, setReadiness] = useState<ReadinessDecision | null>(null);
+    const [openIncidents, setOpenIncidents] = useState(0);
+
+    useEffect(() => {
+        const load = async () => {
+            if (!workspaceId) return;
+            try {
+                const navigationResult = await studioAPI.getNavigationState(workspaceId);
+                const nav = navigationResult.data || null;
+                setNavigationState(nav);
+                const roomId = nav?.active?.roomId || nav?.rooms?.[0]?.id;
+                if (!roomId) {
+                    setManagerSummary(null);
+                    setReadiness(null);
+                    setOpenIncidents(0);
+                    return;
+                }
+                const [summaryResult, readinessResult, incidentsResult] = await Promise.all([
+                    studioAPI.getManagerSummary(workspaceId, String(roomId), { periodDays: 14 }),
+                    studioAPI.getReadinessDecision(workspaceId, String(roomId), { periodDays: 14 }),
+                    studioAPI.listPilotIncidents(workspaceId, { status: 'open', severity: 'all', periodDays: 14 })
+                ]);
+                setManagerSummary(summaryResult.data?.summary || null);
+                setReadiness(readinessResult.data || null);
+                setOpenIncidents(Number(incidentsResult.data?.counts?.open || 0));
+            } catch (error) {
+                console.error('Failed to load team operations summary:', error);
+                setManagerSummary(null);
+                setReadiness(null);
+                setOpenIncidents(0);
+            }
+        };
+        load();
+    }, [workspaceId]);
+
+    const activeRoomLabel = useMemo(() => {
+        const roomId = navigationState?.active?.roomId;
+        if (!roomId) return 'No active room';
+        const room = navigationState?.rooms?.find((entry) => Number(entry.id) === Number(roomId));
+        return room?.name || `Room ${roomId}`;
+    }, [navigationState]);
 
     if (isLoading) {
         return (
@@ -41,6 +86,28 @@ const TeamView: React.FC = () => {
                     <p className="text-slate-500 dark:text-slate-400 text-lg font-medium">
                         Manage members and permissions for <span className="text-indigo-600 dark:text-indigo-400 font-bold">{activeWorkspace.name}</span>
                     </p>
+                </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-4">
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                    <div className="text-xs uppercase font-bold text-slate-500">Active Room</div>
+                    <div className="mt-2 text-sm font-semibold text-slate-900 dark:text-white">{activeRoomLabel}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                    <div className="text-xs uppercase font-bold text-slate-500">Pending Approvals</div>
+                    <div className="mt-2 text-2xl font-black text-slate-900 dark:text-white">{managerSummary?.pendingApprovals ?? 0}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                    <div className="text-xs uppercase font-bold text-slate-500">Blocked Publishes</div>
+                    <div className="mt-2 text-2xl font-black text-amber-600">{managerSummary?.blockedPublishes ?? 0}</div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                    <div className="text-xs uppercase font-bold text-slate-500">Open Incidents</div>
+                    <div className="mt-2 text-2xl font-black text-rose-600">{openIncidents}</div>
+                    <div className="text-xs text-slate-500 mt-1">
+                        Readiness: {readiness?.overall === 'go' ? 'GO' : readiness?.overall === 'no_go' ? 'NO-GO' : 'n/a'}
+                    </div>
                 </div>
             </div>
 

@@ -1,6 +1,6 @@
 # Toeasy Analyst OS Phase 4 Tracker
 
-Last updated: February 20, 2026
+Last updated: February 21, 2026
 Owner: Product + Engineering
 Execution window: 24 weeks
 Scope: RevOps-first Analyst Team OS
@@ -89,6 +89,16 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
   - [x] scheduled execution worker with retry/backoff policy
   - [x] startup/shutdown queue lifecycle in backend server
   - [x] queue health API (`/automations/queue-state`)
+- [x] Account + settings operations upgrade:
+  - [x] workspace member management endpoints (`list/update role/remove`)
+  - [x] workspace policy settings endpoints (`get/update`)
+  - [x] Settings Control Center route and workspace policy toggles
+  - [x] Profile page rewritten to unified account + ops snapshot + security flow
+  - [x] Team/Home/Chat surfaces wired to manager/readiness/incident context
+- [x] Studio convenience upgrades:
+  - [x] Context rail layout modes (`overlay` and `docked`) with width presets
+  - [x] Persisted Studio layout preferences (local storage)
+  - [x] Panel purpose helper card (input/output/value clarity per tool)
 
 ## 5) In Progress (Current Slice)
 - [x] Route-level execution unified on shared execution service paths.
@@ -167,6 +177,54 @@ Deliver a Decision Room that supports the full weekly RevOps analyst cycle end-t
 4. Keep route integration suite green as release guardrail.
 
 ## 10) Change Log
+- 2026-02-21 (Simple Mode foundation tranche):
+  - Added workspace mode APIs:
+    - `GET /api/workspaces/:id/mode`
+    - `POST /api/workspaces/:id/mode`
+  - Added Simple Mode room APIs:
+    - `GET /api/workspaces/:id/rooms/:roomId/simple/home`
+    - `GET /api/workspaces/:id/rooms/:roomId/workflow/health`
+    - `GET /api/workspaces/:id/rooms/:roomId/adoption/friction`
+    - `POST /api/workspaces/:id/rooms/:roomId/assistant/recommend-next`
+    - `GET /api/workspaces/:id/rooms/:roomId/templates/revops`
+    - `GET /api/workspaces/:id/rooms/:roomId/simple/manager-summary`
+  - Added room dashboard/table convenience APIs:
+    - `POST /api/workspaces/:id/rooms/:roomId/dashboards`
+    - `GET /api/workspaces/:id/rooms/:roomId/dashboards`
+    - `POST /api/workspaces/:id/rooms/:roomId/dashboards/:dashboardId/tiles`
+    - `POST /api/workspaces/:id/rooms/:roomId/tables/view`
+  - Frontend wiring:
+    - new `/app/simple` surface (`src/components/SimpleModeHome.tsx`)
+    - Studio entry route now respects stored mode and redirects to Simple vs Pro
+    - API client contracts + tests added for all new endpoints
+  - Validation:
+    - backend build PASS
+    - frontend Studio API contract tests PASS
+- 2026-02-20 (Operations UX upgrade tranche):
+  - Added workspace member management APIs in workspace routes:
+    - `GET /api/workspaces/:id/members`
+    - `PUT /api/workspaces/:id/members/:memberId`
+    - `DELETE /api/workspaces/:id/members/:memberId`
+  - Added workspace policy settings APIs in Studio routes:
+    - `GET /api/workspaces/:id/settings/policies`
+    - `POST /api/workspaces/:id/settings/policies`
+  - Added Settings Control Center surface:
+    - new route `/app/settings`
+    - new component `src/components/SettingsControlCenter.tsx`
+    - workspace policy toggles + persona/notification preference controls
+  - Upgraded Team, Home, and Chat for operational context:
+    - Team page now renders manager/readiness/incident summary cards
+    - Home page now renders `Operations Pulse` from room manager/reliability context
+    - Chat page now includes context quick actions:
+      - `Create Follow-up Task`
+      - `Post Status Draft`
+  - Upgraded billing page with PMF packaging panel using billing APIs (`plans`, `subscription`, `checkout`).
+  - Fixed Team member client integration to use canonical API client and auth token handling.
+  - Validation:
+    - backend build PASS
+    - backend tests PASS
+    - frontend API contract tests PASS
+    - frontend production build PASS
 - 2026-02-20 (Real PMF + Product Plan tranche):
   - Added PMF pilot ops schema migration:
     - `backend/migrations/036_pmf_pilot_ops.js`

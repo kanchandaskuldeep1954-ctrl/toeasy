@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import axios from 'axios';
 import PaymentFlow from './PaymentFlow';
+import { billingAPI, PlanTier, SubscriptionState } from '../services/api';
+import { useWorkspace } from '../hooks/useWorkspace';
 
 interface SubscriptionData {
   id: string;
@@ -49,6 +51,7 @@ interface PaymentFlowState {
 
 const BillingViewIntegrated: React.FC = () => {
   const { token, refreshProfile } = useAuth();
+  const { activeWorkspace } = useWorkspace();
   const [subscription, setSubscription] = useState<SubscriptionData | null>(null);
   const [usage, setUsage] = useState<UsageData>({
     datasets_used: 0,
@@ -66,6 +69,9 @@ const BillingViewIntegrated: React.FC = () => {
   const [billingCycle, setBillingCycle] = useState<'month' | 'year'>('year');
   const [currency, setCurrency] = useState<'USD' | 'INR'>('USD');
   const [processingTier, setProcessingTier] = useState<string | null>(null);
+  const [pmfPlans, setPmfPlans] = useState<PlanTier[]>([]);
+  const [pmfSubscription, setPmfSubscription] = useState<SubscriptionState | null>(null);
+  const [pmfCheckoutLoading, setPmfCheckoutLoading] = useState<string | null>(null);
   const [paymentFlow, setPaymentFlow] = useState<PaymentFlowState>({
     isOpen: false,
   });
@@ -77,7 +83,7 @@ const BillingViewIntegrated: React.FC = () => {
       loadSubscriptionAndUsage();
       detectCurrency();
     }
-  }, [token]);
+  }, [token, activeWorkspace?.id]);
 
   const detectCurrency = () => {
     try {
@@ -107,6 +113,18 @@ const BillingViewIntegrated: React.FC = () => {
 
       setSubscription(subRes.data);
       setBackendPlans(plansRes.data);
+      try {
+        const [pmfPlansRes, pmfSubscriptionRes] = await Promise.all([
+          billingAPI.getPlans(),
+          billingAPI.getSubscription(activeWorkspace?.id || undefined)
+        ]);
+        setPmfPlans(Array.isArray(pmfPlansRes.data?.plans) ? pmfPlansRes.data.plans : []);
+        setPmfSubscription(pmfSubscriptionRes.data || null);
+      } catch (pmfError) {
+        console.warn('Failed to load PMF billing plans/subscription:', pmfError);
+        setPmfPlans([]);
+        setPmfSubscription(null);
+      }
       // NOTE: We do NOT override billingCycle from subscription.interval
       // The toggle should default to 'year' (best value) for marketing purposes
 
@@ -195,6 +213,31 @@ const BillingViewIntegrated: React.FC = () => {
     setPaymentFlow({ isOpen: false });
   };
 
+  const handlePmfCheckout = async (tier: PlanTier['id'], billingCycle: 'monthly' | 'annual' | 'pilot_90d') => {
+    try {
+      setPmfCheckoutLoading(tier);
+      const response = await billingAPI.checkout({
+        workspaceId: activeWorkspace?.id ? Number(activeWorkspace.id) : undefined,
+        tier,
+        billingCycle,
+        seats: tier === 'solo_analyst' ? 1 : undefined,
+        currency
+      });
+      const payload = response.data || {};
+      alert(
+        payload?.nextAction === 'contact_sales'
+          ? `Checkout intent created (${payload.checkoutId}). Sales follow-up queued.`
+          : `Checkout created (${payload.checkoutId}). Complete payment to activate.`
+      );
+      const refreshed = await billingAPI.getSubscription(activeWorkspace?.id || undefined);
+      setPmfSubscription(refreshed.data || null);
+    } catch (error: any) {
+      alert(error?.response?.data?.error || error?.message || 'Failed to start checkout.');
+    } finally {
+      setPmfCheckoutLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -227,6 +270,69 @@ const BillingViewIntegrated: React.FC = () => {
       {error && (
         <div className="mb-8 p-4 bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 rounded-xl">
           {error}
+        </div>
+      )}
+
+      {pmfPlans.length > 0 && (
+        <div className="mb-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-lg p-8">
+          <div className="flex items-center justify-between gap-3 mb-6">
+            <div>
+                <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">Decision Room Packaging</h2>
+                <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                PMF pricing path: solo entry -&gt; pilot -&gt; annual conversion.
+                </p>
+              </div>
+            {pmfSubscription && (
+              <div className="text-xs text-slate-500">
+                Active PMF tier: <span className="font-bold text-slate-900 dark:text-white">{pmfSubscription.tier}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {pmfPlans.map((plan) => (
+              <div key={plan.id} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4">
+                <div className="text-sm font-black text-slate-900 dark:text-white">{plan.name}</div>
+                <div className="text-xs text-slate-500 mt-1">
+                  {plan.monthlyUsd != null ? `$${plan.monthlyUsd}/mo` : 'Monthly n/a'}
+                  {' | '}
+                  {plan.annualUsd != null ? `$${plan.annualUsd}/yr` : 'Annual n/a'}
+                </div>
+                <div className="mt-3 text-xs text-slate-500">
+                  Seats: {plan.limits?.seatsIncluded ?? 'n/a'} | Connectors: {plan.limits?.maxConnectors ?? 'n/a'}
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  {plan.id === 'solo_analyst' && (
+                    <>
+                      <button
+                        onClick={() => handlePmfCheckout(plan.id, 'monthly')}
+                        disabled={pmfCheckoutLoading === plan.id}
+                        className="rounded-lg bg-blue-600 text-white text-xs font-bold px-3 py-2 disabled:opacity-50"
+                      >
+                        {pmfCheckoutLoading === plan.id ? 'Starting...' : 'Start Monthly'}
+                      </button>
+                      <button
+                        onClick={() => handlePmfCheckout(plan.id, 'annual')}
+                        disabled={pmfCheckoutLoading === plan.id}
+                        className="rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold px-3 py-2 disabled:opacity-50"
+                      >
+                        Annual
+                      </button>
+                    </>
+                  )}
+                  {plan.id !== 'solo_analyst' && (
+                    <button
+                      onClick={() => handlePmfCheckout(plan.id, plan.id === 'decision_room_pilot' ? 'pilot_90d' : 'annual')}
+                      disabled={pmfCheckoutLoading === plan.id}
+                      className="rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-bold px-3 py-2 disabled:opacity-50"
+                    >
+                      {pmfCheckoutLoading === plan.id ? 'Starting...' : 'Create Intent'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

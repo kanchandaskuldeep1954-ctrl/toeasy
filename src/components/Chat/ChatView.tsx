@@ -20,6 +20,8 @@ import { MessageList, Message } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { Button, Badge, Avatar, Modal, Input } from '../UI';
 import { chatService } from '../../services/workOsService';
+import { tasksService } from '../../services/workOsService';
+import { studioAPI } from '../../services/api';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useSocket } from '../../context/SocketContext';
 import { useAuth } from '../../context/AuthContext';
@@ -105,6 +107,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
     const [roomContextLoading, setRoomContextLoading] = useState(false);
     const [roomContextError, setRoomContextError] = useState('');
     const [publishingContextUpdate, setPublishingContextUpdate] = useState(false);
+    const [creatingFollowUpTask, setCreatingFollowUpTask] = useState(false);
+    const [postingStatusDraft, setPostingStatusDraft] = useState(false);
 
     const [replyTo, setReplyTo] = useState<{ id: string; userName: string; content: string } | null>(null);
     const { socket } = useSocket();
@@ -452,6 +456,54 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
         }
     };
 
+    const handleCreateFollowUpTask = async () => {
+        if (!workspaceId || !contextRoomId || !activeChannel) return;
+        setCreatingFollowUpTask(true);
+        try {
+            const roomName = roomContext?.room?.name || `Room ${contextRoomId}`;
+            const due = new Date();
+            due.setDate(due.getDate() + 2);
+            const created = await tasksService.create({
+                workspace_id: workspaceId,
+                title: `[${roomName}] Follow-up from chat`,
+                description: `Created from Decision Room chat context.\nRoom: ${roomName}\nStage: ${roomContext?.room?.stage || 'n/a'}\nPending approvals: ${roomContext?.summary?.pendingApprovals ?? 0}`,
+                status: 'in_progress',
+                priority: 'medium',
+                due_date: due.toISOString(),
+                tags: ['decision-room', 'chat-follow-up']
+            });
+            await chatService.sendMessage(
+                activeChannel.id,
+                `Created follow-up task #${created?.id || 'n/a'} for ${roomName}.`
+            );
+        } catch (error) {
+            console.error('Failed to create follow-up task:', error);
+        } finally {
+            setCreatingFollowUpTask(false);
+        }
+    };
+
+    const handlePostStatusDraft = async () => {
+        if (!workspaceId || !contextRoomId || !activeChannel) return;
+        setPostingStatusDraft(true);
+        try {
+            const result = await studioAPI.generateStatusDraft(workspaceId, contextRoomId, { persist: false });
+            const draft = result.data?.draft;
+            if (!draft) return;
+            const statusMessage = [
+                `*Status Draft* (${new Date(draft.generatedAt).toLocaleString()})`,
+                draft.summary,
+                `Completed: ${draft.completedActions?.length || 0} | In progress: ${draft.inProgressActions?.length || 0} | Blocked: ${draft.blockedActions?.length || 0}`,
+                `Evidence artifacts: ${draft.evidenceArtifactIds?.length || 0}`
+            ].join('\n');
+            await chatService.sendMessage(activeChannel.id, statusMessage);
+        } catch (error) {
+            console.error('Failed to post status draft:', error);
+        } finally {
+            setPostingStatusDraft(false);
+        }
+    };
+
     // Transform channels for ChannelList component
     const channelListData = channels.map(c => ({
         id: c.id,
@@ -501,6 +553,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ workspaceId: propWorkspaceId
                                             className="!px-2 !py-1 text-[11px]"
                                         >
                                             Open in Studio
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={handleCreateFollowUpTask}
+                                            disabled={creatingFollowUpTask || roomContextLoading}
+                                            className="!px-2 !py-1 text-[11px]"
+                                        >
+                                            {creatingFollowUpTask ? 'Creating task...' : 'Create Follow-up Task'}
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={handlePostStatusDraft}
+                                            disabled={postingStatusDraft || roomContextLoading}
+                                            className="!px-2 !py-1 text-[11px]"
+                                        >
+                                            {postingStatusDraft ? 'Posting draft...' : 'Post Status Draft'}
                                         </Button>
                                         <Button
                                             size="sm"

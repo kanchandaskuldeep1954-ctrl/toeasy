@@ -1,28 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { User, Shield, Trash2, MoreVertical, Loader2, Mail, Calendar, CheckCircle, Search, Filter } from 'lucide-react';
+import { Trash2, MoreVertical, Loader2, Mail, Calendar, CheckCircle, Search } from 'lucide-react';
 import { Menu, Transition } from '@headlessui/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { InviteModal } from './InviteModal';
 import { useWorkspaceRole } from '../../hooks/useWorkspaceRole';
-import { Card, Badge, Button, Input } from '../UI';
-
-interface Member {
-    id: number;
-    full_name: string;
-    email: string;
-    role: 'admin' | 'editor' | 'viewer';
-    joined_at: string;
-    avatar_url?: string;
-}
+import { Card, Badge, Button } from '../UI';
+import { WorkspaceMember, workspaceAPI } from '../../services/api';
 
 interface TeamMembersProps {
     workspaceId: string;
 }
 
 export const TeamMembers: React.FC<TeamMembersProps> = ({ workspaceId }) => {
-    const [members, setMembers] = useState<Member[]>([]);
-    const [filteredMembers, setFilteredMembers] = useState<Member[]>([]);
+    const [members, setMembers] = useState<WorkspaceMember[]>([]);
+    const [filteredMembers, setFilteredMembers] = useState<WorkspaceMember[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isInviteOpen, setIsInviteOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -31,10 +22,7 @@ export const TeamMembers: React.FC<TeamMembersProps> = ({ workspaceId }) => {
 
     const fetchMembers = async () => {
         try {
-            const response = await axios.get(
-                `${import.meta.env.VITE_BACKEND_URL}/api/workspaces/${workspaceId}/members`,
-                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-            );
+            const response = await workspaceAPI.listMembers(workspaceId);
             setMembers(response.data);
             setFilteredMembers(response.data);
         } catch (err) {
@@ -70,10 +58,7 @@ export const TeamMembers: React.FC<TeamMembersProps> = ({ workspaceId }) => {
         try {
             // Optimistic update
             setMembers(prev => prev.filter(m => m.id !== userId));
-            await axios.delete(
-                `${import.meta.env.VITE_BACKEND_URL}/api/workspaces/${workspaceId}/members/${userId}`,
-                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-            );
+            await workspaceAPI.removeMember(workspaceId, userId);
         } catch (err) {
             alert('Failed to remove member');
             fetchMembers(); // Revert on error
@@ -84,11 +69,7 @@ export const TeamMembers: React.FC<TeamMembersProps> = ({ workspaceId }) => {
         try {
             // Optimistic update
             setMembers(prev => prev.map(m => m.id === userId ? { ...m, role: newRole as any } : m));
-            await axios.put(
-                `${import.meta.env.VITE_BACKEND_URL}/api/workspaces/${workspaceId}/members/${userId}`,
-                { role: newRole },
-                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-            );
+            await workspaceAPI.updateMemberRole(workspaceId, userId, newRole as 'admin' | 'editor' | 'viewer');
         } catch (err) {
             alert('Failed to update role');
             fetchMembers();

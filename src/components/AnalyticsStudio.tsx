@@ -44,6 +44,7 @@ type StudioPanel = 'sheets' | 'query' | 'pivot' | 'visuals' | 'report' | 'action
 type RunMode = 'sql' | 'nl' | 'sheet_op';
 type MentionPresetKey = 'manager' | 'exec' | 'owner_group';
 type RightRailView = 'overview' | 'metrics' | 'comms' | 'artifacts';
+type ContextRailMode = 'docked' | 'overlay';
 type StudioFeatureFlags = {
   legacySurfacesEnabled: boolean;
   visualsTabEnabled: boolean;
@@ -95,6 +96,12 @@ interface PlaybookRecommendation {
 
 const PANELS: StudioPanel[] = ['sheets', 'query', 'pivot', 'visuals', 'report', 'actions', 'comms'];
 const EVIDENCE_ARTIFACT_TYPES = new Set(['dataset_version', 'query_run', 'chart', 'pivot', 'report_block', 'decision_brief']);
+const CONTEXT_WIDTH_OPTIONS = [
+  { value: 300, label: 'Narrow' },
+  { value: 360, label: 'Standard' },
+  { value: 440, label: 'Wide' }
+] as const;
+const STUDIO_LAYOUT_STORAGE_KEY = 'toeasy.studio.layout.v1';
 
 const parseDatasetRows = (rawData: any, headers?: string[]) => {
   if (!rawData) return [];
@@ -135,6 +142,51 @@ const reportSectionMeaning: Record<string, string> = {
   pattern: 'Detected risks and shifts (owner concentration, bottlenecks, volatility, segment movement).',
   explanation: 'Deterministic explanation of what changed and why it matters for RevOps decisions.',
   recommendation: 'Next actions tied to evidence so owners can execute in Slack and action boards.'
+};
+
+const panelPurpose: Record<StudioPanel, { title: string; input: string; output: string; value: string }> = {
+  sheets: {
+    title: 'Sheets',
+    input: 'Raw dataset rows from Sheet/SQL imports',
+    output: 'Filtered rows and data profile artifacts',
+    value: 'Fast table-first exploration with quality checks.'
+  },
+  query: {
+    title: 'Query',
+    input: 'SQL prompt or natural-language prompt',
+    output: 'Versioned query runs with lineage and execution metadata',
+    value: 'Analyst-depth transformations and reusable query artifacts.'
+  },
+  pivot: {
+    title: 'Pivot',
+    input: 'Run results or sheet rows',
+    output: 'Grouped aggregates, rank, % total, and saved pivot artifacts',
+    value: 'Summarize trends and compare segments before charting.'
+  },
+  visuals: {
+    title: 'Visuals',
+    input: 'Pivot/query outputs + drill paths',
+    output: 'Saved charts, annotations, and visual lineage',
+    value: 'Explain patterns visually with drill and cross-filter behavior.'
+  },
+  report: {
+    title: 'Report',
+    input: 'Evidence artifacts + timeframe',
+    output: 'Evidence-gated weekly brief with publish checks',
+    value: 'Turn analysis into decision-ready stakeholder reporting.'
+  },
+  actions: {
+    title: 'Actions',
+    input: 'Approved findings + evidence links',
+    output: 'Owner-assigned actions, sync logs, and status drafts',
+    value: 'Convert insight into coordinated execution and follow-through.'
+  },
+  comms: {
+    title: 'Comms',
+    input: 'Artifact threads, approvals, checkpoints',
+    output: 'Documented decisions, approvals, and team handoffs',
+    value: 'Run team collaboration in-room with traceable evidence context.'
+  }
 };
 
 type RevOpsVisualTemplate = {
@@ -392,6 +444,8 @@ const AnalyticsStudio: React.FC = () => {
   } | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
   const [isContextRailOpen, setIsContextRailOpen] = useState(true);
+  const [contextRailMode, setContextRailMode] = useState<ContextRailMode>('overlay');
+  const [contextRailWidth, setContextRailWidth] = useState<number>(360);
   const [isFocusMode, setIsFocusMode] = useState(false);
   const [rightRailView, setRightRailView] = useState<RightRailView>('overview');
   const [pivotPercentOfTotalEnabled, setPivotPercentOfTotalEnabled] = useState(true);
@@ -516,6 +570,40 @@ const AnalyticsStudio: React.FC = () => {
     () => mentionableUsers.slice(0, 6).map((user) => user.handle).join(', '),
     [mentionableUsers]
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(STUDIO_LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as {
+        contextRailMode?: ContextRailMode;
+        contextRailWidth?: number;
+        contextRailOpen?: boolean;
+      };
+      if (parsed.contextRailMode === 'docked' || parsed.contextRailMode === 'overlay') {
+        setContextRailMode(parsed.contextRailMode);
+      }
+      if (typeof parsed.contextRailWidth === 'number' && parsed.contextRailWidth >= 260 && parsed.contextRailWidth <= 520) {
+        setContextRailWidth(parsed.contextRailWidth);
+      }
+      if (typeof parsed.contextRailOpen === 'boolean') {
+        setIsContextRailOpen(parsed.contextRailOpen);
+      }
+    } catch {
+      // Ignore malformed local storage payload.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const payload = {
+      contextRailMode,
+      contextRailWidth,
+      contextRailOpen: isContextRailOpen
+    };
+    window.localStorage.setItem(STUDIO_LAYOUT_STORAGE_KEY, JSON.stringify(payload));
+  }, [contextRailMode, contextRailWidth, isContextRailOpen]);
 
   const numericFields = useMemo(() => {
     if (!currentRows.length) return [];
@@ -2226,6 +2314,7 @@ const AnalyticsStudio: React.FC = () => {
 
   const roomStageProgress = stageOrder.indexOf(roomStage) + 1;
   const showContextRail = isContextRailOpen && !isFocusMode;
+  const useDockedContextRail = showContextRail && contextRailMode === 'docked';
   const panelViewportHeights = isFocusMode
     ? { primary: 700, secondary: 580, compact: 340 }
     : { primary: 520, secondary: 400, compact: 220 };
@@ -2281,6 +2370,31 @@ const AnalyticsStudio: React.FC = () => {
           >
             {showContextRail ? 'Hide Context' : 'Show Context'}
           </button>
+          {showContextRail && (
+            <>
+              <select
+                value={contextRailMode}
+                onChange={(e) => setContextRailMode(e.target.value as ContextRailMode)}
+                className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                title="Context layout mode"
+              >
+                <option value="overlay">Overlay context</option>
+                <option value="docked">Docked context</option>
+              </select>
+              <select
+                value={contextRailWidth}
+                onChange={(e) => setContextRailWidth(Number(e.target.value) || 360)}
+                className="px-2 py-1 text-xs rounded border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800"
+                title="Context panel width"
+              >
+                {CONTEXT_WIDTH_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <button
             onClick={() => setIsFocusMode((prev) => !prev)}
             className={`px-2 py-1 text-xs rounded border ${
@@ -2349,8 +2463,21 @@ const AnalyticsStudio: React.FC = () => {
         </div>
       )}
 
-      <div className={`flex-1 min-h-0 ${showContextRail ? 'grid grid-cols-1 xl:grid-cols-[1fr_320px]' : 'block'}`}>
+      <div
+        className={`flex-1 min-h-0 relative ${useDockedContextRail ? 'grid grid-cols-1' : 'block'}`}
+        style={useDockedContextRail ? { gridTemplateColumns: `minmax(0, 1fr) ${contextRailWidth}px` } : undefined}
+      >
         <div className="min-h-0 p-4 overflow-auto">
+          <div className="mb-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-[11px]">
+            <div className="text-xs font-bold uppercase text-slate-500 mb-1">{panelPurpose[panel].title}</div>
+            <div className="text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">Input:</span> {panelPurpose[panel].input}
+            </div>
+            <div className="text-slate-600 dark:text-slate-300">
+              <span className="font-semibold">Output:</span> {panelPurpose[panel].output}
+            </div>
+            <div className="text-slate-500 mt-1">{panelPurpose[panel].value}</div>
+          </div>
           {panel === 'sheets' && (
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
@@ -3650,7 +3777,14 @@ const AnalyticsStudio: React.FC = () => {
         </div>
 
         {showContextRail && (
-          <aside className="border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto">
+          <aside
+            className={
+              useDockedContextRail
+                ? 'border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 overflow-auto'
+                : 'absolute right-3 top-3 bottom-3 z-20 rounded-xl border border-slate-200 dark:border-slate-700 bg-white/95 dark:bg-slate-900/95 backdrop-blur p-3 overflow-auto shadow-xl'
+            }
+            style={useDockedContextRail ? undefined : { width: `${contextRailWidth}px` }}
+          >
             <div className="rounded border border-slate-200 dark:border-slate-700 p-1 grid grid-cols-2 gap-1 text-[11px] mb-3">
               <button
                 onClick={() => setRightRailView('overview')}

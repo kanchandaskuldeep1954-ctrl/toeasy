@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { analyticsAPI, billingAPI, initializeAPIClient, studioAPI } from '../services/api';
+import { analyticsAPI, billingAPI, initializeAPIClient, studioAPI, workspaceAPI } from '../services/api';
 
 jest.mock('axios');
 
@@ -27,6 +27,105 @@ describe('Studio MVP API Contracts', () => {
   it('calls room guide endpoint', () => {
     studioAPI.getGuide('12', '77');
     expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/guide');
+  });
+
+  it('calls workspace mode endpoints', () => {
+    studioAPI.getMode('12');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/mode');
+
+    studioAPI.setMode('12', 'simple');
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/mode', { mode: 'simple' });
+  });
+
+  it('calls simple home endpoint', () => {
+    studioAPI.getSimpleHome('12', '77', { periodDays: 7 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/simple/home', {
+      params: { periodDays: 7 }
+    });
+  });
+
+  it('calls room dashboards endpoints', () => {
+    studioAPI.createRoomDashboard('12', '77', { name: 'Weekly Dashboard', timeframeDays: 7 });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/dashboards', {
+      name: 'Weekly Dashboard',
+      timeframeDays: 7
+    });
+
+    studioAPI.listRoomDashboards('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/dashboards');
+  });
+
+  it('calls dashboard tile endpoint', () => {
+    studioAPI.addDashboardTile('12', '77', 100, {
+      artifactId: 55,
+      title: 'Pipeline trend',
+      tileType: 'chart'
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/dashboards/100/tiles', {
+      artifactId: 55,
+      title: 'Pipeline trend',
+      tileType: 'chart'
+    });
+  });
+
+  it('calls table view preset endpoint', () => {
+    studioAPI.saveTableViewPreset('12', '77', {
+      name: 'Top deals',
+      filters: { stage: 'negotiation' },
+      visibleColumns: ['owner', 'amount']
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/tables/view', {
+      name: 'Top deals',
+      filters: { stage: 'negotiation' },
+      visibleColumns: ['owner', 'amount']
+    });
+  });
+
+  it('calls workflow health endpoint', () => {
+    studioAPI.getWorkflowHealth('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/workflow/health');
+  });
+
+  it('calls adoption friction endpoint', () => {
+    studioAPI.getAdoptionFriction('12', '77', { periodDays: 14 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/adoption/friction', {
+      params: { periodDays: 14 }
+    });
+  });
+
+  it('calls assistant recommend-next endpoint', () => {
+    studioAPI.recommendNextAction('12', '77', { context: { role: 'manager' } });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/rooms/77/assistant/recommend-next', {
+      context: { role: 'manager' }
+    });
+  });
+
+  it('calls RevOps templates endpoint', () => {
+    studioAPI.getRevopsTemplates('12', '77');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/templates/revops');
+  });
+
+  it('calls simple manager summary endpoint', () => {
+    studioAPI.getSimpleManagerSummary('12', '77', { periodDays: 7 });
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/rooms/77/simple/manager-summary', {
+      params: { periodDays: 7 }
+    });
+  });
+
+  it('calls workspace policy settings endpoints', () => {
+    studioAPI.getWorkspacePolicySettings('12');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/settings/policies');
+
+    studioAPI.updateWorkspacePolicySettings('12', {
+      aiAssistiveModeEnabled: true,
+      approvalGateEnforced: true
+    });
+    expect(mockPost).toHaveBeenCalledWith('/workspaces/12/settings/policies', {
+      policies: {
+        aiAssistiveModeEnabled: true,
+        approvalGateEnforced: true
+      }
+    });
   });
 
   it('calls guide complete-step endpoint', () => {
@@ -418,6 +517,17 @@ describe('Studio MVP API Contracts', () => {
   it('calls billing plans endpoint', () => {
     billingAPI.getPlans();
     expect(mockGet).toHaveBeenCalledWith('/billing/plans');
+  });
+
+  it('calls workspace member management endpoints', () => {
+    workspaceAPI.listMembers('12');
+    expect(mockGet).toHaveBeenCalledWith('/workspaces/12/members');
+
+    workspaceAPI.updateMemberRole('12', 9, 'editor');
+    expect(mockClient.put).toHaveBeenCalledWith('/workspaces/12/members/9', { role: 'editor' });
+
+    workspaceAPI.removeMember('12', 9);
+    expect(mockClient.delete).toHaveBeenCalledWith('/workspaces/12/members/9');
   });
 
   it('calls billing subscription endpoint', () => {

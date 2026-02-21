@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { tasksService, docsService, chatService } from '../../services/workOsService';
-import { datasetAPI } from '../../services/api';
+import { datasetAPI, studioAPI } from '../../services/api';
 import { Button, Card, Badge } from '../UI';
 
 export const HomeView: React.FC = () => {
@@ -30,17 +30,33 @@ export const HomeView: React.FC = () => {
         { label: 'Datasets', value: '0', icon: Activity, color: 'violet' }
     ]);
     const [loading, setLoading] = useState(true);
+    const [opsPulse, setOpsPulse] = useState<{
+        roomName: string;
+        pendingApprovals: number;
+        blockedPublishes: number;
+        overdueActions: number;
+        openIncidents: number;
+        readiness: 'go' | 'no_go' | 'unknown';
+    }>({
+        roomName: 'No active room',
+        pendingApprovals: 0,
+        blockedPublishes: 0,
+        overdueActions: 0,
+        openIncidents: 0,
+        readiness: 'unknown'
+    });
 
     useEffect(() => {
         const fetchStats = async () => {
             if (!workspaceId) return;
             setLoading(true);
             try {
-                const [tasks, docs, channels, datasetsRes] = await Promise.all([
+                const [tasks, docs, channels, datasetsRes, navigationRes] = await Promise.all([
                     tasksService.getAll(workspaceId),
                     docsService.getAll(workspaceId),
                     chatService.getChannels(workspaceId),
-                    datasetAPI.list(workspaceId)
+                    datasetAPI.list(workspaceId),
+                    studioAPI.getNavigationState(workspaceId)
                 ]);
 
                 setStats([
@@ -49,6 +65,32 @@ export const HomeView: React.FC = () => {
                     { label: 'Channels', value: String(channels.length), icon: MessageCircle, color: 'emerald' },
                     { label: 'Datasets', value: String(datasetsRes.data?.data?.length || 0), icon: Activity, color: 'violet' }
                 ]);
+
+                const navigation = navigationRes.data;
+                const roomId = navigation?.active?.roomId || navigation?.rooms?.[0]?.id;
+                const roomName = navigation?.rooms?.find((room) => Number(room.id) === Number(roomId))?.name
+                    || 'No active room';
+                if (roomId) {
+                    const [summaryRes, readinessRes, incidentsRes] = await Promise.all([
+                        studioAPI.getManagerSummary(workspaceId, String(roomId), { periodDays: 14 }),
+                        studioAPI.getReadinessDecision(workspaceId, String(roomId), { periodDays: 14 }),
+                        studioAPI.listPilotIncidents(workspaceId, { periodDays: 14, status: 'open', severity: 'all' })
+                    ]);
+                    setOpsPulse({
+                        roomName,
+                        pendingApprovals: Number(summaryRes.data?.summary?.pendingApprovals || 0),
+                        blockedPublishes: Number(summaryRes.data?.summary?.blockedPublishes || 0),
+                        overdueActions: Number(summaryRes.data?.summary?.overdueActions || 0),
+                        openIncidents: Number(incidentsRes.data?.counts?.open || 0),
+                        readiness: readinessRes.data?.overall || 'unknown'
+                    });
+                } else {
+                    setOpsPulse((prev) => ({
+                        ...prev,
+                        roomName,
+                        readiness: 'unknown'
+                    }));
+                }
             } catch (error) {
                 console.error('Failed to fetch home stats:', error);
             } finally {
@@ -180,6 +222,35 @@ export const HomeView: React.FC = () => {
 
                 {/* Right Column: Recent Activity / Tips */}
                 <div className="space-y-8">
+                    <div className="bg-white dark:bg-slate-900 rounded-[32px] p-6 border border-slate-200 dark:border-slate-800">
+                        <h3 className="font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                            <Activity className="w-5 h-5 text-indigo-500" />
+                            Operations Pulse
+                        </h3>
+                        <div className="text-xs text-slate-500 mb-3">Active room: {opsPulse.roomName}</div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                                <div className="text-[10px] uppercase text-slate-500">Readiness</div>
+                                <div className={`text-lg font-black ${opsPulse.readiness === 'go' ? 'text-emerald-600' : opsPulse.readiness === 'no_go' ? 'text-rose-600' : 'text-slate-500'}`}>
+                                    {opsPulse.readiness === 'go' ? 'GO' : opsPulse.readiness === 'no_go' ? 'NO-GO' : 'N/A'}
+                                </div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                                <div className="text-[10px] uppercase text-slate-500">Open incidents</div>
+                                <div className="text-lg font-black text-rose-600">{opsPulse.openIncidents}</div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                                <div className="text-[10px] uppercase text-slate-500">Pending approvals</div>
+                                <div className="text-lg font-black text-slate-900 dark:text-white">{opsPulse.pendingApprovals}</div>
+                            </div>
+                            <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-3">
+                                <div className="text-[10px] uppercase text-slate-500">Blocked publishes</div>
+                                <div className="text-lg font-black text-amber-600">{opsPulse.blockedPublishes}</div>
+                            </div>
+                        </div>
+                        <div className="mt-3 text-xs text-slate-500">Overdue actions: {opsPulse.overdueActions}</div>
+                    </div>
+
                     <div className="bg-slate-50 dark:bg-slate-900/50 rounded-[32px] p-8 border border-slate-200 dark:border-slate-800">
                         <h3 className="font-black text-slate-900 dark:text-white mb-4 flex items-center gap-2">
                             <TrendingUp className="w-5 h-5 text-emerald-500" />

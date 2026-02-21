@@ -39,12 +39,14 @@ import AlertsManager from './src/components/Alerts/AlertsManager';
 
 // Unified Work OS Modules
 const HomeView = React.lazy(() => import('./src/components/Home/HomeView'));
+const SimpleModeHome = React.lazy(() => import('./src/components/SimpleModeHome'));
 const ChatView = React.lazy(() => import('./src/components/Chat/ChatView'));
 const TasksView = React.lazy(() => import('./src/components/Tasks/TasksView'));
 const DocsView = React.lazy(() => import('./src/components/Docs/DocsView'));
 const FormsView = React.lazy(() => import('./src/components/Forms/FormsView'));
 const FilesView = React.lazy(() => import('./src/components/Files/FilesView'));
 const ControlTowerView = React.lazy(() => import('./src/components/Manager/ControlTowerView'));
+const SettingsControlCenter = React.lazy(() => import('./src/components/SettingsControlCenter'));
 
 // Legal & Public Pages
 import PublicLayout from './src/components/Layout/PublicLayout';
@@ -74,8 +76,10 @@ const AppLayout: React.FC = () => {
           <Route path="workspaces" element={<WorkspacesView />} />
           <Route path="datasets" element={<DatasetLibrary />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="settings" element={<SettingsControlCenter />} />
           <Route path="team" element={<TeamView />} />
           <Route path="studio" element={<StudioEntryRedirect source="studio_route" />} />
+          <Route path="simple" element={<SimpleModeHome />} />
           <Route path="control-tower" element={<ControlTowerView />} />
 
           {/* Connect & Upload */}
