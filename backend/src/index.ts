@@ -46,6 +46,7 @@ import formsRoutes from './routes/forms.js';
 import filesRoutes from './routes/files.js';
 import alertsRoutes from './routes/alerts.js';
 import notificationsRoutes from './routes/notifications.js';
+import briefRoutes from './routes/brief.js';
 import { setupWebSocket } from './websocket.js'; // Import WebSocket Setup
 
 const app = express();
@@ -167,6 +168,7 @@ app.use('/api/alerts', authenticateToken, alertsRoutes);
 app.use('/api/notifications', authenticateToken, notificationsRoutes);
 app.use('/api/invites', invitesRoutes); // invites has its own auth middleware inside
 app.use('/api/billing', authenticateToken, billingRoutes);
+app.use('/api/workspaces', briefRoutes); // Decision Brief MVP
 
 // Top-level AI endpoints (not nested under workspaces)
 app.post('/api/generate-sql', authenticateToken, checkSubscription, checkTierLimit('aiQueriesPerDay'), async (req: AuthRequest, res) => {

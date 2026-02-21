@@ -209,6 +209,23 @@ const SimpleModeHome: React.FC = () => {
           </div>
         )}
 
+        {/* ⚡ PRIMARY CTA — Decision Brief */}
+        <button
+          onClick={() => navigate('/app/brief')}
+          className="w-full text-left bg-gradient-to-r from-indigo-600 to-blue-600 rounded-xl p-5 hover:from-indigo-500 hover:to-blue-500 transition-all shadow-lg shadow-indigo-900/20 group"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚡</span>
+            <div>
+              <div className="text-base font-semibold text-white">Generate Your Weekly Decision Brief</div>
+              <div className="text-xs text-indigo-200 mt-0.5">
+                AI analyzes your data → generates findings → you approve → actions auto-created. Kill your Monday meeting.
+              </div>
+            </div>
+            <span className="ml-auto text-white text-xl group-hover:translate-x-1 transition-transform">→</span>
+          </div>
+        </button>
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <button
             onClick={() => navigate(buildStudioUrl('visuals'))}

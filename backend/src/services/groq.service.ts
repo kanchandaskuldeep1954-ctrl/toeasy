@@ -1773,6 +1773,153 @@ ANALYZE and return ONLY valid JSON (no markdown):
     }
   }
 
+  // ===== WEEKLY DECISION BRIEF =====
+
+  /**
+   * Generate a structured weekly decision brief from a dataset.
+   * Returns: executiveSummary, keyFindings, recommendedActions, dataQualityFlags
+   */
+  static async generateWeeklyBrief(dataset: {
+    headers: string[];
+    data: any[];
+    name?: string;
+  }): Promise<any> {
+    try {
+      const headers = dataset.headers || Object.keys(dataset.data?.[0] || {});
+      const data = dataset.data || [];
+      const dataSize = data.length;
+      const sample = data.slice(0, 30);
+
+      // Identify column types for smarter prompting
+      const numericCols = headers.filter((h: string) =>
+        sample.some((r: any) => !isNaN(Number(r[h])) && r[h] !== null && r[h] !== '')
+      );
+      const dateCols = headers.filter((h: string) =>
+        sample.some((r: any) => {
+          const v = String(r[h] || '');
+          return /\d{4}[-/]\d{1,2}[-/]\d{1,2}/.test(v) || /\d{1,2}[-/]\d{1,2}[-/]\d{4}/.test(v);
+        })
+      );
+
+      // Compute basic stats for context
+      const statsSummary = numericCols.slice(0, 6).map((col: string) => {
+        const vals = data.map((r: any) => Number(r[col])).filter((v: number) => !isNaN(v));
+        if (vals.length === 0) return `${col}: no numeric data`;
+        const sum = vals.reduce((a: number, b: number) => a + b, 0);
+        const avg = sum / vals.length;
+        const min = Math.min(...vals);
+        const max = Math.max(...vals);
+        return `${col}: avg=${avg.toFixed(2)}, min=${min}, max=${max}, sum=${sum.toFixed(2)}, count=${vals.length}`;
+      }).join('\n');
+
+      // Check for data quality issues
+      const qualityIssues = headers.slice(0, 15).map((col: string) => {
+        const nullCount = data.filter((r: any) => r[col] === null || r[col] === '' || r[col] === undefined).length;
+        const nullPct = ((nullCount / Math.max(data.length, 1)) * 100).toFixed(1);
+        return Number(nullPct) > 10 ? `${col}: ${nullPct}% null/empty` : null;
+      }).filter(Boolean);
+
+      const groqPrompt = `You are a Chief Decision Officer generating a WEEKLY DECISION BRIEF for a RevOps team.
+
+PURPOSE: This brief replaces the Monday meeting. It must be evidence-backed, actionable, and concise.
+
+DATASET: "${dataset.name || 'Dataset'}"
+- Rows: ${dataSize}
+- Columns: ${headers.slice(0, 20).join(', ')}
+- Numeric columns: ${numericCols.slice(0, 10).join(', ') || 'none detected'}
+- Date columns: ${dateCols.join(', ') || 'none detected'}
+
+KEY STATISTICS:
+${statsSummary || 'No numeric summaries available.'}
+
+DATA QUALITY ISSUES:
+${qualityIssues.length > 0 ? qualityIssues.join('\n') : 'No significant quality issues detected.'}
+
+SAMPLE DATA (first 5 rows):
+${JSON.stringify(sample.slice(0, 5), null, 2)}
+
+TASK: Generate a structured weekly decision brief.
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "executiveSummary": "2-3 sentence high-level summary of what this data tells us this week. Reference specific numbers.",
+  "keyFindings": [
+    {
+      "title": "Finding title",
+      "insight": "What this means for the business. Be specific with numbers.",
+      "evidence": "Exact data reference (column, values, trends)",
+      "severity": "high|medium|low",
+      "trend": "up|down|stable"
+    }
+  ],
+  "recommendedActions": [
+    {
+      "title": "Action title",
+      "description": "What exactly to do and expected impact",
+      "priority": "high|medium|low",
+      "suggestedOwnerRole": "Role title (e.g. Sales Lead, CS Manager, Ops Lead)",
+      "evidenceReference": "Which finding supports this"
+    }
+  ],
+  "dataQualityFlags": [
+    { "column": "column_name", "issue": "Description of quality concern" }
+  ]
+}
+
+RULES:
+1. Generate 3-5 key findings. At least one must be "high" severity.
+2. Generate 2-4 recommended actions. Each must trace back to a finding.
+3. Be specific — use actual column names and computed statistics.
+4. Write for a busy executive: direct, evidence-backed, no fluff.
+5. Data quality flags should only include genuine issues.`;
+
+      const result = await this.callGroq(groqPrompt, 2500);
+      const brief = this.cleanAndParseJSON(result);
+
+      // Validate and normalize the brief structure
+      return {
+        executiveSummary: brief.executiveSummary || `Analysis of ${dataSize} records across ${headers.length} dimensions.`,
+        keyFindings: Array.isArray(brief.keyFindings) ? brief.keyFindings : [],
+        recommendedActions: Array.isArray(brief.recommendedActions) ? brief.recommendedActions : [],
+        dataQualityFlags: Array.isArray(brief.dataQualityFlags) ? brief.dataQualityFlags : [],
+        generatedAt: new Date().toISOString(),
+        status: 'pending_review',
+        evidenceCoverage: brief.keyFindings?.length > 0
+          ? Math.min(100, Math.round((brief.keyFindings.filter((f: any) => f.evidence).length / brief.keyFindings.length) * 100))
+          : 0,
+      };
+    } catch (error) {
+      console.error('Weekly brief generation error:', error instanceof Error ? error.message : error);
+
+      // Return a skeleton brief so the frontend still works
+      const headers = dataset.headers || [];
+      return {
+        executiveSummary: `Analysis of ${dataset.data?.length || 0} records could not be fully completed. Please review the data manually or retry.`,
+        keyFindings: [
+          {
+            title: 'Brief generation incomplete',
+            insight: 'The AI analysis could not be completed. This may be due to data format issues or API limits.',
+            evidence: `Dataset has ${headers.length} columns and ${dataset.data?.length || 0} rows`,
+            severity: 'medium',
+            trend: 'stable',
+          },
+        ],
+        recommendedActions: [
+          {
+            title: 'Retry brief generation',
+            description: 'Review data quality and retry. Ensure numeric columns have valid values.',
+            priority: 'high',
+            suggestedOwnerRole: 'Data Lead',
+            evidenceReference: 'Brief generation incomplete',
+          },
+        ],
+        dataQualityFlags: [],
+        generatedAt: new Date().toISOString(),
+        status: 'pending_review',
+        evidenceCoverage: 0,
+      };
+    }
+  }
 
 }
 
